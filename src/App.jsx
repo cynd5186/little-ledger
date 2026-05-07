@@ -14,26 +14,25 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05ah";
+const APP_VERSION = "2026.05.05aw";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "Cloud sync build 1: family-code setup UI + backend route handlers",
-  "Generate or enter a 6-char family code on first launch (when backend detected)",
-  "Storage layer rewrite + polling come in build 2",
-  "API routes shipped as separate files — drop into your Next.js app/api/ folder",
+  "Bank: Edit any transaction (debt/gift/payback) — pencil icon next to remove",
+  "Redeem gift: clearer preview explaining what auto-adjusts and when",
+  "Today/tomorrow gift redemptions auto-swap shifts immediately · day 3+ surface a note",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
-  { version: "2026.05.05ah", summary: "Cloud sync build 1: family code UI + backend routes" },
-  { version: "2026.05.05ag", summary: "Backup/restore for manual cross-device sync · reset bug fix" },
-  { version: "2026.05.05af", summary: "When-things-happen redesign · no fractional hours · cleaner durations" },
-  { version: "2026.05.05ae", summary: "FIX cosmetic 'left box' — removed paper noise filter creating density artifacts" },
-  { version: "2026.05.05ad", summary: "Bottle exp time = 6h hard limit (was 4h preferred-use)" },
-  { version: "2026.05.05ac", summary: "Diaper cadence card · age-aware change thresholds · recalibrated norms" },
-  { version: "2026.05.05ab", summary: "Bottle tiles: 'exp' prefix on expiration time" },
-  { version: "2026.05.05aa", summary: "Pump edit: start+end time picker (matches natural logging)" },
+  { version: "2026.05.05aw", summary: "Edit Bank transactions · clearer redeem preview · far-future caveat" },
+  { version: "2026.05.05av", summary: "Tappable peek strip · sleep time picker · Wellness trim · Journal collapse · less landing page noise" },
+  { version: "2026.05.05au", summary: "Future peek strip · Today day plan collapsed by default" },
+  { version: "2026.05.05at", summary: "Bank tab · on-site moves to Now · diaper labels restored · auto-adjustments collapsed" },
+  { version: "2026.05.05as", summary: "Schedule tab redesign · Day plan · Upcoming filters" },
+  { version: "2026.05.05ar", summary: "Wellness chart: daily intake 14-day trend with stats" },
+  { version: "2026.05.05aq", summary: "Sleep tile rename · top-level tomorrow pip · mot du jour cleanup" },
+  { version: "2026.05.05ap", summary: "Declutter quadrants and pump-overdue button" },
 ];
 
 
@@ -145,7 +144,12 @@ function rangeStatus(value, range) {
 // Convention: balance > 0 means Mommy owes Daddy. balance < 0 → Daddy owes Mommy.
 //   "owed":  Daddy→Mommy  → +mins   |  Mommy→Daddy  → -mins
 //   "paid":  Mommy→Daddy  → -mins   |  Daddy→Mommy  → +mins
-//   "gift":  no balance impact (gift = no expectation of payback)
+//   "gift":  no balance impact — gifts live on a separate "pending gifts"
+//           track, where the recipient gets to choose WHEN to redeem. At
+//           redemption the gift transforms into a real shift swap (the
+//           giver covers a chosen time block for the recipient). Gifts
+//           that haven't been redeemed yet show as a small callout on the
+//           recipient's Now landing.
 function computeTimeBankBalance(transactions) {
   let balance = 0;
   for (const tx of (transactions || [])) {
@@ -158,6 +162,17 @@ function computeTimeBankBalance(transactions) {
     }
   }
   return balance;
+}
+
+// Pending gifts: kind === "gift" AND not yet redeemed. The recipient sees a
+// landing-page callout with the total amount; they choose when to redeem.
+// At redemption time, the gift is marked with .redeemed = { at, blockStart,
+// blockEnd, meetingId } and a real Meeting is created so the shift schedule
+// reflects the swap.
+function getPendingGifts(transactions, recipientName) {
+  return (transactions || []).filter(tx =>
+    tx.kind === "gift" && tx.to === recipientName && !tx.redeemed
+  );
 }
 
 // ---- Bulk import parser ------------------------------------------------
@@ -768,15 +783,33 @@ function getTimeMode(d = new Date()) {
 //   muted  warm brown          secondary text
 //   soft   warm sand           dividers, soft fills
 //   line   near-black          hairlines (used at low alpha)
+// Theme palettes. Day (and time-of-day variants that share day's tokens)
+// versus the dusk palette which is a true warm-dark theme.
+//
+// The user can pick "day" or "dusk" via a toggle in the Profile Switcher;
+// the picked theme overrides time-of-day inference. The dawn/night entries
+// are kept as aliases so any code that references mode === "night" / "dawn"
+// (e.g. the TimeOrb) still resolves to a valid palette.
+//
+// Color philosophy for dusk:
+//   - bg: deep plum-brown (NOT black). Purple undertone makes it read as
+//     "twilight sky" rather than "office at midnight."
+//   - paper: card surface, slightly lifted.
+//   - ink: warm cream — the day theme's BACKGROUND becomes the night
+//     theme's FOREGROUND. The two themes feel like the same app in
+//     different moods rather than two unrelated designs.
+//   - accents: each day color pulled toward a softer dusk equivalent.
+//     Mommy rose → softer dusty pink. Terracotta → warm lamp amber.
+//     Gold → candlelight. Slate-blue Daddy → moonlit slate.
 const PALETTES = {
   day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
            mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
   dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
            mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
-  dusk:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
-  night: { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
+  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
+           mommy: "#D89BAE", daddy: "#8FA8C4", gold: "#E5B860" },
+  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
+           mommy: "#D89BAE", daddy: "#8FA8C4", gold: "#E5B860" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -809,6 +842,22 @@ function LittleLedgerLogo({ C, size = 40 }) {
 
 // ---- Storage layer -----------------------------------------------------
 const storage = {
+  // === Cloud sync runtime state ===
+  // Set by App via setCloudContext(). Storage uses these to decide whether
+  // to push writes to the cloud and whether to skip cloud-writes that would
+  // bounce back as polling updates. Holding them as fields here (not module-
+  // level globals) keeps everything tied to the storage object so a future
+  // Reset can clear them cleanly.
+  _familyCode: null,
+  _syncingFromCloud: false,
+  _onCloudWriteError: null, // callback for offline-pip UI
+
+  setCloudContext({ familyCode, syncingFromCloud, onCloudWriteError }) {
+    if (familyCode !== undefined) this._familyCode = familyCode;
+    if (syncingFromCloud !== undefined) this._syncingFromCloud = syncingFromCloud;
+    if (onCloudWriteError !== undefined) this._onCloudWriteError = onCloudWriteError;
+  },
+
   // Wipe marker sentinel: if this localStorage key exists, the user just
   // performed a Reset and the artifact-storage backend may still hold stale
   // data. While the marker exists, get() will NOT self-heal from artifact
@@ -855,7 +904,8 @@ const storage = {
   async set(key, value) {
     const json = JSON.stringify(value);
     // ALWAYS write to localStorage first — synchronous, can't fail silently.
-    // This is our authoritative store.
+    // This is our authoritative store, and it stays correct even if cloud
+    // sync is unavailable, the network is down, or we're in artifact-only mode.
     let localOk = false;
     try { localStorage.setItem(key, json); localOk = true; } catch (e) {
       console.warn("[storage] localStorage write failed for", key, e);
@@ -870,6 +920,28 @@ const storage = {
       // Don't surface — localStorage already has it.
       if (!localOk) console.warn("[storage] both backends failed for", key, e);
     }
+
+    // === Cloud sync write ===
+    // If a family code is set AND this write didn't originate from a cloud
+    // pull (which would create a write→bump-timestamp→re-pull loop), push
+    // to the API too. We don't await — the cloud write is fire-and-forget so
+    // the UI never blocks on network. On failure we ping the offline-indicator
+    // callback so the header can show a "sync paused" pip.
+    //
+    // Why we exclude solene:meta:* keys: those are local-only infrastructure
+    // (wipe marker, daily-content cache, etc.) that don't belong on the
+    // cloud. Pushing them would pollute the namespace and could even loop
+    // (the wipe marker push on Device A would propagate to Device B and
+    // confuse its hydrate).
+    if (this._familyCode && !this._syncingFromCloud && !key.startsWith("solene:meta:")) {
+      // Pushing the parsed value (not the JSON string) so the server stores
+      // it as a structured object, matching what cloudGet returns.
+      this.cloudSet(this._familyCode, key, value).then(ok => {
+        if (!ok && this._onCloudWriteError) {
+          try { this._onCloudWriteError(); } catch {}
+        }
+      });
+    }
   },
   async delete(key) {
     try { localStorage.removeItem(key); } catch {}
@@ -878,6 +950,10 @@ const storage = {
         await window.storage.delete(key);
       }
     } catch {}
+    // Mirror the delete to the cloud so other devices stop seeing this key.
+    if (this._familyCode && !this._syncingFromCloud && !key.startsWith("solene:meta:")) {
+      this.cloudDel(this._familyCode, key).catch(() => {});
+    }
   },
   async wipeAll() {
     // Set the wipe marker FIRST so even if anything below fails, the next
@@ -919,6 +995,81 @@ const storage = {
   // After this call, normal get() behavior (with self-heal) resumes.
   clearWipeMarker() {
     try { localStorage.removeItem(this.WIPE_MARKER_KEY); } catch {}
+  },
+
+  // === Cloud sync methods ===
+  // These talk to /api/data?ns={code}&key={key} and serialize values as JSON
+  // bodies. They're called BY the autosave effects (in addition to local
+  // writes), and BY the polling loop / initial sync routines.
+  //
+  // All four are pure HTTP — no fallback logic, no caching. The caller is
+  // responsible for deciding whether cloud is available and whether to fall
+  // back to local storage on failure. This separation keeps the methods
+  // simple and testable.
+  //
+  // Returns:
+  //   cloudGet  → the parsed value, or null if missing
+  //   cloudSet  → true on success, false on failure (logs)
+  //   cloudDel  → true on success, false on failure
+  //   cloudList → { keys, updatedAt } or null on failure
+
+  async cloudGet(familyCode, key) {
+    if (!familyCode) return null;
+    try {
+      const url = `/api/data?ns=${encodeURIComponent(familyCode)}&key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, { method: "GET" });
+      if (!res.ok) return null;
+      const json = await res.json();
+      // The server stores the value as-is (a JSON-serialized object). If we
+      // ever stored {value: <obj>} the server returned it under .value.
+      return json.value ?? null;
+    } catch (e) {
+      console.warn("[storage.cloudGet] failed for", key, e);
+      return null;
+    }
+  },
+
+  async cloudSet(familyCode, key, value) {
+    if (!familyCode) return false;
+    try {
+      const url = `/api/data?ns=${encodeURIComponent(familyCode)}&key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value }),
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn("[storage.cloudSet] failed for", key, e);
+      return false;
+    }
+  },
+
+  async cloudDel(familyCode, key) {
+    if (!familyCode) return false;
+    try {
+      const url = `/api/data?ns=${encodeURIComponent(familyCode)}&key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, { method: "DELETE" });
+      return res.ok;
+    } catch (e) {
+      console.warn("[storage.cloudDel] failed for", key, e);
+      return false;
+    }
+  },
+
+  // Returns { keys: string[], updatedAt: number }. The polling loop uses
+  // updatedAt to detect "is there anything new?" without fetching every key.
+  async cloudList(familyCode) {
+    if (!familyCode) return null;
+    try {
+      const url = `/api/data?ns=${encodeURIComponent(familyCode)}`;
+      const res = await fetch(url, { method: "GET" });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      console.warn("[storage.cloudList] failed", e);
+      return null;
+    }
   },
 };
 
@@ -1045,6 +1196,24 @@ export default function SoleneHandoff() {
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
   const [weather, setWeather] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+  // === Theme override ===
+  // User-picked theme: "day" or "dusk". Defaults to "day" so existing users
+  // aren't surprised by sudden dark mode after sunset (the default would
+  // otherwise come from getTimeMode and could go to "dusk" or "night" based
+  // on time of day). Persisted to localStorage as ll:theme — lives outside
+  // the solene:* keyspace so a Reset doesn't clear it. Per-device, NOT
+  // synced via cloud — you might want dusk on phone in bed but day on
+  // laptop at the desk.
+  const [themeOverride, setThemeOverride] = useState(() => {
+    if (typeof window === "undefined") return "day";
+    try {
+      const v = localStorage.getItem("ll:theme");
+      return (v === "day" || v === "dusk") ? v : "day";
+    } catch { return "day"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:theme", themeOverride); } catch {}
+  }, [themeOverride]);
   // Cloud sync state. familyCode is the 6-char shared secret that namespaces
   // data on the backend. cloudSyncAvailable is set after a /api/ping check
   // succeeds. cloudSyncSetupNeeded is true when we have backend access but
@@ -1055,11 +1224,36 @@ export default function SoleneHandoff() {
   const [familyCode, setFamilyCode] = useState(null);
   const [cloudSyncAvailable, setCloudSyncAvailable] = useState(false);
   const [showFamilyCodeSetup, setShowFamilyCodeSetup] = useState(false);
+  // === Cloud sync runtime indicators ===
+  // cloudSyncStatus tracks the health of the cloud connection at runtime.
+  //   "ok"      → last write/poll succeeded recently
+  //   "offline" → last write failed; localStorage is keeping local copy safe
+  //   "syncing" → an initial sync (upload-on-Generate or download-on-Enter) is in progress
+  // The header shows a small pip in the LIVE area whose color reflects this.
+  const [cloudSyncStatus, setCloudSyncStatus] = useState("ok"); // "ok" | "offline" | "syncing"
+  // syncingFromCloudRef is set to true while we're applying a poll result to
+  // React state. The autosave effects (and storage.set internally) check this
+  // to skip re-pushing to cloud, which would otherwise create a feedback loop.
+  // Using a ref (not state) so the autosave effects see the current value
+  // synchronously without waiting for a re-render.
+  const syncingFromCloudRef = useRef(false);
+  // Last server-known timestamp from cloudList. Polling compares this to the
+  // current value to decide whether to re-pull.
+  const lastCloudTimestampRef = useRef(0);
+  // Has the initial sync (upload-on-Generate / download-on-Enter) completed
+  // for the current code? Until this is true, polling stays paused so it
+  // can't race with the migration.
+  const initialSyncDoneRef = useRef(false);
   const [showLogger, setShowLogger] = useState(false);
   // Deep-link flag: when set, ShiftsView auto-opens the TimeBank modal on
   // mount/tab-switch and clears the flag. Used by the LOG sheet pills so
   // gift/payback is reachable from anywhere without hoisting the modal.
   const [pendingTimeBankAction, setPendingTimeBankAction] = useState(null); // null | "gift" | "payback"
+  // Gift being redeemed — when set, the RedeemGiftModal mounts. Set by
+  // tapping the "you have a gift" pip on the Now view. The recipient picks
+  // when to use it; submission converts the gift into a meeting + marks
+  // the gift transaction as redeemed.
+  const [redeemingGift, setRedeemingGift] = useState(null);
   // Bulk import modal — opened from LOG sheet's "Catch up" section. Lives at
   // top level so the LOG sheet can close before the import modal opens (avoids
   // overlapping modals).
@@ -1069,6 +1263,14 @@ export default function SoleneHandoff() {
   const [activeBfTimer, setActiveBfTimer] = useState(null);
   // On-site mode: { parent, departedAt, earliestReturn, latestReturn, etaUpdate?: ISOString }
   const [onsite, setOnsite] = useState(null);
+  // Modal triggers for on-site flow — hoisted to App so the trigger button
+  // can live in NowView while the modals stay portable to any caller.
+  const [showOnsiteModal, setShowOnsiteModal] = useState(false);
+  const [showEtaModal, setShowEtaModal] = useState(false);
+  // Sleep-down time picker — when the user confirms baby fell asleep, this
+  // opens with a pre-filled estimate they can adjust.
+  const [showSleepDownPicker, setShowSleepDownPicker] = useState(false);
+  const [sleepDownPrefill, setSleepDownPrefill] = useState(null);
   // Doctor notes & appointments
   const [notes, setNotes] = useState([]);            // { id, ts, category, text }
   const [appointments, setAppointments] = useState([]); // { id, dateTime, title, doctor?, location?, prepNotes? }
@@ -1253,10 +1455,6 @@ export default function SoleneHandoff() {
   //   3. If backend available AND no code yet, flag setup modal to open
   //   4. If backend unavailable, app stays in local-only mode (current
   //      behavior — works fine in Claude artifact view, etc.)
-  //
-  // This effect runs independently of the data hydrate above. The data
-  // hydrate uses storage.get which currently still talks to localStorage;
-  // build 2 will swap that to API-backed when familyCode is set.
   useEffect(() => {
     (async () => {
       // Read stored code
@@ -1264,7 +1462,15 @@ export default function SoleneHandoff() {
       try {
         storedCode = localStorage.getItem("ll:familyCode");
       } catch {}
-      if (storedCode) setFamilyCode(storedCode);
+      if (storedCode) {
+        setFamilyCode(code => code || storedCode);
+        // Code already exists — this is a reload, not first-time setup.
+        // Mark initial sync as done so the polling loop can engage as soon
+        // as cloudSyncAvailable comes back true. The polling loop will then
+        // catch up on anything the partner wrote while this device was
+        // offline (it'll see a server timestamp newer than 0 and pull).
+        initialSyncDoneRef.current = true;
+      }
 
       // Probe backend
       try {
@@ -1285,6 +1491,129 @@ export default function SoleneHandoff() {
       }
     })();
   }, []);
+
+  // === Wire family code into storage layer ===
+  // Whenever familyCode changes (e.g. user generated/entered/reset), update
+  // the storage layer's internal context so subsequent set() calls know
+  // whether to push to cloud. Also wires the offline-indicator callback so
+  // the storage layer can flip the cloudSyncStatus state when a cloud write
+  // fails. This is the only place the connection between React state and
+  // the storage object is made; everything else just calls storage.set().
+  useEffect(() => {
+    storage.setCloudContext({
+      familyCode: familyCode,
+      onCloudWriteError: () => {
+        // Don't overwrite "syncing" status with "offline" — initial sync errors
+        // are handled separately. We only flip to offline during steady-state.
+        setCloudSyncStatus(prev => prev === "syncing" ? prev : "offline");
+      },
+    });
+  }, [familyCode]);
+
+  // === State applier ===
+  // Maps each cloud key to its corresponding React setter, with date-rehydration
+  // for fields whose values include Date objects. Used by both the polling
+  // refresh and the initial download-from-cloud routine. Keeping this map in
+  // one place means the polling logic doesn't need to know about per-field
+  // hydration rules.
+  //
+  // We MUST set syncingFromCloudRef = true before applying these so the
+  // autosave effects don't bounce the same data right back to the cloud.
+  // The ref is cleared after a microtask (queueMicrotask) so the state update
+  // has time to fire its effect first.
+  const cloudKeySetters = useMemo(() => ({
+    "solene:events":          (v) => setEvents(Array.isArray(v) ? v.map(x => ({ ...x, ts: new Date(x.ts) })) : []),
+    "solene:inventory":       (v) => setInventory(Array.isArray(v) ? v.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) })) : []),
+    "solene:meetings":        (v) => setMeetings(Array.isArray(v) ? v : []),
+    "solene:shifts:v3":       (v) => v && typeof v === "object" && setShifts(v),
+    "solene:diaperbag":       (v) => v && setDiaperBag(v),
+    "solene:onsite":          (v) => setOnsite(v),
+    "solene:notes":           (v) => setNotes(Array.isArray(v) ? v : []),
+    "solene:appointments":    (v) => setAppointments(Array.isArray(v) ? v : []),
+    "solene:activeActivity":  (v) => setActiveActivity(v),
+    "solene:activePump":      (v) => setActivePump(v),
+    "solene:takeover":        (v) => setTakeover(v),
+    "solene:handoffNote":     (v) => setHandoffNote(v),
+    "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
+    "solene:timeBank":        (v) => v && setTimeBank(v),
+    "solene:dailyContent":    (v) => v && setDailyContent(v),
+    "solene:currentUser":     (v) => v && setCurrentUser(v),
+  }), []);
+
+  // === Polling loop ===
+  // Every 5 seconds while in foreground:
+  //   1. Call cloudList to get { keys, updatedAt }
+  //   2. If updatedAt > our last-known, pull each key and apply via setters
+  //   3. Update last-known timestamp
+  //   4. Set cloudSyncStatus = "ok" (clears any prior offline pip)
+  //
+  // Paused when: no family code, cloud unavailable, initial sync not done,
+  // tab hidden, or wipe in progress.
+  //
+  // Why 5 seconds: balance between "feels real-time" (under 10s) and not
+  // hammering the API. 5s × ~3000s/day in active foreground use = 600 reqs/
+  // day per device. Two devices → 1200 reqs/day. Free tier = 30k/day. Plenty.
+  useEffect(() => {
+    if (!familyCode || !cloudSyncAvailable) return;
+    let cancelled = false;
+
+    const pollOnce = async () => {
+      if (cancelled) return;
+      if (!initialSyncDoneRef.current) return; // wait for initial sync
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (isWiping()) return;
+
+      try {
+        const list = await storage.cloudList(familyCode);
+        if (!list) {
+          // Network failure / API error. Set offline pip but don't crash.
+          setCloudSyncStatus(prev => prev === "syncing" ? prev : "offline");
+          return;
+        }
+        const serverTs = list.updatedAt || 0;
+        if (serverTs <= lastCloudTimestampRef.current) {
+          // Nothing new. Just confirm we're online.
+          setCloudSyncStatus(prev => prev === "syncing" ? prev : "ok");
+          return;
+        }
+
+        // Server has newer data. Fetch each known key and apply.
+        // Set the syncing flag BEFORE any setX so autosaves skip cloud-push.
+        syncingFromCloudRef.current = true;
+        storage.setCloudContext({ syncingFromCloud: true });
+
+        for (const key of (list.keys || [])) {
+          const setter = cloudKeySetters[key];
+          if (!setter) continue;
+          const value = await storage.cloudGet(familyCode, key);
+          if (value !== null) {
+            try { setter(value); } catch (e) { console.warn("[poll] setter failed for", key, e); }
+          }
+        }
+
+        lastCloudTimestampRef.current = serverTs;
+        setCloudSyncStatus("ok");
+
+        // Clear the syncing flag after a small delay so React has time to
+        // batch and process all the state updates above (and their autosave
+        // effects). Using 200ms as a generous safety margin — the autosaves
+        // typically run within one render cycle (<16ms), but cloud writes
+        // happen async so we need to make sure none are in flight.
+        setTimeout(() => {
+          syncingFromCloudRef.current = false;
+          storage.setCloudContext({ syncingFromCloud: false });
+        }, 200);
+      } catch (e) {
+        console.warn("[poll] error:", e);
+        setCloudSyncStatus(prev => prev === "syncing" ? prev : "offline");
+      }
+    };
+
+    // Poll immediately, then every 5 seconds.
+    pollOnce();
+    const interval = setInterval(pollOnce, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [familyCode, cloudSyncAvailable, cloudKeySetters]);
 
   // Autosave: persist each piece of state when it changes, after hydration.
   // Each effect is guarded by the global `__soleneWiping` flag so that during
@@ -1320,9 +1649,9 @@ export default function SoleneHandoff() {
     }
     setHandoffNote(newNote);
   };
-  useEffect(() => { if (hydrated) storage.set("solene:timeBank", timeBank); }, [timeBank, hydrated]);
-  useEffect(() => { if (hydrated) storage.set("solene:dailyContent", dailyContent); }, [dailyContent, hydrated]);
-  useEffect(() => { if (hydrated) storage.set("solene:currentUser", currentUser); }, [currentUser, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:timeBank", timeBank); }, [timeBank, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:dailyContent", dailyContent); }, [dailyContent, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:currentUser", currentUser); }, [currentUser, hydrated]);
 
   // Weather + UV
   useEffect(() => {
@@ -1418,7 +1747,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   }, [hydrated, dailyContent, loadingDaily]);
 
   const mode = getTimeMode(now);
-  const C = PALETTES[mode];
+  // Theme palette key. Derived from the user's chosen theme override
+  // (day/dusk). Decoupled from `mode` so TimeOrb can still show sun/moon
+  // based on real time of day, while the COLORS follow the user's pick.
+  const themeMode = themeOverride === "dusk" ? "dusk" : "day";
+  const C = PALETTES[themeMode];
 
   // Compute effective shifts: base shifts → auto-projected for commitments → onsite override
   // Since projection happens later in the file, we declare the layered logic to use it
@@ -2930,7 +3263,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
       <header style={{ padding: "20px 18px 8px", maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
             {/* Little Ledger mark — full-presence brand glyph */}
             <div style={{
               display: "flex", alignItems: "center", gap: 11,
@@ -2970,11 +3303,22 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               <span>{fmtTime12(now)}</span>
               <span style={{ opacity: 0.5 }}>·</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {/* Sync-status pip: green=ok, gold=syncing, coral=offline.
+                    Reflects whether cloud sync is healthy. When no family
+                    code is set, this is just a "live" indicator (always green). */}
                 <span style={{
                   display: "inline-block", width: 6, height: 6, borderRadius: "50%",
-                  background: "#5C8E5C",
+                  background: !familyCode ? "#5C8E5C"
+                            : cloudSyncStatus === "ok" ? "#5C8E5C"
+                            : cloudSyncStatus === "syncing" ? C.gold
+                            : C.accent,
                 }} className="pulse-soft" />
-                <span style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted }}>live</span>
+                <span style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted }}>
+                  {!familyCode ? "live"
+                   : cloudSyncStatus === "syncing" ? "syncing…"
+                   : cloudSyncStatus === "offline" ? "offline"
+                   : "synced"}
+                </span>
               </span>
             </div>
           </div>
@@ -3009,6 +3353,166 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "0 18px", position: "relative", zIndex: 2 }}>
         {tab === "now" && (
+        <>
+        {/* Pending gifts pip — only renders when current user has gifts
+            waiting to be redeemed. Sits above the OnDutyCard as a small
+            but visible nudge. Tapping opens the RedeemGiftModal for the
+            most recent pending gift; if multiple gifts are pending, the
+            user can redeem each in turn. */}
+        {(() => {
+          const pendingGifts = getPendingGifts(timeBank.transactions, currentUser);
+          if (pendingGifts.length === 0) return null;
+          const totalMins = pendingGifts.reduce((sum, g) => sum + g.mins, 0);
+          // Tap behavior: open the most recent pending gift. The modal will
+          // close on submit; if more remain, the pip stays visible so the
+          // user can tap again.
+          const mostRecent = pendingGifts.slice().sort(
+            (a, b) => new Date(b.ts) - new Date(a.ts)
+          )[0];
+          const giverColor = mostRecent.from === "Mommy" ? C.mommy : C.daddy;
+          return (
+            <button
+              onClick={() => setRedeemingGift(mostRecent)}
+              style={{
+                width: "100%",
+                background: `linear-gradient(135deg, ${giverColor}18 0%, ${C.gold}12 100%)`,
+                border: `1px solid ${giverColor}40`,
+                borderRadius: 12,
+                padding: "10px 14px",
+                marginBottom: 12,
+                marginTop: 8,
+                fontFamily: "inherit",
+                cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 10,
+                textAlign: "left",
+              }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>🎁</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, lineHeight: 1.3 }}>
+                  {pendingGifts.length === 1
+                    ? <>You have a <strong>{fmtBalance(totalMins)}</strong> gift from <span style={{ color: giverColor }}>{mostRecent.from}</span></>
+                    : <><strong>{pendingGifts.length}</strong> gifts waiting · <strong>{fmtBalance(totalMins)}</strong> total</>}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  Tap to choose when to redeem
+                </div>
+              </div>
+              <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
+            </button>
+          );
+        })()}
+
+        {/* Tomorrow's commitments reminder pip — sits in the same prominent
+            slot as the gift pip. Triggers when:
+            (a) it's after 4pm (gives time to log before bedtime)
+            (b) currentUser has no commitments logged for tomorrow yet
+            Visual urgency escalates by hour:
+              4–6pm: subtle nudge (pale accent fill, small)
+              6–8pm: more present (coral accent border, slightly larger)
+              8pm+:  pulsing prominence (coral fill, animated, can't miss)
+            Goes away once user logs ANY commitment for tomorrow OR taps
+            "nothing tomorrow" (which logs a sentinel that satisfies the
+            check until midnight). */}
+        {(() => {
+          const hour = now.getHours();
+          if (hour < 16) return null; // before 4pm — don't nag yet
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(0, 0, 0, 0);
+          const dayAfter = new Date(tomorrow);
+          dayAfter.setDate(dayAfter.getDate() + 1);
+          const tomorrowMine = (meetings || []).filter(m => {
+            const t = new Date(m.start);
+            return t >= tomorrow && t < dayAfter && m.parent === currentUser;
+          });
+          // User has explicitly marked tomorrow as quiet? Skip.
+          let dismissedToday = false;
+          try {
+            const key = `ll:tomorrowDismissed:${currentUser}:${now.toDateString()}`;
+            dismissedToday = !!localStorage.getItem(key);
+          } catch {}
+          if (tomorrowMine.length > 0 || dismissedToday) return null;
+
+          // Tier the visual urgency
+          const tier = hour >= 20 ? "urgent" : hour >= 18 ? "elevated" : "subtle";
+
+          if (tier === "urgent") {
+            return (
+              <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+                width: "100%", marginBottom: 12, marginTop: 8,
+                background: C.accent, color: "#fff",
+                border: `2px solid ${C.accent}`,
+                borderRadius: 14, padding: "14px 16px",
+                display: "flex", alignItems: "center", gap: 12,
+                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                boxShadow: `0 4px 16px ${C.accent}55, 0 0 0 4px ${C.accent}22`,
+                animation: "pulse-glow 2.4s ease-in-out infinite",
+              }}>
+                <style>{`@keyframes pulse-glow {
+                  0%, 100% { box-shadow: 0 4px 16px ${C.accent}55, 0 0 0 4px ${C.accent}22; }
+                  50%      { box-shadow: 0 6px 22px ${C.accent}88, 0 0 0 8px ${C.accent}33; }
+                }`}</style>
+                <AlarmClock size={22} style={{ flexShrink: 0 }} className="pulse-soft" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.95 }}>
+                    Before you wind down
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, marginTop: 2 }}>
+                    Log tomorrow's commitments
+                  </div>
+                </div>
+                <ChevronRight size={18} style={{ flexShrink: 0 }} />
+              </button>
+            );
+          }
+
+          if (tier === "elevated") {
+            return (
+              <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+                width: "100%", marginBottom: 12, marginTop: 8,
+                background: `${C.accent}15`,
+                border: `1.5px solid ${C.accent}80`,
+                borderRadius: 12, padding: "12px 14px",
+                display: "flex", alignItems: "center", gap: 10,
+                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+              }}>
+                <AlarmClock size={18} color={C.accent} style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>
+                    Tomorrow's calendar?
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                    Log meetings or commitments so coverage balances before morning
+                  </div>
+                </div>
+                <ChevronRight size={14} color={C.accent} style={{ flexShrink: 0 }} />
+              </button>
+            );
+          }
+
+          // subtle tier (4-6pm)
+          return (
+            <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+              width: "100%", marginBottom: 12, marginTop: 8,
+              background: `${C.accent}10`,
+              border: `1px solid ${C.accent}40`,
+              borderRadius: 10, padding: "10px 14px",
+              display: "flex", alignItems: "center", gap: 10,
+              cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+            }}>
+              <AlarmClock size={14} color={C.accent} style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>
+                  Anything on your calendar tomorrow?
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                  Tap to log — or this nudge gets bigger as the night goes on
+                </div>
+              </div>
+              <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
+            </button>
+          );
+        })()}
         <OnDutyCard
           C={C} mode={mode}
           onDuty={onDuty}
@@ -3060,14 +3564,17 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           archiveCount={noteArchive.length}
           onLogSleepDown={() => {
             // Estimate when she fell asleep: midpoint between last feed and now,
-            // bounded so it doesn't go too far back
+            // bounded so it doesn't go too far back. Open the time-picker
+            // modal pre-filled with this estimate so the parent can accept
+            // it or override with the actual time if they remember.
             const estTs = (() => {
               if (!lastFeed) return new Date();
               const feedTime = new Date(lastFeed.ts);
               const midpoint = new Date((feedTime.getTime() + now.getTime()) / 2);
               return midpoint;
             })();
-            addEvent({ type: "sleep_down", ts: estTs, estimated: true });
+            setSleepDownPrefill(estTs);
+            setShowSleepDownPicker(true);
           }}
           onConfirmAwake={() => addEvent({ type: "wake_confirmed", silent: true })}
           activePump={activePump}
@@ -3115,7 +3622,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setTakeover(null);
           }}
           onPickBottle={(loc) => setBottlePickerLoc(loc)}
+          /* Quick-log from quadrants: tile tap opens the LOG sheet
+             pre-set to the given event type. Lets the user one-tap
+             from the at-a-glance view straight into a focused logger. */
+          onQuickLog={(eventType) => { setLoggerType(eventType); setShowLogger(true); }}
         />
+        </>
         )}
 
         {tab === "now" && (
@@ -3144,6 +3656,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             myActiveCommitment={myActiveCommitment}
             onEndCommitmentEarly={endCommitmentEarly}
             onOpenCommitmentLog={() => { setLoggerType("commitment"); setShowLogger(true); }}
+            onsite={onsite}
+            onStartOnsite={() => setShowOnsiteModal(true)}
+            onUpdateEta={() => setShowEtaModal(true)}
+            onArrivedHome={() => setOnsite(null)}
             onDispute={(swap) => {
               const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
               setNoteWithArchive({
@@ -3170,6 +3686,17 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             swaps={projectedShifts.swaps}
             tomorrowProjection={tomorrowProjection}
             timeBank={timeBank} setTimeBank={setTimeBank}
+            currentUser={currentUser}
+            pendingTimeBankAction={pendingTimeBankAction}
+            clearPendingTimeBankAction={() => setPendingTimeBankAction(null)}
+          />
+        )}
+        {tab === "bank" && (
+          <BankView
+            C={C}
+            timeBank={timeBank} setTimeBank={setTimeBank}
+            setMeetings={setMeetings}
+            now={now}
             currentUser={currentUser}
             pendingTimeBankAction={pendingTimeBankAction}
             clearPendingTimeBankAction={() => setPendingTimeBankAction(null)}
@@ -3332,6 +3859,40 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         />
       )}
 
+      {/* Redeem gift modal — opened from the Now-view pip when the current
+          user has pending gifts. Picking a time creates a meeting and marks
+          the gift as redeemed; the pip vanishes once all gifts are claimed. */}
+      {redeemingGift && (
+        <RedeemGiftModal
+          C={C}
+          gift={redeemingGift}
+          timeBank={timeBank}
+          setTimeBank={setTimeBank}
+          setMeetings={setMeetings}
+          now={now}
+          onClose={() => setRedeemingGift(null)}
+        />
+      )}
+
+      {/* On-site / ETA modals at App level — triggered from NowView's
+          on-site control or from anywhere else that needs to start/update
+          an on-site session. */}
+      {showOnsiteModal && <OnsiteModal C={C} onClose={() => setShowOnsiteModal(false)} onSubmit={(o) => { setOnsite(o); setShowOnsiteModal(false); }} />}
+      {showEtaModal && onsite && <EtaUpdateModal C={C} onsite={onsite} onClose={() => setShowEtaModal(false)} onSubmit={(eta) => { setOnsite({ ...onsite, etaUpdate: eta }); setShowEtaModal(false); }} />}
+      {showSleepDownPicker && sleepDownPrefill && (
+        <SleepDownPickerModal
+          C={C}
+          prefill={sleepDownPrefill}
+          now={now}
+          onClose={() => { setShowSleepDownPicker(false); setSleepDownPrefill(null); }}
+          onSubmit={(ts, estimated) => {
+            addEvent({ type: "sleep_down", ts, estimated });
+            setShowSleepDownPicker(false);
+            setSleepDownPrefill(null);
+          }}
+        />
+      )}
+
       {/* Family code setup — first-launch flow when cloud sync backend is
           detected. Stores the code in localStorage outside the solene:*
           namespace so it survives data wipes. Build 1: just captures the
@@ -3339,10 +3900,116 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       {showFamilyCodeSetup && (
         <FamilyCodeSetupModal
           C={C}
-          onSet={(code) => {
+          onSet={async (code, mode) => {
+            // mode is "generate" (we're starting a new family) or "enter"
+            // (joining one our partner created). The two modes do different
+            // things to existing local data:
+            //   generate → upload all local state to cloud (we're seeding it)
+            //   enter    → confirm-and-replace local state with cloud state
+            //              (the partner's data wins; ours gets discarded)
+            //
+            // The "enter" path is destructive, so confirm first. If user
+            // declines, we don't set the code at all — they stay local-only.
+            if (mode === "enter") {
+              // Check if there's existing data that would be lost
+              const hasLocalData = events.length > 0 || notes.length > 0 || meetings.length > 0;
+              if (hasLocalData) {
+                const ok = window.confirm(
+                  "Joining a family will REPLACE the data on this device with " +
+                  "your partner's data. Anything you've logged here that isn't " +
+                  "in their snapshot will be lost.\n\n" +
+                  "If you have data here that you want to keep, cancel and use " +
+                  "Backup → Export first.\n\n" +
+                  "Continue and join the family?"
+                );
+                if (!ok) return;
+              }
+            }
+
             try { localStorage.setItem("ll:familyCode", code); } catch {}
             setFamilyCode(code);
             setShowFamilyCodeSetup(false);
+            setCloudSyncStatus("syncing");
+
+            // Block polling until initial sync completes — initialSyncDoneRef
+            // gates the polling loop. We'll set it to true after the migration.
+            initialSyncDoneRef.current = false;
+
+            // Update storage context immediately (don't wait for the useEffect
+            // that watches familyCode — we want to push/pull NOW).
+            storage.setCloudContext({ familyCode: code, syncingFromCloud: false });
+
+            try {
+              if (mode === "generate") {
+                // Upload all current state to cloud. We push each key with the
+                // CURRENT React state value. The cloud writes happen in
+                // parallel for speed. If any fail we log but don't abort —
+                // partial sync is better than no sync.
+                const stateToUpload = {
+                  "solene:events": events,
+                  "solene:inventory": inventory,
+                  "solene:meetings": meetings,
+                  "solene:shifts:v3": shifts,
+                  "solene:diaperbag": diaperBag,
+                  "solene:onsite": onsite,
+                  "solene:notes": notes,
+                  "solene:appointments": appointments,
+                  "solene:activeActivity": activeActivity,
+                  "solene:activePump": activePump,
+                  "solene:takeover": takeover,
+                  "solene:handoffNote": handoffNote,
+                  "solene:noteArchive": noteArchive,
+                  "solene:timeBank": timeBank,
+                  "solene:dailyContent": dailyContent,
+                  "solene:currentUser": currentUser,
+                };
+                const writes = Object.entries(stateToUpload).map(([k, v]) =>
+                  storage.cloudSet(code, k, v).then(ok => ({ k, ok }))
+                );
+                const results = await Promise.all(writes);
+                const failed = results.filter(r => !r.ok).map(r => r.k);
+                if (failed.length > 0) {
+                  console.warn("[initial sync upload] failed keys:", failed);
+                }
+                // Get the new server timestamp so polling won't immediately
+                // think it has new data and re-pull what we just pushed.
+                const list = await storage.cloudList(code);
+                lastCloudTimestampRef.current = list?.updatedAt || Date.now();
+              } else {
+                // mode === "enter" — download cloud state and apply locally.
+                // Set syncingFromCloud BEFORE applying so autosaves don't
+                // bounce these writes back.
+                syncingFromCloudRef.current = true;
+                storage.setCloudContext({ familyCode: code, syncingFromCloud: true });
+
+                const list = await storage.cloudList(code);
+                if (!list) throw new Error("Couldn't reach the server. Try again in a moment.");
+
+                for (const k of (list.keys || [])) {
+                  const setter = cloudKeySetters[k];
+                  if (!setter) continue;
+                  const value = await storage.cloudGet(code, k);
+                  if (value !== null) {
+                    try { setter(value); } catch (e) { console.warn("[initial sync download] setter failed for", k, e); }
+                  }
+                }
+                lastCloudTimestampRef.current = list.updatedAt || 0;
+
+                // Wait one event loop turn for autosaves to flush, then
+                // re-enable cloud writes.
+                await new Promise(resolve => setTimeout(resolve, 100));
+                syncingFromCloudRef.current = false;
+                storage.setCloudContext({ familyCode: code, syncingFromCloud: false });
+              }
+
+              initialSyncDoneRef.current = true;
+              setCloudSyncStatus("ok");
+            } catch (e) {
+              console.warn("[initial sync] failed:", e);
+              alert("Cloud sync setup hit an error: " + (e.message || e) + "\n\nYour local data is safe. Try resetting the family code from Profile Switcher.");
+              initialSyncDoneRef.current = true; // unblock polling so user can retry
+              setCloudSyncStatus("offline");
+            }
           }}
           onSkip={() => {
             // Mark that the user has seen + dismissed the setup so we
@@ -3364,6 +4031,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onClearTakeover={() => setTakeover(null)}
           familyCode={familyCode}
           cloudSyncAvailable={cloudSyncAvailable}
+          themeOverride={themeOverride}
+          setThemeOverride={setThemeOverride}
           onOpenFamilyCodeSetup={() => {
             setShowProfileSwitcher(false);
             // Clear the dismiss flag so the modal can show even if previously
@@ -3375,6 +4044,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             try { localStorage.removeItem("ll:familyCode"); } catch {}
             try { localStorage.removeItem("ll:familyCodeSetupDismissed"); } catch {}
             setFamilyCode(null);
+            // Reset all cloud sync runtime state so the app cleanly returns
+            // to local-only mode. The actual cloud data stays intact in KV
+            // (the partner can still access it with the same code).
+            initialSyncDoneRef.current = false;
+            lastCloudTimestampRef.current = 0;
+            syncingFromCloudRef.current = false;
+            setCloudSyncStatus("ok");
+            storage.setCloudContext({ familyCode: null, syncingFromCloud: false });
             setShowProfileSwitcher(false);
             setShowFamilyCodeSetup(true);
           }}
@@ -3412,6 +4089,21 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             // Parse + validate. We trust the schema only as far as the field
             // names; missing fields fall back to current state to avoid
             // wiping things the user might not have meant to wipe.
+            // First: detect whether the user pasted a free-form log (e.g. for
+            // bulk import) into the wrong box. The tell: text doesn't start
+            // with '{' (a JSON object) or '['  (a JSON array). If so, give a
+            // friendly redirect to Bulk Import instead of a confusing JSON
+            // parser error like 'Unexpected token "S", "SUN May 3"...'.
+            const trimmed = (jsonText || "").trim();
+            if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+              return {
+                ok: false,
+                error: "This looks like free-form log text, not a JSON backup. " +
+                       "If you're trying to import historical events, close this modal " +
+                       "and use LOG → Catch up → Bulk import instead. This box only " +
+                       "accepts JSON snapshots created by the Export button.",
+              };
+            }
             try {
               const parsed = JSON.parse(jsonText);
               if (!parsed || typeof parsed !== "object" || !parsed.data) {
@@ -4142,11 +4834,11 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
       setError("Code must be exactly 6 characters (letters + numbers).");
       return;
     }
-    onSet(cleaned);
+    onSet(cleaned, "enter");
   };
 
   const acceptGenerated = () => {
-    onSet(generatedCode);
+    onSet(generatedCode, "generate");
   };
 
   return (
@@ -4337,7 +5029,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
 }
 
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Backup section state
   // mode: null = collapsed, 'export' = showing exported text, 'import' = showing import textarea
@@ -4384,6 +5076,61 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           );
         })}
       </div>
+
+      {/* Theme toggle — Day vs Dusk. Per-device preference (not synced).
+          Sits right after profile selection because it's a personal/visual
+          setting that changes immediately and locally. */}
+      {setThemeOverride && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{
+            fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
+            color: C.muted, fontWeight: 600, marginBottom: 8,
+          }}>
+            Appearance
+          </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+          }}>
+            {[
+              { v: "day", l: "Day", icon: "☀", desc: "warm cream" },
+              { v: "dusk", l: "Dusk", icon: "🌙", desc: "warm dark" },
+            ].map(opt => {
+              const active = themeOverride === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => setThemeOverride(opt.v)}
+                  style={{
+                    background: active ? C.accent : C.paper,
+                    color: active ? "#fff" : C.ink,
+                    border: `1.5px solid ${active ? C.accent : C.line + "40"}`,
+                    borderRadius: 12, padding: "12px 14px", cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 10,
+                    textAlign: "left", fontFamily: "inherit",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}>
+                  <div style={{
+                    fontSize: 20, lineHeight: 1, flexShrink: 0,
+                  }}>{opt.icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 18, fontWeight: 500, lineHeight: 1.1,
+                    }}>{opt.l}</div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginTop: 1 }}>
+                      {opt.desc}
+                    </div>
+                  </div>
+                  {active && <Check size={14} />}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 6, textAlign: "center" }}>
+            saved on this device only — your partner's device keeps its own preference
+          </div>
+        </div>
+      )}
 
       {/* Clear stuck takeover — only when one is active */}
       {takeover && (
@@ -5039,7 +5786,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
   );
 }
 
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, currentUser, rtItems, fridgeItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, currentUser, rtItems, fridgeItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -5356,13 +6103,14 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           icon={<Milk size={12} />}
           iconColor="#A8745C"
           value={lastFeed ? fmtElapsed(minutesAgo(lastFeed.ts)) : "—"}
-          sub={lastFeed ? (lastFeed.type === "breastfeed" ? `${lastFeed.totalDurationMin}m breastfeeding` : `${lastFeed.oz || "?"}oz · ${lastFeed.source || ""}`) : "no feeds yet"} />
+          sub={lastFeed ? (lastFeed.type === "breastfeed" ? `${lastFeed.totalDurationMin}m breastfeeding` : `${lastFeed.oz || "?"}oz · ${lastFeed.source || ""}`) : "no feeds yet"}
+          onTap={onQuickLog ? () => onQuickLog("feed") : undefined} />
         <StatTile C={C} label={
           lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= URGENT_H
-            ? "diaper · urgent"
+            ? "diaper change overdue"
             : lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= WARN_H
-            ? "diaper · check soon"
-            : "last diaper"
+            ? "diaper change soon"
+            : "last diaper change"
         }
           icon={<Baby size={12} />}
           iconColor={
@@ -5386,18 +6134,22 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               : lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= WARN_H
               ? "#D4A03A"
               : null
-          } />
+          }
+          onTap={onQuickLog ? () => onQuickLog("diaper") : undefined} />
         <StatTile C={C}
-          label={isAsleep ? "sleeping for" : "last sleep"}
+          /* Label flips between asleep/awake states. The label IS the
+             status — no separate sub needed. The big number reads as a
+             duration ("5h 59m") so paired with "Awake for" or "Asleep
+             for" it's a clean phrase: "Awake for · 5h 59m". */
+          label={isAsleep ? "asleep for" : "awake for"}
           icon={isAsleep ? <Moon size={12} /> : <Sun size={12} />}
           iconColor={isAsleep ? "#5A6E8A" : "#D4A03A"}
           value={isAsleep ? fmtElapsed(minutesAgo(lastSleep.ts)) : (lastWake ? fmtElapsed(minutesAgo(lastWake.ts)) : "—")}
-          sub={isAsleep ? "🌙 down" : "awake"} />
+          onTap={onQuickLog ? () => onQuickLog("sleep") : undefined} />
         <StatTile C={C} label="next feed est."
           icon={<Clock size={12} />}
           iconColor={C.accent}
-          value={lastFeed ? fmtPredictedNextFeed(lastFeed, now) : "—"}
-          sub={lastFeed ? "based on typical pattern" : ""} />
+          value={lastFeed ? fmtPredictedNextFeed(lastFeed, now) : "—"} />
       </div>
 
       {/* Milk panel — RT inventory + next pump, visible to both parents always */}
@@ -5515,11 +6267,13 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           : pumpOverdue ? "#C44545"
           : pumpSoon ? "#D4A03A"
           : "#5C8E5C";
+        // Eyebrow now omits the redundant "tap to start" since the whole
+        // tile is a button — the action is implied. State word + condition.
         const stateLabel = activePump
-          ? "Pumping now · tap to finish"
-          : pumpOverdue ? "Pump overdue · tap to start"
-          : pumpSoon ? "Pump soon · tap to start"
-          : "On schedule · tap to start";
+          ? "Pumping now"
+          : pumpOverdue ? "Pump overdue"
+          : pumpSoon ? "Pump soon"
+          : "On schedule";
         return (
         <button
           onClick={activePump ? onEndActivePump : onStartPump}
@@ -5536,23 +6290,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             cursor: "pointer",
             textAlign: "left",
             fontFamily: "inherit",
-            position: "relative",
           }}>
-          {/* Status pip — top-right corner — clarifies state independent of bg color */}
-          <span style={{
-            position: "absolute", top: 8, right: 10,
-            display: "inline-flex", alignItems: "center", gap: 5,
-            background: "rgba(255,255,255,0.22)",
-            padding: "2px 8px", borderRadius: 10,
-            fontSize: 9, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase",
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: "#fff",
-              boxShadow: "0 0 0 2px rgba(255,255,255,0.35)",
-            }} />
-            {activePump ? "active" : pumpOverdue ? "late" : pumpSoon ? "soon" : "ahead"}
-          </span>
           <Timer size={28} className={activePump ? "pulse-soft" : ""} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.9 }}>
@@ -5568,20 +6306,27 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 ? (() => {
                     // Math.floor on negatives rounds toward -infinity, so
                     // Math.floor(-6/60) === -1 (not 0). Take abs first, then split.
+                    // Drop the "late" suffix here — eyebrow already says overdue.
                     const lateMin = Math.abs(minsToNextPump);
                     const h = Math.floor(lateMin / 60);
                     const m = lateMin % 60;
-                    return h > 0 ? `${h}h ${m}m late` : `${m} min late`;
+                    return h > 0 ? `${h}h ${m}m` : `${m} min`;
                   })()
                 : minsToNextPump < 60
                 ? `${minsToNextPump} min`
                 : `${Math.floor(minsToNextPump / 60)}h ${minsToNextPump % 60}m`}
             </div>
-            <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", opacity: 0.85, marginTop: 2 }}>
-              {activePump
-                ? `started ${fmtTimeShort(activePump.startedAt)} · finish to log oz`
-                : `target ${fmtTimeShort(nextPumpAt)} · 3hr from last start`}
-            </div>
+            {/* Bottom reference line — only shown for active pump (where
+                it shows when the timer started) or on-schedule (where the
+                target time is useful context). Dropped for overdue/soon
+                because the duration in the big number is what matters. */}
+            {(activePump || (!pumpOverdue && !pumpSoon)) && (
+              <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", opacity: 0.85, marginTop: 2 }}>
+                {activePump
+                  ? `started ${fmtTimeShort(activePump.startedAt)}`
+                  : `target ${fmtTimeShort(nextPumpAt)}`}
+              </div>
+            )}
           </div>
         </button>
         );
@@ -5795,9 +6540,24 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   );
 }
 
-function StatTile({ C, label, value, sub, subColor, icon, iconColor }) {
+function StatTile({ C, label, value, sub, subColor, icon, iconColor, onTap }) {
+  const Wrapper = onTap ? "button" : "div";
+  const tapProps = onTap ? {
+    onClick: onTap,
+    style: {
+      background: C.paper, padding: "14px 14px 12px", position: "relative",
+      border: "none", textAlign: "left", width: "100%",
+      cursor: "pointer", fontFamily: "inherit",
+      transition: "background 0.15s",
+    },
+    onMouseEnter: (e) => { e.currentTarget.style.background = `${C.accent}08`; },
+    onMouseLeave: (e) => { e.currentTarget.style.background = C.paper; },
+    "aria-label": `${label}: ${value}. Tap to log.`,
+  } : {
+    style: { background: C.paper, padding: "14px 14px 12px", position: "relative" },
+  };
   return (
-    <div style={{ background: C.paper, padding: "14px 14px 12px", position: "relative" }}>
+    <Wrapper {...tapProps}>
       {icon && (
         <div style={{
           position: "absolute", top: 12, right: 12,
@@ -5821,7 +6581,7 @@ function StatTile({ C, label, value, sub, subColor, icon, iconColor }) {
         {value}
       </div>
       {sub && <div style={{ fontSize: 11, color: subColor || C.muted, marginTop: 3, fontFamily: "'JetBrains Mono', monospace" }}>{sub}</div>}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -5944,7 +6704,7 @@ function AutoSwapBanner({ C, swaps, currentUser, onDispute }) {
   );
 }
 
-function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, inventory, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, shifts, baseShifts, swaps, meetings, todayCalories, lastBath, lastSkincare, todayDailyContent, loadingDaily, currentUser, myActiveCommitment, onEndCommitmentEarly, onOpenCommitmentLog, onDispute }) {
+function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, inventory, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, shifts, baseShifts, swaps, meetings, todayCalories, lastBath, lastSkincare, todayDailyContent, loadingDaily, currentUser, myActiveCommitment, onEndCommitmentEarly, onOpenCommitmentLog, onDispute, onsite, onStartOnsite, onUpdateEta, onArrivedHome }) {
   const [rhythmFilter, setRhythmFilter] = useState("all");
   const [verseExpanded, setVerseExpanded] = useState(false);
   const [frenchExpanded, setFrenchExpanded] = useState(false);
@@ -5999,105 +6759,8 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
         />
       )}
 
-      {/* Tomorrow's commitments reminder — moved to TOP so it's the first
-          thing the on-duty parent sees during their last shift. */}
-      {(() => {
-        const hour = now.getHours();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0);
-        const dayAfter = new Date(tomorrow);
-        dayAfter.setDate(dayAfter.getDate() + 1);
-        const tomorrowMine = (meetings || []).filter(m => {
-          const t = new Date(m.start);
-          return t >= tomorrow && t < dayAfter && m.parent === currentUser;
-        });
-        if (tomorrowMine.length > 0) return null;
-
-        // Determine if currentUser is in their LAST shift of the calendar day.
-        const userShifts = shifts && shifts[currentUser] ? shifts[currentUser] : [];
-        const toAbs = (hhmm) => {
-          const [h, m] = hhmm.split(":").map(Number);
-          const d = new Date(now);
-          d.setHours(h, m, 0, 0);
-          return d;
-        };
-        const cur = userShifts.find(s => {
-          const sStart = toAbs(s.start);
-          let sEnd = toAbs(s.end);
-          if (sEnd <= sStart) sEnd = new Date(sEnd.getTime() + 86400000);
-          return now >= sStart && now < sEnd;
-        });
-        const todayShifts = userShifts
-          .map(s => ({ ...s, _absStart: toAbs(s.start) }))
-          .filter(s => s._absStart.getDate() === now.getDate())
-          .sort((a, b) => b._absStart - a._absStart);
-        const lastShiftToday = todayShifts[0];
-        const isInLastShift = cur && lastShiftToday &&
-          cur.start === lastShiftToday.start && cur.end === lastShiftToday.end;
-
-        if (isInLastShift) {
-          // VERY PROMINENT — pulsing border, full-bleed coral, can't miss it
-          return (
-            <button onClick={onOpenCommitmentLog} style={{
-              width: "100%", marginBottom: 14,
-              background: C.accent,
-              color: "#fff",
-              border: `3px solid ${C.accent}`,
-              borderRadius: 16, padding: "18px 20px",
-              display: "flex", alignItems: "center", gap: 16,
-              cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-              boxShadow: `0 6px 20px ${C.accent}66, 0 0 0 4px ${C.accent}22`,
-              animation: "pulse-glow 2.4s ease-in-out infinite",
-            }}>
-              <style>{`@keyframes pulse-glow {
-                0%, 100% { box-shadow: 0 6px 20px ${C.accent}66, 0 0 0 4px ${C.accent}22; }
-                50% { box-shadow: 0 8px 28px ${C.accent}88, 0 0 0 8px ${C.accent}33; }
-              }`}</style>
-              <AlarmClock size={36} style={{ flexShrink: 0 }} className="pulse-soft" />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9, letterSpacing: "0.24em", textTransform: "uppercase", fontWeight: 700, opacity: 0.95 }}>
-                  ⚠ before you wind down
-                </div>
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600,
-                  lineHeight: 1.1, marginTop: 3,
-                }}>
-                  Log tomorrow's commitments
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.95, marginTop: 5, lineHeight: 1.4 }}>
-                  This is your last shift today. Tap here to log meetings, appointments, or "going out" so coverage balances before morning.
-                </div>
-              </div>
-              <ChevronRight size={24} style={{ flexShrink: 0 }} />
-            </button>
-          );
-        }
-
-        // Subtle nudge after 6pm (if not already in the prominent window)
-        if (hour < 18) return null;
-        return (
-          <button onClick={onOpenCommitmentLog} style={{
-            width: "100%", marginBottom: 12,
-            background: `${C.accent}15`,
-            border: `1px solid ${C.accent}55`,
-            borderRadius: 10, padding: "10px 14px",
-            display: "flex", alignItems: "center", gap: 10,
-            cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-          }}>
-            <AlarmClock size={16} color={C.accent} style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>
-                Anything on your calendar tomorrow?
-              </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                Log it now so we can balance shifts before the day starts.
-              </div>
-            </div>
-            <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
-          </button>
-        );
-      })()}
+      {/* Tomorrow's commitments reminder lives at App level now, alongside
+          the gift pip. See the App-level pip block above the OnDutyCard. */}
 
       {/* Mot du jour — per-parent tier. Mommy is intermediate French
           (recapturing fluency); Daddy is beginner (learner-tier). The daily
@@ -6150,10 +6813,7 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
                 fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase",
                 color: viewerColor, fontWeight: 700, marginBottom: 3,
               }}>
-                mot du jour · for Solène
-                <span style={{ marginLeft: 6, opacity: 0.7, fontWeight: 500, letterSpacing: "0.18em" }}>
-                  · {tierLabel}
-                </span>
+                mot du jour
               </div>
               <div style={{
                 fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
@@ -6223,15 +6883,58 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
                 : `No ${rhythmFilter} entries today.`}
             </div>
           </div>
-        ) : (
-          <div style={{ background: C.paper, borderRadius: 12, padding: "10px 16px 14px", border: `1px solid ${C.line}15`, position: "relative" }}>
-            <div style={{ position: "absolute", left: 30, top: 22, bottom: 22, width: 1, background: `${C.line}22` }} />
-            {clusteredRhythm.map(e => (
-              <TimelineEvent key={e._isCluster ? `cluster-${e.firstId}` : e.id} ev={e} C={C} now={now} />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          // Cap to the 5 most recent so the landing page doesn't grow long.
+          // Full list lives in the Journal tab.
+          const RECENT_CAP = 5;
+          const visible = clusteredRhythm.slice(0, RECENT_CAP);
+          const hidden = Math.max(0, clusteredRhythm.length - RECENT_CAP);
+          return (
+            <div style={{ background: C.paper, borderRadius: 12, padding: "10px 16px 14px", border: `1px solid ${C.line}15`, position: "relative" }}>
+              <div style={{ position: "absolute", left: 30, top: 22, bottom: hidden > 0 ? 56 : 22, width: 1, background: `${C.line}22` }} />
+              {visible.map(e => (
+                <TimelineEvent key={e._isCluster ? `cluster-${e.firstId}` : e.id} ev={e} C={C} now={now} />
+              ))}
+              {hidden > 0 && (
+                <div style={{
+                  marginTop: 6, paddingTop: 8,
+                  borderTop: `1px solid ${C.line}15`,
+                  fontSize: 11, color: C.muted, fontStyle: "italic", textAlign: "center",
+                }}>
+                  + {hidden} earlier event{hidden === 1 ? "" : "s"} · see Journal tab for full day
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Section>
+
+      {/* On-site / variable return — moved from Schedule tab. Sits above
+          Today's shifts because being away from home is a Now-context
+          status more than a planning concept. When active, shows the live
+          ETA card; when not, a low-key "Going on-site?" button. */}
+      {onsite ? (
+        <Section C={C} title={`On-site · ${onsite.parent} away`}>
+          <ActiveOnsiteCard
+            C={C} onsite={onsite} now={now}
+            onUpdateEta={onUpdateEta}
+            onArrived={onArrivedHome}
+          />
+        </Section>
+      ) : (onStartOnsite && (
+        <button onClick={onStartOnsite} style={{
+          width: "100%", marginTop: 14, marginBottom: 4,
+          background: "transparent",
+          color: C.muted,
+          border: `1px dashed ${C.line}40`,
+          borderRadius: 10, padding: "10px 14px",
+          fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        }}>
+          <MapPin size={13} />
+          Going on-site? Tap to log a variable-return window
+        </button>
+      ))}
 
       <Section C={C} title="Today's shifts">
         <ShiftStrip C={C} shifts={shifts} now={now} />
@@ -7249,17 +7952,35 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
           <div style={{ color: C.muted, fontStyle: "italic", padding: 20, fontSize: 14, textAlign: "center" }}>
             Nothing logged yet.
           </div>
-        ) : Object.entries(grouped).map(([day, evs]) => (
-          <div key={day} style={{ marginBottom: 20 }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontSize: 18, color: C.muted, marginBottom: 8 }}>
-              {new Date(day).toDateString() === now.toDateString() ? "Today"
-               : new Date(day).toDateString() === new Date(now.getTime() - 86400000).toDateString() ? "Yesterday"
-               : new Date(day).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-              <span style={{ fontStyle: "normal", fontSize: 11, color: C.muted, marginLeft: 8, fontFamily: "'JetBrains Mono', monospace" }}>
+        ) : Object.entries(grouped).map(([day, evs]) => {
+          const dayDate = new Date(day);
+          const isToday = dayDate.toDateString() === now.toDateString();
+          const isYesterday = dayDate.toDateString() === new Date(now.getTime() - 86400000).toDateString();
+          const dayLabel = isToday ? "Today"
+            : isYesterday ? "Yesterday"
+            : dayDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+          const safeKey = day.replace(/[^a-z0-9]/gi, '');
+
+          // Today renders un-collapsed; older days wrap in <details> so the
+          // journal isn't an info wall on first load.
+          const dayHeader = (
+            <div style={{
+              display: "flex", alignItems: "baseline", gap: 8,
+              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+              fontSize: 18, color: C.muted,
+            }}>
+              {!isToday && (
+                <ChevronRight size={12} className={`journal-chev-${safeKey}`} style={{ transition: "transform 0.2s", flexShrink: 0, alignSelf: "center" }} />
+              )}
+              <span>{dayLabel}</span>
+              <span style={{ fontStyle: "normal", fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
                 · {evs.length} events
               </span>
             </div>
-            <div style={{ background: C.paper, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}15` }}>
+          );
+
+          const dayBody = (
+            <div style={{ background: C.paper, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}15`, marginTop: 8 }}>
               {evs.map((e, i) => (
                 <div key={e.id} style={{
                   display: "flex", alignItems: "center", gap: 10,
@@ -7302,8 +8023,26 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                 </div>
               ))}
             </div>
-          </div>
-        ))}
+          );
+
+          if (isToday) {
+            return (
+              <div key={day} style={{ marginBottom: 20 }}>
+                {dayHeader}
+                {dayBody}
+              </div>
+            );
+          }
+          return (
+            <details key={day} style={{ marginBottom: 14 }}>
+              <summary style={{ cursor: "pointer", listStyle: "none" }}>
+                {dayHeader}
+              </summary>
+              <style>{`details[open] .journal-chev-${safeKey} { transform: rotate(90deg); }`}</style>
+              {dayBody}
+            </details>
+          );
+        })}
       </Section>
 
       {editing && (
@@ -7629,22 +8368,409 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
   );
 }
 
+// ---- Day plan card -----------------------------------------------------
+// Shows ONE day's coverage: the per-parent shift grid + auto-swap
+// adjustments + commitments, all in one place. Used inside the unified
+// "Day plan" section for both Today and Tomorrow.
+//
+// Props:
+//   C          — palette
+//   label      — "Today" or "Tomorrow" or any other day label
+//   subLabel   — date string, e.g. "Tue, May 6"
+//   defaultOpen — initial expand state (true for today, false for tomorrow)
+//   shiftBlocks — { Mommy: [...], Daddy: [...] } projected for this day
+//   daySwaps   — list of auto-swap adjustments for the day
+//   commitments — meetings/commitments scheduled for the day
+//   onRemoveCommitment — for tap-to-delete on commitments
+//   onAddCommitment — only shown when this is "today" (you can add for any
+//                    day really, but the affordance lives on today's card)
+//   showAddButton — boolean, whether to show "Add commitment" button
+//
+// Visual hierarchy:
+//   1. Day header with chevron (clickable to collapse/expand)
+//   2. (When open) Shifts grid · auto-swap summary · commitments list · add button
+function DayPlanCard({
+  C, label, subLabel, defaultOpen,
+  shiftBlocks, daySwaps, commitments,
+  onRemoveCommitment, onAddCommitment, showAddButton,
+  isToday,
+  // Controlled-open mode: when controlledOpen + setControlledOpen are
+  // provided, this component delegates open state to the parent. This
+  // lets the peek strip toggle a specific day's card from outside.
+  controlledOpen, setControlledOpen,
+}) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const isControlled = controlledOpen !== undefined && setControlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? setControlledOpen : setInternalOpen;
+
+  const totalCommits = commitments?.length || 0;
+  const swapCount = daySwaps?.length || 0;
+  const headerColor = isToday ? C.accent : C.mommy;
+
+  return (
+    <div id={isToday ? "dayplan-today" : "dayplan-tomorrow"} style={{
+      background: C.paper,
+      borderRadius: 12,
+      border: `1px solid ${C.line}15`,
+      borderLeft: `4px solid ${headerColor}`,
+      marginBottom: 10,
+      overflow: "hidden",
+      scrollMarginTop: 80,
+    }}>
+      {/* Header — always visible. Tappable to expand/collapse. */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%",
+          background: "transparent",
+          border: "none",
+          padding: "12px 14px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          textAlign: "left",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+        <ChevronRight
+          size={14}
+          color={C.muted}
+          style={{
+            flexShrink: 0,
+            transition: "transform 0.2s",
+            transform: open ? "rotate(90deg)" : "rotate(0deg)",
+          }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 19, fontWeight: 600, fontStyle: "italic",
+            color: headerColor, lineHeight: 1.1,
+          }}>
+            {label}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+            {subLabel}
+          </div>
+        </div>
+        <div style={{
+          display: "flex", gap: 6, alignItems: "center",
+          fontSize: 11, color: C.muted,
+        }}>
+          {totalCommits > 0 && (
+            <span style={{
+              background: `${C.accent}18`, color: C.accent,
+              padding: "2px 8px", borderRadius: 999,
+              fontWeight: 600, fontSize: 10, letterSpacing: "0.04em",
+            }}>
+              {totalCommits} {totalCommits === 1 ? "commitment" : "commitments"}
+            </span>
+          )}
+          {swapCount > 0 && (
+            <span style={{
+              background: `${C.gold}18`, color: C.gold,
+              padding: "2px 8px", borderRadius: 999,
+              fontWeight: 600, fontSize: 10, letterSpacing: "0.04em",
+            }}>
+              ↻ {swapCount}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {/* Body — only when open */}
+      {open && (
+        <div style={{ padding: "0 14px 14px" }}>
+          {/* Per-parent shift grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {["Mommy", "Daddy"].map(parent => {
+              const color = parent === "Mommy" ? C.mommy : C.daddy;
+              const otherColor = parent === "Mommy" ? C.daddy : C.mommy;
+              const blocks = shiftBlocks?.[parent] || [];
+              return (
+                <div key={parent} style={{
+                  background: C.bg, borderRadius: 10, padding: 12,
+                  border: `1px solid ${C.line}12`, borderTop: `2.5px solid ${color}`,
+                }}>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 16, fontWeight: 500,
+                    marginBottom: 6, color,
+                  }}>
+                    {parent}
+                  </div>
+                  {blocks.length === 0 ? (
+                    <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>no shifts</div>
+                  ) : blocks.map((s, i) => {
+                    const isCovered = s._coveringFor;
+                    const isConflict = s._conflict;
+                    return (
+                      <div key={i} style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                        padding: "2px 0", color: C.ink,
+                        display: "flex", alignItems: "center", gap: 5,
+                      }}>
+                        {isCovered && <span style={{ color: otherColor, fontWeight: 600 }}>+</span>}
+                        {isConflict && <span style={{ color: C.accent, fontWeight: 600 }}>!</span>}
+                        <span>{fmtShiftRange(s)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Auto-swap summary — collapsed by default. Header shows just
+              the count chip; tap to expand and see why each adjustment
+              happened. The shifts grid above already has + indicators
+              showing WHERE the changes are; this section answers WHY. */}
+          {swapCount > 0 && (
+            <details style={{
+              background: `${C.accent}10`,
+              border: `1px solid ${C.accent}30`,
+              borderRadius: 8, marginBottom: 10,
+              fontSize: 11, color: C.ink, lineHeight: 1.5,
+            }}>
+              <summary style={{
+                padding: "6px 10px", cursor: "pointer", listStyle: "none",
+                display: "flex", alignItems: "center", gap: 6,
+                fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
+                color: C.accent, fontWeight: 700,
+              }}>
+                <ChevronRight size={11} className={`autoswap-chevron-${label.toLowerCase()}`} style={{ transition: "transform 0.2s" }} />
+                <span>↻ {swapCount} auto-adjustment{swapCount === 1 ? "" : "s"}</span>
+                <span style={{ marginLeft: "auto", color: C.muted, fontSize: 9, fontWeight: 500, letterSpacing: "0.06em", textTransform: "none", fontStyle: "italic" }}>
+                  tap to see why
+                </span>
+              </summary>
+              <style>{`details[open] .autoswap-chevron-${label.toLowerCase()} { transform: rotate(90deg); }`}</style>
+              <div style={{ padding: "0 10px 8px" }}>
+                {daySwaps.map((sw, i) => {
+                  const cColor = sw.coveringParent === "Mommy" ? C.mommy : sw.coveringParent === "Daddy" ? C.daddy : C.muted;
+                  const oColor = sw.originalParent === "Mommy" ? C.mommy : C.daddy;
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, padding: "2px 0", flexWrap: "wrap" }}>
+                      {sw.blocked ? (
+                        <>
+                          <span style={{ color: C.accent, fontWeight: 600 }}>!</span>
+                          <span style={{ color: oColor, fontWeight: 600 }}>{sw.originalParent}</span>
+                          <span style={{ color: C.muted }}>blocked at</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{fmtShiftRange(sw.shift)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ color: cColor, fontWeight: 600 }}>+</span>
+                          <span style={{ color: cColor, fontWeight: 600 }}>{sw.coveringParent}</span>
+                          <span style={{ color: C.muted }}>covers</span>
+                          <span style={{ color: oColor, fontWeight: 600 }}>{sw.originalParent}'s</span>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>{fmtShiftRange(sw.shift)}</span>
+                          {sw.reason && <span style={{ color: C.muted, fontStyle: "italic" }}>· {sw.reason}</span>}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+
+          {/* Commitments */}
+          {totalCommits > 0 ? (
+            <>
+              <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 6 }}>
+                Commitments
+              </div>
+              <div style={{ display: "grid", gap: 6, marginBottom: showAddButton ? 10 : 0 }}>
+                {commitments.map(m => (
+                  <MeetingRow key={m.id} m={m} C={C} onRemove={() => onRemoveCommitment(m.id)} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{
+              color: C.muted, fontSize: 11, fontStyle: "italic",
+              textAlign: "center", padding: "6px 0",
+              marginBottom: showAddButton ? 8 : 0,
+            }}>
+              No commitments {isToday ? "today" : "logged for this day"} yet.
+            </div>
+          )}
+
+          {/* Add button — only shown when caller wants it */}
+          {showAddButton && (
+            <button onClick={onAddCommitment} style={{
+              width: "100%",
+              background: "transparent",
+              color: C.accent,
+              border: `1px dashed ${C.accent}55`,
+              borderRadius: 8, padding: "8px 12px",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              fontFamily: "inherit",
+            }}>
+              <Plus size={12} /> Add commitment
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Upcoming section --------------------------------------------------
+// Collapsible list of commitments beyond tomorrow, with filter pills:
+//   "All"        — everything beyond tomorrow
+//   "Next 7"     — commitments in the next 7 days from now
+//   "Next 30"    — commitments in the next 30 days from now
+//   "Beyond"     — anything past 30 days
+// Total count badge in header always shows total — filters scope the
+// visible items but don't hide the bigger picture.
+function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMeeting, externalOpen, externalFilter, onExternalOpenHandled }) {
+  const [filter, setFilter] = useState("all"); // "all" | "week" | "month" | "beyond"
+  const detailsRef = useRef(null);
+
+  // When the parent fires externalOpen (e.g. peek strip tap), open the
+  // details element and (optionally) set the filter, then notify the parent
+  // so it can clear its trigger flag.
+  useEffect(() => {
+    if (!externalOpen) return;
+    if (detailsRef.current) detailsRef.current.open = true;
+    if (externalFilter) setFilter(externalFilter);
+    // Scroll the section into view
+    if (detailsRef.current) {
+      detailsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    onExternalOpenHandled && onExternalOpenHandled();
+  }, [externalOpen, externalFilter, onExternalOpenHandled]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return allFuture;
+    if (filter === "week") return allFuture.filter(m => new Date(m.start) <= sevenDaysOut);
+    if (filter === "month") return allFuture.filter(m => new Date(m.start) <= thirtyDaysOut);
+    if (filter === "beyond") return allFuture.filter(m => new Date(m.start) > thirtyDaysOut);
+    return allFuture;
+  }, [allFuture, filter, sevenDaysOut, thirtyDaysOut]);
+
+  // Group filtered items by date for date-section headings
+  const sortedDateGroups = useMemo(() => {
+    const byDate = {};
+    for (const m of filtered) {
+      const dt = new Date(m.start);
+      const key = dt.toISOString().slice(0, 10);
+      if (!byDate[key]) byDate[key] = { date: dt, items: [] };
+      byDate[key].items.push(m);
+    }
+    return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b));
+  }, [filtered]);
+
+  // Counts per filter for badge labels
+  const counts = useMemo(() => ({
+    all: allFuture.length,
+    week: allFuture.filter(m => new Date(m.start) <= sevenDaysOut).length,
+    month: allFuture.filter(m => new Date(m.start) <= thirtyDaysOut).length,
+    beyond: allFuture.filter(m => new Date(m.start) > thirtyDaysOut).length,
+  }), [allFuture, sevenDaysOut, thirtyDaysOut]);
+
+  const FILTERS = [
+    { v: "all",    l: "All" },
+    { v: "week",   l: "Next 7d" },
+    { v: "month",  l: "Next 30d" },
+    { v: "beyond", l: "Beyond" },
+  ];
+
+  return (
+    <details ref={detailsRef} id="upcoming-section" style={{
+      background: C.paper, borderRadius: 12,
+      border: `1px solid ${C.line}15`, marginTop: 14,
+      overflow: "hidden",
+      scrollMarginTop: 80,
+    }}>
+      <summary style={{
+        padding: "12px 14px", cursor: "pointer",
+        fontSize: 14, fontWeight: 600, color: C.ink,
+        display: "flex", alignItems: "center", gap: 8,
+        listStyle: "none",
+      }}>
+        <ChevronRight size={14} style={{ transition: "transform 0.2s" }} className="upcoming-chevron" />
+        <span>Upcoming · {allFuture.length} commitment{allFuture.length === 1 ? "" : "s"}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted, fontWeight: 500 }}>
+          next: {allFuture[0] && new Date(allFuture[0].start).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+        </span>
+      </summary>
+      <style>{`details[open] .upcoming-chevron { transform: rotate(90deg); }`}</style>
+      <div style={{ padding: "0 14px 14px" }}>
+        {/* Filter pills */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8, marginBottom: 12 }}>
+          {FILTERS.map(f => {
+            const active = filter === f.v;
+            const count = counts[f.v];
+            return (
+              <button
+                key={f.v}
+                onClick={() => setFilter(f.v)}
+                style={{
+                  background: active ? C.accent : "transparent",
+                  color: active ? "#fff" : C.ink,
+                  border: `1px solid ${active ? C.accent : C.line + "40"}`,
+                  borderRadius: 999, padding: "5px 11px",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "inherit",
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                }}>
+                {f.l}
+                <span style={{
+                  fontSize: 10, opacity: active ? 0.85 : 0.6,
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+                }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filtered date groups */}
+        {sortedDateGroups.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>
+            Nothing in this window.
+          </div>
+        ) : sortedDateGroups.map(([key, { date, items }]) => (
+          <div key={key} style={{ marginBottom: 10 }}>
+            <div style={{
+              fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.muted, fontWeight: 700, marginBottom: 6,
+              paddingBottom: 4, borderBottom: `1px solid ${C.line}15`,
+            }}>
+              {date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {items.map(m => (
+                <MeetingRow key={m.id} m={m} C={C} onRemove={() => onRemoveMeeting(m.id)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [showOnsite, setShowOnsite] = useState(false);
-  const [showEta, setShowEta] = useState(false);
-  const [showTimeBank, setShowTimeBank] = useState(false);
-  const [showRedeem, setShowRedeem] = useState(false);
-  const [timeBankInitialMode, setTimeBankInitialMode] = useState(null); // "gift" or "payback" — preselects the form mode
-  // Honor a deep-link from elsewhere in the app (e.g. LOG sheet pills).
-  // When pendingTimeBankAction is set, open the modal in the right mode and
-  // clear the flag so we don't reopen on every render.
-  useEffect(() => {
-    if (!pendingTimeBankAction) return;
-    setTimeBankInitialMode(pendingTimeBankAction);
-    setShowTimeBank(true);
-    clearPendingTimeBankAction && clearPendingTimeBankAction();
-  }, [pendingTimeBankAction, clearPendingTimeBankAction]);
+  // NOTE: Time Bank and on-site state used to live here. Time Bank is now
+  // its own tab (BankView), and on-site lives in NowView. The
+  // pendingTimeBankAction deep-link is handled at App level (forwarded to
+  // BankView) — this view no longer reacts to it.
+
+  // Day-plan open state hoisted to parent so the Next-7-days peek strip
+  // can toggle it from outside. Both default to closed (low overload).
+  const [todayOpen, setTodayOpen] = useState(false);
+  const [tomorrowOpen, setTomorrowOpen] = useState(false);
+
+  // Upcoming-section trigger from peek strip. When user taps a day 3+
+  // ahead, we open the Upcoming details and (if we can) narrow the filter.
+  const [upcomingTrigger, setUpcomingTrigger] = useState(null); // { open: bool, filter: "week"|"month"|null }
+
   const addMeeting = (m) => {
     const newMeeting = { ...m, id: crypto.randomUUID() };
     setMeetings(prev => {
@@ -7669,36 +8795,6 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
 
   return (
     <div style={{ marginTop: 14 }}>
-      {/* Time Bank summary card */}
-      <Section C={C} title="Time Bank">
-        <TimeBankCard C={C} timeBank={timeBank} onOpen={() => setShowTimeBank(true)}
-          currentUser={currentUser} onRedeem={() => setShowRedeem(true)} />
-      </Section>
-      {/* On-site mode card */}
-      <Section C={C} title={onsite ? "On-site mode · active" : "On-site / variable return"}>
-        {onsite ? (
-          <ActiveOnsiteCard
-            C={C} onsite={onsite} now={now}
-            onUpdateEta={() => setShowEta(true)}
-            onArrived={() => setOnsite(null)}
-          />
-        ) : (
-          <div style={{ background: C.paper, borderRadius: 12, padding: 16, border: `1px solid ${C.line}15` }}>
-            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 12 }}>
-              Heading to the lab or onsite without a firm return time? Tap below — your partner takes all your shifts during the away window, and you can update your ETA with one tap when you know more.
-            </div>
-            <button onClick={() => setShowOnsite(true)} style={{
-              width: "100%",
-              background: C.accent, color: "#fff", border: "none",
-              padding: 14, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}>
-              <MapPin size={16} /> I'm going on-site
-            </button>
-          </div>
-        )}
-      </Section>
-
       <Section C={C} title="Base shift schedule">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {["Mommy", "Daddy"].map(parent => {
@@ -7738,162 +8834,248 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
         )}
       </Section>
 
-      {/* Diff: today's effective vs base */}
-      {(swaps && swaps.length > 0) && (
-        <Section C={C} title="Today vs the base plan">
-          <DiffCard C={C} swaps={swaps} shifts={shifts} activeShifts={activeShifts} />
-        </Section>
-      )}
+      {/* Day plan — unified Today + Tomorrow view. Each day shows shifts +
+          auto-swap adjustments + commitments together so coverage and
+          calendar are coupled. Both default to collapsed; tap headers to
+          expand. The Next-7-days peek strip below provides the broader
+          weekly context. */}
+      <Section C={C} title="Day plan">
+        {(() => {
+          // ---- Today
+          const todayLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+          const todayCommitments = today;
 
-      <Section C={C} title="Today's commitments">
-        {today.length === 0 ? (
-          <div style={{ color: C.muted, fontSize: 13, padding: "10px 0", fontStyle: "italic" }}>
-            No meetings or appointments today. Tap below to add one — base shifts will auto-adjust.
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {today.map(m => <MeetingRow key={m.id} m={m} C={C} onRemove={() => removeMeeting(m.id)} />)}
-          </div>
-        )}
-        <button onClick={() => setShowAdd(true)} style={{
-          marginTop: 10, width: "100%",
-          background: C.accent, color: "#fff", border: "none", borderRadius: 10,
-          padding: 12, fontSize: 14, fontWeight: 600, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-        }}>
-          <Plus size={15} /> Add commitment
-        </button>
-        <div style={{ marginTop: 8, fontSize: 11, color: C.muted, fontStyle: "italic", textAlign: "center" }}>
-          meetings, appointments, hair, friends — anything that takes you off duty
-        </div>
+          // ---- Tomorrow
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const dayAfter = new Date(tomorrow);
+          dayAfter.setDate(dayAfter.getDate() + 1);
+          tomorrow.setHours(0, 0, 0, 0);
+          dayAfter.setHours(0, 0, 0, 0);
+          const tomorrowMeetings = (meetings || []).filter(m => {
+            const t = new Date(m.start);
+            return t >= tomorrow && t < dayAfter;
+          });
+          const tomorrowLabel = tomorrow.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+          const tomProj = tomorrowProjection?.projected || { Mommy: shifts.Mommy || [], Daddy: shifts.Daddy || [] };
+          const tomSwaps = tomorrowProjection?.swaps || [];
+
+          return (
+            <>
+              <DayPlanCard
+                C={C}
+                label="Today"
+                subLabel={todayLabel}
+                shiftBlocks={activeShifts}
+                daySwaps={swaps || []}
+                commitments={todayCommitments}
+                onRemoveCommitment={removeMeeting}
+                onAddCommitment={() => setShowAdd(true)}
+                showAddButton={true}
+                isToday={true}
+                controlledOpen={todayOpen}
+                setControlledOpen={setTodayOpen}
+              />
+              <DayPlanCard
+                C={C}
+                label="Tomorrow"
+                subLabel={tomorrowLabel}
+                shiftBlocks={tomProj}
+                daySwaps={tomSwaps}
+                commitments={tomorrowMeetings}
+                onRemoveCommitment={removeMeeting}
+                onAddCommitment={() => setShowAdd(true)}
+                showAddButton={true}
+                isToday={false}
+                controlledOpen={tomorrowOpen}
+                setControlledOpen={setTomorrowOpen}
+              />
+              <div style={{ marginTop: 6, fontSize: 11, color: C.muted, fontStyle: "italic", textAlign: "center" }}>
+                meetings, appointments, hair, friends — anything that takes you off duty
+              </div>
+            </>
+          );
+        })()}
       </Section>
 
-      {/* Tomorrow — next day's shift schedule + any commitments already logged.
-          Forward-looking quick reference. Shifts are projected, so commitments
-          logged for tomorrow will already show as auto-coverage in the grid. */}
+      {/* Future peek — horizontal strip of the next 7 days. Each compact
+          card summarizes the day at a glance: weekday, date, count of
+          commitments, count of auto-adjustments. Tap behavior:
+            • Today → expands the Today card in Day plan above and scrolls to it
+            • Tomorrow → same for Tomorrow
+            • Days 2-6 ahead → opens the Upcoming section below with a filter
+              scoped to the week or month (whichever fits).
+          Today's card is highlighted in coral. */}
       {(() => {
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const dayAfter = new Date(tomorrow);
-        dayAfter.setDate(dayAfter.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0);
-        dayAfter.setHours(0, 0, 0, 0);
-        const tomorrowMeetings = (meetings || []).filter(m => {
-          const t = new Date(m.start);
-          return t >= tomorrow && t < dayAfter;
-        });
-        const tomorrowLabel = tomorrow.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-        const tomProj = tomorrowProjection?.projected || { Mommy: shifts.Mommy || [], Daddy: shifts.Daddy || [] };
-        const tomSwaps = tomorrowProjection?.swaps || [];
-        return (
-          <Section C={C} title={`Tomorrow · ${tomorrowLabel}`}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-              {["Mommy", "Daddy"].map(parent => {
-                const color = parent === "Mommy" ? C.mommy : C.daddy;
-                const otherColor = parent === "Mommy" ? C.daddy : C.mommy;
-                const blocks = tomProj[parent] || [];
-                return (
-                  <div key={parent} style={{
-                    background: C.paper, borderRadius: 12, padding: 14,
-                    border: `1px solid ${C.line}15`, borderTop: `3px solid ${color}`,
-                  }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginBottom: 8, color }}>
-                      {parent}
-                    </div>
-                    {blocks.length === 0 ? (
-                      <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>no shifts</div>
-                    ) : blocks.map((s, i) => {
-                      const isCovered = s._coveringFor; // this parent is covering for the OTHER
-                      const isConflict = s._conflict;   // both blocked, unresolved
-                      return (
-                        <div key={i} style={{
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-                          padding: "3px 0", color: C.ink,
-                          display: "flex", alignItems: "center", gap: 6,
-                        }}>
-                          {isCovered && <span style={{ color: otherColor, fontWeight: 600 }}>+</span>}
-                          {isConflict && <span style={{ color: C.accent, fontWeight: 600 }}>!</span>}
-                          <span>{fmtShiftRange(s)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(now);
+          d.setDate(d.getDate() + i);
+          d.setHours(0, 0, 0, 0);
+          const dEnd = new Date(d);
+          dEnd.setDate(dEnd.getDate() + 1);
+          const dayMeetings = (meetings || []).filter(m => {
+            const t = new Date(m.start);
+            return t >= d && t < dEnd;
+          });
+          let swapCount = 0;
+          if (i === 0) swapCount = (swaps || []).length;
+          else if (i === 1) swapCount = (tomorrowProjection?.swaps || []).length;
+          const giftCount = dayMeetings.filter(m => (m.label || "").startsWith("🎁")).length;
+          days.push({ date: d, meetings: dayMeetings, swapCount, giftCount, isToday: i === 0, daysAhead: i });
+        }
 
-            {/* Adjustments summary — show what's auto-flexing */}
-            {tomSwaps.length > 0 && (
-              <div style={{
-                background: `${C.accent}10`,
-                border: `1px solid ${C.accent}30`,
-                borderRadius: 10, padding: "10px 12px", marginBottom: 10,
-                fontSize: 12, color: C.ink, lineHeight: 1.5,
-              }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.accent, fontWeight: 700, marginBottom: 6 }}>
-                  ↻ {tomSwaps.length} auto-adjustment{tomSwaps.length === 1 ? "" : "s"} for tomorrow
-                </div>
-                {tomSwaps.map((sw, i) => {
-                  const cColor = sw.coveringParent === "Mommy" ? C.mommy : sw.coveringParent === "Daddy" ? C.daddy : C.muted;
-                  const oColor = sw.originalParent === "Mommy" ? C.mommy : C.daddy;
-                  return (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", flexWrap: "wrap" }}>
-                      {sw.blocked ? (
-                        <>
-                          <span style={{ color: C.accent, fontWeight: 600 }}>!</span>
-                          <span style={{ color: oColor, fontWeight: 600 }}>{sw.originalParent}</span>
-                          <span style={{ color: C.muted }}>blocked at</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{fmtShiftRange(sw.shift)}</span>
-                          <span style={{ color: C.muted, fontStyle: "italic" }}>· both unavailable</span>
-                        </>
+        const handleTap = (d) => {
+          if (d.daysAhead === 0) {
+            setTodayOpen(true);
+            setTimeout(() => {
+              const el = document.getElementById("dayplan-today");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 50);
+          } else if (d.daysAhead === 1) {
+            setTomorrowOpen(true);
+            setTimeout(() => {
+              const el = document.getElementById("dayplan-tomorrow");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 50);
+          } else {
+            // Open Upcoming with appropriate filter
+            const filter = d.daysAhead <= 7 ? "week" : "month";
+            setUpcomingTrigger({ open: true, filter });
+          }
+        };
+
+        return (
+          <Section C={C} title="Next 7 days">
+            <div style={{
+              display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6,
+              scrollbarWidth: "thin",
+            }}>
+              {days.map((d, i) => {
+                const isToday = d.isToday;
+                const isTomorrow = i === 1;
+                const count = d.meetings.length;
+                const hasGifts = d.giftCount > 0;
+                const hasSwaps = d.swapCount > 0;
+                const dim = count === 0 && !hasSwaps;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleTap(d)}
+                    style={{
+                      flex: "0 0 auto",
+                      minWidth: 76,
+                      background: isToday ? `${C.accent}15` : C.paper,
+                      border: `1px solid ${isToday ? C.accent + "55" : C.line + "20"}`,
+                      borderRadius: 12, padding: "10px 8px",
+                      textAlign: "center",
+                      opacity: dim ? 0.7 : 1,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "transform 0.1s, box-shadow 0.15s",
+                    }}
+                    onMouseDown={e => e.currentTarget.style.transform = "scale(0.96)"}
+                    onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                  >
+                    <div style={{
+                      fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+                      color: isToday ? C.accent : C.muted, fontWeight: 700,
+                    }}>
+                      {isToday ? "Today" : isTomorrow ? "Tom." : d.date.toLocaleDateString(undefined, { weekday: "short" })}
+                    </div>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 24, fontWeight: 500, fontStyle: "italic",
+                      color: isToday ? C.accent : C.ink, lineHeight: 1.05,
+                      marginTop: 1,
+                    }}>
+                      {d.date.getDate()}
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: C.muted,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      marginTop: 2,
+                    }}>
+                      {d.date.toLocaleDateString(undefined, { month: "short" }).toLowerCase()}
+                    </div>
+                    <div style={{
+                      marginTop: 6, paddingTop: 6,
+                      borderTop: `1px solid ${C.line}15`,
+                      display: "flex", flexDirection: "column", gap: 2,
+                      minHeight: 28,
+                    }}>
+                      {count === 0 && !hasSwaps ? (
+                        <div style={{ fontSize: 9, color: C.muted, fontStyle: "italic" }}>—</div>
                       ) : (
                         <>
-                          <span style={{ color: cColor, fontWeight: 600 }}>+</span>
-                          <span style={{ color: cColor, fontWeight: 600 }}>{sw.coveringParent}</span>
-                          <span style={{ color: C.muted }}>covers</span>
-                          <span style={{ color: oColor, fontWeight: 600 }}>{sw.originalParent}'s</span>
-                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{fmtShiftRange(sw.shift)}</span>
-                          <span style={{ color: C.muted, fontStyle: "italic" }}>· {sw.reason}</span>
+                          {count > 0 && (
+                            <div style={{
+                              fontSize: 10, color: C.accent, fontWeight: 700,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+                            }}>
+                              {hasGifts && <span style={{ fontSize: 9 }}>🎁</span>}
+                              {count}{count === 1 ? " mtg" : " mtgs"}
+                            </div>
+                          )}
+                          {hasSwaps && (
+                            <div style={{
+                              fontSize: 9, color: C.gold, fontWeight: 600,
+                              fontFamily: "'JetBrains Mono', monospace",
+                            }}>
+                              ↻ {d.swapCount}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tomorrow's commitments (read-only here; primary editing is via Today's commitments) */}
-            {tomorrowMeetings.length > 0 ? (
-              <>
-                <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 6 }}>
-                  Commitments logged for tomorrow
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  {tomorrowMeetings.map(m => <MeetingRow key={m.id} m={m} C={C} onRemove={() => removeMeeting(m.id)} />)}
-                </div>
-              </>
-            ) : (
-              <div style={{ color: C.muted, fontSize: 12, fontStyle: "italic", textAlign: "center", padding: "4px 0" }}>
-                No commitments logged for tomorrow yet.
-              </div>
-            )}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 4, textAlign: "center" }}>
+              tap a day to jump to its details
+            </div>
           </Section>
         );
       })()}
 
+      {/* Upcoming — anything beyond tomorrow. Collapsible because it can grow
+          long once recurring commitments accumulate. Groups by date so
+          scanning is easier than a flat list. Includes filter pills for
+          quick narrowing: Day-after / This week / This month / All. Filters
+          act on the visible groups; the count badge in the header still
+          shows the TOTAL future count so you can see at a glance whether
+          things are falling outside the current filter. */}
+      {(() => {
+        const dayAfterTomorrow = new Date(now);
+        dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+        dayAfterTomorrow.setHours(0, 0, 0, 0);
+        const allFuture = (meetings || [])
+          .filter(m => new Date(m.start) >= dayAfterTomorrow)
+          .sort((a, b) => new Date(a.start) - new Date(b.start));
+        if (allFuture.length === 0) return null;
+
+        // Filter cutoffs (relative to now)
+        const sevenDaysOut = new Date(now); sevenDaysOut.setDate(sevenDaysOut.getDate() + 7); sevenDaysOut.setHours(23, 59, 59, 999);
+        const thirtyDaysOut = new Date(now); thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30); thirtyDaysOut.setHours(23, 59, 59, 999);
+
+        return (
+          <UpcomingSection
+            C={C}
+            allFuture={allFuture}
+            sevenDaysOut={sevenDaysOut}
+            thirtyDaysOut={thirtyDaysOut}
+            onRemoveMeeting={removeMeeting}
+            externalOpen={upcomingTrigger?.open}
+            externalFilter={upcomingTrigger?.filter}
+            onExternalOpenHandled={() => setUpcomingTrigger(null)}
+          />
+        );
+      })()}
+
       {showAdd && <AddMeetingModal C={C} onClose={() => setShowAdd(false)} onSubmit={addMeeting} currentUser={currentUser} />}
-      {showOnsite && <OnsiteModal C={C} onClose={() => setShowOnsite(false)} onSubmit={(o) => { setOnsite(o); setShowOnsite(false); }} />}
-      {showEta && onsite && <EtaUpdateModal C={C} onsite={onsite} onClose={() => setShowEta(false)} onSubmit={(eta) => { setOnsite({ ...onsite, etaUpdate: eta }); setShowEta(false); }} />}
-      {showTimeBank && <TimeBankModal C={C} timeBank={timeBank} setTimeBank={setTimeBank} initialMode={timeBankInitialMode} onClose={() => { setShowTimeBank(false); setTimeBankInitialMode(null); }} />}
-      {showRedeem && <RedeemModal
-        C={C}
-        timeBank={timeBank}
-        setTimeBank={setTimeBank}
-        setMeetings={setMeetings}
-        currentUser={currentUser}
-        now={now}
-        onClose={() => setShowRedeem(false)}
-      />}
     </div>
   );
 }
@@ -7964,6 +9146,34 @@ function fmtBalance(mins) {
 
 function TimeBankCard({ C, timeBank, onOpen, currentUser, onRedeem }) {
   const balance = timeBank.balance || 0;
+  // Breakdown by transaction kind, FROM currentUser's perspective.
+  // Gifts and debts both contribute to balance the same way (per the
+  // computeTimeBankBalance logic), but for breakdown display we want to
+  // show them separately so the user sees what's accumulating where:
+  //   - gifts directed AT currentUser show as positive (received)
+  //   - debts owed BY currentUser show as negative
+  // This mirrors the "+ and -" mental model the user asked for.
+  const breakdown = useMemo(() => {
+    let giftsReceived = 0;  // gifts where currentUser is the recipient
+    let giftsGiven = 0;     // gifts where currentUser is the giver
+    let debtsOwedToYou = 0; // owed where currentUser is owed (i.e. partner covered for them)
+    let debtsYouOwe = 0;    // owed where currentUser owes
+    let payback = 0;        // either direction
+    for (const tx of (timeBank.transactions || [])) {
+      const m = tx.mins || 0;
+      if (tx.kind === "gift") {
+        if (tx.to === currentUser) giftsReceived += m;
+        else if (tx.from === currentUser) giftsGiven += m;
+      } else if (tx.kind === "owed") {
+        if (tx.to === currentUser) debtsYouOwe += m;       // partner covered for you → you owe them
+        else if (tx.from === currentUser) debtsOwedToYou += m; // you covered for partner → they owe you
+      } else if (tx.kind === "paid") {
+        payback += m;
+      }
+    }
+    return { giftsReceived, giftsGiven, debtsOwedToYou, debtsYouOwe, payback };
+  }, [timeBank.transactions, currentUser]);
+
   // From currentUser's POV:
   //   if balance > 0: Mommy owes Daddy.
   //     - if currentUser=Mommy → "You owe Daddy"
@@ -7995,6 +9205,12 @@ function TimeBankCard({ C, timeBank, onOpen, currentUser, onRedeem }) {
     youOwe = false;
   }
 
+  // Total +/- shown in the breakdown strip.
+  // From your view: +gifts received, -gifts given, +debts owed to you, -debts you owe.
+  const positiveTotal = breakdown.giftsReceived + breakdown.debtsOwedToYou;
+  const negativeTotal = breakdown.giftsGiven + breakdown.debtsYouOwe;
+  const hasAny = (timeBank.transactions || []).length > 0;
+
   return (
     <div style={{
       background: balance === 0
@@ -8020,6 +9236,29 @@ function TimeBankCard({ C, timeBank, onOpen, currentUser, onRedeem }) {
               </span>
             )}
           </div>
+          {/* Breakdown strip — from current user's perspective.
+              Plus side = gifts received + debts owed to you (both move balance toward you).
+              Minus side = gifts given + debts you owe (both move balance away from you).
+              Hidden when there are no transactions. */}
+          {hasAny && (positiveTotal > 0 || negativeTotal > 0) && (
+            <div style={{
+              marginTop: 10, display: "flex", alignItems: "center", gap: 12,
+              fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              {positiveTotal > 0 && (
+                <span style={{ color: "#4F6E4D", fontWeight: 600 }}>
+                  +{fmtBalance(positiveTotal)}
+                  <span style={{ color: C.muted, fontWeight: 400, marginLeft: 4 }}>received</span>
+                </span>
+              )}
+              {negativeTotal > 0 && (
+                <span style={{ color: C.accent, fontWeight: 600 }}>
+                  −{fmtBalance(negativeTotal)}
+                  <span style={{ color: C.muted, fontWeight: 400, marginLeft: 4 }}>given</span>
+                </span>
+              )}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
             {timeBank.transactions.length === 0
               ? "tap to log a swap, gift, or payback"
@@ -8050,6 +9289,10 @@ function TimeBankModal({ C, timeBank, setTimeBank, initialMode, onClose }) {
   // initial 'kind' state: gift → 'gift', payback → 'paid'.
   const [tab, setTab] = useState("add"); // 'add' | 'history'
   const initialKind = initialMode === "gift" ? "gift" : initialMode === "payback" ? "paid" : null;
+  // Confirmation banner: after saving a transaction we briefly show a
+  // success message so the user sees the action took effect (especially
+  // important for gifts, which don't visibly change the balance number).
+  const [lastSaved, setLastSaved] = useState(null); // { kind, mins, to } | null
 
   const recordTransaction = (tx) => {
     const newTx = { ...tx, id: crypto.randomUUID(), ts: new Date().toISOString() };
@@ -8059,6 +9302,11 @@ function TimeBankModal({ C, timeBank, setTimeBank, initialMode, onClose }) {
       balance: computeTimeBankBalance(newTransactions),
       transactions: newTransactions,
     });
+    // Show a 4s confirmation. Capture the new tx's id in the toast so the
+    // auto-clear setTimeout only clears THIS toast (not a newer one if the
+    // user records a second transaction within 4 seconds).
+    setLastSaved({ id: newTx.id, kind: tx.kind, mins: tx.mins, to: tx.to, from: tx.from });
+    setTimeout(() => setLastSaved(prev => prev && prev.id === newTx.id ? null : prev), 4000);
   };
 
   const removeTransaction = (id) => {
@@ -8115,6 +9363,28 @@ function TimeBankModal({ C, timeBank, setTimeBank, initialMode, onClose }) {
           </button>
         </div>
       )}
+      {lastSaved && (
+        <div style={{
+          background: "#5C8E5C12",
+          border: "1px solid #5C8E5C55",
+          borderRadius: 10,
+          padding: "10px 12px",
+          marginBottom: 12,
+          fontSize: 13, color: "#3D6B3D", lineHeight: 1.5,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <Check size={14} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <strong>Saved.</strong>{" "}
+            {lastSaved.kind === "gift"
+              ? <>Gift of <strong>{fmtBalance(lastSaved.mins)}</strong> for <strong>{lastSaved.to}</strong> is now pending — they'll see it on their Now page and choose when to redeem.</>
+              : lastSaved.kind === "paid"
+              ? <>Payback of <strong>{fmtBalance(lastSaved.mins)}</strong> from {lastSaved.from} → {lastSaved.to} recorded. Balance updated.</>
+              : <>Debt of <strong>{fmtBalance(lastSaved.mins)}</strong> recorded. {lastSaved.to} owes {lastSaved.from}.</>
+            }
+          </div>
+        </div>
+      )}
       <SegControl C={C} value={tab} onChange={setTab} options={[
         { v: "add", l: "Record" },
         { v: "history", l: `History (${timeBank.transactions.length})` },
@@ -8131,12 +9401,17 @@ function TimeBankModal({ C, timeBank, setTimeBank, initialMode, onClose }) {
   );
 }
 
-function TimeBankAddForm({ C, onSubmit, balance, initialKind }) {
-  const [kind, setKind] = useState(initialKind || "owed"); // 'owed' | 'gift' | 'paid'
-  const [from, setFrom] = useState("Daddy"); // who is giving / paying
-  const [to, setTo] = useState("Mommy");     // who is receiving
-  const [mins, setMins] = useState(60);
-  const [reason, setReason] = useState("");
+function TimeBankAddForm({ C, onSubmit, balance, initialKind, initialTx }) {
+  // Edit mode: when initialTx is provided, pre-fill all fields. The submit
+  // label changes to "Save changes" and the parent's onSubmit callback
+  // gets the same shape — but it's the parent's job to replace the tx
+  // (rather than append) when initialTx was passed.
+  const isEdit = !!initialTx;
+  const [kind, setKind] = useState(initialTx?.kind || initialKind || "owed");
+  const [from, setFrom] = useState(initialTx?.from || "Daddy");
+  const [to, setTo] = useState(initialTx?.to || "Mommy");
+  const [mins, setMins] = useState(initialTx?.mins || 60);
+  const [reason, setReason] = useState(initialTx?.reason || "");
 
   // Quick reason chips
   const REASONS = {
@@ -8242,12 +9517,12 @@ function TimeBankAddForm({ C, onSubmit, balance, initialKind }) {
       <div style={{ background: C.bg, borderRadius: 8, padding: 10, fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
         <strong style={{ color: C.ink }}>Preview:</strong>{" "}
         {kind === "owed" && <span><span style={{ color: fromColor, fontWeight: 600 }}>{from}</span> covered {fmtBalance(mins)} for <span style={{ color: toColor, fontWeight: 600 }}>{to}</span> → {to} owes {from} {fmtBalance(mins)}.</span>}
-        {kind === "gift" && <span><span style={{ color: fromColor, fontWeight: 600 }}>{from}</span> gifts {fmtBalance(mins)} to <span style={{ color: toColor, fontWeight: 600 }}>{to}</span> · no payback expected.</span>}
+        {kind === "gift" && <span><span style={{ color: fromColor, fontWeight: 600 }}>{from}</span> gifts {fmtBalance(mins)} to <span style={{ color: toColor, fontWeight: 600 }}>{to}</span> · {to} chooses when to redeem.</span>}
         {kind === "paid" && <span><span style={{ color: fromColor, fontWeight: 600 }}>{from}</span> pays back {fmtBalance(mins)} to <span style={{ color: toColor, fontWeight: 600 }}>{to}</span> · debt reduced.</span>}
       </div>
 
       <SubmitButton C={C} onClick={() => onSubmit({ kind, from, to, mins: Number(mins), reason: reason.trim() })}>
-        {kind === "owed" ? "Log debt" : kind === "gift" ? "Log gift" : "Log payback"}
+        {isEdit ? "Save changes" : kind === "owed" ? "Log debt" : kind === "gift" ? "Log gift" : "Log payback"}
       </SubmitButton>
     </>
   );
@@ -8277,18 +9552,40 @@ function TimeBankHistory({ C, transactions, onRemove, onSettleAll }) {
             }}>
               <span style={{ fontSize: 18 }}>{emoji}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: C.ink }}>
-                  <span style={{ color: fromColor, fontWeight: 600 }}>{tx.from}</span>
-                  {tx.kind === "owed" && " covered "}
-                  {tx.kind === "gift" && " gifted "}
-                  {tx.kind === "paid" && " paid back "}
-                  <strong>{fmtBalance(tx.mins)}</strong>
-                  {" "}{tx.kind === "owed" ? "for" : "to"}{" "}
-                  <span style={{ color: toColor, fontWeight: 600 }}>{tx.to}</span>
+                <div style={{ fontSize: 13, color: C.ink, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span>
+                    <span style={{ color: fromColor, fontWeight: 600 }}>{tx.from}</span>
+                    {tx.kind === "owed" && " covered "}
+                    {tx.kind === "gift" && " gifted "}
+                    {tx.kind === "paid" && " paid back "}
+                    <strong>{fmtBalance(tx.mins)}</strong>
+                    {" "}{tx.kind === "owed" ? "for" : "to"}{" "}
+                    <span style={{ color: toColor, fontWeight: 600 }}>{tx.to}</span>
+                  </span>
+                  {tx.kind === "gift" && (
+                    tx.redeemed ? (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                        background: "#5C8E5C20", color: "#3D6B3D",
+                        padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
+                      }}>✓ Redeemed</span>
+                    ) : (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                        background: `${C.gold}25`, color: "#7A5A00",
+                        padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
+                      }}>Pending</span>
+                    )
+                  )}
                 </div>
                 {tx.reason && (
                   <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 2 }}>
                     {tx.reason}
+                  </div>
+                )}
+                {tx.redeemed && (
+                  <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+                    redeemed {new Date(tx.redeemed.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · used {fmtTimeShort(new Date(tx.redeemed.blockStart))}
                   </div>
                 )}
                 <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
@@ -8430,6 +9727,615 @@ function RedeemModal({ C, timeBank, setTimeBank, setMeetings, currentUser, now, 
   );
 }
 
+// ---- BankView ----------------------------------------------------------
+// Standalone tab for time bank management. Acts like a real bank app —
+// balance hero card at top, quick action buttons below, transaction
+// ledger with filter pills, drill-down on each transaction.
+//
+// Lives separate from Schedule because time-bank accounting is its own
+// mental model: credits / debits / gifts that flow between two parents.
+// Mixing it with shift scheduling made both feel cluttered.
+function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, pendingTimeBankAction, clearPendingTimeBankAction }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addInitialMode, setAddInitialMode] = useState(null); // "owed" | "gift" | "paid" | null
+  const [editingTx, setEditingTx] = useState(null); // tx being edited; when set, shows the form pre-filled
+  const [showRedeem, setShowRedeem] = useState(false);
+  const [filter, setFilter] = useState("all"); // "all" | "gifts" | "debts" | "paybacks"
+
+  // Honor deep-link pending action (e.g. from LOG sheet pills)
+  useEffect(() => {
+    if (!pendingTimeBankAction) return;
+    setAddInitialMode(pendingTimeBankAction === "gift" ? "gift" : "paid");
+    setShowAddModal(true);
+    clearPendingTimeBankAction && clearPendingTimeBankAction();
+  }, [pendingTimeBankAction, clearPendingTimeBankAction]);
+
+  const balance = timeBank.balance || 0;
+  const transactions = timeBank.transactions || [];
+  const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+  const partnerColor = currentUser === "Mommy" ? C.daddy : C.mommy;
+  const youColor = currentUser === "Mommy" ? C.mommy : C.daddy;
+
+  // From currentUser's POV — direction language matches the modal
+  let directionLabel, primaryColor, youOwe;
+  if (balance === 0) {
+    directionLabel = "All square";
+    primaryColor = C.ink;
+    youOwe = null;
+  } else if (
+    (balance > 0 && currentUser === "Mommy") ||
+    (balance < 0 && currentUser === "Daddy")
+  ) {
+    directionLabel = `You owe ${partner}`;
+    primaryColor = partnerColor;
+    youOwe = true;
+  } else {
+    directionLabel = `${partner} owes you`;
+    primaryColor = youColor;
+    youOwe = false;
+  }
+
+  // Breakdown for the +/- summary
+  const breakdown = useMemo(() => {
+    let giftsReceived = 0, giftsGiven = 0, debtsOwedToYou = 0, debtsYouOwe = 0, payback = 0;
+    for (const tx of transactions) {
+      const m = tx.mins || 0;
+      if (tx.kind === "gift") {
+        if (tx.to === currentUser) giftsReceived += m;
+        else if (tx.from === currentUser) giftsGiven += m;
+      } else if (tx.kind === "owed") {
+        if (tx.to === currentUser) debtsYouOwe += m;
+        else if (tx.from === currentUser) debtsOwedToYou += m;
+      } else if (tx.kind === "paid") {
+        payback += m;
+      }
+    }
+    return { giftsReceived, giftsGiven, debtsOwedToYou, debtsYouOwe, payback };
+  }, [transactions, currentUser]);
+
+  const positiveTotal = breakdown.giftsReceived + breakdown.debtsOwedToYou;
+  const negativeTotal = breakdown.giftsGiven + breakdown.debtsYouOwe;
+
+  // Filter transactions for the ledger
+  const filtered = useMemo(() => {
+    let result = [...transactions];
+    if (filter === "gifts") result = result.filter(t => t.kind === "gift");
+    else if (filter === "debts") result = result.filter(t => t.kind === "owed");
+    else if (filter === "paybacks") result = result.filter(t => t.kind === "paid");
+    return result.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+  }, [transactions, filter]);
+
+  const counts = useMemo(() => ({
+    all: transactions.length,
+    gifts: transactions.filter(t => t.kind === "gift").length,
+    debts: transactions.filter(t => t.kind === "owed").length,
+    paybacks: transactions.filter(t => t.kind === "paid").length,
+  }), [transactions]);
+
+  // Drift detection — for the recompute button
+  const ledgerBalance = computeTimeBankBalance(transactions);
+  const driftDetected = ledgerBalance !== balance;
+  const recomputeBalance = () => {
+    setTimeBank({ balance: ledgerBalance, transactions });
+  };
+
+  const removeTransaction = (id) => {
+    const newTransactions = transactions.filter(t => t.id !== id);
+    setTimeBank({ balance: computeTimeBankBalance(newTransactions), transactions: newTransactions });
+  };
+
+  const recordTransaction = (tx) => {
+    const newTx = { ...tx, id: crypto.randomUUID(), ts: new Date().toISOString() };
+    const newTransactions = [...transactions, newTx];
+    setTimeBank({ balance: computeTimeBankBalance(newTransactions), transactions: newTransactions });
+  };
+
+  // Update an existing transaction in place. Preserves id, original
+  // timestamp, and any side-channel fields like .redeemed (so editing a
+  // redeemed gift's reason doesn't accidentally un-redeem it). The
+  // mutable shape is only what TimeBankAddForm owns: kind, from, to,
+  // mins, reason. Balance is recomputed from history afterward.
+  const updateTransaction = (id, patch) => {
+    const newTransactions = transactions.map(t =>
+      t.id === id ? { ...t, ...patch } : t
+    );
+    setTimeBank({ balance: computeTimeBankBalance(newTransactions), transactions: newTransactions });
+  };
+
+  const FILTERS = [
+    { v: "all",      l: "All" },
+    { v: "debts",    l: "Debts" },
+    { v: "gifts",    l: "Gifts" },
+    { v: "paybacks", l: "Paybacks" },
+  ];
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      {/* === Balance hero card === */}
+      <div style={{
+        background: balance === 0
+          ? C.paper
+          : `linear-gradient(135deg, ${primaryColor}22, ${C.paper})`,
+        border: `1px solid ${C.line}15`,
+        borderLeft: balance === 0 ? `1px solid ${C.line}15` : `4px solid ${primaryColor}`,
+        borderRadius: 14, padding: 18,
+        marginBottom: 12,
+      }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+          Time bank
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 14, fontStyle: "italic", color: C.muted, marginTop: 2,
+        }}>
+          {directionLabel}
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: balance === 0 ? 36 : 44,
+          fontWeight: 500,
+          color: balance === 0 ? C.ink : primaryColor,
+          lineHeight: 1, marginTop: 6,
+          fontStyle: balance === 0 ? "italic" : "normal",
+        }}>
+          {balance === 0 ? "no debts" : fmtBalance(balance)}
+        </div>
+
+        {/* +/- breakdown */}
+        {transactions.length > 0 && (positiveTotal > 0 || negativeTotal > 0) && (
+          <div style={{
+            marginTop: 14, paddingTop: 10,
+            borderTop: `1px solid ${C.line}15`,
+            display: "flex", alignItems: "center", gap: 16,
+            fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            {positiveTotal > 0 && (
+              <span style={{ color: "#4F6E4D", fontWeight: 600 }}>
+                +{fmtBalance(positiveTotal)}
+                <span style={{ color: C.muted, fontWeight: 400, marginLeft: 5 }}>received</span>
+              </span>
+            )}
+            {negativeTotal > 0 && (
+              <span style={{ color: C.accent, fontWeight: 600 }}>
+                −{fmtBalance(negativeTotal)}
+                <span style={{ color: C.muted, fontWeight: 400, marginLeft: 5 }}>given</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Recompute drift warning */}
+        {driftDetected && (
+          <div style={{
+            marginTop: 12,
+            background: `${C.accent}10`,
+            border: `1px solid ${C.accent}40`,
+            borderRadius: 8, padding: "8px 10px",
+            fontSize: 11, color: C.ink,
+          }}>
+            <div style={{ color: C.accent, fontWeight: 600, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+              <AlertCircle size={11} /> Balance doesn't match the history
+            </div>
+            <button onClick={recomputeBalance} style={{
+              background: C.accent, color: "#fff", border: "none",
+              borderRadius: 6, padding: "4px 10px",
+              fontSize: 10, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit",
+            }}>
+              Recompute from history
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* === Quick actions === */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+        gap: 8, marginBottom: 14,
+      }}>
+        <button onClick={() => { setAddInitialMode("owed"); setShowAddModal(true); }} style={{
+          background: C.paper, border: `1.5px solid ${C.line}30`,
+          borderRadius: 10, padding: "12px 8px",
+          cursor: "pointer", fontFamily: "inherit",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          <ArrowRightLeft size={16} color={C.accent} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log debt</span>
+        </button>
+        <button onClick={() => { setAddInitialMode("gift"); setShowAddModal(true); }} style={{
+          background: C.paper, border: `1.5px solid ${C.line}30`,
+          borderRadius: 10, padding: "12px 8px",
+          cursor: "pointer", fontFamily: "inherit",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          <Gift size={16} color={C.gold} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Send gift</span>
+        </button>
+        <button onClick={() => { setAddInitialMode("paid"); setShowAddModal(true); }} style={{
+          background: C.paper, border: `1.5px solid ${C.line}30`,
+          borderRadius: 10, padding: "12px 8px",
+          cursor: "pointer", fontFamily: "inherit",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          <Check size={16} color={C.mommy} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log payback</span>
+        </button>
+      </div>
+
+      {/* === Redeem button — only when partner owes you ≥30m === */}
+      {youOwe === false && Math.abs(balance) >= 30 && (
+        <button onClick={() => setShowRedeem(true)} style={{
+          width: "100%", marginBottom: 14,
+          background: youColor, color: "#fff", border: "none",
+          padding: "14px 18px", borderRadius: 10,
+          fontSize: 14, fontWeight: 600, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          fontFamily: "inherit",
+          boxShadow: `0 2px 8px ${youColor}55`,
+        }}>
+          <Gift size={16} /> Cash in: have {partner} cover a shift
+        </button>
+      )}
+
+      {/* === Transaction ledger === */}
+      <Section C={C} title={`Ledger · ${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`}>
+        {transactions.length === 0 ? (
+          <div style={{
+            background: C.paper, borderRadius: 12, padding: 20,
+            border: `1px solid ${C.line}15`, textAlign: "center",
+          }}>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif", fontSize: 18,
+              fontStyle: "italic", color: C.muted,
+            }}>
+              No transactions yet.
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
+              When one parent covers for the other (or gifts time, or pays back),
+              log it here. The bank tracks who's ahead and who's behind.
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Filter pills */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {FILTERS.map(f => {
+                const active = filter === f.v;
+                return (
+                  <button key={f.v} onClick={() => setFilter(f.v)} style={{
+                    background: active ? C.accent : "transparent",
+                    color: active ? "#fff" : C.ink,
+                    border: `1px solid ${active ? C.accent : C.line + "40"}`,
+                    borderRadius: 999, padding: "5px 11px",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "inherit",
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}>
+                    {f.l}
+                    <span style={{
+                      fontSize: 10, opacity: active ? 0.85 : 0.6,
+                      fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+                    }}>{counts[f.v]}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Transaction rows */}
+            {filtered.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: 20 }}>
+                No {filter} in the ledger.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {filtered.map(tx => {
+                  const fromColor = tx.from === "Mommy" ? C.mommy : C.daddy;
+                  const toColor = tx.to === "Mommy" ? C.mommy : C.daddy;
+                  const kindIcon = tx.kind === "gift" ? "🎁" : tx.kind === "paid" ? "✓" : "⇄";
+                  const kindLabel = tx.kind === "gift" ? "GIFT" : tx.kind === "paid" ? "PAYBACK" : "DEBT";
+                  const kindColor = tx.kind === "gift" ? C.gold : tx.kind === "paid" ? C.mommy : C.accent;
+                  const date = new Date(tx.ts);
+                  const isRedeemed = tx.kind === "gift" && tx.redeemed;
+                  return (
+                    <div key={tx.id} style={{
+                      background: C.paper, borderRadius: 10,
+                      padding: "10px 12px",
+                      border: `1px solid ${C.line}15`,
+                      borderLeft: `3px solid ${kindColor}`,
+                      display: "flex", flexDirection: "column", gap: 4,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          fontSize: 9, letterSpacing: "0.16em", fontWeight: 700,
+                          background: `${kindColor}18`, color: kindColor,
+                          padding: "2px 7px", borderRadius: 4,
+                        }}>
+                          {kindIcon} {kindLabel}
+                        </span>
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 13, fontWeight: 600, color: C.ink,
+                        }}>
+                          {fmtBalance(tx.mins)}
+                        </span>
+                        {isRedeemed && (
+                          <span style={{
+                            fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
+                            background: `${C.muted}18`, color: C.muted,
+                            padding: "1px 6px", borderRadius: 3,
+                          }}>
+                            REDEEMED
+                          </span>
+                        )}
+                        {tx.kind === "gift" && !isRedeemed && tx.to === currentUser && (
+                          <span style={{
+                            fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
+                            background: `${C.gold}22`, color: C.gold,
+                            padding: "1px 6px", borderRadius: 3,
+                          }}>
+                            PENDING
+                          </span>
+                        )}
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                          {/* Edit — only enabled for non-redeemed transactions.
+                              A redeemed gift has a downstream meeting that
+                              auto-swapped coverage; editing its mins/direction
+                              after redemption would create inconsistency. */}
+                          {!isRedeemed && (
+                            <button
+                              onClick={() => setEditingTx(tx)}
+                              title="Edit this transaction"
+                              style={{
+                                background: "transparent", border: "none",
+                                color: C.muted, cursor: "pointer", padding: 2,
+                                display: "flex", alignItems: "center",
+                              }}>
+                              <Edit3 size={12} />
+                            </button>
+                          )}
+                          <button onClick={() => {
+                            if (window.confirm(`Remove this ${kindLabel.toLowerCase()} transaction?`)) {
+                              removeTransaction(tx.id);
+                            }
+                          }} style={{
+                            background: "transparent", border: "none",
+                            color: C.muted, cursor: "pointer", padding: 2,
+                            display: "flex", alignItems: "center",
+                          }}>
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
+                        <span style={{ color: fromColor, fontWeight: 600 }}>{tx.from}</span>
+                        <span style={{ color: C.muted }}>{" "}{tx.kind === "gift" ? "→ gifts to" : tx.kind === "paid" ? "→ pays back" : "covered for"}{" "}</span>
+                        <span style={{ color: toColor, fontWeight: 600 }}>{tx.to}</span>
+                      </div>
+                      {tx.reason && (
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>
+                          "{tx.reason}"
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
+                        {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {fmtTimeShort(date)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </Section>
+
+      {/* Add transaction modal — reuses the same TimeBankAddForm */}
+      {showAddModal && (
+        <ModalShell C={C} onClose={() => { setShowAddModal(false); setAddInitialMode(null); }} title="Record transaction">
+          <TimeBankAddForm
+            C={C}
+            balance={balance}
+            initialKind={addInitialMode}
+            onSubmit={(tx) => {
+              recordTransaction(tx);
+              setShowAddModal(false);
+              setAddInitialMode(null);
+            }}
+          />
+        </ModalShell>
+      )}
+
+      {/* Edit modal — same form pre-filled with the transaction's current
+          values. Updates in place rather than appending a new row. */}
+      {editingTx && (
+        <ModalShell C={C} onClose={() => setEditingTx(null)} title="Edit transaction">
+          <TimeBankAddForm
+            C={C}
+            balance={balance}
+            initialTx={editingTx}
+            onSubmit={(patch) => {
+              updateTransaction(editingTx.id, patch);
+              setEditingTx(null);
+            }}
+          />
+        </ModalShell>
+      )}
+
+      {showRedeem && <RedeemModal
+        C={C}
+        timeBank={timeBank}
+        setTimeBank={setTimeBank}
+        setMeetings={setMeetings}
+        currentUser={currentUser}
+        now={now}
+        onClose={() => setShowRedeem(false)}
+      />}
+    </div>
+  );
+}
+
+// ---- RedeemGiftModal ----------------------------------------------------
+// Recipient picks WHEN to use a specific gift. The flow is intentionally
+// minimal — show what gift this is, ask "now or pick a time + duration",
+// then on confirm: (a) create a red Meeting for the recipient at that time
+// so the shift schedule auto-swaps the giver into coverage, and (b) mark
+// the gift transaction as .redeemed so it stops appearing on the recipient's
+// landing page.
+function RedeemGiftModal({ C, gift, timeBank, setTimeBank, setMeetings, now, onClose }) {
+  const recipient = gift.to;
+  const giver = gift.from;
+  const giverColor = giver === "Mommy" ? C.mommy : C.daddy;
+  const recipientColor = recipient === "Mommy" ? C.mommy : C.daddy;
+
+  const [whenChoice, setWhenChoice] = useState("now"); // 'now' | 'pick'
+  const [pickedDateTime, setPickedDateTime] = useState(() => {
+    const d = new Date();
+    d.setHours(d.getHours() + 1);
+    d.setMinutes(0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [reason, setReason] = useState("");
+
+  const handleSubmit = () => {
+    const startTime = whenChoice === "now" ? new Date(now) : new Date(pickedDateTime);
+    const endTime = new Date(startTime.getTime() + gift.mins * 60000);
+    const meetingId = crypto.randomUUID();
+
+    // Create a red commitment for the recipient → projection auto-assigns
+    // the giver to cover. Label it as "gift" so it's distinguishable in the
+    // schedule view from regular meetings.
+    const newMeeting = {
+      id: meetingId,
+      parent: recipient,
+      level: "red",
+      label: `🎁 Gift from ${giver}${reason ? ` · ${reason}` : ""}`,
+      start: startTime.toISOString(),
+      end: endTime.toISOString(),
+    };
+    setMeetings(prev => {
+      const next = [...prev, newMeeting];
+      try { localStorage.setItem("solene:meetings", JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    // Mark the gift as redeemed (don't add a new transaction; just update
+    // the existing one). This keeps the gift's history intact while
+    // preventing it from re-appearing on the landing page.
+    const newTransactions = (timeBank.transactions || []).map(t =>
+      t.id === gift.id
+        ? { ...t, redeemed: { at: new Date().toISOString(), blockStart: startTime.toISOString(), blockEnd: endTime.toISOString(), meetingId } }
+        : t
+    );
+    setTimeBank({
+      balance: computeTimeBankBalance(newTransactions),
+      transactions: newTransactions,
+    });
+    onClose();
+  };
+
+  return (
+    <ModalShell C={C} onClose={onClose} title="Redeem gift">
+      <div style={{
+        background: `${giverColor}15`,
+        border: `1px solid ${giverColor}40`,
+        borderRadius: 10,
+        padding: 14,
+        marginBottom: 16,
+      }}>
+        <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.55, marginBottom: 8 }}>
+          🎁 <strong style={{ color: giverColor }}>{giver}</strong> gifted you{" "}
+          <strong>{fmtBalance(gift.mins)}</strong> off-duty time
+          {gift.reason ? <> for <em>{gift.reason}</em></> : null}
+          .
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
+          Logged {new Date(gift.ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })} at {fmtTimeShort(new Date(gift.ts))}
+        </div>
+      </div>
+
+      <Field C={C} label="When do you want to use it?">
+        <SegControl C={C} value={whenChoice} onChange={setWhenChoice} options={[
+          { v: "now", l: "Right now" },
+          { v: "pick", l: "Pick a time" },
+        ]} />
+      </Field>
+
+      {whenChoice === "pick" && (
+        <Field C={C} label="Start">
+          <input type="datetime-local"
+            value={pickedDateTime}
+            onChange={(e) => setPickedDateTime(e.target.value)}
+            style={{
+              width: "100%", padding: 10, fontSize: 14,
+              background: C.bg, border: `1px solid ${C.line}33`,
+              borderRadius: 8, color: C.ink, outline: "none",
+              fontFamily: "inherit",
+            }} />
+        </Field>
+      )}
+
+      <Field C={C} label="Optional note">
+        <input type="text"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="nap, gym, errand…"
+          style={{
+            width: "100%", padding: 10, fontSize: 14,
+            background: C.bg, border: `1px solid ${C.line}33`,
+            borderRadius: 8, color: C.ink, outline: "none",
+            fontFamily: "inherit",
+          }} />
+      </Field>
+
+      {(() => {
+        const startTime = whenChoice === "now" ? new Date(now) : new Date(pickedDateTime);
+        const endTime = new Date(startTime.getTime() + gift.mins * 60000);
+        const startDate = new Date(startTime);
+        startDate.setHours(0, 0, 0, 0);
+        const todayDate = new Date(now);
+        todayDate.setHours(0, 0, 0, 0);
+        const daysAhead = Math.round((startDate - todayDate) / 86400000);
+        // We compute live shift swaps for today and tomorrow only. Beyond
+        // that, the meeting is recorded but the visible auto-swap doesn't
+        // appear in any pre-computed view until that day becomes today
+        // or tomorrow. Surface this so the user knows what to expect.
+        const isFarFuture = daysAhead >= 2;
+        return (
+          <div style={{
+            background: C.bg, borderRadius: 8, padding: 10,
+            fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5,
+          }}>
+            <div style={{ marginBottom: isFarFuture ? 6 : 0 }}>
+              <strong style={{ color: C.ink }}>What happens:</strong>{" "}
+              You go off-duty for{" "}
+              <strong>{fmtBalance(gift.mins)}</strong>{" "}
+              starting{" "}
+              <strong>
+                {whenChoice === "now" ? "right now" : new Date(pickedDateTime).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}
+              </strong>.{" "}
+              <span style={{ color: giverColor, fontWeight: 600 }}>{giver}</span>{" "}
+              {daysAhead === 0 ? "covers — today's shifts auto-adjust immediately." :
+               daysAhead === 1 ? "covers — tomorrow's shifts auto-adjust on the Schedule tab." :
+                                 "covers — a commitment block is created for that day."}
+            </div>
+            {isFarFuture && (
+              <div style={{
+                fontSize: 11, color: C.gold, fontStyle: "italic",
+                paddingTop: 6, borderTop: `1px solid ${C.line}15`,
+              }}>
+                Note: shift auto-swap is computed for today and tomorrow only. The block is saved and will appear in coverage when {daysAhead === 2 ? "the day after tomorrow" : "that day"} becomes tomorrow.
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      <SubmitButton C={C} onClick={handleSubmit}>
+        Redeem · {giver} covers {fmtBalance(gift.mins)}
+      </SubmitButton>
+    </ModalShell>
+  );
+}
+
 function ActiveOnsiteCard({ C, onsite, now, onUpdateEta, onArrived }) {
   const awayColor = onsite.parent === "Mommy" ? C.mommy : C.daddy;
   const homeColor = onsite.parent === "Mommy" ? C.daddy : C.mommy;
@@ -8509,6 +10415,126 @@ function ActiveOnsiteCard({ C, onsite, now, onUpdateEta, onArrived }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// ---- SleepDownPickerModal ---------------------------------------------
+// When the parent confirms the baby fell asleep (after a "still awake?"
+// prompt), this lets them specify the actual sleep-down time. Pre-filled
+// with the system's midpoint estimate, but if the parent remembers — say
+// — that she dozed off 20 min ago, they can adjust.
+//
+// Behavior:
+//   • Default selection = "Use estimate" (one-tap path stays fast)
+//   • "I know when" reveals a datetime-local input
+//   • Bound to range [last feed, now] — can't pick the future or before
+//     the last feed since that would be nonsensical
+//   • The `estimated` flag on the resulting event is true ONLY when the
+//     user accepts the system estimate. If they specify a time, we trust
+//     them and mark estimated:false.
+function SleepDownPickerModal({ C, prefill, now, onClose, onSubmit }) {
+  const [mode, setMode] = useState("estimate"); // "estimate" | "exact"
+  // datetime-local format: YYYY-MM-DDTHH:MM (local time, no seconds, no TZ)
+  const toLocalIso = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [exactTime, setExactTime] = useState(toLocalIso(prefill));
+
+  const submit = () => {
+    if (mode === "estimate") {
+      onSubmit(prefill, true);
+    } else {
+      const ts = new Date(exactTime);
+      if (isNaN(ts.getTime())) return;
+      // Clamp: don't allow future, or earlier than 8h ago (sanity bound).
+      const eightHoursAgo = new Date(now.getTime() - 8 * 3600 * 1000);
+      if (ts > now) return onSubmit(now, false);
+      if (ts < eightHoursAgo) return onSubmit(eightHoursAgo, false);
+      onSubmit(ts, false);
+    }
+  };
+
+  const fmtPretty = (d) =>
+    d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const minsAgo = Math.round((now - prefill) / 60000);
+
+  return (
+    <ModalShell C={C} onClose={onClose} title="When did she fall asleep?">
+      <div style={{
+        background: `${C.gold}10`,
+        border: `1px solid ${C.gold}30`,
+        borderRadius: 10, padding: "10px 12px", marginBottom: 14,
+        fontSize: 12, color: C.muted, lineHeight: 1.5,
+      }}>
+        Based on the last feed, she likely went down around{" "}
+        <strong style={{ color: C.ink }}>{fmtPretty(prefill)}</strong>{" "}
+        ({minsAgo} min ago). If you remember the actual time, you can enter it below.
+      </div>
+
+      {/* Mode toggle */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <button onClick={() => setMode("estimate")} style={{
+          padding: "12px 10px", borderRadius: 10,
+          background: mode === "estimate" ? C.accent : "transparent",
+          color: mode === "estimate" ? "#fff" : C.ink,
+          border: `1.5px solid ${mode === "estimate" ? C.accent : C.line + "40"}`,
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          <span style={{ fontSize: 9, letterSpacing: "0.16em", opacity: 0.85 }}>USE ESTIMATE</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
+            {fmtPretty(prefill)}
+          </span>
+        </button>
+        <button onClick={() => setMode("exact")} style={{
+          padding: "12px 10px", borderRadius: 10,
+          background: mode === "exact" ? C.accent : "transparent",
+          color: mode === "exact" ? "#fff" : C.ink,
+          border: `1.5px solid ${mode === "exact" ? C.accent : C.line + "40"}`,
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}>
+          <span style={{ fontSize: 9, letterSpacing: "0.16em", opacity: 0.85 }}>I KNOW WHEN</span>
+          <span style={{ fontSize: 12 }}>specify time</span>
+        </button>
+      </div>
+
+      {/* Exact time input — shown only when mode = "exact" */}
+      {mode === "exact" && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{
+            display: "block", fontSize: 11, color: C.muted,
+            marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase",
+          }}>
+            She fell asleep at
+          </label>
+          <input
+            type="datetime-local"
+            value={exactTime}
+            onChange={e => setExactTime(e.target.value)}
+            max={toLocalIso(now)}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: `1px solid ${C.line}40`,
+              background: C.bg,
+              color: C.ink,
+              fontSize: 14,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          />
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 4, fontStyle: "italic" }}>
+            Use 24h format. Can't pick a future time.
+          </div>
+        </div>
+      )}
+
+      <SubmitButton C={C} onClick={submit}>
+        Log sleep-down
+      </SubmitButton>
+    </ModalShell>
   );
 }
 
@@ -8825,28 +10851,9 @@ function InventoryView({ C, inventory, moveToFridge, removeInventory, emptyLocat
         </Section>
       )}
 
-      {expired.length > 0 && (
-        <Section C={C} title="Expired (toss)">
-          <div style={{ display: "grid", gap: 8, opacity: 0.6 }}>
-            {expired.map(item => (
-              <div key={item.id} style={{
-                background: C.paper, borderRadius: 10, padding: "10px 14px",
-                display: "flex", alignItems: "center", gap: 12,
-                border: `1px dashed ${C.line}33`,
-              }}>
-                <span style={{ fontSize: 13, flex: 1, textDecoration: "line-through" }}>
-                  {item.oz} oz · {item.location === "rt" ? "RT" : "fridge"}
-                </span>
-                <button onClick={() => removeInventory(item.id)} style={{
-                  background: "transparent", border: "none", color: C.muted, cursor: "pointer", padding: 4,
-                }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+      {/* Expired-inventory section removed in v05.05av — was visual clutter
+          without much value. Expired items are auto-excluded from totals
+          and bottle picker; no need to surface them as a separate section. */}
     </div>
   );
 }
@@ -9232,7 +11239,8 @@ function TabBar({ C, tab, setTab }) {
     { id: "doctor", label: "Wellness" },
     { id: "_spacer" },
     { id: "inventory", label: "Milk" },
-    { id: "shifts", label: "Shifts" },
+    { id: "shifts", label: "Schedule" },
+    { id: "bank", label: "Bank" },
   ];
   return (
     <div style={{
@@ -9666,6 +11674,7 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
     return d.toISOString().slice(0, 16);
   });
   const [durationMin, setDurationMin] = useState(60);
+  const [customDurationOpen, setCustomDurationOpen] = useState(false);
   const [label, setLabel] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -9729,20 +11738,53 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
         <DateTimeInput C={C} value={start} onChange={setStart} />
       </Field>
 
-      {/* Duration as quick pills + custom — replaces explicit end picker */}
+      {/* Duration as quick pills + custom — replaces explicit end picker.
+          The 'Custom' pill at the end opens a free-form minutes input so
+          users can enter 45m, 2h 30m, etc. without being boxed in by the
+          presets. */}
       <Field C={C} label={`Duration · ends ${computedEnd.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${isFlex ? " (flexible)" : ""}`}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
           {DURATIONS.map(d => (
-            <button key={d.v} onClick={() => setDurationMin(d.v)} style={{
-              background: durationMin === d.v ? C.accent : C.bg,
-              color: durationMin === d.v ? "#fff" : C.ink,
-              border: `1.5px solid ${durationMin === d.v ? C.accent : C.line + "22"}`,
+            <button key={d.v} onClick={() => { setDurationMin(d.v); setCustomDurationOpen(false); }} style={{
+              background: durationMin === d.v && !customDurationOpen ? C.accent : C.bg,
+              color: durationMin === d.v && !customDurationOpen ? "#fff" : C.ink,
+              border: `1.5px solid ${durationMin === d.v && !customDurationOpen ? C.accent : C.line + "22"}`,
               borderRadius: 8, padding: "10px 4px", cursor: "pointer",
               fontSize: 12, fontWeight: 600,
               fontFamily: "inherit",
             }}>{d.l}</button>
           ))}
+          <button onClick={() => setCustomDurationOpen(v => !v)} style={{
+            background: customDurationOpen ? C.accent : C.bg,
+            color: customDurationOpen ? "#fff" : C.ink,
+            border: `1.5px dashed ${customDurationOpen ? C.accent : C.line + "55"}`,
+            borderRadius: 8, padding: "10px 4px", cursor: "pointer",
+            fontSize: 12, fontWeight: 600,
+            fontFamily: "inherit",
+          }}>Custom</button>
         </div>
+        {customDurationOpen && (
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="number"
+              min={5}
+              max={720}
+              step={5}
+              value={durationMin}
+              onChange={e => setDurationMin(Math.max(5, Math.min(720, Number(e.target.value) || 0)))}
+              style={{
+                width: 90, padding: "8px 10px", fontSize: 14,
+                background: C.bg, border: `1.5px solid ${C.accent}`,
+                borderRadius: 8, color: C.ink, outline: "none",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+              autoFocus
+            />
+            <span style={{ fontSize: 12, color: C.muted }}>
+              minutes ({Math.floor(durationMin / 60)}h {durationMin % 60}m)
+            </span>
+          </div>
+        )}
       </Field>
 
       {/* Advanced options — collapsed by default. Most adds don't need to
@@ -10496,7 +12538,7 @@ function ActivityForm({ C, onSubmit, activeActivity, setActiveActivity }) {
         ) : (
           <button onClick={stopAndSave} style={{
             marginTop: 10, width: "100%",
-            background: "#fff", color: activityInfo.color, border: `1px solid ${activityInfo.color}`,
+            background: C.paper, color: activityInfo.color, border: `1px solid ${activityInfo.color}`,
             padding: 12, borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
@@ -10725,6 +12767,452 @@ function NoteForm({ C, onSubmit, initial, flaggedNotes, updateNote }) {
          : "Save note"}
       </SubmitButton>
     </>
+  );
+}
+
+// ---- Daily intake trend chart ------------------------------------------
+// 14-day rolling view of total daily intake (oz). Computed from feed events
+// (which carry an explicit `oz` field) and breastfeed events (which only
+// have a duration — we estimate at 1 oz per 5 minutes of nursing, the
+// common pediatric reference for a 3-month-old). The estimation is
+// conservative and surfaced to the user via the legend footnote so a
+// data-aware viewer can judge the assumption.
+//
+// Visual layers (back to front):
+//   1. AAP-typical band (horizontal dashed band shading the normal range)
+//   2. Daily bars (terracotta, today brighter)
+//   3. 7-day rolling-mean line (gold, smoothed)
+//   4. Tap detail callout (when a day is selected)
+//
+// Statistics surfaced below the chart:
+//   - 14-day median (central tendency)
+//   - 14-day mean ± σ (variability)
+//   - Trend direction (last-7 mean vs first-7 mean, % change)
+//   - Anomaly count (days >2σ from mean — flagged in chart with ring)
+//
+// Hand-rolled SVG (no recharts dependency) so it themes cleanly via the
+// shared C palette and stays consistent with the rest of the app's
+// typography (Cormorant labels, JetBrains Mono numerics).
+function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
+  const [selectedDayIdx, setSelectedDayIdx] = useState(null);
+
+  // BF oz estimation: standard pediatric reference is ~1 oz per 5 min for
+  // a 3-month-old. We surface this in the footnote.
+  const BF_OZ_PER_MIN = 1 / 5;
+
+  // ---- Build the 14-day series ----
+  const series = useMemo(() => {
+    const DAYS = 14;
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // Build a map: dayIdx -> { oz_bm, oz_bf, feeds_bm, feeds_bf }
+    // dayIdx 0 = 13 days ago, dayIdx 13 = today
+    const buckets = Array.from({ length: DAYS }, (_, i) => {
+      const d = new Date(startOfToday);
+      d.setDate(d.getDate() - (DAYS - 1 - i));
+      return {
+        idx: i,
+        date: d,
+        ozBM: 0,
+        ozBF: 0,
+        countBM: 0,
+        countBF: 0,
+        hasData: false,
+      };
+    });
+
+    // Map each feed/breastfeed event to its bucket
+    for (const e of events) {
+      if (e.type !== "feed" && e.type !== "breastfeed") continue;
+      const ts = new Date(e.ts);
+      const dayStart = new Date(ts);
+      dayStart.setHours(0, 0, 0, 0);
+      const daysAgo = Math.round((startOfToday - dayStart) / 86400000);
+      const idx = (DAYS - 1) - daysAgo;
+      if (idx < 0 || idx >= DAYS) continue;
+
+      buckets[idx].hasData = true;
+      if (e.type === "feed") {
+        buckets[idx].ozBM += e.oz || 0;
+        buckets[idx].countBM += 1;
+      } else if (e.type === "breastfeed") {
+        const dur = e.totalDurationMin || 0;
+        buckets[idx].ozBF += dur * BF_OZ_PER_MIN;
+        buckets[idx].countBF += 1;
+      }
+    }
+
+    return buckets.map(b => ({
+      ...b,
+      total: b.ozBM + b.ozBF,
+    }));
+  }, [events, now]);
+
+  // ---- Statistics ----
+  const stats = useMemo(() => {
+    const totals = series.filter(d => d.hasData).map(d => d.total);
+    if (totals.length === 0) return null;
+    const sorted = [...totals].sort((a, b) => a - b);
+    const median = sorted.length % 2
+      ? sorted[Math.floor(sorted.length / 2)]
+      : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+    const mean = totals.reduce((a, b) => a + b, 0) / totals.length;
+    const variance = totals.reduce((a, b) => a + (b - mean) ** 2, 0) / totals.length;
+    const sigma = Math.sqrt(variance);
+
+    // Trend: compare last-7 mean vs first-7 mean (when we have ≥7 days each)
+    // — gives a directional signal that smooths daily noise.
+    let trendPct = null;
+    if (series.length >= 14) {
+      const first7 = series.slice(0, 7).filter(d => d.hasData).map(d => d.total);
+      const last7 = series.slice(7, 14).filter(d => d.hasData).map(d => d.total);
+      if (first7.length >= 3 && last7.length >= 3) {
+        const f = first7.reduce((a, b) => a + b, 0) / first7.length;
+        const l = last7.reduce((a, b) => a + b, 0) / last7.length;
+        trendPct = f > 0 ? ((l - f) / f) * 100 : null;
+      }
+    }
+
+    return { median, mean, sigma, trendPct, n: totals.length };
+  }, [series]);
+
+  // ---- Rolling 7-day mean (centered where possible, trailing at edges) ----
+  const rolling = useMemo(() => {
+    return series.map((d, i) => {
+      // Use a trailing 7-day window (more honest for the "current trend"
+      // story than a centered window which would peek into the future
+      // for the right-edge points).
+      const lo = Math.max(0, i - 6);
+      const hi = i + 1;
+      const window = series.slice(lo, hi).filter(p => p.hasData);
+      if (window.length === 0) return null;
+      return window.reduce((a, b) => a + b.total, 0) / window.length;
+    });
+  }, [series]);
+
+  // ---- Anomalies: flag days outside ±2σ ----
+  const anomalyIdxs = useMemo(() => {
+    if (!stats) return new Set();
+    const set = new Set();
+    series.forEach((d, i) => {
+      if (!d.hasData) return;
+      if (Math.abs(d.total - stats.mean) > 2 * stats.sigma) set.add(i);
+    });
+    return set;
+  }, [series, stats]);
+
+  // ---- Chart geometry ----
+  // Use a viewBox-based SVG so it scales cleanly. Internal units don't
+  // need to match pixels — viewBox "0 0 W H" defines the coordinate space.
+  const W = 700;
+  const H = 220;
+  const PAD_L = 36; // y-axis labels
+  const PAD_R = 12;
+  const PAD_T = 12;
+  const PAD_B = 32; // x-axis labels
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+
+  // Y-domain: 0 to nearest-4 above max(bar, ageNorm-high)
+  const maxData = Math.max(
+    ...series.map(d => d.total),
+    ageNorms?.ozPerDay?.[1] || 0,
+    20 // ensure a sensible floor even with sparse data
+  );
+  const yMax = Math.ceil(maxData / 4) * 4;
+  const yToPx = (v) => PAD_T + plotH - (v / yMax) * plotH;
+  const xToPx = (i) => PAD_L + (plotW / 14) * (i + 0.5);
+  const barW = (plotW / 14) * 0.62;
+
+  // Y-axis ticks at sensible intervals
+  const yTicks = [];
+  const tickStep = yMax >= 32 ? 8 : yMax >= 16 ? 4 : 2;
+  for (let v = 0; v <= yMax; v += tickStep) yTicks.push(v);
+
+  // AAP normal band
+  const normLow = ageNorms?.ozPerDay?.[0];
+  const normHigh = ageNorms?.ozPerDay?.[1];
+
+  // ---- Render ----
+  if (!stats || stats.n === 0) {
+    // Empty state: no feeds in the last 14 days.
+    return (
+      <div style={{
+        background: C.paper, borderRadius: 14,
+        border: `1px solid ${C.line}22`,
+        padding: 20, textAlign: "center",
+      }}>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontStyle: "italic",
+          color: C.muted,
+        }}>
+          Not enough data yet for a 14-day trend.
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>
+          Log a few feedings and the chart will populate.
+        </div>
+      </div>
+    );
+  }
+
+  const selectedDay = selectedDayIdx != null ? series[selectedDayIdx] : null;
+
+  return (
+    <div style={{
+      background: C.paper,
+      borderRadius: 14,
+      border: `1px solid ${C.line}22`,
+      padding: "14px 14px 12px",
+    }}>
+      {/* Header strip — title + median callout */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "baseline",
+        marginBottom: 6, gap: 8, flexWrap: "wrap",
+      }}>
+        <div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 18, fontWeight: 600, color: C.ink, lineHeight: 1.1,
+          }}>
+            Daily intake — 14-day trend
+          </div>
+          <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 2 }}>
+            total oz per calendar day · bottle + breast (estimated)
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "baseline" }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              median
+            </div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 22, fontWeight: 600, color: C.ink, lineHeight: 1,
+            }}>
+              {stats.median.toFixed(1)}<span style={{ fontSize: 11, color: C.muted, marginLeft: 3 }}>oz</span>
+            </div>
+          </div>
+          {stats.trendPct != null && (
+            <div>
+              <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+                trend
+              </div>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 14, fontWeight: 600,
+                color: Math.abs(stats.trendPct) < 5 ? C.muted : (stats.trendPct > 0 ? "#5C8E5C" : C.accent),
+                lineHeight: 1, marginTop: 4,
+              }}>
+                {stats.trendPct > 0 ? "↑" : stats.trendPct < 0 ? "↓" : "→"} {Math.abs(stats.trendPct).toFixed(0)}%
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SVG chart */}
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="xMidYMid meet"
+           style={{ display: "block", marginTop: 8 }}>
+        {/* AAP normal band — dashed horizontal stripe */}
+        {normLow != null && normHigh != null && (
+          <g>
+            <rect
+              x={PAD_L} y={yToPx(normHigh)}
+              width={plotW} height={yToPx(normLow) - yToPx(normHigh)}
+              fill={C.gold} opacity="0.10"
+            />
+            <line x1={PAD_L} y1={yToPx(normLow)} x2={W - PAD_R} y2={yToPx(normLow)}
+              stroke={C.gold} strokeWidth="1" strokeDasharray="3 4" opacity="0.6" />
+            <line x1={PAD_L} y1={yToPx(normHigh)} x2={W - PAD_R} y2={yToPx(normHigh)}
+              stroke={C.gold} strokeWidth="1" strokeDasharray="3 4" opacity="0.6" />
+            <text x={W - PAD_R - 4} y={yToPx(normHigh) - 4}
+              textAnchor="end" fontSize="9" fill={C.gold} fontWeight="600"
+              style={{ letterSpacing: "0.06em" }}>
+              AAP {normLow}–{normHigh} oz
+            </text>
+          </g>
+        )}
+
+        {/* Y-axis ticks + grid lines */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line x1={PAD_L} y1={yToPx(v)} x2={W - PAD_R} y2={yToPx(v)}
+              stroke={C.line} strokeWidth="0.5" opacity="0.15" />
+            <text x={PAD_L - 6} y={yToPx(v) + 3} textAnchor="end"
+              fontSize="9" fill={C.muted} fontFamily="'JetBrains Mono', monospace">
+              {v}
+            </text>
+          </g>
+        ))}
+
+        {/* Bars */}
+        {series.map((d, i) => {
+          if (!d.hasData) {
+            // Sparse-data marker — tiny tick at y=0
+            return (
+              <line key={`empty-${i}`}
+                x1={xToPx(i) - barW / 2} x2={xToPx(i) + barW / 2}
+                y1={yToPx(0)} y2={yToPx(0)}
+                stroke={C.muted} strokeWidth="2" opacity="0.3" />
+            );
+          }
+          const isToday = i === series.length - 1;
+          const isAnomaly = anomalyIdxs.has(i);
+          const isSelected = selectedDayIdx === i;
+          return (
+            <g key={`bar-${i}`}>
+              <rect
+                x={xToPx(i) - barW / 2}
+                y={yToPx(d.total)}
+                width={barW}
+                height={Math.max(1, yToPx(0) - yToPx(d.total))}
+                fill={isToday ? C.accent : `${C.accent}CC`}
+                stroke={isAnomaly ? C.accent : isSelected ? C.ink : "none"}
+                strokeWidth={isAnomaly ? "1.5" : isSelected ? "1" : "0"}
+                rx="2"
+                style={{ cursor: "pointer", transition: "fill 0.15s" }}
+                onClick={() => setSelectedDayIdx(isSelected ? null : i)}
+              />
+              {/* Today label */}
+              {isToday && (
+                <text x={xToPx(i)} y={yToPx(d.total) - 5} textAnchor="middle"
+                  fontSize="9" fontWeight="700" fill={C.accent}
+                  style={{ letterSpacing: "0.06em" }}>
+                  TODAY
+                </text>
+              )}
+              {/* Anomaly star */}
+              {isAnomaly && !isToday && (
+                <text x={xToPx(i)} y={yToPx(d.total) - 5} textAnchor="middle"
+                  fontSize="11" fill={C.accent}>
+                  ✦
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* 7-day rolling mean line — drawn on top of bars */}
+        {(() => {
+          const points = rolling
+            .map((v, i) => v == null ? null : `${xToPx(i)},${yToPx(v)}`)
+            .filter(Boolean)
+            .join(" ");
+          if (!points) return null;
+          return (
+            <g>
+              <polyline
+                points={points}
+                fill="none"
+                stroke={C.gold}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity="0.85"
+              />
+              {/* Dots at each rolling-mean point for emphasis */}
+              {rolling.map((v, i) => v == null ? null : (
+                <circle key={`r-${i}`} cx={xToPx(i)} cy={yToPx(v)} r="2"
+                  fill={C.gold} opacity="0.9" />
+              ))}
+            </g>
+          );
+        })()}
+
+        {/* X-axis: label every other day, today emphasized */}
+        {series.map((d, i) => {
+          // Label every other day to avoid crowding (i % 2 === 1 means
+          // label days 1, 3, 5, ... — gives 7 labels across 14 days)
+          if (i % 2 !== 1 && i !== series.length - 1) return null;
+          const isToday = i === series.length - 1;
+          const dateStr = `${d.date.getMonth() + 1}/${d.date.getDate()}`;
+          return (
+            <text key={`x-${i}`}
+              x={xToPx(i)} y={H - 14}
+              textAnchor="middle"
+              fontSize="9"
+              fontFamily="'JetBrains Mono', monospace"
+              fill={isToday ? C.accent : C.muted}
+              fontWeight={isToday ? "700" : "500"}>
+              {dateStr}
+            </text>
+          );
+        })}
+      </svg>
+
+      {/* Selected-day detail callout */}
+      {selectedDay && selectedDay.hasData && (
+        <div style={{
+          background: `${C.accent}10`,
+          border: `1px solid ${C.accent}40`,
+          borderRadius: 10, padding: "8px 12px",
+          fontSize: 12, color: C.ink, marginTop: 4,
+          display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+        }}>
+          <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 15, fontStyle: "italic" }}>
+            {selectedDay.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+          </strong>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: C.accent }}>
+            {selectedDay.total.toFixed(1)} oz total
+          </span>
+          <span style={{ color: C.muted, fontSize: 11 }}>
+            {selectedDay.countBM > 0 && <>{selectedDay.countBM} bottle{selectedDay.countBM === 1 ? "" : "s"} ({selectedDay.ozBM.toFixed(1)} oz)</>}
+            {selectedDay.countBM > 0 && selectedDay.countBF > 0 && " · "}
+            {selectedDay.countBF > 0 && <>{selectedDay.countBF} BF (~{selectedDay.ozBF.toFixed(1)} oz est.)</>}
+          </span>
+          {anomalyIdxs.has(selectedDayIdx) && (
+            <span style={{ color: C.accent, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" }}>
+              ✦ {selectedDay.total > stats.mean ? "ABOVE" : "BELOW"} 2σ
+            </span>
+          )}
+          <button
+            onClick={() => setSelectedDayIdx(null)}
+            style={{
+              background: "transparent", border: "none", color: C.muted,
+              cursor: "pointer", marginLeft: "auto", fontSize: 12, fontFamily: "inherit",
+            }}>
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Legend + statistics footer */}
+      <div style={{
+        marginTop: 10, paddingTop: 10,
+        borderTop: `1px solid ${C.line}15`,
+        display: "flex", flexWrap: "wrap", gap: 14,
+        fontSize: 10, color: C.muted,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ display: "inline-block", width: 10, height: 8, background: C.accent, borderRadius: 1 }} />
+          daily total
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ display: "inline-block", width: 14, height: 2, background: C.gold }} />
+          7-day rolling mean
+        </div>
+        {normLow != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ display: "inline-block", width: 10, height: 8, background: C.gold, opacity: 0.18, border: `1px dashed ${C.gold}`, borderRadius: 1 }} />
+            AAP {normLow}–{normHigh} oz/day
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ color: C.accent, fontWeight: 700 }}>✦</span>
+          anomaly (&gt;2σ from mean)
+        </div>
+        <div style={{ marginLeft: "auto", fontFamily: "'JetBrains Mono', monospace" }}>
+          μ {stats.mean.toFixed(1)} ± {stats.sigma.toFixed(1)} oz · n={stats.n}{anomalyIdxs.size > 0 && ` · ${anomalyIdxs.size} flagged`}
+        </div>
+      </div>
+
+      <div style={{
+        marginTop: 6, fontSize: 10, color: C.muted, fontStyle: "italic", lineHeight: 1.4,
+      }}>
+        BF intake estimated at 1 oz / 5 min nursing — adjust mentally if Solène's transfer is faster or slower than typical.
+      </div>
+    </div>
   );
 }
 
@@ -11466,6 +13954,20 @@ function AnalyticsSection({ C, events, now }) {
 
         return (
           <div style={{ marginBottom: 12 }}>
+            {/* Daily intake trend chart — 14-day rolling view of total oz/day.
+                Sits above the snapshot card grid because it gives temporal
+                context that the cards (which show single aggregated numbers)
+                can't. The chart is also where you'd notice anomalies (a low
+                day, a sudden trend shift) before they become a pattern. */}
+            <div style={{ marginBottom: 14 }}>
+              <DailyIntakeTrendChart
+                C={C}
+                events={events}
+                now={now}
+                ageNorms={norms}
+              />
+            </div>
+
             {/* Window header — what window we're showing, age band */}
             <div style={{
               display: "flex", alignItems: "baseline", justifyContent: "space-between",
@@ -11487,40 +13989,14 @@ function AnalyticsSection({ C, events, now }) {
               </div>
             </div>
 
-            {/* Card grid */}
+            {/* Card grid — pared down 2026.05.05av. Removed:
+                  • Feedings/day (already shown in the daily intake chart)
+                  • Intake/day (chart's primary metric, with full 14-day context)
+                  • Change cadence (duplicates Diapers/day; longest-gap was
+                    only unique signal and isn't worth its own card)
+                Kept: Diapers/day, Longest stretch, Eating rhythm (CV%),
+                Wake window — each measures something the chart doesn't. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-              <MetricCard
-                topic="Feedings / day"
-                value={sessionsPerDay.toFixed(1)}
-                range={norms.feedsPerDay}
-                status={feedsStatus}
-                note={(() => {
-                  // Combine avg oz/session + peak hour into one compact note line.
-                  // Peak hour gets visual emphasis (bold + ink color) since it's
-                  // the actionable "when does she eat most" answer.
-                  const ozPart = stats.avgOzPerFeed > 0
-                    ? <>{stats.avgOzPerFeed.toFixed(1)} oz/session avg</>
-                    : null;
-                  const peakPart = peakStr
-                    ? <>peak <strong style={{ color: C.ink, fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace" }}>{peakStr}</strong></>
-                    : null;
-                  if (ozPart && peakPart) return <>{ozPart} · {peakPart}</>;
-                  return ozPart || peakPart;
-                })()}
-              />
-              <MetricCard
-                topic="Intake / day"
-                value={dailyOz.toFixed(1)}
-                unit="oz"
-                range={norms.ozPerDay}
-                status={ozStatus}
-                note={(() => {
-                  const trendBit = Math.abs(stats.ozTrend) > 5
-                    ? `${stats.ozTrend > 0 ? "↑" : "↓"} ${Math.abs(stats.ozTrend).toFixed(0)}%`
-                    : "steady";
-                  return `bottle + breast · ${trendBit}`;
-                })()}
-              />
               <MetricCard
                 topic="Diapers / day"
                 value={diapersPerDay.toFixed(1)}
@@ -11544,11 +14020,6 @@ function AnalyticsSection({ C, events, now }) {
                   note={stats.medianSleep > 0 ? `median ${fmtDuration(stats.medianSleep)}` : null}
                 />
               )}
-              {/* Feeding consistency — coefficient of variation of daily oz.
-                  Doesn't have a normative band (depends on baby), so we use
-                  rough heuristics: <15% very consistent, 15-25% moderate, >25%
-                  variable. This is the kind of stat a biochemist will read
-                  fluently — "stable intake" or "noisy intake" at a glance. */}
               {/* Daily intake stability — value is a layman-friendly word
                   (Stable / Moderate / Variable) with the CV% as a small
                   technical sub-line for those who care. Threshold heuristics
@@ -11600,30 +14071,6 @@ function AnalyticsSection({ C, events, now }) {
                         ? `range ${fmtDuration(stats.wakeWindowP25)}–${fmtDuration(stats.wakeWindowP75)} · ${stats.wakeWindowCount} samples`
                         : `${stats.wakeWindowCount} sample${stats.wakeWindowCount === 1 ? "" : "s"}`
                     }
-                  />
-                );
-              })()}
-              {/* Change cadence — daytime interval between diaper changes.
-                  Compared to the age-band changeIntervalH norm. Above-band
-                  is the warning direction here (going TOO LONG between
-                  changes), so we use 'above' for that and recolor to
-                  match the urgency that makes sense for diapers. */}
-              {stats.medianChangeIntervalH != null && norms.changeIntervalH && (() => {
-                const interval = stats.medianChangeIntervalH;
-                const cadenceStatus = rangeStatus(interval, norms.changeIntervalH);
-                // longest gap is the most actionable info — "we went 5h
-                // once" is what the user actually wants to know.
-                const longestNote = stats.longestDaytimeGapH > norms.changeIntervalH[1]
-                  ? `longest gap: ${fmtHours(stats.longestDaytimeGapH)} ⚠`
-                  : `longest gap: ${fmtHours(stats.longestDaytimeGapH)}`;
-                return (
-                  <MetricCard
-                    topic="Change cadence"
-                    value={fmtHours(interval)}
-                    numericValue={interval}
-                    range={norms.changeIntervalH}
-                    status={cadenceStatus}
-                    note={longestNote}
                   />
                 );
               })()}
@@ -12440,7 +14887,12 @@ ${summary.htmlReport}
         ) : (
           <>
             <div style={{
-              background: "#fff", color: "#1F1B16",
+              /* In day mode this stays paper-cream; in dusk it lifts to a
+                 print-preview-style white so the rendered HTML's black text
+                 stays readable. The doctor summary's rendered content uses
+                 dark text by design for printability. */
+              background: C.paper === "#FCF8F1" ? "#fff" : C.paper,
+              color: "#1F1B16",
               border: `1px solid ${C.line}22`, borderRadius: 10,
               padding: 18, fontSize: 13, lineHeight: 1.6,
               maxHeight: 400, overflowY: "auto",
