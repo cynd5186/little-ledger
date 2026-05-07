@@ -2,6 +2,35 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+<!-- Theme color for browser chrome (Chrome on Android shows this in the
+     URL bar; some iOS PWA install dialogs use it too). Matches the
+     Mommy rose to keep the brand identity consistent. -->
+<meta name="theme-color" content="#C77893">
+
+<!-- Apple-specific PWA hints. apple-mobile-web-app-capable lets the page
+     install as a full-screen home-screen app on iOS. The status bar style
+     'default' shows dark text on light bg, which matches our cream theme. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Ledger">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- Apple touch icon — iOS uses this for the home-screen shortcut. The
+     180x180 size covers all iPhone screen densities. iOS automatically
+     rounds corners and adds a slight gloss; our icon is designed to
+     work with that. -->
+<link rel="apple-touch-icon" href="/little-ledger-icon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/little-ledger-icon-180.png">
+
+<!-- Standard icons for browsers and Android home-screen install -->
+<link rel="icon" type="image/svg+xml" href="/little-ledger-icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/little-ledger-icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/little-ledger-icon-512.png">
+
+<!-- PWA manifest. Tells the browser this site is installable, what to
+     name it, what colors to theme it with, etc. -->
+<link rel="manifest" href="/manifest.json">
+    
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>little-ledger</title>
