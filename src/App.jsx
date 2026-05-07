@@ -14,22 +14,24 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt";
+const APP_VERSION = "2026.05.05bt3";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "DATA INTEGRITY: auto-snapshot to localStorage before any family-code change · 'Restore from snapshot' UI in Profile Switcher → Backup",
-  "DATA INTEGRITY: confirm-gate when generating new code while already linked · clear warning with current code shown",
-  "DATA INTEGRITY: '22:NaNa' bug fixed at the four sites that constructed HH:MM strings without invalid-date guards (carving, takeover-window, datetime-local builders)",
-  "MILK: prominent expiration banner at top of milk panel when a bottle is past 4h preferred or about to be (within 30m)",
-  "MILK: bottle sharpie label shows under each bottle emoji · auto-suggests next available letter A-Z (24h cycle) when finishing a pump",
-  "JOURNAL: pump entries show explicit start–end range '(3:05p–3:30p)' so timestamp ambiguity is gone",
-  "WELLNESS: awake-7h impossibility flag — sub-line warning on the asleep/awake tile when duration is implausible (likely missed log)",
-  "WELLNESS: doctor summary now compares last 7 days vs prior 7 days · structured local fallback when AI is unavailable so the visit prep is never blocked",
+  "FIX: Day plan shift chart now updates immediately when commitments are added/removed for today or tomorrow — no need to refresh",
+  "Build fix: JS comments in JSX attribute position (rejected by Rolldown)",
+  "DATA INTEGRITY: auto-snapshot before any family-code change · 'Restore from snapshot' UI",
+  "DATA INTEGRITY: confirm-gate when generating new code while already linked",
+  "DATA INTEGRITY: '22:NaNa' bug fixed everywhere",
+  "MILK: prominent expiration banner · sharpie label visible per bottle · auto-suggest next letter",
+  "JOURNAL: pump entries show start–end range",
+  "WELLNESS: awake-7h impossibility flag · doctor summary period-over-period + local fallback",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt3", summary: "Day plan chart now reflects new commitments immediately (force-remount on commitment count change)" },
+  { version: "2026.05.05bt2", summary: "Build fix for v05.05bt — Rolldown rejected JS comments in JSX attribute position" },
   { version: "2026.05.05bt", summary: "DATA INTEGRITY: auto-backup before code change + restore UI · 22:NaNa fix · expiration banner · sharpie sync · pump time-range · awake-7h flag · doctor summary fallback + period-over-period" },
   { version: "2026.05.05bs", summary: "Icon updated to mauve · pip labels PUMP/REST · terracotta deeper · tile divider warmed · About panel maker's colophon" },
   { version: "2026.05.05br", summary: "State colors muted: overdue red → terracotta, on-schedule kelly → sage · whole alarm/success palette retuned for mauve" },
@@ -4009,10 +4011,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             });
           }}
           onPickBottle={(loc) => setBottlePickerLoc(loc)}
-          /* Quick-log from quadrants: tile tap opens the LOG sheet
-             pre-set to the given event type. Lets the user one-tap
-             from the at-a-glance view straight into a focused logger. */
-          onQuickLog={(eventType) => { setLoggerType(eventType); setShowLogger(true); }}
+          onQuickLog={(eventType) => {
+            // Quick-log from quadrants: tile tap opens the LOG sheet
+            // pre-set to the given event type. Lets the user one-tap
+            // from the at-a-glance view straight into a focused logger.
+            setLoggerType(eventType); setShowLogger(true);
+          }}
         />
         </>
         )}
@@ -6923,15 +6927,15 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               : null
           }
           onTap={onQuickLog ? () => onQuickLog("diaper") : undefined} />
+        {/* Label flips between asleep/awake states. The label IS the
+            status — no separate sub needed. The big number reads as a
+            duration ("5h 59m") so paired with "Awake for" or "Asleep
+            for" it's a clean phrase: "Awake for · 5h 59m".
+            v05.05bt: Added impossibility flag — for a young infant,
+            awake >5h is unusual, >7h almost certainly a missed sleep_down
+            log. Same suspicion for asleep >14h. Surface as a sub-line
+            nudge so the user fixes the data, not the analytics later. */}
         <StatTile C={C}
-          /* Label flips between asleep/awake states. The label IS the
-             status — no separate sub needed. The big number reads as a
-             duration ("5h 59m") so paired with "Awake for" or "Asleep
-             for" it's a clean phrase: "Awake for · 5h 59m".
-             v05.05bt: Added impossibility flag — for a young infant,
-             awake >5h is unusual, >7h almost certainly a missed sleep_down
-             log. Same suspicion for asleep >14h. Surface as a sub-line
-             nudge so the user fixes the data, not the analytics later. */}
           label={isAsleep ? "asleep for" : "awake for"}
           icon={isAsleep ? <Moon size={12} /> : <Sun size={12} />}
           iconColor={isAsleep ? "#5A6E8A" : C.gold}
@@ -9961,6 +9965,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           return (
             <>
               <DayPlanCard
+                key={`today-${todayCommitments.length}-${todayCommitments.map(m => m.start + m.end).join("|")}`}
                 C={C}
                 label="Today"
                 subLabel={todayLabel}
@@ -9976,6 +9981,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 setControlledOpen={setTodayOpen}
               />
               <DayPlanCard
+                key={`tomorrow-${tomorrowMeetings.length}-${tomorrowMeetings.map(m => m.start + m.end).join("|")}`}
                 C={C}
                 label="Tomorrow"
                 subLabel={tomorrowLabel}
