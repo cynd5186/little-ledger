@@ -5,7 +5,7 @@ import {
   Bell, Trash2, Cloud, Heart, Sparkles, Bath, ShoppingBag,
   Play, Pause, RotateCcw, Flame, Package, Coffee, Timer, MapPin,
   BookOpen, Stethoscope, FileText, Copy, Printer, MessageSquare, Star,
-  ArrowRightLeft, Gift, Volume2, AlarmClock,
+  ArrowRightLeft, Gift, Volume2, AlarmClock, Search,
 } from "lucide-react";
 
 // ---- App identity ------------------------------------------------------
@@ -14,25 +14,46 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05aw";
+const APP_VERSION = "2026.05.05bt";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "Bank: Edit any transaction (debt/gift/payback) — pencil icon next to remove",
-  "Redeem gift: clearer preview explaining what auto-adjusts and when",
-  "Today/tomorrow gift redemptions auto-swap shifts immediately · day 3+ surface a note",
+  "DATA INTEGRITY: auto-snapshot to localStorage before any family-code change · 'Restore from snapshot' UI in Profile Switcher → Backup",
+  "DATA INTEGRITY: confirm-gate when generating new code while already linked · clear warning with current code shown",
+  "DATA INTEGRITY: '22:NaNa' bug fixed at the four sites that constructed HH:MM strings without invalid-date guards (carving, takeover-window, datetime-local builders)",
+  "MILK: prominent expiration banner at top of milk panel when a bottle is past 4h preferred or about to be (within 30m)",
+  "MILK: bottle sharpie label shows under each bottle emoji · auto-suggests next available letter A-Z (24h cycle) when finishing a pump",
+  "JOURNAL: pump entries show explicit start–end range '(3:05p–3:30p)' so timestamp ambiguity is gone",
+  "WELLNESS: awake-7h impossibility flag — sub-line warning on the asleep/awake tile when duration is implausible (likely missed log)",
+  "WELLNESS: doctor summary now compares last 7 days vs prior 7 days · structured local fallback when AI is unavailable so the visit prep is never blocked",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt", summary: "DATA INTEGRITY: auto-backup before code change + restore UI · 22:NaNa fix · expiration banner · sharpie sync · pump time-range · awake-7h flag · doctor summary fallback + period-over-period" },
+  { version: "2026.05.05bs", summary: "Icon updated to mauve · pip labels PUMP/REST · terracotta deeper · tile divider warmed · About panel maker's colophon" },
+  { version: "2026.05.05br", summary: "State colors muted: overdue red → terracotta, on-schedule kelly → sage · whole alarm/success palette retuned for mauve" },
+  { version: "2026.05.05bq", summary: "Mommy color: rose → mauve-violet · sophistication match for Daddy's slate-blue" },
+  { version: "2026.05.05bp", summary: "Coverage tag only shows when current shift slice is actually a covering slice — phantom-coverage bug fixed" },
+  { version: "2026.05.05bo", summary: "Blue policy: reserved for Daddy only · all generic blue chrome migrated to warm-palette neutrals" },
+  { version: "2026.05.05bn", summary: "Diaper Pee/Poo relabel · new Poo/day metric vs AAP norm · clearer composition labels" },
+  { version: "2026.05.05bm", summary: "Logo follows viewer · home-screen icon assets + setup instructions" },
+  { version: "2026.05.05bl", summary: "Bottom UI fully viewer-themed: LOG button base + tab active state in viewer color · drop milk panel coral stripe" },
+  { version: "2026.05.05bk", summary: "Milk panel viewer-tint guaranteed · LOG button viewer halo · tab bar elevated docked panel" },
+  { version: "2026.05.05bj", summary: "Milk panel container + fridge bottles follow viewer color" },
+  { version: "2026.05.05bi", summary: "Power pump live mode: PUMP/REST phase guidance with countdown + 5-pip progress" },
+  { version: "2026.05.05bh", summary: "Grain bump · gold token swap · Wellness snapshot eyebrow viewer-aware" },
+  { version: "2026.05.05bg", summary: "Adopted Refined Ledger palette: warmer paper, antique-brass gold, subtle CSS grain" },
+  { version: "2026.05.05bf", summary: "Solène header follows viewer · inventory Add-bottle button follows viewer" },
+  { version: "2026.05.05be", summary: "Viewer-aware chrome: Daddy sees blue accents on shared content; Mommy-specific stays rose" },
+  { version: "2026.05.05bd", summary: "Sleep correlation analysis card · top-quartile vs baseline across 5 features" },
+  { version: "2026.05.05bc", summary: "Feed amount prediction + per-session vs age norm metric · Daddy bluer · theme bleed fix · swipe-down modal · device persona durability · error boundary" },
+  { version: "2026.05.05bb", summary: "Multi-bottle feed picker · sorted commitments · simplified small-size logo" },
+  { version: "2026.05.05ba", summary: "Tag-in fix: handoff countdown points to other parent · take-back affordance" },
+  { version: "2026.05.05az", summary: "Bug-fix sweep: tab bar, clock, edit meetings, balance auto-heal, takeover ordering, ?m fallbacks" },
+  { version: "2026.05.05ay", summary: "Coverage card phrasing rewrite · auto-repay clean wording" },
+  { version: "2026.05.05ax", summary: "On-site to LOG sheet · supply analytics moved to Milk · sleep prediction · sleep card cleanup" },
   { version: "2026.05.05aw", summary: "Edit Bank transactions · clearer redeem preview · far-future caveat" },
-  { version: "2026.05.05av", summary: "Tappable peek strip · sleep time picker · Wellness trim · Journal collapse · less landing page noise" },
-  { version: "2026.05.05au", summary: "Future peek strip · Today day plan collapsed by default" },
-  { version: "2026.05.05at", summary: "Bank tab · on-site moves to Now · diaper labels restored · auto-adjustments collapsed" },
-  { version: "2026.05.05as", summary: "Schedule tab redesign · Day plan · Upcoming filters" },
-  { version: "2026.05.05ar", summary: "Wellness chart: daily intake 14-day trend with stats" },
-  { version: "2026.05.05aq", summary: "Sleep tile rename · top-level tomorrow pip · mot du jour cleanup" },
-  { version: "2026.05.05ap", summary: "Declutter quadrants and pump-overdue button" },
 ];
 
 
@@ -51,14 +72,24 @@ function getAgeNorms(ageMonths) {
   // 6–12mo every 3–4h (~6–8/day). Daytime cadence band tells the user "time
   // to check" — used by the Now view nudge and the Wellness change-cadence
   // card. Night gap can be longer for sleeping babies.
+  //
+  // ozPerFeed bands added v05.05bb. Sourced from AAP "Healthy Children"
+  // bottle-feeding guidance and CDC infant nutrition material:
+  //   newborn      → 1.5–3 oz/feed (small stomach, frequent feeds)
+  //   1–2 mo       → 3–4 oz/feed
+  //   2–4 mo       → 4–6 oz/feed
+  //   4–6 mo       → 6–8 oz/feed (then plateaus as solids start)
+  //   6+ mo        → 6–8 oz/feed alongside solids; downward as solids ramp
   // 0–1 mo (newborn)
   if (ageMonths < 1) return {
     label: "newborn (0–1 mo)",
     feedsPerDay: [8, 12],
     ozPerDay: [16, 24],
+    ozPerFeed: [1.5, 3],
     sleepStretchH: [2, 4],
     totalSleepH: [14, 17],
     diapersPerDay: [8, 12],
+    pooPerDay: [1, 5],
     changeIntervalH: [2, 3],
   };
   // 1–2 mo
@@ -66,9 +97,11 @@ function getAgeNorms(ageMonths) {
     label: "1–2 mo",
     feedsPerDay: [7, 10],
     ozPerDay: [20, 30],
+    ozPerFeed: [3, 4],
     sleepStretchH: [3, 5],
     totalSleepH: [14, 17],
     diapersPerDay: [8, 12],
+    pooPerDay: [1, 4],
     changeIntervalH: [2, 3],
   };
   // 2–4 mo
@@ -76,9 +109,11 @@ function getAgeNorms(ageMonths) {
     label: "2–4 mo",
     feedsPerDay: [6, 8],
     ozPerDay: [24, 32],
+    ozPerFeed: [4, 6],
     sleepStretchH: [4, 8],
     totalSleepH: [12, 16],
     diapersPerDay: [8, 10],
+    pooPerDay: [1, 3],
     changeIntervalH: [3, 4],
   };
   // 4–6 mo
@@ -86,9 +121,11 @@ function getAgeNorms(ageMonths) {
     label: "4–6 mo",
     feedsPerDay: [5, 7],
     ozPerDay: [27, 36],
+    ozPerFeed: [6, 8],
     sleepStretchH: [6, 10],
     totalSleepH: [12, 15],
     diapersPerDay: [8, 10],
+    pooPerDay: [1, 3],
     changeIntervalH: [3, 4],
   };
   // 6–9 mo (solids starting; milk volumes drop slightly)
@@ -96,9 +133,11 @@ function getAgeNorms(ageMonths) {
     label: "6–9 mo",
     feedsPerDay: [4, 6],
     ozPerDay: [24, 32],
+    ozPerFeed: [6, 8],
     sleepStretchH: [8, 11],
     totalSleepH: [12, 14],
     diapersPerDay: [6, 8],
+    pooPerDay: [1, 2],
     changeIntervalH: [3, 4],
   };
   // 9–12 mo
@@ -106,9 +145,11 @@ function getAgeNorms(ageMonths) {
     label: "9–12 mo",
     feedsPerDay: [3, 5],
     ozPerDay: [20, 30],
+    ozPerFeed: [6, 8],
     sleepStretchH: [9, 12],
     totalSleepH: [11, 14],
     diapersPerDay: [6, 8],
+    pooPerDay: [1, 2],
     changeIntervalH: [3, 4],
   };
   // 12+ mo (toddler)
@@ -116,9 +157,11 @@ function getAgeNorms(ageMonths) {
     label: "12+ mo",
     feedsPerDay: [2, 4],
     ozPerDay: [16, 24],
+    ozPerFeed: [6, 8],
     sleepStretchH: [10, 12],
     totalSleepH: [11, 14],
     diapersPerDay: [4, 7],
+    pooPerDay: [1, 2],
     changeIntervalH: [3, 5],
   };
 }
@@ -473,6 +516,69 @@ const TYPICAL_FEED_OZ = 5;
 const TYPICAL_FEED_INTERVAL_HRS = 3;
 const PUMP_INTERVAL_HRS = 3; // start-to-start
 
+// Diaper display labels — clearer than the legacy stored values.
+// We KEEP "wet" / "dirty" / "both" in the data layer (so existing logged
+// events still read correctly without migration), but display them as
+// "Pee" / "Poo" / "Pee + Poo" everywhere the user sees them. The original
+// pediatric-tracker convention treats "dirty" = poop, but in practice
+// users find that ambiguous — Pee/Poo is unambiguous to anyone.
+function diaperLabel(notes) {
+  if (notes === "dirty" || notes === "soiled") return "Poo";
+  if (notes === "both") return "Pee + Poo";
+  return "Pee";  // covers "wet" and any unexpected value
+}
+
+// === Power pump protocol ===
+// Standard 60-minute protocol (mimics cluster feeding to signal supply).
+//   pump 20m  →  rest 10m  →  pump 10m  →  rest 10m  →  pump 10m
+// Phase indices 0-4. Phase types alternate pump/rest after the first.
+const POWER_PUMP_PHASES = [
+  { type: "pump", durationMin: 20, label: "Pump 20" },
+  { type: "rest", durationMin: 10, label: "Rest 10" },
+  { type: "pump", durationMin: 10, label: "Pump 10" },
+  { type: "rest", durationMin: 10, label: "Rest 10" },
+  { type: "pump", durationMin: 10, label: "Pump 10" },
+];
+const POWER_PUMP_TOTAL_MIN = POWER_PUMP_PHASES.reduce((s, p) => s + p.durationMin, 0); // 60
+
+// Given an active pump session (has startedAt, type === "power") and the
+// current time, return the live phase state. Computes phase by walking the
+// schedule from session start. If we're past the last phase, returns
+// { complete: true } so the caller can prompt the user to log oz.
+function getPowerPumpPhase(activePump, now) {
+  if (!activePump || activePump.type !== "power") return null;
+  const startMs = new Date(activePump.startedAt).getTime();
+  const elapsedMs = now.getTime() - startMs;
+  if (elapsedMs < 0) return null;
+  let cumul = 0;
+  for (let i = 0; i < POWER_PUMP_PHASES.length; i++) {
+    const p = POWER_PUMP_PHASES[i];
+    const phaseDurationMs = p.durationMin * 60000;
+    const phaseEndCumul = cumul + phaseDurationMs;
+    if (elapsedMs < phaseEndCumul) {
+      const phaseElapsedMs = elapsedMs - cumul;
+      return {
+        complete: false,
+        phaseIndex: i,
+        phaseType: p.type,
+        phaseLabel: p.label,
+        phaseDurationMs,
+        phaseElapsedMs,
+        phaseRemainingMs: phaseDurationMs - phaseElapsedMs,
+        totalElapsedMs: elapsedMs,
+        totalRemainingMs: POWER_PUMP_TOTAL_MIN * 60000 - elapsedMs,
+      };
+    }
+    cumul = phaseEndCumul;
+  }
+  return {
+    complete: true,
+    phaseIndex: POWER_PUMP_PHASES.length,
+    totalElapsedMs: elapsedMs,
+    totalRemainingMs: 0,
+  };
+}
+
 // Solène's birthday: January 23, 2026
 const BIRTHDAY = new Date(2026, 0, 23);
 
@@ -508,11 +614,11 @@ function fmtHours(hours) {
 
 // Note categories for observations
 const NOTE_CATEGORIES = [
-  { v: "sleep", l: "Sleep", emoji: "😴", color: "#6B7CA8" },
+  { v: "sleep", l: "Sleep", emoji: "😴", color: "#7C5C84" },
   { v: "feeding", l: "Feeding", emoji: "🍼", color: "#C77B8E" },
   { v: "skin", l: "Skin", emoji: "🌿", color: "#7B9479" },
   { v: "development", l: "Development", emoji: "✨", color: "#C44545" },
-  { v: "mood", l: "Mood", emoji: "💛", color: "#D4A03A" },
+  { v: "mood", l: "Mood", emoji: "💛", color: "#C49A3A" },
   // Illness — fevers, vomiting, congestion, anything pediatrician should hear about
   { v: "illness", l: "Illness", emoji: "🤒", color: "#B85C2E" },
   { v: "other", l: "Other", emoji: "📝", color: "#7C6F5E" },
@@ -521,10 +627,10 @@ const NOTE_CATEGORIES = [
 // Activity types
 const ACTIVITIES = [
   { v: "tummy", l: "Tummy time", emoji: "🤸", color: "#C44545" },
-  { v: "reading", l: "Book reading", emoji: "📖", color: "#6B7CA8" },
+  { v: "reading", l: "Book reading", emoji: "📖", color: "#A37750" },
   { v: "french", l: "French time", emoji: "🇫🇷", color: "#C77B8E" },
   { v: "music", l: "Music time", emoji: "🎵", color: "#7B9479" },
-  { v: "play", l: "Free play", emoji: "🧸", color: "#D4A03A" },
+  { v: "play", l: "Free play", emoji: "🧸", color: "#C49A3A" },
   { v: "outdoor", l: "Outdoor", emoji: "🌳", color: "#5C8E5C" },
   { v: "sensory", l: "Sensory", emoji: "👋", color: "#9C6BB0" },
   { v: "other_act", l: "Other", emoji: "⭐", color: "#7C6F5E" },
@@ -575,9 +681,44 @@ const BATH_TYPES = {
 const pad = (n) => String(n).padStart(2, "0");
 const toMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 
+// 24-hour HH:MM formatter — tolerates Date or ISO string and Invalid Date.
+// Returns "00:00" rather than "NaN:NaN" if the date is invalid, because the
+// callers (carveWindow, slice construction, etc) parse the result with
+// toMin() which would propagate NaN through shift math. "00:00" is a safe
+// fallback that produces a tiny zero-width slice that downstream filters
+// will drop. v05.05bt: hoisted from inline definitions to fix the
+// "22:NaNa" bug seen in Journal/shift display when an event has a
+// corrupted ts.
+const safeHHMM = (d) => {
+  if (!(d instanceof Date)) d = new Date(d);
+  if (isNaN(d.getTime())) {
+    console.warn("[safeHHMM] Invalid Date input, returning 00:00 fallback");
+    return "00:00";
+  }
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// Local datetime string formatter for <input type="datetime-local">.
+// Format: YYYY-MM-DDTHH:MM (local, no Z). Tolerates Date or ISO string.
+// Falls back to NOW for Invalid Date so a corrupted event timestamp doesn't
+// produce "NaN-NaN-NaNTNaN:NaN" which the input rejects, leaving the user
+// stuck in an unfixable form. Falling back to "now" keeps the form editable;
+// the user re-enters whatever the actual time should be.
+const safeDatetimeLocal = (d) => {
+  if (!(d instanceof Date)) d = new Date(d);
+  if (isNaN(d.getTime())) {
+    console.warn("[safeDatetimeLocal] Invalid Date input, falling back to now");
+    d = new Date();
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 // 12-hour formatters everywhere — tolerate Date or ISO string
 const fmtTime12 = (d) => {
   if (!(d instanceof Date)) d = new Date(d);
+  // Guard against Invalid Date — prevents NaN:NaN output ("22:NaNa" bug)
+  if (isNaN(d.getTime())) return "—";
   let h = d.getHours();
   const m = d.getMinutes();
   const ap = h >= 12 ? "PM" : "AM";
@@ -586,6 +727,8 @@ const fmtTime12 = (d) => {
 };
 const fmtTimeShort = (d) => {
   if (!(d instanceof Date)) d = new Date(d);
+  // Guard against Invalid Date — prevents NaN:NaN output ("22:NaNa" bug)
+  if (isNaN(d.getTime())) return "—";
   let h = d.getHours();
   const m = d.getMinutes();
   const ap = h >= 12 ? "p" : "a";
@@ -751,15 +894,51 @@ function whoIsOn(shifts, now = new Date()) {
   return { parent: "Mommy", shift: shifts.Mommy[0] };
 }
 
-function nextHandoff(shifts, now = new Date()) {
-  const cur = now.getHours() * 60 + now.getMinutes();
+function nextHandoff(shifts, now = new Date(), currentOnDutyParent = null) {
+  // The "next handoff" should be when the OTHER parent takes over, not just
+  // the next shift in time order. Without filtering, this would return the
+  // current parent's next shift (e.g. Mommy's afternoon block) when the
+  // user is on duty in the morning — which reads as "X min until handoff
+  // to Mommy" while Mommy is already on duty. That's the bug this filter
+  // fixes.
+  //
+  // We chronologically order all shifts in [now, +24h), then return the
+  // first one whose parent != currentOnDutyParent. Time-comparison logic
+  // is in absolute milliseconds rather than minutes-of-day so we don't
+  // get tripped up by overnight shifts (e.g. an 11pm-3am block on tomorrow's
+  // calendar).
+  const nowAbs = now.getTime();
+  const ONE_DAY = 24 * 3600 * 1000;
   const all = [];
+  // Build absolute timestamps for each shift, anchored to today and tomorrow
+  // (so we don't miss an overnight or early-morning shift that wraps).
   for (const p of ["Mommy", "Daddy"]) {
-    for (const s of shifts[p]) all.push({ ...s, parent: p, startMin: toMin(s.start) });
+    for (const s of shifts[p] || []) {
+      const [h, m] = s.start.split(":").map(Number);
+      for (const dayOffset of [0, 1]) {
+        const candidate = new Date(now);
+        candidate.setHours(h, m, 0, 0);
+        candidate.setDate(candidate.getDate() + dayOffset);
+        if (candidate.getTime() > nowAbs && candidate.getTime() < nowAbs + ONE_DAY) {
+          all.push({ ...s, parent: p, _absStart: candidate.getTime() });
+        }
+      }
+    }
   }
-  all.sort((a, b) => a.startMin - b.startMin);
-  const upcoming = all.find((s) => s.startMin > cur) || all[0];
-  return upcoming;
+  all.sort((a, b) => a._absStart - b._absStart);
+
+  // Prefer the next shift owned by the OTHER parent (the actual handoff).
+  if (currentOnDutyParent) {
+    const otherParent = currentOnDutyParent === "Mommy" ? "Daddy" : "Mommy";
+    const otherNext = all.find(s => s.parent === otherParent);
+    if (otherNext) return otherNext;
+  }
+  // Fallback: just return the next shift in time order. Old behavior, kept
+  // for the rare case where one parent doesn't appear in the next 24h.
+  if (all[0]) return all[0];
+  // Last resort if shifts is empty entirely
+  const fallback = shifts.Mommy?.[0];
+  return fallback ? { ...fallback, parent: "Mommy" } : { parent: "Mommy", start: "00:00", end: "00:00" };
 }
 
 // ---- Atmosphere --------------------------------------------------------
@@ -801,41 +980,82 @@ function getTimeMode(d = new Date()) {
 //   - accents: each day color pulled toward a softer dusk equivalent.
 //     Mommy rose → softer dusty pink. Terracotta → warm lamp amber.
 //     Gold → candlelight. Slate-blue Daddy → moonlit slate.
+// Palette refined v05.05bg to adopt the Mockup 1 "Refined Ledger" coloring:
+//   • paper bumped from FCF8F1 → FCF7EB (a half-step warmer; reads as
+//     oatmeal cream rather than near-white)
+//   • gold muted from D4A03A → C49A3A (antique brass instead of marigold;
+//     pairs more naturally with the cream paper without competing for
+//     attention with the rose accent)
+//   • dusk/night gold equivalently muted: E5B860 → D6A856
+// The bg, ink, accent, mommy, daddy, muted, and line tokens are
+// intentionally unchanged — those already worked.
+// Mommy palette token updated v05.05bq from saturated rose (#C77893) to
+// mauve-violet (#9C7B96). The rose was visually "pretty" but read as girlier
+// than Daddy's calm slate-blue (#6286B0); mauve-violet is desaturated to
+// the same sophistication level as the slate-blue, so the two together
+// feel like equal-weight partners with the same mood, different temperature.
+// Dusk/night versions (#BFA0BC) are lifted proportionally to how Daddy's
+// blue gets lifted in dark mode, preserving the day↔dark contrast curve.
 const PALETTES = {
-  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
-  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF8F1", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#C77893", daddy: "#6286B0", gold: "#D4A03A" },
+  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
+  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
   dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#D89BAE", daddy: "#8FA8C4", gold: "#E5B860" },
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
   night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#D89BAE", daddy: "#8FA8C4", gold: "#E5B860" },
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
 // at any size. Open journal base + swaddled-baby motif + small star + heart.
-function LittleLedgerLogo({ C, size = 40 }) {
+function LittleLedgerLogo({ C, size = 40, currentUser }) {
+  // Logo is brand-neutral — represents the baby's app identity, not a specific
+  // parent. Like Solène's name in the header, the rose-tinted elements
+  // (swaddle teardrop + heart) follow the viewer color so the brand mark
+  // feels like the viewer's. Star (gold) and journal (ink) are brand-neutral
+  // and stay as-is. v05.05bm: was hardcoded C.mommy.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   // viewBox extends to 54 to accommodate the heart that hangs slightly
   // below the baby (was previously clipped by 48-tall viewBox). Display
   // is block to prevent the inline-baseline whitespace that can give a
   // floating image the appearance of sitting in a faint container.
+  //
+  // At small sizes (<32px) we render a simplified mark — just teardrop +
+  // star + heart — without the open-journal curves that collapse to noise
+  // at favicon scale. This matches the home-screen icon shipped as
+  // /public/little-ledger-icon.svg so the in-app glyph and the home-
+  // screen shortcut read as the same brand mark.
+  const isCompact = size < 32;
+  if (isCompact) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 48 54" fill="none"
+           xmlns="http://www.w3.org/2000/svg" aria-label="Little Ledger"
+           style={{ display: "block" }}>
+        <path d="M37 6 L38.4 9.6 L42 11 L38.4 12.4 L37 16 L35.6 12.4 L32 11 L35.6 9.6 Z" fill={C.gold} />
+        <path d="M24 9 Q14 17 14 28 Q14 36 24 38 Q34 36 34 28 Q34 17 24 9 Z" fill={viewerColor} opacity="0.92" />
+        <circle cx="24" cy="14" r="3.2" fill="none" stroke={C.bg} strokeWidth="1.6" />
+        <path d="M37 47 C35.5 45.5 33.5 46 33.5 47.5 C33.5 49 35.5 50.5 37 51.8 C38.5 50.5 40.5 49 40.5 47.5 C40.5 46 38.5 45.5 37 47 Z" fill={viewerColor} opacity="0.75" />
+      </svg>
+    );
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 48 54" fill="none"
          xmlns="http://www.w3.org/2000/svg" aria-label="Little Ledger"
          style={{ display: "block" }}>
       {/* small star upper-right — soft gold */}
       <path d="M37 6 L38.4 9.6 L42 11 L38.4 12.4 L37 16 L35.6 12.4 L32 11 L35.6 9.6 Z" fill={C.gold} />
-      {/* swaddled baby — large rose teardrop centered */}
-      <path d="M24 9 Q14 17 14 28 Q14 36 24 38 Q34 36 34 28 Q34 17 24 9 Z" fill={C.mommy} opacity="0.92" />
-      {/* baby head — outline only, no fill (the rose teardrop shows through).
+      {/* swaddled baby — large viewer-color teardrop centered */}
+      <path d="M24 9 Q14 17 14 28 Q14 36 24 38 Q34 36 34 28 Q34 17 24 9 Z" fill={viewerColor} opacity="0.92" />
+      {/* baby head — outline only, no fill (the teardrop shows through).
           A solid C.bg fill here read as a faint "patch" against any subtle
           page tint, which is what made the logo look boxed-in. */}
       <circle cx="24" cy="14" r="3.2" fill="none" stroke={C.bg} strokeWidth="1.6" />
       {/* open journal — two stroked curves form the open book */}
       <path d="M4 40 Q14 35 24 39 Q34 35 44 40" stroke={C.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.85" />
       <path d="M6 44 Q14 40 24 42 Q34 40 42 44" stroke={C.ink} strokeWidth="1.4" strokeLinecap="round" fill="none" opacity="0.5" />
-      {/* small heart bottom-right */}
-      <path d="M37 47 C35.5 45.5 33.5 46 33.5 47.5 C33.5 49 35.5 50.5 37 51.8 C38.5 50.5 40.5 49 40.5 47.5 C40.5 46 38.5 45.5 37 47 Z" fill={C.mommy} opacity="0.75" />
+      {/* small heart bottom-right — viewer-color */}
+      <path d="M37 47 C35.5 45.5 33.5 46 33.5 47.5 C33.5 49 35.5 50.5 37 51.8 C38.5 50.5 40.5 49 40.5 47.5 C40.5 46 38.5 45.5 37 47 Z" fill={viewerColor} opacity="0.75" />
     </svg>
   );
 }
@@ -1186,8 +1406,81 @@ function seedHistoricalInventory() {
 }
 
 
+// ---- Error Boundary ----------------------------------------------------
+// Catches render errors anywhere in the tree so a crash shows a recoverable
+// UI instead of a blank white page. Reload preserves localStorage, so any
+// logged data survives.
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("[AppErrorBoundary] caught:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          minHeight: "100vh", padding: "40px 20px",
+          background: "#F4EEE6", color: "#1F1B16",
+          fontFamily: "'Inter', -apple-system, sans-serif",
+          maxWidth: 600, margin: "0 auto",
+        }}>
+          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, marginBottom: 8 }}>
+            Something hiccuped
+          </h2>
+          <p style={{ fontSize: 14, lineHeight: 1.6, color: "#5A5448", marginBottom: 16 }}>
+            The app hit a render error. Your data is safe — it's stored in
+            this browser. Tapping reload below will reload the app fresh
+            without losing any logged events or inventory.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              background: "#C44545", color: "#fff", border: "none",
+              padding: "12px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+              cursor: "pointer", marginBottom: 16, fontFamily: "inherit",
+            }}>
+            Reload app
+          </button>
+          <details style={{ fontSize: 12, color: "#5A5448" }}>
+            <summary style={{ cursor: "pointer", marginBottom: 8 }}>
+              Show error detail (for debugging)
+            </summary>
+            <pre style={{
+              background: "#fff", border: "1px solid #ddd",
+              padding: 12, borderRadius: 6,
+              fontSize: 11, lineHeight: 1.4,
+              overflow: "auto", maxHeight: 300,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              {String(this.state.error?.message || this.state.error)}
+              {"\n\n"}
+              {this.state.error?.stack || ""}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ---- Main App ----------------------------------------------------------
 export default function SoleneHandoff() {
+  return (
+    <AppErrorBoundary>
+      <SoleneHandoffInner />
+    </AppErrorBoundary>
+  );
+}
+
+function SoleneHandoffInner() {
   const [now, setNow] = useState(new Date());
   const [tab, setTab] = useState("now");
   const [events, setEvents] = useState([]);
@@ -1295,8 +1588,23 @@ export default function SoleneHandoff() {
   // Daily content cache: { date: 'YYYY-MM-DD', french: {...}, verse: {...} }
   const [dailyContent, setDailyContent] = useState({});
   const [loadingDaily, setLoadingDaily] = useState(false);
-  // Which parent is currently using the app — affects what's primary, what's "your" data
-  const [currentUser, setCurrentUser] = useState("Mommy");
+  // Which parent is currently using the app — affects what's primary, what's
+  // "your" data. STORED PER-DEVICE in localStorage (under a non-synced key)
+  // so Mom's phone defaults to Mommy and Dad's phone defaults to Daddy.
+  // This was previously synced through the cloud, which caused both devices
+  // to show the same view (whoever changed it last won). Fixed in v05.05bb.
+  const [currentUser, setCurrentUserState] = useState(() => {
+    try {
+      const stored = localStorage.getItem("ll:devicePersona");
+      if (stored === "Mommy" || stored === "Daddy") return stored;
+    } catch {}
+    return "Mommy";
+  });
+  // Wrapper that ALSO writes to the device-local key on every change.
+  const setCurrentUser = (next) => {
+    setCurrentUserState(next);
+    try { localStorage.setItem("ll:devicePersona", next); } catch {}
+  };
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
 
   useEffect(() => {
@@ -1437,7 +1745,12 @@ export default function SoleneHandoff() {
         });
       }
       if (dc) setDailyContent(dc);
-      if (cu) setCurrentUser(cu);
+      // INTENTIONALLY skip `if (cu) setCurrentUser(cu)`. The device-local
+      // localStorage key `ll:devicePersona` already determined currentUser
+      // at mount; cloud-side currentUser is just a stale crumb from when
+      // the OTHER device set it. Pulling that value here would clobber
+      // the per-device default — Mommy's phone would suddenly show
+      // Daddy's view because that's who saved last.
       // Clear the wipe marker now that hydrate has completed cleanly. While
       // the marker was present, get() refused to self-heal artifact storage,
       // so the boot installed fresh seed data without resurrection. We can
@@ -1537,7 +1850,10 @@ export default function SoleneHandoff() {
     "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
     "solene:dailyContent":    (v) => v && setDailyContent(v),
-    "solene:currentUser":     (v) => v && setCurrentUser(v),
+    // INTENTIONALLY no setter for "solene:currentUser". Device persona is
+    // strictly device-local (ll:devicePersona localStorage). Cross-device
+    // sync would cause Mommy's phone to flip to Daddy's view whenever
+    // Daddy switched on his device, which is the bug we just fixed.
   }), []);
 
   // === Polling loop ===
@@ -1651,7 +1967,8 @@ export default function SoleneHandoff() {
   };
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:timeBank", timeBank); }, [timeBank, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:dailyContent", dailyContent); }, [dailyContent, hydrated]);
-  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:currentUser", currentUser); }, [currentUser, hydrated]);
+  // currentUser autosave intentionally removed — device persona is local
+  // only (ll:devicePersona). See cloudKeySetters above for rationale.
 
   // Weather + UV
   useEffect(() => {
@@ -1752,6 +2069,22 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // based on real time of day, while the COLORS follow the user's pick.
   const themeMode = themeOverride === "dusk" ? "dusk" : "day";
   const C = PALETTES[themeMode];
+
+  // Sync html + body backgrounds to the current theme. Without this, iOS
+  // overscroll, the area under the safe-area inset, and any rendering gap
+  // shows the browser's default white. This makes the theme bleed all the
+  // way to the edges of the viewport in every state.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    const prevBody = document.body.style.backgroundColor;
+    document.documentElement.style.backgroundColor = C.bg;
+    document.body.style.backgroundColor = C.bg;
+    return () => {
+      document.documentElement.style.backgroundColor = prevHtml;
+      document.body.style.backgroundColor = prevBody;
+    };
+  }, [C.bg]);
 
   // Compute effective shifts: base shifts → auto-projected for commitments → onsite override
   // Since projection happens later in the file, we declare the layered logic to use it
@@ -1908,6 +2241,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         oz: ev.oz,
         pumpedAt: tsISO,
         location: ev.location || "rt",
+        bottleLabel: ev.bottleLabel || null,
       }]);
     }
     setShowLogger(false);
@@ -2163,8 +2497,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       // Compute takeover-window HH:MM strings
       const takeoverStart = new Date(e.ts);
       const takeoverEnd = new Date(takeoverStart.getTime() + oweMin * 60000);
-      const tStartHHMM = `${String(takeoverStart.getHours()).padStart(2, "0")}:${String(takeoverStart.getMinutes()).padStart(2, "0")}`;
-      const tEndHHMM = `${String(takeoverEnd.getHours()).padStart(2, "0")}:${String(takeoverEnd.getMinutes()).padStart(2, "0")}`;
+      const tStartHHMM = safeHHMM(takeoverStart);
+      const tEndHHMM = safeHHMM(takeoverEnd);
 
       // 1. Carve the takeover window itself out of debtor's shift, give to creditor
       carveWindow(debtor, creditor, tStartHHMM, tEndHHMM, {
@@ -2296,8 +2630,9 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             && (commitStart > sStart || commitEnd < sEnd); // not fully covering the shift
           const MIN_SLICE_MIN = 15;
 
-          // Helper: format a Date back to "HH:MM" for the shift block format
-          const fmtHM = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          // Helper: format a Date back to "HH:MM" for the shift block format.
+          // Using top-level safeHHMM which guards against Invalid Date.
+          const fmtHM = safeHHMM;
           const minBetween = (a, b) => Math.round((b - a) / 60000);
 
           if (canCarve) {
@@ -2906,7 +3241,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           const canCarve = !otherBlocked
             && (commitStart > sStart || commitEnd < sEnd);
           const MIN_SLICE_MIN = 15;
-          const fmtHM = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+          const fmtHM = safeHHMM;
           const minBetween = (a, b) => Math.round((b - a) / 60000);
 
           if (canCarve) {
@@ -3136,26 +3471,50 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   const onDuty = takeover
     ? { parent: takeover.coveringParent, shift: { start: takeover.startedAt.slice(11, 16), end: "??:??" } }
     : baseOnDuty;
-  const next = nextHandoff(activeShifts, now);
+  const next = nextHandoff(activeShifts, now, onDuty.parent);
 
   // ACTIVE COVERING COMMITMENT: is the on-duty parent currently covering for
   // their partner because of a real commitment that's still in progress?
   // If yes, we offer an "ended early" button so either parent can truncate
   // the meeting and reclaim the partner's shift the moment the meeting ends.
-  // We look for a real (non-synthetic) commitment owned by the OTHER parent
-  // that overlaps `now` and was the cause of the on-duty parent covering.
+  //
+  // FIX v05.05bp: previously this just returned ANY meeting on the other
+  // parent's calendar that overlapped now — which falsely flagged "Mommy
+  // covering Daddy" when Daddy had a meeting that happened to fall during
+  // Mommy's REGULAR shift (no swap occurred, no coverage was needed). The
+  // correct test is: did the on-duty parent's current shift slice get
+  // carved/swapped specifically because of this meeting? We answer that by
+  // checking whether the current slice in projectedShifts.projected has
+  // _coveringFor === otherParent. If not, no coverage tag.
   const activeCoveringCommitment = useMemo(() => {
     if (takeover) return null; // takeover has its own end-flow
     const otherParent = onDuty.parent === "Mommy" ? "Daddy" : "Mommy";
+    // Find the on-duty parent's current slice in the annotated projection
+    const currentSlice = (projectedShifts.projected[onDuty.parent] || []).find(s => {
+      const sStart = new Date(now);
+      const [sh, sm] = s.start.split(":").map(Number);
+      sStart.setHours(sh, sm, 0, 0);
+      const sEnd = new Date(now);
+      const [eh, em] = s.end.split(":").map(Number);
+      sEnd.setHours(eh, em, 0, 0);
+      if (sEnd <= sStart) sEnd.setDate(sEnd.getDate() + 1);
+      return sStart <= now && now < sEnd;
+    });
+    // If the current slice isn't a coverage slice for the other parent,
+    // there's no active coverage — even if a meeting exists on the other
+    // parent's calendar right now, it's during the on-duty parent's own
+    // regular time, not coverage.
+    if (!currentSlice || currentSlice._coveringFor !== otherParent) return null;
+    // Find the meeting that caused the carving — match by parent + overlap.
     return meetings.find(m => {
       if (m.parent !== otherParent) return false;
-      if (m.level === "green") return false; // green doesn't trigger coverage
-      if (m.synthetic) return false; // skip takeover-derived synthetics
+      if (m.level === "green") return false;
+      if (m.synthetic) return false;
       const ms = new Date(m.start);
       const me = new Date(m.end);
       return ms <= now && me > now;
     }) || null;
-  }, [meetings, onDuty.parent, now, takeover]);
+  }, [meetings, onDuty.parent, now, takeover, projectedShifts.projected]);
 
   // PARENT-IN-MEETING: is the CURRENT USER (whoever is viewing the app) in
   // an active commitment right now? Lets that user "I'm back early" from
@@ -3247,14 +3606,29 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       color: C.ink,
       fontFamily: "'Inter', -apple-system, sans-serif",
       transition: "background 1.5s ease, color 1.5s ease",
-      paddingBottom: 110,
+      paddingBottom: 130,
       position: "relative",
       overflow: "hidden",
     }}>
-      {/* Per-user view tint — extremely subtle wash; main differentiation is via accents/borders */}
+      {/* Per-user view tint — drastically stronger for cross-room recognition.
+          v05.05bb: Daddy's blue wash is much more present so Mommy can tell
+          at a glance which view he's on. We push the alpha up further on
+          Daddy specifically since the muted slate-blue daddy color reads
+          as less saturated than mommy's rose at the same opacity — to get
+          equal perceptual punch, blue needs more alpha. */}
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: `linear-gradient(180deg, ${userTint}08 0%, transparent 30%)`,
+        // Global wash: 12 alpha for Daddy (more present), 0C for Mommy
+        background: currentUser === "Daddy" ? `${userTint}14` : `${userTint}0C`,
+        pointerEvents: "none", zIndex: 0,
+        transition: "background 0.4s ease",
+      }} />
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: "50vh",
+        // Top gradient: 40 → 14 → transparent for Daddy; 28 → 0C → transparent for Mommy
+        background: currentUser === "Daddy"
+          ? `linear-gradient(180deg, ${userTint}40 0%, ${userTint}14 50%, transparent 100%)`
+          : `linear-gradient(180deg, ${userTint}28 0%, ${userTint}0C 60%, transparent 100%)`,
         pointerEvents: "none", zIndex: 0,
         transition: "background 0.4s ease",
       }} />
@@ -3269,7 +3643,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               display: "flex", alignItems: "center", gap: 11,
               marginBottom: 10,
             }}>
-              <LittleLedgerLogo C={C} size={44} />
+              <LittleLedgerLogo C={C} size={44} currentUser={currentUser} />
               <span style={{
                 fontFamily: "'Cormorant Garamond', serif",
                 fontSize: 17, fontStyle: "italic",
@@ -3284,7 +3658,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               letterSpacing: "-0.02em",
               fontStyle: "italic",
               lineHeight: 1.05,
-              color: C.mommy,
+              // v05.05bf: name follows viewer. Solène isn't Mommy-specific
+              // content; she's the shared subject of the journal. Mom sees
+              // her name in rose, Dad sees it in blue. The gold period stays
+              // — it's brand punctuation, not person.
+              color: userTint,
             }}>
               Solène<span style={{ color: C.gold }}>.</span>
             </h1>
@@ -3296,7 +3674,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               A journal of care, rhythm &amp; handoff
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ color: C.mommy, fontWeight: 600 }}>{fmtAge(BIRTHDAY, now)}</span>
+              <span style={{ color: userTint, fontWeight: 600 }}>{fmtAge(BIRTHDAY, now)}</span>
               <span style={{ opacity: 0.5 }}>·</span>
               <span>{now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
               <span style={{ opacity: 0.5 }}>·</span>
@@ -3323,7 +3701,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <TimeOrb mode={mode} now={now} C={C} />
             <button onClick={() => setShowProfileSwitcher(true)} style={{
               background: currentUser === "Mommy" ? C.mommy : C.daddy,
               color: "#fff",
@@ -3578,7 +3955,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           }}
           onConfirmAwake={() => addEvent({ type: "wake_confirmed", silent: true })}
           activePump={activePump}
-          onStartPump={() => setActivePump({ startedAt: new Date().toISOString() })}
+          onStartPump={(type = "standard") => setActivePump({
+            startedAt: new Date().toISOString(),
+            type,
+          })}
           onEndActivePump={() => setShowFinishPump(true)}
           takeover={takeover}
           onStartTakeover={() => {
@@ -3594,6 +3974,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             if (!takeover) return;
             const startMs = new Date(takeover.startedAt).getTime();
             const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
+            // CLEAR FIRST — this guarantees that even if anything below
+            // throws, the takeover state is cleared. Previously the clear
+            // was at the end, so a failure in addEvent or setTimeBank
+            // would leave the takeover stuck.
+            setTakeover(null);
+            try {
+              localStorage.setItem("solene:takeover", "null");
+            } catch {}
             // Append the transaction; balance derives from the ledger.
             const newTransactions = [
               ...timeBank.transactions,
@@ -3619,7 +4007,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               coveringParent: takeover.coveringParent,
               originalParent: takeover.originalParent,
             });
-            setTakeover(null);
           }}
           onPickBottle={(loc) => setBottlePickerLoc(loc)}
           /* Quick-log from quadrants: tile tap opens the LOG sheet
@@ -3705,10 +4092,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         {tab === "inventory" && (
           <InventoryView
             C={C} inventory={liveInventory}
+            events={events}
+            currentUser={currentUser}
             moveToFridge={moveToFridge}
             removeInventory={removeInventory}
             emptyLocation={(loc) => setInventory(prev => prev.filter(i => i.location !== loc))}
             editBottle={(bottleId) => setEditingBottleId(bottleId)}
+            addBottle={() => setEditingBottleId("__new__")}
             totalSafeOz={totalSafeOz} rtSafeOz={rtSafeOz} fridgeOz={fridgeOz}
             feedsRunway={feedsRunway} hoursRunway={hoursRunway}
             lastPump={lastPump} nextPumpAt={nextPumpAt} now={now}
@@ -3719,14 +4109,15 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           <DoctorView C={C} now={now} events={events} notes={notes} appointments={appointments}
             removeNote={removeNote} updateNote={updateNote}
             addAppointment={addAppointment} removeAppointment={removeAppointment}
-            docSummary={docSummary} setDocSummary={setDocSummary} />
+            docSummary={docSummary} setDocSummary={setDocSummary}
+            currentUser={currentUser} />
         )}
       </main>
 
       {/* Central LOG button */}
-      <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} />
+      <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} currentUser={currentUser} />
 
-      <TabBar C={C} tab={tab} setTab={setTab} />
+      <TabBar C={C} tab={tab} setTab={setTab} currentUser={currentUser} />
 
       {showLogger && (
         <LogPickerSheet
@@ -3735,22 +4126,38 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onPick={(t) => setLoggerType(t)}
           loggerType={loggerType}
           onSubmit={(payload) => {
-            // Special handling for feeds with a usedBottleId — deduct from inventory
+            // Multi-bottle allocation path: payload.bottleAllocations is an
+            // array of { bottleId, oz } describing how the feed was sourced
+            // across multiple bottles. We deduct each bottle's specified
+            // amount and bottles that hit zero are removed from inventory.
+            if (payload.type === "feed" && Array.isArray(payload.bottleAllocations) && payload.bottleAllocations.length > 0) {
+              const allocs = payload.bottleAllocations;
+              setInventory(prev => prev.map(b => {
+                const a = allocs.find(x => x.bottleId === b.id);
+                if (!a) return b;
+                const newOz = b.oz - a.oz;
+                if (newOz <= 0.01) return null; // floating-point safety
+                return { ...b, oz: newOz };
+              }).filter(Boolean));
+              const { bottleAllocations, usedBottleId, ...event } = payload;
+              addEvent(event);
+              return;
+            }
+            // Single-bottle path (backward compat)
             if (payload.type === "feed" && payload.usedBottleId) {
               const bottleId = payload.usedBottleId;
               const oz = payload.oz;
               setInventory(prev => prev.map(b => {
                 if (b.id !== bottleId) return b;
                 const newOz = b.oz - oz;
-                if (newOz <= 0) return null; // mark for filter
+                if (newOz <= 0.01) return null;
                 return { ...b, oz: newOz };
               }).filter(Boolean));
-              // Strip usedBottleId from event before adding (it's a UI hint, not event data)
               const { usedBottleId, ...event } = payload;
               addEvent(event);
-            } else {
-              addEvent(payload);
+              return;
             }
+            addEvent(payload);
           }}
           lastFeed={lastFeed}
           lastPump={lastPump}
@@ -3784,13 +4191,18 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onOpenTimeBank={(action) => {
             setShowLogger(false);
             setLoggerType(null);
-            setTab("shifts");
+            setTab("bank");
             setPendingTimeBankAction(action);
           }}
           onOpenBulkImport={() => {
             setShowLogger(false);
             setLoggerType(null);
             setShowBulkImport(true);
+          }}
+          onStartOnsite={() => {
+            setShowLogger(false);
+            setLoggerType(null);
+            setShowOnsiteModal(true);
           }}
         />
       )}
@@ -3900,7 +4312,25 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       {showFamilyCodeSetup && (
         <FamilyCodeSetupModal
           C={C}
+          currentCode={familyCode}
+          currentUser={currentUser}
           onSet={async (code, mode) => {
+            // SAFETY: if user is already linked and tries to GENERATE, that
+            // would orphan them from the existing family. Confirm.
+            if (mode === "generate" && familyCode && code !== familyCode) {
+              const ok = window.confirm(
+                `You're already linked to family code ${familyCode}.\n\n` +
+                "Generating a new code will start a fresh family on this " +
+                "device. Your partner won't be able to see your updates " +
+                "unless they also enter the new code.\n\n" +
+                "Are you SURE you want to leave the existing family and " +
+                "start a new one?"
+              );
+              if (!ok) {
+                setShowFamilyCodeSetup(false);
+                return;
+              }
+            }
             // mode is "generate" (we're starting a new family) or "enter"
             // (joining one our partner created). The two modes do different
             // things to existing local data:
@@ -3924,6 +4354,45 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 );
                 if (!ok) return;
               }
+            }
+
+            // Race protection: the moment we change familyCode, autosave
+            // useEffects fire and start writing local state to the new cloud
+            // namespace. For ENTER mode, that's a disaster — local "blank"
+            // state would clobber the partner's real data on the cloud.
+            // Setting syncingFromCloud=true here suppresses the autosaves
+            // until the enter-flow has explicitly downloaded cloud state
+            // and re-enabled writes. For GENERATE mode it's a no-op (we
+            // WANT the local state to flow up, but the explicit upload
+            // below does that more atomically anyway).
+            if (mode === "enter") {
+              syncingFromCloudRef.current = true;
+            }
+
+            // === Auto-backup before any familyCode change ===
+            // v05.05bt: If something goes wrong with the sync change (cloud
+            // empty, partner's data overwrites ours, code regen wipes us),
+            // we want a local snapshot we can restore from. This runs for
+            // both generate and enter modes — both can lose data in their
+            // own ways. The backup includes a timestamp + the "previous
+            // code" so the About panel can offer a meaningful restore
+            // option ("Restore data from before joining family XYZ789").
+            try {
+              const snapshot = {
+                savedAt: new Date().toISOString(),
+                previousCode: familyCode || null,
+                newCode: code,
+                mode,
+                appVersion: APP_VERSION,
+                data: {
+                  events, inventory, meetings, shifts, diaperBag, onsite,
+                  notes, appointments, activeActivity, activePump, takeover,
+                  timeBank, weather,
+                },
+              };
+              localStorage.setItem("ll:emergency-backup", JSON.stringify(snapshot));
+            } catch (e) {
+              console.warn("[familyCode change] emergency-backup save failed", e);
             }
 
             try { localStorage.setItem("ll:familyCode", code); } catch {}
@@ -4136,6 +4605,44 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               return { ok: false, error: err.message || String(err) };
             }
           }}
+          onRestoreBackup={() => {
+            // v05.05bt: Restore from the auto-snapshot saved before any
+            // family-code change. The snapshot was written in the
+            // FamilyCodeSetupModal onSet path; here we read it back and
+            // apply it through the same set* family used by onImportData.
+            // Returns { ok, savedAt, previousCode, mode } for the UI.
+            try {
+              const raw = localStorage.getItem("ll:emergency-backup");
+              if (!raw) return { ok: false, error: "No backup found." };
+              const snapshot = JSON.parse(raw);
+              if (!snapshot || !snapshot.data) {
+                return { ok: false, error: "Backup is corrupted or in an unknown format." };
+              }
+              const d = snapshot.data;
+              if (Array.isArray(d.events)) setEvents(d.events.map(x => ({ ...x, ts: new Date(x.ts) })));
+              if (Array.isArray(d.inventory)) setInventory(d.inventory.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) })));
+              if (Array.isArray(d.meetings)) setMeetings(d.meetings);
+              if (d.shifts && typeof d.shifts === "object") setShifts(d.shifts);
+              if (d.diaperBag) setDiaperBag(d.diaperBag);
+              if ("onsite" in d) setOnsite(d.onsite);
+              if (Array.isArray(d.notes)) setNotes(d.notes);
+              if (Array.isArray(d.appointments)) setAppointments(d.appointments);
+              if ("activeActivity" in d) setActiveActivity(d.activeActivity);
+              if ("activePump" in d) setActivePump(d.activePump);
+              if ("takeover" in d) setTakeover(d.takeover);
+              if (d.timeBank) setTimeBank(d.timeBank);
+              return {
+                ok: true,
+                savedAt: snapshot.savedAt,
+                previousCode: snapshot.previousCode,
+                newCode: snapshot.newCode,
+                mode: snapshot.mode,
+                count: (d.events?.length || 0) + (d.notes?.length || 0),
+              };
+            } catch (err) {
+              return { ok: false, error: err.message || String(err) };
+            }
+          }}
           onResetData={async () => {
             // Step 1: Mark the app as wiping. This sets a window flag that the
             // autosave effects check; while wiping, no autosave will fire and
@@ -4203,27 +4710,45 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           C={C}
           activePump={activePump}
           now={now}
+          recentBottles={inventory}
           onCancel={() => setShowFinishPump(false)}
-          onSubmit={({ oz, location }) => {
-            const start = new Date(activePump.startedAt);
-            const durationMin = Math.max(1, Math.round((now - start) / 60000));
-            // Log pump event using the start time so it sits at the right moment in the timeline
-            addEvent({
-              type: "pump",
-              ts: start,
-              oz,
-              durationMin,
-              mode: "end",
-            });
-            // Add to inventory
-            setInventory(prev => [...prev, {
-              id: crypto.randomUUID(),
-              pumpedAt: start.toISOString(),
-              oz,
-              location,
-            }]);
-            setActivePump(null);
-            setShowFinishPump(false);
+          onSubmit={({ oz, location, bottleLabel }) => {
+            try {
+              const start = new Date(activePump.startedAt);
+              const wasPower = activePump.type === "power";
+              // For power pumps the protocol is 60 min — round to that if
+              // we're within ±2 min of the target so a small wall-clock
+              // delay at "tap to end" doesn't make the event read as 62 or 58.
+              const wallMin = Math.max(1, Math.round((now - start) / 60000));
+              const durationMin = wasPower && Math.abs(wallMin - POWER_PUMP_TOTAL_MIN) <= 2
+                ? POWER_PUMP_TOTAL_MIN
+                : wallMin;
+              // Clear timer FIRST so even if a downstream call throws,
+              // the user isn't stuck with a stale active-pump state.
+              setActivePump(null);
+              setShowFinishPump(false);
+              // Log pump event using start time. The addEvent helper
+              // ALSO adds to inventory automatically (when mode !== "start"
+              // and oz is set), so we must NOT separately call setInventory
+              // here — that would create a duplicate bottle. The previous
+              // implementation did both, causing inventory to double-count
+              // every pump. Fixed in v05.05bb.
+              addEvent({
+                type: "pump",
+                ts: start,
+                oz,
+                durationMin,
+                mode: "end",
+                location,
+                bottleLabel,
+                ...(wasPower ? { pumpType: "power" } : {}),
+              });
+            } catch (err) {
+              console.error("[FinishPumpModal.onSubmit] failed:", err);
+              // Even on error, clear the modal so the user isn't stuck
+              setShowFinishPump(false);
+              alert("Couldn't fully log the pump — please check the Journal and inventory. Error: " + (err?.message || err));
+            }
           }}
           onDiscard={() => {
             setActivePump(null);
@@ -4263,19 +4788,40 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setEditingBottleId(bottleId);
             setBottlePickerLoc(null);
           }}
+          onAddBottle={(location) => {
+            // Open Edit-bottle modal in ADD mode, with location preset.
+            // Use a special flag the modal will read.
+            setBottlePickerLoc(null);
+            setEditingBottleId("__new__");
+          }}
         />
       )}
 
       {editingBottleId && (() => {
-        const bottle = liveInventory.find(b => b.id === editingBottleId);
-        if (!bottle) { setEditingBottleId(null); return null; }
+        // "__new__" sentinel = add a fresh bottle. The modal handles both
+        // edit (existing bottle passed in) and add (bottle prop is null).
+        const isNew = editingBottleId === "__new__";
+        const bottle = isNew ? null : liveInventory.find(b => b.id === editingBottleId);
+        if (!isNew && !bottle) { setEditingBottleId(null); return null; }
         return (
           <EditBottleModal
             C={C}
             bottle={bottle}
             onClose={() => setEditingBottleId(null)}
             onSave={(updates) => {
-              setInventory(prev => prev.map(b => b.id === editingBottleId ? { ...b, ...updates } : b));
+              if (isNew) {
+                // Create a new bottle from the form values. Default to RT
+                // location and now timestamp if not specified by the form.
+                setInventory(prev => [...prev, {
+                  id: crypto.randomUUID(),
+                  oz: updates.oz || 0,
+                  location: updates.location || "rt",
+                  pumpedAt: updates.pumpedAt || new Date().toISOString(),
+                  bottleLabel: updates.bottleLabel || "",
+                }]);
+              } else {
+                setInventory(prev => prev.map(b => b.id === editingBottleId ? { ...b, ...updates } : b));
+              }
               setEditingBottleId(null);
             }}
           />
@@ -4285,7 +4831,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   );
 }
 
-function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onDiscardBottle, onEditBottle }) {
+function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onDiscardBottle, onEditBottle, onAddBottle }) {
   // Sort: oldest first within location (use-up order)
   const sorted = [...inventory].sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
   // Single-bottle mode (default) is for feeding — pick one bottle, log a feed.
@@ -4304,7 +4850,7 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
     return () => clearTimeout(t);
   }, [bulkConfirm]);
   const selected = sorted.find(b => b.id === selectedId);
-  const locColor = location === "rt" ? "#D4A03A" : C.daddy;
+  const locColor = location === "rt" ? C.gold : C.muted;
   const locLabel = location === "rt" ? "Room temp" : "Fridge";
 
   const switchMode = (newMode) => {
@@ -4336,9 +4882,19 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
     <ModalShell C={C} onClose={onClose} title={`${mode === "use" ? "Use a bottle from" : "Manage bottles in"} ${locLabel.toLowerCase()}`}>
       {sorted.length === 0 ? (
         <div style={{ background: C.paper, borderRadius: 12, padding: 24, border: `1px solid ${C.line}15`, textAlign: "center" }}>
-          <div style={{ fontSize: 14, color: C.muted, fontStyle: "italic" }}>
+          <div style={{ fontSize: 14, color: C.muted, fontStyle: "italic", marginBottom: 14 }}>
             No bottles in {locLabel.toLowerCase()} right now.
           </div>
+          {onAddBottle && (
+            <button onClick={() => { onAddBottle(location); onClose(); }} style={{
+              background: "transparent", color: C.mommy,
+              border: `1.5px dashed ${C.mommy}66`, borderRadius: 8,
+              padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit",
+            }}>
+              + Add a bottle to {locLabel.toLowerCase()}
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -4533,9 +5089,9 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       }
                     }}
                     style={{
-                      background: bulkConfirm === "move" ? C.daddy : (multiCount === 0 ? C.bg : "transparent"),
-                      color: bulkConfirm === "move" ? "#fff" : (multiCount === 0 ? C.muted : C.daddy),
-                      border: bulkConfirm === "move" ? "none" : `1.5px solid ${multiCount === 0 ? C.line + "22" : C.daddy + "55"}`,
+                      background: bulkConfirm === "move" ? C.accent : (multiCount === 0 ? C.bg : "transparent"),
+                      color: bulkConfirm === "move" ? "#fff" : (multiCount === 0 ? C.muted : C.accent),
+                      border: bulkConfirm === "move" ? "none" : `1.5px solid ${multiCount === 0 ? C.line + "22" : C.accent + "55"}`,
                       borderRadius: 10, padding: "10px 12px",
                       fontSize: 12, fontWeight: 600,
                       cursor: multiCount === 0 ? "default" : "pointer",
@@ -4586,18 +5142,23 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
 }
 
 function EditBottleModal({ C, bottle, onClose, onSave }) {
-  const [oz, setOz] = useState(bottle.oz);
-  const [loc, setLoc] = useState(bottle.location);
+  // bottle === null → ADD mode (manual new bottle entry)
+  // bottle !== null → EDIT mode (correct existing bottle's values)
+  const isAdd = !bottle;
+  const [oz, setOz] = useState(isAdd ? 4 : bottle.oz);
+  const [loc, setLoc] = useState(isAdd ? "rt" : bottle.location);
   const [pumpedAtLocal, setPumpedAtLocal] = useState(() => {
-    const d = new Date(bottle.pumpedAt);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const d = isAdd ? new Date() : new Date(bottle.pumpedAt);
+    return safeDatetimeLocal(d);
   });
+  const [bottleLabel, setBottleLabel] = useState(isAdd ? "" : (bottle.bottleLabel || ""));
 
   return (
-    <ModalShell C={C} onClose={onClose} title="Edit bottle (no feed logged)">
+    <ModalShell C={C} onClose={onClose} title={isAdd ? "Add a bottle (manual)" : "Edit bottle (no feed logged)"}>
       <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
-        Use this when the app's tracking is wrong. Adjusting these values won't log a feed event — it just updates inventory directly.
+        {isAdd
+          ? "Manually add a bottle — useful if a pump session wasn't logged in the app or to recover after a sync issue. No pump event is logged; this just adds to inventory."
+          : "Use this when the app's tracking is wrong. Adjusting these values won't log a feed event — it just updates inventory directly."}
       </div>
 
       <Field C={C} label="Volume (oz)">
@@ -4628,22 +5189,64 @@ function EditBottleModal({ C, bottle, onClose, onSave }) {
         </div>
       </Field>
 
+      <Field C={C} label="Bottle label (optional)">
+        <input
+          type="text"
+          value={bottleLabel}
+          onChange={e => setBottleLabel(e.target.value.slice(0, 4).toUpperCase())}
+          placeholder="A, B, 1, 2…"
+          maxLength={4}
+          style={{
+            width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+            borderRadius: 8, fontSize: 14, background: C.bg, color: C.ink,
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        />
+        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.4 }}>
+          Sharpie a letter on the bottle, sync it here. Daddy will know exactly which one to grab.
+        </div>
+      </Field>
+
       <SubmitButton C={C} onClick={() => onSave({
         oz: Number(oz),
         location: loc,
         pumpedAt: new Date(pumpedAtLocal).toISOString(),
+        bottleLabel: bottleLabel.trim() || null,
       })}>
-        Save changes
+        {isAdd ? "Add bottle" : "Save changes"}
       </SubmitButton>
     </ModalShell>
   );
 }
 
-function FinishPumpModal({ C, activePump, now, onCancel, onSubmit, onDiscard }) {
+function FinishPumpModal({ C, activePump, now, onCancel, onSubmit, onDiscard, recentBottles }) {
   const start = new Date(activePump.startedAt);
   const durationMin = Math.max(1, Math.round((now - start) / 60000));
   const [oz, setOz] = useState(4);
   const [location, setLocation] = useState("rt");
+
+  // Auto-suggest the next sharpie letter. Walk through recent bottles
+  // (last 24h) and find the lowest letter A-Z not currently in use. After
+  // 24h, older labels are assumed to have been used up and consumed —
+  // the cycle resets. If everything A-Z is somehow taken, fall back to
+  // empty string. v05.05bt: the auto-suggestion lets the user just sharpie
+  // whatever the app shows on the new bottle and tap save — no thinking.
+  const suggestedLabel = useMemo(() => {
+    const cutoff = new Date(now.getTime() - 24 * 3600000);
+    const recentLabels = new Set(
+      (recentBottles || [])
+        .filter(b => new Date(b.pumpedAt) >= cutoff && b.bottleLabel)
+        .map(b => b.bottleLabel.toUpperCase())
+    );
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (const ch of alphabet) {
+      if (!recentLabels.has(ch)) return ch;
+    }
+    return "";
+  }, [recentBottles, now]);
+
+  const [bottleLabel, setBottleLabel] = useState(suggestedLabel);
 
   return (
     <ModalShell C={C} onClose={onCancel} title="Finish pump session">
@@ -4652,10 +5255,13 @@ function FinishPumpModal({ C, activePump, now, onCancel, onSubmit, onDiscard }) 
         border: `1px solid ${C.mommy}33`,
       }}>
         <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.mommy, fontWeight: 700, marginBottom: 4 }}>
-          Pump session
+          {activePump.type === "power" ? "Power pump session" : "Pump session"}
         </div>
         <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.5 }}>
           Started <strong>{fmtTimeShort(start)}</strong> · ran for <strong>{durationMin} min</strong>
+          {activePump.type === "power" && durationMin >= POWER_PUMP_TOTAL_MIN - 2 && (
+            <span style={{ color: C.gold, fontWeight: 600 }}> · full protocol completed ✓</span>
+          )}
         </div>
       </div>
 
@@ -4678,7 +5284,28 @@ function FinishPumpModal({ C, activePump, now, onCancel, onSubmit, onDiscard }) 
         </div>
       </Field>
 
-      <SubmitButton C={C} onClick={() => onSubmit({ oz, location })}>
+      <Field C={C} label="Bottle label">
+        <input
+          type="text"
+          value={bottleLabel}
+          onChange={e => setBottleLabel(e.target.value.slice(0, 4).toUpperCase())}
+          placeholder="A, B, 1…"
+          maxLength={4}
+          style={{
+            width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+            borderRadius: 8, fontSize: 16, background: C.bg, color: C.ink,
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.15em",
+            textTransform: "uppercase", textAlign: "center", fontWeight: 700,
+          }}
+        />
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic", lineHeight: 1.4 }}>
+          {suggestedLabel
+            ? `Suggested: "${suggestedLabel}" — sharpie this letter on the bottle so Daddy knows which one is which. Edit or clear if you want.`
+            : "Sharpie a letter on the bottle so Daddy knows which one is which. Optional."}
+        </div>
+      </Field>
+
+      <SubmitButton C={C} onClick={() => onSubmit({ oz, location, bottleLabel: bottleLabel.trim() || null })}>
         Save · {oz} oz to {location === "rt" ? "room temp" : location === "fridge" ? "fridge" : "freezer"}
       </SubmitButton>
 
@@ -4807,7 +5434,10 @@ function NoteArchiveModal({ C, archive, currentUser, onClose, onClear }) {
 // the code into localStorage. Build 2 will wire the storage layer to use
 // it for reads/writes. So tapping "Generate" in build 1 creates a code but
 // doesn't move local data anywhere — that comes later.
-function FamilyCodeSetupModal({ C, onSet, onSkip }) {
+function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
+  // Viewer color for chrome — code generated/cloud sync isn't tied to a
+  // specific person, so its accent should match whoever's looking at it.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   const [mode, setMode] = useState("choose"); // 'choose' | 'generate' | 'enter'
   const [enteredCode, setEnteredCode] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
@@ -4843,6 +5473,21 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
 
   return (
     <ModalShell C={C} onClose={onSkip} title="Family code setup">
+      {currentCode && (
+        <div style={{
+          background: `${C.accent}15`,
+          border: `1.5px solid ${C.accent}55`,
+          borderRadius: 10, padding: "10px 12px", marginBottom: 14,
+          fontSize: 12, color: C.ink, lineHeight: 1.5,
+        }}>
+          <div style={{ fontWeight: 700, color: C.accent, marginBottom: 4, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            ⚠ Already linked
+          </div>
+          You're currently linked to family code{" "}
+          <strong style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>{currentCode}</strong>.
+          Don't generate a new code unless you want to start a fresh family. To share with your partner, just give them this code.
+        </div>
+      )}
       {mode === "choose" && (
         <>
           <div style={{
@@ -4859,8 +5504,26 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
           </div>
 
           <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-            <button onClick={generate} style={{
-              background: C.mommy, color: "#fff", border: "none",
+            <button onClick={() => {
+              // v05.05bt: extra confirm-gate when already linked. The
+              // banner above explains this is dangerous; the confirm()
+              // makes a wrong tap impossible (especially on mobile where
+              // accidental taps happen). An emergency-backup snapshot also
+              // runs in the onSet path before the code change takes effect,
+              // so even if the user confirms by mistake, data isn't gone.
+              if (currentCode) {
+                const ok = window.confirm(
+                  `You're currently linked to family code "${currentCode}". ` +
+                  `Generating a NEW code will create a fresh family — your ` +
+                  `partner's device on "${currentCode}" will stay there but ` +
+                  `this device will be on the new code instead.\n\n` +
+                  `Are you sure?`
+                );
+                if (!ok) return;
+              }
+              generate();
+            }} style={{
+              background: viewerColor, color: "#fff", border: "none",
               padding: "12px 14px", borderRadius: 10,
               fontSize: 14, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit", textAlign: "left",
@@ -4875,7 +5538,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
               </div>
             </button>
             <button onClick={() => setMode("enter")} style={{
-              background: C.daddy, color: "#fff", border: "none",
+              background: viewerColor, color: "#fff", border: "none",
               padding: "12px 14px", borderRadius: 10,
               fontSize: 14, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit", textAlign: "left",
@@ -4909,8 +5572,8 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
             Your new family code:
           </div>
           <div style={{
-            background: `${C.mommy}10`,
-            border: `2px solid ${C.mommy}`,
+            background: `${viewerColor}10`,
+            border: `2px solid ${viewerColor}`,
             borderRadius: 12,
             padding: "20px 16px", marginBottom: 12,
             textAlign: "center",
@@ -4944,7 +5607,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
               {copied ? "✓ Copied" : "Copy code"}
             </button>
             <button onClick={acceptGenerated} style={{
-              background: C.mommy, color: "#fff", border: "none",
+              background: viewerColor, color: "#fff", border: "none",
               borderRadius: 8, padding: "10px",
               fontSize: 13, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
@@ -5012,7 +5675,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
               onClick={submitEntered}
               disabled={!enteredCode.trim()}
               style={{
-                background: enteredCode.trim() ? C.daddy : `${C.line}33`,
+                background: enteredCode.trim() ? viewerColor : `${C.line}33`,
                 color: enteredCode.trim() ? "#fff" : C.muted,
                 border: "none", borderRadius: 8,
                 padding: "10px", fontSize: 13, fontWeight: 600,
@@ -5029,8 +5692,10 @@ function FamilyCodeSetupModal({ C, onSet, onSkip }) {
 }
 
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // Viewer color for chrome — cloud sync section, etc.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   // Backup section state
   // mode: null = collapsed, 'export' = showing exported text, 'import' = showing import textarea
   const [backupMode, setBackupMode] = useState(null);
@@ -5212,6 +5877,19 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
               ))}
             </div>
           </details>
+          {/* Maker's mark — discreet colophon, like the back-page note in
+              an old book. Lives at the bottom of the About panel where
+              attribution belongs. Italic Cormorant in muted to keep it
+              quiet; the warmth comes from the wording, not the styling. */}
+          <div style={{
+            marginTop: 14, paddingTop: 10,
+            borderTop: `1px solid ${C.line}12`,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 12,
+            color: C.muted, lineHeight: 1.5,
+          }}>
+            made with care by Cyndi · for Solène <span style={{ color: C.gold }}>✦</span>
+          </div>
         </div>
       </div>
 
@@ -5226,8 +5904,8 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           </div>
           {familyCode ? (
             <div style={{
-              background: `${C.mommy}08`,
-              border: `1px solid ${C.mommy}33`,
+              background: `${viewerColor}08`,
+              border: `1px solid ${viewerColor}33`,
               borderRadius: 10,
               padding: "12px 14px",
             }}>
@@ -5272,7 +5950,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
               </div>
               <button onClick={onOpenFamilyCodeSetup} style={{
                 width: "100%",
-                background: C.mommy, color: "#fff", border: "none",
+                background: viewerColor, color: "#fff", border: "none",
                 borderRadius: 8, padding: "10px",
                 fontSize: 13, fontWeight: 600, cursor: "pointer",
                 fontFamily: "inherit",
@@ -5331,6 +6009,71 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
               </button>
             </div>
           )}
+
+          {/* Emergency restore — only shows if a backup snapshot exists.
+              The snapshot is auto-saved before any family-code change so
+              the user can recover from accidental code regen / wrong "join
+              family" / etc. Reads the localStorage key directly here just
+              to decide whether to render; the actual restore goes through
+              onRestoreBackup. */}
+          {backupMode === null && onRestoreBackup && (() => {
+            let snapshot = null;
+            try {
+              const raw = localStorage.getItem("ll:emergency-backup");
+              if (raw) snapshot = JSON.parse(raw);
+            } catch {}
+            if (!snapshot || !snapshot.savedAt) return null;
+            const savedDate = new Date(snapshot.savedAt);
+            const ago = Math.round((Date.now() - savedDate.getTime()) / 60000);
+            const agoLabel = ago < 60 ? `${ago}m ago`
+              : ago < 1440 ? `${Math.round(ago / 60)}h ago`
+              : `${Math.round(ago / 1440)}d ago`;
+            const modeLabel = snapshot.mode === "generate" ? "code regen" : "joining a family";
+            return (
+              <div style={{
+                marginTop: 10,
+                background: `${C.gold}10`,
+                border: `1px solid ${C.gold}55`,
+                borderRadius: 10,
+                padding: "10px 12px",
+              }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
+                  ⏪ Emergency restore available
+                </div>
+                <div style={{ fontSize: 11, color: C.ink, lineHeight: 1.5, marginBottom: 8 }}>
+                  Auto-snapshot saved <strong>{agoLabel}</strong> before {modeLabel}.
+                  Restore puts your data back to that moment.
+                </div>
+                <button onClick={() => {
+                  const ok = window.confirm(
+                    `This will replace current data on this device with ` +
+                    `the snapshot from ${savedDate.toLocaleString()}.\n\n` +
+                    `Continue?`
+                  );
+                  if (!ok) return;
+                  const result = onRestoreBackup();
+                  if (result.ok) {
+                    setImportResult({ ok: true, count: result.count, restore: true });
+                    setTimeout(() => onClose(), 1200);
+                  } else {
+                    setImportResult({ ok: false, error: result.error });
+                  }
+                }} style={{
+                  background: C.gold, color: "#fff", border: "none",
+                  padding: "8px 12px", borderRadius: 8,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>
+                  Restore from snapshot
+                </button>
+                {importResult && importResult.restore && (
+                  <div style={{ fontSize: 11, color: "#4D6B43", marginTop: 6 }}>
+                    ✓ Restored {importResult.count} entries.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {backupMode === "export" && (
             <div>
@@ -5525,15 +6268,18 @@ function FontImports() {
 }
 
 function PaperGrain({ mode }) {
-  // Earlier versions had an SVG feTurbulence noise filter overlaying the
-  // entire page. At 6% opacity it was barely visible as texture, but it
-  // created a perceptual artifact: text-dense regions (the header column
-  // on the left) rendered slightly lighter than empty regions (the right
-  // half of the page), because the rendered text covered the noise dots.
-  // The result was a faint "box" appearance around the header content.
-  // We've removed the noise entirely — modern OS-level subpixel rendering
-  // already gives the cream a subtle warmth, and the radial glow below
-  // adds enough atmosphere on its own.
+  // v05.05bg re-introduced subtle grain via CSS radial-dot pattern. Earlier
+  // builds had SVG feTurbulence noise but that created a perceptual "box"
+  // artifact: text-dense regions rendered slightly lighter than empty
+  // regions because the rendered text covered the noise dots. The CSS
+  // approach below uses mix-blend-mode: multiply on a fixed-position
+  // overlay, so the blend is uniform across the viewport regardless of
+  // foreground content density. Two layered dot grids at offset positions
+  // give the grain texture without forming a visible repeating pattern.
+  // Day mode: warm dark dots on cream paper (multiply darkens). Night mode:
+  // skip the multiply (would be invisibly dark) and use screen blend with
+  // a faint warm spot pattern instead.
+  const isDark = mode === "dusk" || mode === "night";
   return (
     <>
       {/* Warm corner glow — large and very diffuse so it adds atmosphere
@@ -5543,11 +6289,27 @@ function PaperGrain({ mode }) {
         top: -700, right: -700,
         width: 1400, height: 1400,
         borderRadius: "50%",
-        background: mode === "night"
+        background: isDark
           ? "radial-gradient(circle, rgba(232, 168, 124, 0.05), transparent 95%)"
           : "radial-gradient(circle, rgba(184, 92, 46, 0.06), transparent 95%)",
         pointerEvents: "none", zIndex: 1,
       }} />
+      {/* Paper grain — fixed overlay so it doesn't move on scroll, multiply
+          blend so it darkens the paper imperceptibly. Two dot grids at
+          slight offsets so the eye doesn't lock onto a pattern. */}
+      {!isDark && (
+        <div style={{
+          position: "fixed", inset: 0,
+          backgroundImage:
+            "radial-gradient(rgba(31,27,22,0.030) 1px, transparent 1px), " +
+            "radial-gradient(rgba(31,27,22,0.020) 1px, transparent 1px)",
+          backgroundSize: "3px 3px, 7px 7px",
+          backgroundPosition: "0 0, 1px 1px",
+          mixBlendMode: "multiply",
+          pointerEvents: "none",
+          zIndex: 1,
+        }} />
+      )}
     </>
   );
 }
@@ -5894,6 +6656,24 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               </strong> is covering · {takeoverWithMins.takeoverMins} min in
             </div>
           </div>
+          {/* Take-back lives RIGHT HERE in the banner so the affordance is
+              co-located with the status. Removed the duplicate card below
+              the OnDuty quadrants in v05.05bb. */}
+          {onEndTakeover && (
+            <button
+              onClick={onEndTakeover}
+              style={{
+                background: "transparent",
+                color: takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy,
+                border: `1px solid ${takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy}88`,
+                borderRadius: 8, padding: "6px 10px",
+                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                whiteSpace: "nowrap", flexShrink: 0,
+                fontFamily: "inherit",
+              }}>
+              Take back
+            </button>
+          )}
         </div>
       )}
 
@@ -6034,8 +6814,15 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             <Check size={14} /> I'm done covering · log time
           </button>
         </div>
+      ) : takeoverWithMins && takeoverWithMins.originalParent === currentUser ? (
+        // Partner is covering for ME. The take-back affordance lives in the
+        // top banner now (v05.05bb) — co-located with the "Daddy is covering"
+        // status to avoid the redundancy of having the same info in two
+        // places. Nothing to render here.
+        null
       ) : takeoverWithMins ? (
-        // Partner is covering for me — top banner already handles this. No button row needed.
+        // Edge case: takeover exists but I'm neither covering nor original.
+        // Shouldn't normally happen with a 2-parent setup but be safe.
         null
       ) : null}
 
@@ -6097,7 +6884,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
 
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1,
-        marginTop: 18, background: `${C.line}15`, borderRadius: 10, overflow: "hidden",
+        marginTop: 18, background: `${C.muted}22`, borderRadius: 10, overflow: "hidden",
       }}>
         <StatTile C={C} label="last fed"
           icon={<Milk size={12} />}
@@ -6115,9 +6902,9 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           icon={<Baby size={12} />}
           iconColor={
             lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= URGENT_H
-              ? "#C44545"
+              ? "#8A4A35"
               : lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= WARN_H
-              ? "#D4A03A"
+              ? C.gold
               : "#7B9B6E"
           }
           value={lastDiaper ? fmtElapsed(minutesAgo(lastDiaper.ts)) : "—"}
@@ -6126,13 +6913,13 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               ? `${URGENT_H}h+ — change now even if asleep`
               : lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= WARN_H
               ? `${WARN_H}h+ — peek at next feed`
-              : (lastDiaper?.notes || "")
+              : (lastDiaper ? diaperLabel(lastDiaper.notes) : "")
           }
           subColor={
             lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= URGENT_H
-              ? "#C44545"
+              ? "#8A4A35"
               : lastDiaper && (now - new Date(lastDiaper.ts)) / 3600000 >= WARN_H
-              ? "#D4A03A"
+              ? C.gold
               : null
           }
           onTap={onQuickLog ? () => onQuickLog("diaper") : undefined} />
@@ -6140,11 +6927,39 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           /* Label flips between asleep/awake states. The label IS the
              status — no separate sub needed. The big number reads as a
              duration ("5h 59m") so paired with "Awake for" or "Asleep
-             for" it's a clean phrase: "Awake for · 5h 59m". */
+             for" it's a clean phrase: "Awake for · 5h 59m".
+             v05.05bt: Added impossibility flag — for a young infant,
+             awake >5h is unusual, >7h almost certainly a missed sleep_down
+             log. Same suspicion for asleep >14h. Surface as a sub-line
+             nudge so the user fixes the data, not the analytics later. */}
           label={isAsleep ? "asleep for" : "awake for"}
           icon={isAsleep ? <Moon size={12} /> : <Sun size={12} />}
-          iconColor={isAsleep ? "#5A6E8A" : "#D4A03A"}
+          iconColor={isAsleep ? "#5A6E8A" : C.gold}
           value={isAsleep ? fmtElapsed(minutesAgo(lastSleep.ts)) : (lastWake ? fmtElapsed(minutesAgo(lastWake.ts)) : "—")}
+          sub={(() => {
+            if (isAsleep) {
+              const sleepHrs = (now - new Date(lastSleep.ts)) / 3600000;
+              if (sleepHrs >= 14) return "↻ implausible — missed wake?";
+              return null;
+            }
+            if (!lastWake) return null;
+            const awakeHrs = (now - new Date(lastWake.ts)) / 3600000;
+            if (awakeHrs >= 7) return "↻ implausible — missed sleep?";
+            if (awakeHrs >= 5) return "longer than typical wake window";
+            return null;
+          })()}
+          subColor={(() => {
+            if (isAsleep) {
+              const sleepHrs = (now - new Date(lastSleep.ts)) / 3600000;
+              if (sleepHrs >= 14) return "#8A4A35";
+              return null;
+            }
+            if (!lastWake) return null;
+            const awakeHrs = (now - new Date(lastWake.ts)) / 3600000;
+            if (awakeHrs >= 7) return "#8A4A35";
+            if (awakeHrs >= 5) return C.gold;
+            return null;
+          })()}
           onTap={onQuickLog ? () => onQuickLog("sleep") : undefined} />
         <StatTile C={C} label="next feed est."
           icon={<Clock size={12} />}
@@ -6192,9 +7007,35 @@ function fmtPredictedNextFeed(lastFeed, now) {
 // Milk panel: shown on both parents' on-duty card
 function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle }) {
   const isMom = currentUser === "Mommy";
+  // Chrome that's not specifically about Mommy (lactation) but still inside
+  // MilkPanel — bottle markers, "last bottle" tile, etc. — should follow
+  // the viewer. Daddy seeing his own blue accents on shared content makes
+  // the screen feel his when he's reading it.
+  const viewerColor = isMom ? C.mommy : C.daddy;
   const lowSupply = feedsRunway < 2;
   const activePumpMins = activePump ? Math.floor((now - new Date(activePump.startedAt)) / 60000) : 0;
   const [timeFormat, setTimeFormat] = useState("absolute"); // 'duration' | 'absolute'
+  // Power pump chooser modal state — opens when user taps the pump tile
+  // and there's no active session yet. Skipped if user just wants standard
+  // (tap → standard); we only show the chooser if they explicitly long-tap
+  // OR tap the small "Power pump?" affordance below the main button.
+  const [showPumpChooser, setShowPumpChooser] = useState(false);
+
+  // 1-second tick local to this component, fires only when an active power
+  // pump is running. The app's global `now` only updates every 15s for
+  // performance, but the power-pump countdown wants smooth seconds. We use
+  // a local Date and force re-render via a state counter; getPowerPumpPhase
+  // reads from this localNow instead of the global `now`.
+  const [tickCount, setTickCount] = useState(0);
+  useEffect(() => {
+    if (activePump?.type !== "power") return;
+    const id = setInterval(() => setTickCount(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [activePump?.type]);
+  const localNow = activePump?.type === "power" ? new Date() : now;
+
+  // Live power-pump phase. null when no active pump or active is standard.
+  const powerPhase = activePump?.type === "power" ? getPowerPumpPhase(activePump, localNow) : null;
 
   // Find soonest-expiring RT item.
   // expiresAt is the 6h HARD limit (the actual discard time, what "exp"
@@ -6230,12 +7071,67 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   return (
     <div style={{
       marginTop: 14,
-      background: lowSupply || expiryUrgent ? `${C.accent}15` : C.bg,
-      border: `1px solid ${lowSupply || expiryUrgent ? C.accent : C.line + "22"}`,
+      // Container always takes the viewer-color wash so the panel feels
+      // owned by whoever's looking at it. Mommy view: rose tint. Daddy view:
+      // blue tint. Alarm states (low supply, expiry urgent) are communicated
+      // by content INSIDE the panel (runway number, color-coded text); the
+      // chrome itself doesn't need to scream — the fine border is enough.
+      background: `${viewerColor}10`,
+      border: `1px solid ${viewerColor}33`,
       borderRadius: 10, padding: "12px 14px",
     }}>
+      {/* Prominent expiration banner — surfaces the soonest-to-expire RT
+          bottle when it's past or near its preferred-use window. The panel
+          body already shows this in bottle-row colors, but for Daddy who
+          isn't watching closely, this banner is the cue he can't miss.
+          Two trigger states:
+            RISKY  → already past 4h preferred (in 4-6h grace window). Use
+                     it before 6h or discard.
+            URGENT → less than 30 min to 4h preferred. Use soon.
+          Past 6h hard limit, the bottle is already filtered out as expired
+          so it won't appear in sortedRT. */}
+      {soonestExpiry && (soonestExpiry.risky || (soonestExpiry.remaining >= 0 && soonestExpiry.remaining < 0.5)) && (() => {
+        const isRisky = soonestExpiry.risky;
+        const bColor = isRisky ? "#8A4A35" : C.gold;
+        const bandLabel = isRisky ? "Use now or discard" : "Use this bottle next";
+        const subLabel = isRisky
+          ? `Past 4h preferred — use within ${fmtHours(6 - soonestExpiry.ageHrs)} or discard`
+          : `${fmtHours(soonestExpiry.remaining)} until 4h preferred (then discard at 6h)`;
+        const labelText = soonestExpiry.bottleLabel
+          ? `Bottle ${soonestExpiry.bottleLabel} (${soonestExpiry.oz}oz)`
+          : `${soonestExpiry.oz}oz bottle`;
+        return (
+          <div style={{
+            background: `${bColor}14`,
+            border: `1.5px solid ${bColor}88`,
+            borderRadius: 10,
+            padding: "10px 12px",
+            marginBottom: 10,
+            display: "flex", alignItems: "flex-start", gap: 10,
+          }}>
+            <div style={{
+              fontSize: 22, lineHeight: 1, color: bColor, flexShrink: 0, marginTop: 2,
+            }}>{isRisky ? "⚠" : "⏰"}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase",
+                color: bColor, fontWeight: 700, marginBottom: 2,
+              }}>
+                {bandLabel}
+              </div>
+              <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, lineHeight: 1.3 }}>
+                {labelText}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>
+                {subLabel}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-        <Milk size={13} color={C.mommy} />
+        <Milk size={13} color={viewerColor} />
         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted }}>
           Breast milk · live
         </span>
@@ -6246,6 +7142,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         )}
         <button
           onClick={() => setTimeFormat(f => f === "duration" ? "absolute" : "duration")}
+          title="Toggle between 'in 2h' and '4:30p' style"
           style={{
             marginLeft: "auto",
             background: "transparent",
@@ -6254,21 +7151,136 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase",
             fontFamily: "inherit",
           }}>
-          {timeFormat === "duration" ? "in 2h" : "4:30p"}
+          {timeFormat === "duration" ? "show clock" : "show duration"}
         </button>
       </div>
 
       {/* Prominent pump countdown — Mommy only, top of panel.
           State pip on the left clearly signals: green dot = comfortably ahead,
-          amber dot = pump coming up soon, coral dot = past due. */}
+          amber dot = pump coming up soon, coral dot = past due.
+          Three states handled below: (a) ACTIVE POWER PUMP — phase-aware
+          tile with PUMP/REST label, phase countdown, and phase pip dots.
+          (b) ACTIVE STANDARD PUMP — single timer (existing). (c) NOT ACTIVE
+          — tap to start (opens chooser if user wants power, default tap
+          starts standard). */}
       {isMom && (activePump || nextPumpAt) && (() => {
+        // === Branch 1: Active power pump — phase-aware display ===
+        if (powerPhase) {
+          // Phase has either a live phase or is `complete: true` after 60min
+          const isComplete = powerPhase.complete;
+          const phaseRemainSec = isComplete ? 0 : Math.max(0, Math.ceil(powerPhase.phaseRemainingMs / 1000));
+          const remMin = Math.floor(phaseRemainSec / 60);
+          const remSec = phaseRemainSec % 60;
+          const fmtRem = `${remMin}:${String(remSec).padStart(2, "0")}`;
+          const totalMinIn = Math.floor(powerPhase.totalElapsedMs / 60000);
+          // Phase color: pumping uses mommy rose (active doing-work);
+          // rest uses gold (waiting); complete uses green.
+          const phaseColor = isComplete ? "#7B9B6E"
+            : powerPhase.phaseType === "pump" ? C.mommy
+            : C.gold;
+          const phaseLabel = isComplete ? "Power pump complete"
+            : powerPhase.phaseType === "pump" ? "Pumping"
+            : "Rest";
+          // Phase progress within the current phase (0–1)
+          const phaseProgress = isComplete ? 1
+            : powerPhase.phaseElapsedMs / powerPhase.phaseDurationMs;
+
+          return (
+            <button
+              onClick={onEndActivePump}
+              style={{
+                width: "100%",
+                background: `linear-gradient(135deg, ${phaseColor}, ${phaseColor}DD)`,
+                color: "#fff", border: "none",
+                borderRadius: 10, padding: "14px 16px",
+                marginBottom: 12,
+                display: "flex", flexDirection: "column", gap: 10,
+                boxShadow: `0 2px 10px ${phaseColor}55`,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                position: "relative",
+                overflow: "hidden",
+              }}>
+              {/* Phase progress bar — subtle wash from left to right showing
+                  how far through the current phase we are. Lives behind the
+                  content as a low-opacity overlay. */}
+              <div style={{
+                position: "absolute", top: 0, bottom: 0, left: 0,
+                width: `${phaseProgress * 100}%`,
+                background: "rgba(255,255,255,0.10)",
+                pointerEvents: "none",
+                transition: "width 0.6s ease",
+              }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
+                <Timer size={28} className={!isComplete && powerPhase.phaseType === "pump" ? "pulse-soft" : ""} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.9 }}>
+                    Power pump · {totalMinIn}/{POWER_PUMP_TOTAL_MIN} min
+                  </div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
+                    lineHeight: 1.05, marginTop: 2, fontStyle: "italic",
+                  }}>
+                    {phaseLabel}
+                  </div>
+                  <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", opacity: 0.95, marginTop: 4, fontWeight: 600 }}>
+                    {isComplete ? "tap to log oz" : `${fmtRem} left in this phase`}
+                  </div>
+                </div>
+              </div>
+              {/* Phase pip row — five dots showing where you are in the
+                  60-min protocol. Filled = done. Ring = current. Empty = upcoming.
+                  P = pump phase (rose color), R = rest phase (gold-ish). */}
+              <div style={{ display: "flex", gap: 6, position: "relative" }}>
+                {POWER_PUMP_PHASES.map((p, i) => {
+                  const done = isComplete || i < powerPhase.phaseIndex;
+                  const current = !isComplete && i === powerPhase.phaseIndex;
+                  return (
+                    <div key={i} style={{
+                      flex: 1,
+                      height: 6,
+                      borderRadius: 3,
+                      background: done ? "rgba(255,255,255,0.85)" : current ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.15)",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}>
+                      {current && (
+                        <div style={{
+                          position: "absolute", top: 0, bottom: 0, left: 0,
+                          width: `${phaseProgress * 100}%`,
+                          background: "rgba(255,255,255,0.85)",
+                          transition: "width 0.6s ease",
+                        }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, opacity: 0.75, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em", fontWeight: 600 }}>
+                <span>PUMP 20</span>
+                <span>REST 10</span>
+                <span>PUMP 10</span>
+                <span>REST 10</span>
+                <span>PUMP 10</span>
+              </div>
+            </button>
+          );
+        }
+
+        // === Branch 2 & 3: Active standard or not active — existing UI ===
+        // State color palette tuned v05.05br to fit the warm muted palette
+        // alongside mauve-violet. Saturated kelly-green and bright red read
+        // as "alarm app" — this app is a ledger, so we use deeper, warmer
+        // analogs that sit naturally next to mauve and gold:
+        //   overdue     → #8A4A35  warm terracotta (old ledger red)
+        //   soon        → C.gold   antique brass
+        //   on schedule → #7B9B6E  sage (same tone the diaper tile uses)
         const stateColor = activePump
           ? C.mommy
-          : pumpOverdue ? "#C44545"
-          : pumpSoon ? "#D4A03A"
-          : "#5C8E5C";
-        // Eyebrow now omits the redundant "tap to start" since the whole
-        // tile is a button — the action is implied. State word + condition.
+          : pumpOverdue ? "#8A4A35"
+          : pumpSoon ? C.gold
+          : "#7B9B6E";
         const stateLabel = activePump
           ? "Pumping now"
           : pumpOverdue ? "Pump overdue"
@@ -6276,7 +7288,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           : "On schedule";
         return (
         <button
-          onClick={activePump ? onEndActivePump : onStartPump}
+          onClick={activePump ? onEndActivePump : () => setShowPumpChooser(true)}
           style={{
             width: "100%",
             background: activePump
@@ -6332,23 +7344,25 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         );
       })()}
 
-      {/* RT and Fridge side by side — tap to use a bottle.
+      {/* RT and Fridge side by side — tap to use a bottle (when bottles
+          exist) or add one (when empty). Empty tiles are NOT disabled in
+          v05.05bb; tapping an empty tile opens the bottle picker which
+          surfaces an Add-bottle affordance.
           Each tile shows: oz total, then a row of bottle emojis (one per bottle, up to 3,
           then "+N" overflow), with each bottle's individual expiry time underneath. */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
         <button
           onClick={() => onPickBottle && onPickBottle("rt")}
-          disabled={rtSafeOz <= 0}
           style={{
             background: C.paper, borderRadius: 8, padding: "10px 12px",
-            border: `1px solid ${expiryUrgent || expiryRisky ? C.accent : expiryWarn ? "#D4A03A" : C.line + "22"}`,
-            cursor: rtSafeOz > 0 ? "pointer" : "not-allowed",
+            border: `1px solid ${expiryUrgent || expiryRisky ? C.accent : expiryWarn ? C.gold : C.line + "22"}`,
+            cursor: "pointer",
             textAlign: "left", fontFamily: "inherit",
-            opacity: rtSafeOz > 0 ? 1 : 0.5,
+            opacity: rtSafeOz > 0 ? 1 : 0.7,
           }}>
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
             Room temp
-            {rtSafeOz > 0 && <span style={{ opacity: 0.6 }}> · tap to use</span>}
+            {rtSafeOz > 0 ? <span style={{ opacity: 0.6 }}> · tap to use</span> : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
@@ -6367,10 +7381,19 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                   {visible.map(b => {
                     // Color the bottle by its individual urgency
                     const bRem = b.remaining;
-                    const bColor = b.risky ? C.accent : bRem < 1 ? C.accent : bRem < 2 ? "#D4A03A" : "#5C8E5C";
+                    const bColor = b.risky ? C.accent : bRem < 1 ? C.accent : bRem < 2 ? C.gold : "#7B9B6E";
                     return (
                       <div key={b.id} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                         <div style={{ fontSize: 18, lineHeight: 1, color: bColor, filter: bRem < 1 || b.risky ? "none" : "saturate(0.7)" }}>🍼</div>
+                        {b.bottleLabel && (
+                          <div style={{
+                            fontSize: 10, fontFamily: "'Cormorant Garamond', serif",
+                            fontStyle: "italic", color: bColor,
+                            marginTop: 1, fontWeight: 600,
+                          }}>
+                            {b.bottleLabel}
+                          </div>
+                        )}
                         <div style={{
                           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
                           color: bColor, marginTop: 3,
@@ -6435,7 +7458,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     // Fridge bottles age in days; flag last day as warn
                     const ageHrs = (now - new Date(b.pumpedAt)) / 3600000;
                     const remHrs = 96 - ageHrs;
-                    const bColor = remHrs < 0 ? C.accent : remHrs < 24 ? "#D4A03A" : C.daddy;
+                    const bColor = remHrs < 0 ? C.accent : remHrs < 24 ? C.gold : viewerColor;
                     return (
                       <div key={b.id} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                         <div style={{ fontSize: 18, lineHeight: 1, color: bColor }}>🍼</div>
@@ -6489,7 +7512,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         }}>
           <div style={{
             width: 38, height: 38, borderRadius: "50%",
-            background: `${C.mommy}22`, color: C.mommy,
+            background: `${viewerColor}22`, color: viewerColor,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, flexShrink: 0,
           }}>🍼</div>
@@ -6535,6 +7558,59 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 4, textAlign: "center" }}>
           You don't need to ask Mommy — RT and fridge inventory shown above is live.
         </div>
+      )}
+
+      {/* Pump-type chooser modal — opens when user taps the inactive pump
+          tile. Two options: standard (just track time) or power (60-min
+          guided protocol with phase pip dots). Mounting here inside
+          MilkPanel keeps the chooser state local to this component. */}
+      {showPumpChooser && (
+        <ModalShell C={C} onClose={() => setShowPumpChooser(false)} title="Start a pump session">
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+            Pick which kind of session. Both let you log oz and location at the end.
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            <button
+              onClick={() => { onStartPump("standard"); setShowPumpChooser(false); }}
+              style={{
+                background: C.paper,
+                border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.mommy}`,
+                borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                textAlign: "left", fontFamily: "inherit", color: C.ink,
+              }}>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                fontStyle: "italic", color: C.mommy, lineHeight: 1.1,
+              }}>
+                Standard pump
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                Just track elapsed time. Tap to end whenever you're done.
+              </div>
+            </button>
+            <button
+              onClick={() => { onStartPump("power"); setShowPumpChooser(false); }}
+              style={{
+                background: C.paper,
+                border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.gold}`,
+                borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                textAlign: "left", fontFamily: "inherit", color: C.ink,
+              }}>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                fontStyle: "italic", color: C.gold, lineHeight: 1.1,
+              }}>
+                Power pump
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                60-min guided protocol: <strong>20 pump · 10 rest · 10 pump · 10 rest · 10 pump</strong>. The tile will tell you what to do at each phase.
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic", lineHeight: 1.5 }}>
+                Mimics cluster feeding to signal supply. Best done 1×/day for a few days when you want a boost.
+              </div>
+            </button>
+          </div>
+        </ModalShell>
       )}
     </div>
   );
@@ -6606,10 +7682,10 @@ function AutoSwapBanner({ C, swaps, currentUser, onDispute }) {
     <div className="fade-up" style={{
       background: C.paper,
       border: `1px solid ${C.line}22`,
-      borderLeft: `4px solid ${blocked.length > 0 ? "#C44545" : C.accent}`,
+      borderLeft: `4px solid ${blocked.length > 0 ? "#8A4A35" : C.accent}`,
       borderRadius: 12, padding: 14, marginTop: 10,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: blocked.length > 0 ? "#C44545" : C.accent, fontWeight: 600, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: blocked.length > 0 ? "#8A4A35" : C.accent, fontWeight: 600, marginBottom: 8 }}>
         <Edit3 size={12} />
         {blocked.length > 0 ? "Today's plan needs a manual fix" : "Today's plan adjusted"}
       </div>
@@ -6686,8 +7762,8 @@ function AutoSwapBanner({ C, swaps, currentUser, onDispute }) {
         {blocked.map((s, i) => (
           <div key={`b${i}`} style={{
             padding: "8px 10px",
-            background: "#C4454510", borderRadius: 8,
-            fontSize: 13, lineHeight: 1.5, color: "#C44545",
+            background: "#8A4A3510", borderRadius: 8,
+            fontSize: 13, lineHeight: 1.5, color: "#8A4A35",
           }}>
             ⚠ <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600 }}>
               {fmtShiftRange(s.shift)}
@@ -6909,11 +7985,11 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
         })()}
       </Section>
 
-      {/* On-site / variable return — moved from Schedule tab. Sits above
-          Today's shifts because being away from home is a Now-context
-          status more than a planning concept. When active, shows the live
-          ETA card; when not, a low-key "Going on-site?" button. */}
-      {onsite ? (
+      {/* On-site / variable return — only the ACTIVE state shows on Now.
+          When on-site is active, the live ETA card is essential context.
+          When not active, the entry point lives in the LOG sheet so it
+          doesn't clutter the landing page. */}
+      {onsite && (
         <Section C={C} title={`On-site · ${onsite.parent} away`}>
           <ActiveOnsiteCard
             C={C} onsite={onsite} now={now}
@@ -6921,20 +7997,7 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
             onArrived={onArrivedHome}
           />
         </Section>
-      ) : (onStartOnsite && (
-        <button onClick={onStartOnsite} style={{
-          width: "100%", marginTop: 14, marginBottom: 4,
-          background: "transparent",
-          color: C.muted,
-          border: `1px dashed ${C.line}40`,
-          borderRadius: 10, padding: "10px 14px",
-          fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-        }}>
-          <MapPin size={13} />
-          Going on-site? Tap to log a variable-return window
-        </button>
-      ))}
+      )}
 
       <Section C={C} title="Today's shifts">
         <ShiftStrip C={C} shifts={shifts} now={now} />
@@ -7044,7 +8107,7 @@ function SleepPlanCard({ C, events, now }) {
         }}>
         <div style={{
           width: 38, height: 38, borderRadius: "50%",
-          background: "#6B7CA822", color: "#6B7CA8",
+          background: "#7C5C8422", color: "#7C5C84",
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0,
         }}>
@@ -7065,7 +8128,7 @@ function SleepPlanCard({ C, events, now }) {
                 ? `${Math.abs(minsUntilBedtime)}m past · still good`
                 : `tonight`}
               {" · "}
-              <span style={{ color: confidence === "high" ? "#5C8E5C" : confidence === "moderate" ? "#D4A03A" : C.muted }}>
+              <span style={{ color: confidence === "high" ? "#7B9B6E" : confidence === "moderate" ? C.gold : C.muted }}>
                 {confidence} confidence
               </span>
             </div>
@@ -7257,16 +8320,16 @@ function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDisp
                       <span style={{ fontSize: 10, color: C.accent, flexShrink: 0 }} title={`Took over for ${s._takeoverDurationMin}m`}>↔</span>
                     )}
                     {isRepaymentShift && (
-                      <span style={{ fontSize: 10, color: "#5C8E5C", flexShrink: 0 }} title={`Repaying ${s._takeoverDurationMin}m takeover`}>↩</span>
+                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Repaying ${s._takeoverDurationMin}m takeover`}>↩</span>
                     )}
                     {isAutoRepaymentShift && (
-                      <span style={{ fontSize: 10, color: "#5C8E5C", flexShrink: 0 }} title={`Auto-repaying ${s._autoRepayDurationMin}m coverage from earlier`}>↩</span>
+                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Auto-repaying ${s._autoRepayDurationMin}m coverage from earlier`}>↩</span>
                     )}
                     {wasMoved && isBalance && (
                       <span style={{ fontSize: 10, color: color, flexShrink: 0 }}>⚖</span>
                     )}
                     {wasMoved && isAntiCluster && (
-                      <span style={{ fontSize: 10, color: "#5C8E5C", flexShrink: 0 }} title="Breaking a 4h+ stretch for the other parent">⏸</span>
+                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title="Breaking a 4h+ stretch for the other parent">⏸</span>
                     )}
                     <span>{fmtShiftRange(s)}</span>
                   </div>
@@ -7341,57 +8404,66 @@ function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDisp
 
                     {/* Body explanation */}
                     <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5 }}>
-                      {isRepayment ? (
-                        <>
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong> automatically repays{" "}
-                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong>{" "}
-                          for the {s.takeoverDurationMin || "?"}min impromptu takeover earlier. The whole shift flips to{" "}
-                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> ASAP — debt squared once this shift completes.
-                        </>
-                      ) : isTakeover ? (
+                      {isTakeover ? (
                         <>
                           <strong style={{ color: coverColor }}>{s.coveringParent}</strong>{" "}
-                          {s.active ? "is currently covering" : "covered"}{" "}
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong>{" "}
-                          during this shift via impromptu takeover. {s.active ? "Time owed will be logged when it ends." : "Time owed has been added to the time bank."}
+                          {s.active ? "is currently covering" : "covered"} for{" "}
+                          <strong style={{ color: origColor }}>{s.originalParent}</strong>
+                          {s.active ? " — time owed will log when it ends." : " — time owed went to the bank."}
                         </>
                       ) : s.blocked ? (
                         <>
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong> has{" "}
-                          <em>{s.reason || "a commitment"}</em> during this shift, but{" "}
-                          <strong style={{ color: s.originalParent === "Mommy" ? C.daddy : C.mommy }}>
-                            {s.originalParent === "Mommy" ? "Daddy" : "Mommy"}
-                          </strong>{" "}
-                          is also blocked. You'll need to figure this one out manually.
+                          Both blocked at this time. <strong style={{ color: origColor }}>{s.originalParent}</strong> has <em>{s.reason || "a commitment"}</em>; figure this one out manually.
                         </>
                       ) : isBalance ? (
                         <>
-                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> takes back this block from{" "}
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong>{" "}
-                          to keep today's workload roughly equal. No commitment is forcing this swap — it's purely fairness.
+                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> takes this block to keep the day balanced. Pure fairness — no commitment forced it.
                         </>
                       ) : isRedemption ? (
                         <>
-                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> covers this shift because{" "}
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong>{" "}
-                          cashed in <em>time-bank credit</em> for{" "}
-                          <em>{(s.reason || "").replace(/^Time bank:\s*/, "") || "owed time"}</em>. Already settled — no debt incurred.
+                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> covers — <strong style={{ color: origColor }}>{s.originalParent}</strong> cashed in time-bank credit. Already settled.
+                        </>
+                      ) : isRepayment ? (
+                        // Auto-repayment: parent A owed parent B time, and the
+                        // system handed B a shift from A to discharge that debt.
+                        // The user-facing meaning is just "you're paying back
+                        // what you owed" — the internal "Auto-repay Xm coverage"
+                        // commitment label shouldn't be exposed.
+                        <>
+                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> covers — paying back {s.takeoverDurationMin ? `${s.takeoverDurationMin}m` : "time"} <strong style={{ color: origColor }}>{s.originalParent}</strong> owed.
                         </>
                       ) : (
-                        <>
-                          <strong style={{ color: origColor }}>{s.originalParent}</strong> has{" "}
-                          <em>{s.reason || "a commitment"}</em> overlapping this shift, so{" "}
-                          <strong style={{ color: coverColor }}>{s.coveringParent}</strong> picks it up.
-                        </>
+                        // Generic commitment swap. New shorter phrasing:
+                        // lead with WHO is covering (the actionable info)
+                        // and tuck the reason in as the explanation.
+                        // Defensive: if the reason text starts with
+                        // "Auto-repay" (a synthetic commitment label that
+                        // shouldn't have leaked here, but might), strip
+                        // the internal jargon and use friendlier wording.
+                        (() => {
+                          const rawReason = s.reason || "a commitment";
+                          const isLeakedRepayment = /^Auto-repay/i.test(rawReason);
+                          if (isLeakedRepayment) {
+                            return (
+                              <>
+                                <strong style={{ color: coverColor }}>{s.coveringParent}</strong> covers — paying back time <strong style={{ color: origColor }}>{s.originalParent}</strong> owed.
+                              </>
+                            );
+                          }
+                          return (
+                            <>
+                              <strong style={{ color: coverColor }}>{s.coveringParent}</strong> covers — <strong style={{ color: origColor }}>{s.originalParent}</strong> has <em>{rawReason}</em>.
+                            </>
+                          );
+                        })()
                       )}
                     </div>
 
-                    {/* Action row for the impacted user */}
+                    {/* Action row for the impacted user — only the dispute
+                        button shows. The "you've picked this up" label was
+                        redundant since the body already reads "[You] covers". */}
                     {impactsMe && !isRedemption && !isBalance && !s.blocked && onDispute && (
-                      <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>
-                          you've picked this up
-                        </span>
+                      <div style={{ display: "flex", marginTop: 8 }}>
                         <button onClick={() => onDispute(s)} style={{
                           marginLeft: "auto",
                           background: "transparent", color: C.muted,
@@ -7753,25 +8825,25 @@ function TimelineEvent({ ev, C, now }) {
     breastfeed: C.mommy,      // rose — breastfeeds
     pump: C.mommy,            // rose — pumping
     diaper: C.daddy,          // sage
-    sleep_down: "#6B7CA8",    // dusty blue
-    sleep_up: "#D4A03A",      // gold (waking)
-    bath: "#7B9CC4",          // light blue
+    sleep_down: "#7C5C84",    // warm plum (night/dusk in warm-palette terms)
+    sleep_up: C.gold,      // gold (waking)
+    bath: "#7B9B6E",          // sage green (water/clean in warm-palette terms)
     skincare: "#9C6BB0",      // soft purple
-    activity: activityInfo?.color || C.daddy,
+    activity: activityInfo?.color || C.gold,
     takeover: C.accent,
   }[ev.type] || C.ink;
 
   const label = {
-    feed: `Feed · ${ev.oz || "?"}oz ${ev.source || ""}`,
-    breastfeed: `Breastfed · ${ev.totalDurationMin}m (L${ev.leftMin || 0}/R${ev.rightMin || 0})`,
-    pump: `Pump · ${ev.oz || "?"}oz · ${ev.durationMin || "?"}m`,
+    feed: `Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}`,
+    breastfeed: `Breastfed${ev.totalDurationMin ? ` · ${ev.totalDurationMin}m` : ""}${(ev.leftMin || ev.rightMin) ? ` (L${ev.leftMin || 0}/R${ev.rightMin || 0})` : ""}`,
+    pump: `Pump${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}`,
     diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}`,
     sleep_down: "Down for sleep",
     sleep_up: "Awake",
     bath: `${BATH_TYPES[ev.bathType]?.icon || "🛁"} ${BATH_TYPES[ev.bathType]?.label || "Bath"}`,
     skincare: `${ev.routine === "AM" ? "☀️ AM" : "🌙 PM"} routine done`,
-    activity: activityInfo ? `${activityInfo.emoji} ${activityInfo.l} · ${ev.durationMin}m` : `Activity · ${ev.durationMin}m`,
-    takeover: `Takeover · ${ev.coveringParent} covered ${ev.originalParent} for ${fmtBalance(ev.durationMin || 0)}`,
+    activity: activityInfo ? `${activityInfo.emoji} ${activityInfo.l}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}` : `Activity${ev.durationMin ? ` · ${ev.durationMin}m` : ""}`,
+    takeover: `Takeover · ${ev.coveringParent} covered ${ev.originalParent}${ev.durationMin ? ` for ${fmtBalance(ev.durationMin)}` : ""}`,
   }[ev.type] || ev.type;
 
   return (
@@ -7810,7 +8882,7 @@ function WeatherCard({ C, weather, uvNow, tempNow, walkWindows }) {
     return <div style={{ color: C.muted, fontSize: 13, padding: "12px 0", fontStyle: "italic" }}>fetching weather…</div>;
   }
   const uvLabel = uvNow == null ? "—" : uvNow < 3 ? "low" : uvNow < 6 ? "moderate" : uvNow < 8 ? "high" : "very high";
-  const uvColor = uvNow == null ? C.muted : uvNow < 3 ? "#5C8E5C" : uvNow < 6 ? "#D4A03A" : C.accent;
+  const uvColor = uvNow == null ? C.muted : uvNow < 3 ? "#5C8E5C" : uvNow < 6 ? C.gold : C.accent;
 
   return (
     <div style={{ background: C.paper, borderRadius: 12, padding: 16, border: `1px solid ${C.line}15` }}>
@@ -7945,9 +9017,6 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
   return (
     <div style={{ marginTop: 14 }}>
       <Section C={C} title={`Full journal · ${visibleEvents.length} entries`}>
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, fontStyle: "italic" }}>
-          Tap any entry to edit · trash icon to delete
-        </div>
         {Object.keys(grouped).length === 0 ? (
           <div style={{ color: C.muted, fontStyle: "italic", padding: 20, fontSize: 14, textAlign: "center" }}>
             Nothing logged yet.
@@ -7998,19 +9067,31 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                       {fmtTimeShort(new Date(e.ts))}
                     </span>
                     <span style={{ flex: 1, fontSize: 13, color: C.ink }}>
-                      {e.type === "feed" && `Feed · ${e.oz || "?"}oz ${e.source || ""}`}
-                      {e.type === "breastfeed" && `Breastfed · ${e.totalDurationMin}m (L${e.leftMin || 0}/R${e.rightMin || 0})`}
-                      {e.type === "pump" && `Pump · ${e.oz || "?"}oz · ${e.durationMin || "?"}m`}
-                      {e.type === "diaper" && `Diaper · ${e.notes || ""}`}
+                      {e.type === "feed" && `Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`}
+                      {e.type === "breastfeed" && `Breastfed${e.totalDurationMin ? ` · ${e.totalDurationMin}m` : ""}${(e.leftMin || e.rightMin) ? ` (L${e.leftMin || 0}/R${e.rightMin || 0})` : ""}`}
+                      {e.type === "pump" && (() => {
+                        const base = `Pump${e.oz ? ` · ${e.oz}oz` : ""}${e.durationMin ? ` · ${e.durationMin}m` : ""}`;
+                        // Append start–end range if we have duration. mode
+                        // tells us whether ts is the start or end of the
+                        // session; we compute the missing edge from durationMin.
+                        if (!e.durationMin) return base;
+                        const ts = new Date(e.ts);
+                        if (isNaN(ts.getTime())) return base;
+                        const isEnd = e.mode === "end";
+                        const start = isEnd ? new Date(ts.getTime() - e.durationMin * 60000) : ts;
+                        const end = isEnd ? ts : new Date(ts.getTime() + e.durationMin * 60000);
+                        return `${base} (${fmtTimeShort(start)}–${fmtTimeShort(end)})`;
+                      })()}
+                      {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}`}
                       {e.type === "sleep_down" && `Down for sleep${e.estimated ? " (est.)" : ""}`}
                       {e.type === "sleep_up" && "Awake"}
                       {e.type === "bath" && `${BATH_TYPES[e.bathType]?.icon} ${BATH_TYPES[e.bathType]?.label}`}
                       {e.type === "skincare" && `${e.routine === "AM" ? "☀️" : "🌙"} ${e.routine} routine`}
                       {e.type === "activity" && (() => {
                         const a = ACTIVITIES.find(x => x.v === e.activityType);
-                        return `${a?.emoji || "⭐"} ${a?.l || "Activity"} · ${e.durationMin}m`;
+                        return `${a?.emoji || "⭐"} ${a?.l || "Activity"}${e.durationMin ? ` · ${e.durationMin}m` : ""}`;
                       })()}
-                      {e.type === "takeover" && `↔ ${e.coveringParent} covered ${e.originalParent} · ${e.durationMin}m`}
+                      {e.type === "takeover" && `↔ ${e.coveringParent} covered ${e.originalParent}${e.durationMin ? ` · ${e.durationMin}m` : ""}`}
                     </span>
                     <Edit3 size={11} color={C.muted} style={{ opacity: 0.4 }} />
                   </button>
@@ -8066,12 +9147,7 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
 
 function EditEventModal({ C, event, onClose, onSave, onDelete }) {
   // Local edit state — start with the existing values
-  const [tsLocal, setTsLocal] = useState(() => {
-    const d = new Date(event.ts);
-    // Format as local datetime-local: YYYY-MM-DDTHH:MM
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  });
+  const [tsLocal, setTsLocal] = useState(() => safeDatetimeLocal(event.ts));
   const [oz, setOz] = useState(event.oz || 0);
   const [source, setSource] = useState(event.source || "BM");
   const [durationMin, setDurationMin] = useState(event.durationMin || 0);
@@ -8087,8 +9163,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
     const start = new Date(event.ts);
     if (isNaN(start.getTime())) return "";
     const end = new Date(start.getTime() + Number(event.durationMin) * 60000);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+    return safeDatetimeLocal(end);
   });
 
   const submit = () => {
@@ -8185,8 +9260,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
           const start = new Date(startStr);
           if (isNaN(start.getTime())) return startStr;
           const end = new Date(start.getTime() + Number(dur) * 60000);
-          const pad = (n) => String(n).padStart(2, "0");
-          return `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+          return safeDatetimeLocal(end);
         };
         const computeDurFromRange = (startStr, endStr) => {
           if (!startStr || !endStr) return 0;
@@ -8273,8 +9347,8 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
       {event.type === "diaper" && (
         <Field C={C} label="Type">
           <SegControl C={C} value={diaperKind} onChange={setDiaperKind} options={[
-            { v: "wet", l: "Wet" },
-            { v: "dirty", l: "Dirty" },
+            { v: "wet", l: "Pee" },
+            { v: "dirty", l: "Poo" },
             { v: "both", l: "Both" },
           ]} />
         </Field>
@@ -8392,7 +9466,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
 function DayPlanCard({
   C, label, subLabel, defaultOpen,
   shiftBlocks, daySwaps, commitments,
-  onRemoveCommitment, onAddCommitment, showAddButton,
+  onRemoveCommitment, onEditCommitment, onAddCommitment, showAddButton,
   isToday,
   // Controlled-open mode: when controlledOpen + setControlledOpen are
   // provided, this component delegates open state to the parent. This
@@ -8582,7 +9656,9 @@ function DayPlanCard({
               </div>
               <div style={{ display: "grid", gap: 6, marginBottom: showAddButton ? 10 : 0 }}>
                 {commitments.map(m => (
-                  <MeetingRow key={m.id} m={m} C={C} onRemove={() => onRemoveCommitment(m.id)} />
+                  <MeetingRow key={m.id} m={m} C={C}
+                    onRemove={() => onRemoveCommitment(m.id)}
+                    onEdit={onEditCommitment ? () => onEditCommitment(m) : undefined} />
                 ))}
               </div>
             </>
@@ -8625,7 +9701,7 @@ function DayPlanCard({
 //   "Beyond"     — anything past 30 days
 // Total count badge in header always shows total — filters scope the
 // visible items but don't hide the bigger picture.
-function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMeeting, externalOpen, externalFilter, onExternalOpenHandled }) {
+function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMeeting, onEditMeeting, externalOpen, externalFilter, onExternalOpenHandled }) {
   const [filter, setFilter] = useState("all"); // "all" | "week" | "month" | "beyond"
   const detailsRef = useRef(null);
 
@@ -8651,7 +9727,10 @@ function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMe
     return allFuture;
   }, [allFuture, filter, sevenDaysOut, thirtyDaysOut]);
 
-  // Group filtered items by date for date-section headings
+  // Group filtered items by date for date-section headings. Within each
+  // day's bucket, items are sorted by start time so the day reads
+  // chronologically (9am → 11am → 4pm) rather than insertion order. The
+  // outer Object.entries sort orders dates ascending.
   const sortedDateGroups = useMemo(() => {
     const byDate = {};
     for (const m of filtered) {
@@ -8659,6 +9738,10 @@ function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMe
       const key = dt.toISOString().slice(0, 10);
       if (!byDate[key]) byDate[key] = { date: dt, items: [] };
       byDate[key].items.push(m);
+    }
+    // Sort items inside each day chronologically
+    for (const key of Object.keys(byDate)) {
+      byDate[key].items.sort((a, b) => new Date(a.start) - new Date(b.start));
     }
     return Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
@@ -8679,7 +9762,7 @@ function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMe
   ];
 
   return (
-    <details ref={detailsRef} id="upcoming-section" style={{
+    <details ref={detailsRef} id="upcoming-section" open style={{
       background: C.paper, borderRadius: 12,
       border: `1px solid ${C.line}15`, marginTop: 14,
       overflow: "hidden",
@@ -8745,7 +9828,9 @@ function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMe
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               {items.map(m => (
-                <MeetingRow key={m.id} m={m} C={C} onRemove={() => onRemoveMeeting(m.id)} />
+                <MeetingRow key={m.id} m={m} C={C}
+                  onRemove={() => onRemoveMeeting(m.id)}
+                  onEdit={onEditMeeting ? () => onEditMeeting(m) : undefined} />
               ))}
             </div>
           </div>
@@ -8770,6 +9855,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
   // Upcoming-section trigger from peek strip. When user taps a day 3+
   // ahead, we open the Upcoming details and (if we can) narrow the filter.
   const [upcomingTrigger, setUpcomingTrigger] = useState(null); // { open: bool, filter: "week"|"month"|null }
+  const [editingMeeting, setEditingMeeting] = useState(null); // meeting object being edited
 
   const addMeeting = (m) => {
     const newMeeting = { ...m, id: crypto.randomUUID() };
@@ -8789,6 +9875,16 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
       localStorage.setItem("solene:meetings", JSON.stringify(next));
       localStorage.setItem("solene:meetings:backup", JSON.stringify(prev));
     } catch (e) { console.warn("[removeMeeting] sync persist failed", e); }
+    return next;
+  });
+  // Update an existing meeting in place — preserves id and any side-channel
+  // fields (gift redemption metadata, etc.) by spreading the original first
+  // and only overlaying the editable form fields on top.
+  const updateMeeting = (id, patch) => setMeetings(prev => {
+    const next = prev.map(m => m.id === id ? { ...m, ...patch } : m);
+    try {
+      localStorage.setItem("solene:meetings", JSON.stringify(next));
+    } catch (e) { console.warn("[updateMeeting] sync persist failed", e); }
     return next;
   });
   const today = meetings.filter(m => new Date(m.start).toDateString() === now.toDateString());
@@ -8843,7 +9939,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
         {(() => {
           // ---- Today
           const todayLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-          const todayCommitments = today;
+          const todayCommitments = [...today].sort((a, b) => new Date(a.start) - new Date(b.start));
 
           // ---- Tomorrow
           const tomorrow = new Date(now);
@@ -8852,10 +9948,12 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           dayAfter.setDate(dayAfter.getDate() + 1);
           tomorrow.setHours(0, 0, 0, 0);
           dayAfter.setHours(0, 0, 0, 0);
-          const tomorrowMeetings = (meetings || []).filter(m => {
-            const t = new Date(m.start);
-            return t >= tomorrow && t < dayAfter;
-          });
+          const tomorrowMeetings = (meetings || [])
+            .filter(m => {
+              const t = new Date(m.start);
+              return t >= tomorrow && t < dayAfter;
+            })
+            .sort((a, b) => new Date(a.start) - new Date(b.start));
           const tomorrowLabel = tomorrow.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
           const tomProj = tomorrowProjection?.projected || { Mommy: shifts.Mommy || [], Daddy: shifts.Daddy || [] };
           const tomSwaps = tomorrowProjection?.swaps || [];
@@ -8870,6 +9968,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 daySwaps={swaps || []}
                 commitments={todayCommitments}
                 onRemoveCommitment={removeMeeting}
+                onEditCommitment={(m) => setEditingMeeting(m)}
                 onAddCommitment={() => setShowAdd(true)}
                 showAddButton={true}
                 isToday={true}
@@ -8884,6 +9983,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 daySwaps={tomSwaps}
                 commitments={tomorrowMeetings}
                 onRemoveCommitment={removeMeeting}
+                onEditCommitment={(m) => setEditingMeeting(m)}
                 onAddCommitment={() => setShowAdd(true)}
                 showAddButton={true}
                 isToday={false}
@@ -9068,6 +10168,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
             sevenDaysOut={sevenDaysOut}
             thirtyDaysOut={thirtyDaysOut}
             onRemoveMeeting={removeMeeting}
+            onEditMeeting={(m) => setEditingMeeting(m)}
             externalOpen={upcomingTrigger?.open}
             externalFilter={upcomingTrigger?.filter}
             onExternalOpenHandled={() => setUpcomingTrigger(null)}
@@ -9076,6 +10177,22 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
       })()}
 
       {showAdd && <AddMeetingModal C={C} onClose={() => setShowAdd(false)} onSubmit={addMeeting} currentUser={currentUser} />}
+
+      {/* Edit meeting modal — pre-fills the same form used for adding,
+          updates in place on submit. */}
+      {editingMeeting && (
+        <ModalShell C={C} onClose={() => setEditingMeeting(null)} title="Edit commitment">
+          <InlineCommitmentForm
+            C={C}
+            currentUser={currentUser}
+            initial={editingMeeting}
+            onSubmit={(patch) => {
+              updateMeeting(editingMeeting.id, patch);
+              setEditingMeeting(null);
+            }}
+          />
+        </ModalShell>
+      )}
     </div>
   );
 }
@@ -9365,12 +10482,12 @@ function TimeBankModal({ C, timeBank, setTimeBank, initialMode, onClose }) {
       )}
       {lastSaved && (
         <div style={{
-          background: "#5C8E5C12",
-          border: "1px solid #5C8E5C55",
+          background: "#7B9B6E18",
+          border: "1px solid #7B9B6E55",
           borderRadius: 10,
           padding: "10px 12px",
           marginBottom: 12,
-          fontSize: 13, color: "#3D6B3D", lineHeight: 1.5,
+          fontSize: 13, color: "#4D6B43", lineHeight: 1.5,
           display: "flex", alignItems: "center", gap: 8,
         }}>
           <Check size={14} style={{ flexShrink: 0 }} />
@@ -9566,7 +10683,7 @@ function TimeBankHistory({ C, transactions, onRemove, onSettleAll }) {
                     tx.redeemed ? (
                       <span style={{
                         fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                        background: "#5C8E5C20", color: "#3D6B3D",
+                        background: "#7B9B6E25", color: "#4D6B43",
                         padding: "2px 6px", borderRadius: 4, textTransform: "uppercase",
                       }}>✓ Redeemed</span>
                     ) : (
@@ -9743,18 +10860,36 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, pen
   const [filter, setFilter] = useState("all"); // "all" | "gifts" | "debts" | "paybacks"
 
   // Honor deep-link pending action (e.g. from LOG sheet pills)
+  // Maps action → addInitialMode (the form's `kind` field):
+  //   "owed"    → "owed"   (log a debt — partner covered for me)
+  //   "gift"    → "gift"   (gift time, no payback expected)
+  //   "payback" → "paid"   (settle a debt)
   useEffect(() => {
     if (!pendingTimeBankAction) return;
-    setAddInitialMode(pendingTimeBankAction === "gift" ? "gift" : "paid");
+    const modeMap = { owed: "owed", gift: "gift", payback: "paid" };
+    setAddInitialMode(modeMap[pendingTimeBankAction] || "owed");
     setShowAddModal(true);
     clearPendingTimeBankAction && clearPendingTimeBankAction();
   }, [pendingTimeBankAction, clearPendingTimeBankAction]);
 
-  const balance = timeBank.balance || 0;
   const transactions = timeBank.transactions || [];
+  // Always recompute from history. If the cached `balance` field drifted
+  // (e.g. from an old build that mishandled a transaction kind, or a sync
+  // race), the displayed number was wrong. Recomputing on each render
+  // guarantees the displayed balance always reflects the visible ledger.
+  const balance = computeTimeBankBalance(transactions);
   const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
   const partnerColor = currentUser === "Mommy" ? C.daddy : C.mommy;
   const youColor = currentUser === "Mommy" ? C.mommy : C.daddy;
+
+  // Auto-heal the cached balance if it's drifted. This silently keeps the
+  // stored state in sync with the ledger so other views (Now's pip, etc.)
+  // also show the correct number on next render.
+  useEffect(() => {
+    if ((timeBank.balance || 0) !== balance) {
+      setTimeBank({ ...timeBank, balance });
+    }
+  }, [balance, timeBank, setTimeBank]);
 
   // From currentUser's POV — direction language matches the modal
   let directionLabel, primaryColor, youOwe;
@@ -9957,7 +11092,7 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, pen
           cursor: "pointer", fontFamily: "inherit",
           display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
         }}>
-          <Check size={16} color={C.mommy} />
+          <Check size={16} color={youColor} />
           <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log payback</span>
         </button>
       </div>
@@ -10624,10 +11759,10 @@ function EtaUpdateModal({ C, onsite, onClose, onSubmit }) {
   );
 }
 
-function MeetingRow({ m, C, onRemove }) {
+function MeetingRow({ m, C, onRemove, onEdit }) {
   const colors = {
     red: { bg: "#C44545", fg: "#fff", label: "RED" },
-    yellow: { bg: "#D4A03A", fg: "#1F1B16", label: "YELLOW" },
+    yellow: { bg: C.gold, fg: "#1F1B16", label: "YELLOW" },
     green: { bg: "#5C8E5C", fg: "#fff", label: "GREEN" },
   }[m.level];
   const start = new Date(m.start);
@@ -10652,19 +11787,29 @@ function MeetingRow({ m, C, onRemove }) {
 
   return (
     <div style={{
-      background: C.paper, borderRadius: 10, padding: "10px 12px",
+      background: C.paper, borderRadius: 10,
       border: `1px solid ${confirming ? C.accent : C.line + "15"}`,
       display: "flex", alignItems: "center", gap: 10,
       transition: "border-color 0.15s",
+      overflow: "hidden",
     }}>
-      <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: colors.bg }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: colors.bg, marginLeft: 12 }} />
+      {/* Tappable body — clicks open edit modal */}
+      <button
+        onClick={onEdit}
+        disabled={!onEdit}
+        style={{
+          flex: 1, minWidth: 0, textAlign: "left",
+          background: "transparent", border: "none",
+          padding: "10px 0", cursor: onEdit ? "pointer" : "default",
+          fontFamily: "inherit", color: "inherit",
+        }}>
         <div style={{ fontSize: 14, fontWeight: 500 }}>{m.label || "(untitled)"}</div>
         <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
           <span style={{ color: parentColor, fontWeight: 600 }}>{m.parent}</span>
           {" · "}{fmtTimeShort(start)}–{fmtTimeShort(end)}
         </div>
-      </div>
+      </button>
       <span style={{
         fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
         background: colors.bg, color: colors.fg,
@@ -10687,6 +11832,7 @@ function MeetingRow({ m, C, onRemove }) {
           letterSpacing: confirming ? "0.04em" : 0,
           display: "flex", alignItems: "center", gap: 4,
           transition: "all 0.15s",
+          marginRight: 12,
         }}>
         {confirming ? <>Sure?</> : <Trash2 size={14} />}
       </button>
@@ -10707,7 +11853,12 @@ function AddMeetingModal({ C, onClose, onSubmit, currentUser }) {
 }
 
 
-function InventoryView({ C, inventory, moveToFridge, removeInventory, emptyLocation, editBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories }) {
+function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories }) {
+  // Viewer color for chrome that's about inventory management (which both
+  // parents do) rather than active pumping or lactation calories (which
+  // are Mommy-specific). Daddy adds bottles, picks bottles, manages the
+  // fridge — those affordances should be his color.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   const valid = inventory.filter(i => !i.expired);
   const expired = inventory.filter(i => i.expired);
   const lowAlert = feedsRunway < 2;
@@ -10801,8 +11952,27 @@ function InventoryView({ C, inventory, moveToFridge, removeInventory, emptyLocat
         </div>
       </Section>
 
-      {valid.length > 0 && (
-        <Section C={C} title="In stock">
+      <Section C={C} title="In stock">
+        {/* Add bottle button — always visible. Useful for: catching up after
+            a missed pump log, or fixing inventory state if the app double-
+            counted or lost a bottle. */}
+        {addBottle && (
+          <button onClick={addBottle} style={{
+            width: "100%", marginBottom: 10,
+            background: "transparent", color: viewerColor,
+            border: `1.5px dashed ${viewerColor}66`, borderRadius: 8,
+            padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            fontFamily: "inherit",
+          }}>
+            + Add a bottle (manual entry)
+          </button>
+        )}
+        {valid.length === 0 ? (
+          <div style={{ color: C.muted, fontStyle: "italic", padding: "8px 0", fontSize: 13, textAlign: "center" }}>
+            No bottles in stock right now.
+          </div>
+        ) : (<>
           {/* Quick adjust row */}
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {rtSafeOz > 0 && (
@@ -10848,8 +12018,146 @@ function InventoryView({ C, inventory, moveToFridge, removeInventory, emptyLocat
                 onRemove={() => removeInventory(item.id)} />
             ))}
           </div>
-        </Section>
-      )}
+        </>)}
+      </Section>
+
+      {/* Supply analytics — moved here from Wellness in v05.05ax. These
+          sit better next to the bottle inventory than buried in Wellness:
+            • BM vs Formula split: composition of feeds over the window
+            • Pump output trend: supply trajectory across recent vs older
+              halves of the window
+          Both computed locally from `events` to keep this self-contained. */}
+      {(() => {
+        if (!events || events.length === 0) return null;
+        const WINDOW_DAYS = 7;
+        const winMs = WINDOW_DAYS * 86400 * 1000;
+        const cutoff = new Date(now.getTime() - winMs);
+
+        // ---- BM vs Formula
+        let totalBmOz = 0, totalFormulaOz = 0;
+        for (const e of events) {
+          if (e.type !== "feed") continue;
+          const ts = new Date(e.ts);
+          if (ts < cutoff) continue;
+          // Source classification: explicit `source` field if set, else
+          // infer from the bottle (BM bottles are tagged) or assume BM
+          // (most common case for this family).
+          const norm = (e.source || "").toLowerCase();
+          const isFormula = /formula/.test(norm) && !/bm|breast/.test(norm);
+          const isMixed = /formula/.test(norm) && /bm|breast/.test(norm);
+          if (isFormula) totalFormulaOz += e.oz || 0;
+          else if (isMixed) {
+            // Mixed feeds: split 50/50 as a rough heuristic since the
+            // exact ratio isn't stored on the event. The user can refine
+            // this by editing the event's source.
+            totalFormulaOz += (e.oz || 0) / 2;
+            totalBmOz += (e.oz || 0) / 2;
+          } else {
+            totalBmOz += e.oz || 0;
+          }
+        }
+        const totalOz = totalBmOz + totalFormulaOz;
+        const bmRatio = totalOz > 0 ? totalBmOz / totalOz : 0;
+
+        // ---- Pump trend (recent half vs older half of window)
+        const pumpsInWin = events
+          .filter(e => e.type === "pump" && new Date(e.ts) >= cutoff)
+          .map(e => ({ ts: new Date(e.ts), oz: e.oz || 0 }))
+          .sort((a, b) => a.ts - b.ts);
+
+        let olderPumpAvg = 0, newerPumpAvg = 0, pumpTrend = 0;
+        if (pumpsInWin.length >= 4) {
+          const mid = Math.floor(pumpsInWin.length / 2);
+          const older = pumpsInWin.slice(0, mid);
+          const newer = pumpsInWin.slice(mid);
+          olderPumpAvg = older.reduce((s, p) => s + p.oz, 0) / older.length;
+          newerPumpAvg = newer.reduce((s, p) => s + p.oz, 0) / newer.length;
+          pumpTrend = olderPumpAvg > 0 ? ((newerPumpAvg - olderPumpAvg) / olderPumpAvg) * 100 : 0;
+        }
+
+        const hasBmFormula = totalOz > 0;
+        const hasPumpTrend = olderPumpAvg > 0 && newerPumpAvg > 0;
+        if (!hasBmFormula && !hasPumpTrend) return null;
+
+        return (
+          <Section C={C} title="Supply analytics">
+            {hasBmFormula && (
+              <div style={{
+                background: C.paper, borderRadius: 12, padding: 14,
+                border: `1px solid ${C.line}15`, marginBottom: 10,
+              }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
+                  BM vs Formula · last {WINDOW_DAYS} days
+                </div>
+                <div style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", border: `1px solid ${C.line}11` }}>
+                  <div style={{
+                    width: `${bmRatio * 100}%`,
+                    background: C.mommy, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 600, minWidth: 0,
+                  }}>
+                    {bmRatio > 0.15 && `${(bmRatio * 100).toFixed(0)}% BM`}
+                  </div>
+                  <div style={{
+                    width: `${(1 - bmRatio) * 100}%`,
+                    background: "#8B6B4F", color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 600, minWidth: 0,
+                  }}>
+                    {(1 - bmRatio) > 0.15 && `${((1 - bmRatio) * 100).toFixed(0)}% Formula`}
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {totalBmOz.toFixed(1)}oz BM · {totalFormulaOz.toFixed(1)}oz Formula
+                </div>
+              </div>
+            )}
+
+            {hasPumpTrend && (
+              <div style={{
+                background: C.paper, borderRadius: 12, padding: 14,
+                border: `1px solid ${C.line}15`,
+              }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
+                  Pump output trend
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
+                      Earlier half
+                    </div>
+                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.muted }}>
+                      {olderPumpAvg.toFixed(1)} oz
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
+                      Recent half
+                    </div>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                      marginTop: 2, lineHeight: 1.1,
+                      color: pumpTrend > 5 ? "#7B9B6E" : pumpTrend < -5 ? C.accent : C.ink,
+                    }}>
+                      {newerPumpAvg.toFixed(1)} oz
+                      <span style={{ fontSize: 14, marginLeft: 4 }}>
+                        {pumpTrend > 5 ? "↑" : pumpTrend < -5 ? "↓" : "→"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 8, fontStyle: "italic", lineHeight: 1.5 }}>
+                  {Math.abs(pumpTrend) < 5
+                    ? "Output is steady — supply looks well-matched to demand."
+                    : pumpTrend > 5
+                    ? `Output is up ${pumpTrend.toFixed(0)}% — supply is increasing.`
+                    : `Output is down ${Math.abs(pumpTrend).toFixed(0)}% — consider hydration, nursing frequency, or a power pump session.`}
+                </div>
+              </div>
+            )}
+          </Section>
+        );
+      })()}
 
       {/* Expired-inventory section removed in v05.05av — was visual clutter
           without much value. Expired items are auto-excluded from totals
@@ -11209,22 +12517,36 @@ function DiaperBagSection({ C, diaperBag, setDiaperBag }) {
 }
 
 // ---- Central LOG button (impossible to miss) --------------------------
-function CentralLogButton({ C, mode, onClick }) {
+function CentralLogButton({ C, mode, onClick, currentUser }) {
+  // Bottom UI zone (LOG button + tab bar) is owned by the viewer, in contrast
+  // to page-level primary-action coral used elsewhere (Generate code, Use
+  // code, etc). This is the strongest cross-room signal in the app — at a
+  // glance the floating button color tells you whose view this is.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
+  // Darker tone for the gradient end stop. Slightly hand-tuned per color
+  // so the button reads as having depth rather than flat fill.
+  const viewerDarker = currentUser === "Daddy" ? "#4F6E96" : "#7B6177";
   return (
     <button onClick={onClick} style={{
       position: "fixed",
-      bottom: 70, left: "50%", transform: "translateX(-50%)",
+      bottom: 38, left: "50%", transform: "translateX(-50%)",
       zIndex: 7,
-      width: 72, height: 72, borderRadius: "50%",
-      background: `linear-gradient(135deg, ${C.accent}, ${mode === "night" ? "#D88454" : "#A04822"})`,
-      color: "#fff", border: `4px solid ${C.bg}`,
+      width: 64, height: 64, borderRadius: "50%",
+      background: `linear-gradient(135deg, ${viewerColor}, ${viewerDarker})`,
+      color: "#fff",
+      // Ring stays the page bg color so the button reads as floating above
+      // the tab bar. Was viewer-color before; not needed now that the button
+      // base IS viewer-color.
+      border: `4px solid ${C.bg}`,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
       cursor: "pointer",
       fontFamily: "'Cormorant Garamond', serif",
       fontSize: 13, fontWeight: 600, letterSpacing: "0.1em",
-      boxShadow: `0 8px 24px ${C.accent}55`,
+      // Soft shadow gives the button physical lift. Tint the shadow with
+      // the viewer color so the underglow matches.
+      boxShadow: `0 6px 20px ${viewerColor}66`,
     }}>
-      <Plus size={24} strokeWidth={2.5} />
+      <Plus size={22} strokeWidth={2.5} />
       <span style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", fontFamily: "'Inter', sans-serif", fontWeight: 700 }}>
         LOG
       </span>
@@ -11232,7 +12554,12 @@ function CentralLogButton({ C, mode, onClick }) {
   );
 }
 
-function TabBar({ C, tab, setTab }) {
+function TabBar({ C, tab, setTab, currentUser }) {
+  // Bottom-nav zone uses viewer color for active state (label + indicator
+  // bar) instead of the page-level coral accent. This makes the tab bar
+  // unmistakably "yours" at a glance — paired with the viewer-color LOG
+  // button it forms a coherent docked panel claimed by the viewer.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   const tabs = [
     { id: "now", label: "Now" },
     { id: "log", label: "Journal" },
@@ -11245,10 +12572,19 @@ function TabBar({ C, tab, setTab }) {
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
-      background: `${C.bg}EE`,
-      borderTop: `1px solid ${C.line}15`,
+      // Use C.paper (warmer cream than page bg) so the bar visually separates
+      // from the scrollable area above. Adds proper "this is a docked panel"
+      // affordance instead of looking like transparent buttons over the page.
+      background: C.paper,
+      // Soft elevation shadow above (instead of a thin hairline border) gives
+      // the bar physical presence — like it's resting in front of the page.
+      // Lower alpha shadow to keep it subtle in day mode.
+      boxShadow: `0 -8px 24px rgba(31, 27, 22, 0.06), 0 -1px 0 ${C.line}15`,
       zIndex: 6,
-      backdropFilter: "blur(20px)",
+      // Extend background into the iOS home-indicator safe area so the
+      // strip below the tab bar isn't bare white. The buttons stay above
+      // the inset; only the bg color reaches into it.
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
     }}>
       <div style={{
         maxWidth: 720, margin: "0 auto",
@@ -11259,18 +12595,19 @@ function TabBar({ C, tab, setTab }) {
         ) : (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: "transparent", border: "none",
-            padding: "12px 2px",
-            color: tab === t.id ? C.accent : C.muted,
-            fontWeight: tab === t.id ? 600 : 400,
-            fontSize: 10, cursor: "pointer",
+            padding: "14px 2px 14px",
+            color: tab === t.id ? viewerColor : C.muted,
+            fontWeight: tab === t.id ? 600 : 500,
+            fontSize: 11, cursor: "pointer",
             position: "relative",
             letterSpacing: "0.04em",
+            fontFamily: "inherit",
           }}>
             {t.label}
             {tab === t.id && (
               <span style={{
-                position: "absolute", top: 0, left: "30%", right: "30%",
-                height: 2, background: C.accent, borderRadius: 2,
+                position: "absolute", top: 0, left: "25%", right: "25%",
+                height: 2.5, background: viewerColor, borderRadius: 2,
               }} />
             )}
           </button>
@@ -11329,7 +12666,7 @@ Mon May 4
     if (type === "feed") return C.accent;
     if (type === "breastfeed") return C.mommy;
     if (type === "pump") return C.mommy;
-    if (type === "diaper") return C.daddy;
+    if (type === "diaper") return "#B8956A";
     return C.ink;
   };
   const typeLabel = (type) => type === "breastfeed" ? "Breastfeed" : type[0].toUpperCase() + type.slice(1);
@@ -11499,7 +12836,7 @@ Mon May 4
 }
 
 // ---- Log picker sheet (single entry point) ----------------------------
-function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, currentUser, flaggedNotes, updateNote }) {
+function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, onStartOnsite, currentUser, flaggedNotes, updateNote }) {
   if (loggerType) {
     return (
       <ModalShell C={C} onClose={onClose} title={
@@ -11528,13 +12865,16 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
     <ModalShell C={C} onClose={onClose} title="What just happened?">
       <div style={{ display: "grid", gap: 10 }}>
         <PickerOption C={C} icon={<Milk size={22} />} label="Bottle feed" sub="oz, BM or formula" onClick={() => onPick("feed")} color={C.accent} />
-        <PickerOption C={C} icon={<Baby size={22} />} label="Diaper" sub="wet, dirty, both" onClick={() => onPick("diaper")} color={C.daddy} />
+        <PickerOption C={C} icon={<Baby size={22} />} label="Diaper" sub="pee, poo, both" onClick={() => onPick("diaper")} color="#B8956A" />
         <PickerOption C={C} icon={<Droplet size={22} />} label="Pump" sub="standard or power pump" onClick={() => onPick("pump")} color={C.mommy} />
         <PickerOption C={C} icon={<Heart size={22} />} label="Breastfeed" sub="L/R timer" onClick={() => onPick("breastfeed")} color={C.mommy} />
         <PickerOption C={C} icon={<Moon size={22} />} label="Sleep" sub="down or awake" onClick={() => onPick("sleep")} color={C.ink} />
-        <PickerOption C={C} icon={<Star size={22} />} label="Activity" sub="tummy time, reading, etc." onClick={() => onPick("activity")} color={C.daddy} />
+        <PickerOption C={C} icon={<Star size={22} />} label="Activity" sub="tummy time, reading, etc." onClick={() => onPick("activity")} color={C.gold} />
         <PickerOption C={C} icon={<MessageSquare size={22} />} label="Note / observation" sub="optional 🚩 to flag as concern" onClick={() => onPick("note")} color={C.accent} />
-        <PickerOption C={C} icon={<Calendar size={22} />} label="Meeting / appointment" sub="auto-adjusts shifts" onClick={() => onPick("commitment")} color={C.ink} />
+        <PickerOption C={C} icon={<Calendar size={22} />} label="Meeting / appointment" sub="auto-adjusts shifts · includes on-site" onClick={() => onPick("commitment")} color={C.ink} />
+        {/* "Going on-site" used to be a separate picker option but it's
+            really just a commitment flavor — moved into the commitment form
+            as a preset in v05.05bb. */}
       </div>
 
       {/* Time bank quick-actions — visually subordinate pills below the main
@@ -11551,23 +12891,42 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
           <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
             Time bank
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <button
+              onClick={() => onOpenTimeBank("owed")}
+              style={{
+                background: C.paper,
+                border: `1px solid ${C.line}20`,
+                borderRadius: 10,
+                padding: "10px 8px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                color: C.ink,
+                textAlign: "center",
+              }}>
+              <Clock size={16} style={{ color: C.accent, flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>Log debt</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>covered shift</div>
+              </div>
+            </button>
             <button
               onClick={() => onOpenTimeBank("gift")}
               style={{
                 background: C.paper,
                 border: `1px solid ${C.line}20`,
                 borderRadius: 10,
-                padding: "10px 12px",
+                padding: "10px 8px",
                 cursor: "pointer",
                 fontFamily: "inherit",
-                display: "flex", alignItems: "center", gap: 8,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 color: C.ink,
-                textAlign: "left",
+                textAlign: "center",
               }}>
               <Gift size={16} style={{ color: C.gold, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Gift time</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>Send gift</div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>no payback</div>
               </div>
             </button>
@@ -11577,17 +12936,17 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
                 background: C.paper,
                 border: `1px solid ${C.line}20`,
                 borderRadius: 10,
-                padding: "10px 12px",
+                padding: "10px 8px",
                 cursor: "pointer",
                 fontFamily: "inherit",
-                display: "flex", alignItems: "center", gap: 8,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
                 color: C.ink,
-                textAlign: "left",
+                textAlign: "center",
               }}>
-              <Check size={16} style={{ color: "#5C8E5C", flexShrink: 0 }} />
+              <Check size={16} style={{ color: "#7B9B6E", flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Pay back</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>settle a debt</div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>Pay back</div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>settle debt</div>
               </div>
             </button>
           </div>
@@ -11641,7 +13000,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
 // "Add commitment" button (via AddMeetingModal which wraps this in a ModalShell).
 // Single source of truth for commitment creation: change the form here and both
 // entry points update.
-function InlineCommitmentForm({ C, onSubmit, currentUser }) {
+function InlineCommitmentForm({ C, onSubmit, currentUser, initial }) {
   const PRESETS = [
     { id: "meeting_red",    label: "Work meeting",    emoji: "🔴", level: "red",    duration: 60 },
     { id: "meeting_yellow", label: "Work meeting",    emoji: "🟡", level: "yellow", duration: 60 },
@@ -11650,7 +13009,7 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
     { id: "personal",       label: "Personal appt",   emoji: "📅", level: "red",    duration: 120 },
     { id: "errand",         label: "Quick errand",    emoji: "🛒", level: "yellow", duration: 30 },
     { id: "friends",        label: "Friends / social", emoji: "🍷", level: "red",    duration: 180 },
-    { id: "flex_out",       label: "Going out",       emoji: "🚪", level: "red",    duration: 120, flex: true },
+    { id: "flex_out",       label: "Going on-site",   emoji: "📍", level: "red",    duration: 120, flex: true },
   ];
   const DURATIONS = [
     { v: 30,  l: "30m" },
@@ -11660,22 +13019,38 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
     { v: 180, l: "3h" },
   ];
 
+  const isEdit = !!initial;
+  // Edit mode pre-fills from initial; new mode uses defaults.
+  // Format ISO datetime to "YYYY-MM-DDTHH:MM" for the datetime-local input.
+  const toLocalIso = (iso) => {
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const initialDuration = initial
+    ? Math.round((new Date(initial.end) - new Date(initial.start)) / 60000)
+    : 60;
+
   // Defaults: current user's calendar, red level, start = next half hour,
   // duration = 1 hour. These cover the most common case so most adds become
   // "tap preset → tap save."
   const [presetId, setPresetId] = useState(null);
-  const [parent, setParent] = useState(currentUser || "Mommy");
-  const [level, setLevel] = useState("red");
-  const [isFlex, setIsFlex] = useState(false);
+  const [parent, setParent] = useState(initial?.parent || currentUser || "Mommy");
+  const [level, setLevel] = useState(initial?.level || "red");
+  const [isFlex, setIsFlex] = useState(initial?.flex || false);
   const [start, setStart] = useState(() => {
+    if (initial?.start) return toLocalIso(initial.start);
     const d = new Date();
     if (d.getMinutes() > 30) { d.setHours(d.getHours() + 1); d.setMinutes(0); }
     else { d.setMinutes(30); }
     return d.toISOString().slice(0, 16);
   });
-  const [durationMin, setDurationMin] = useState(60);
-  const [customDurationOpen, setCustomDurationOpen] = useState(false);
-  const [label, setLabel] = useState("");
+  const [durationMin, setDurationMin] = useState(initialDuration);
+  const [customDurationOpen, setCustomDurationOpen] = useState(
+    // Auto-open custom input if the existing duration isn't a standard preset
+    initial && ![30, 60, 90, 120, 180].includes(initialDuration)
+  );
+  const [label, setLabel] = useState(initial?.label || "");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Compute end from start + duration. The end is implicit, no separate input.
@@ -11771,7 +13146,22 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
               max={720}
               step={5}
               value={durationMin}
-              onChange={e => setDurationMin(Math.max(5, Math.min(720, Number(e.target.value) || 0)))}
+              onChange={e => {
+                // During typing, allow any number (including 0/empty) so the
+                // user can backspace and re-enter without snapping to the
+                // min. We only enforce min/max on blur. Number("") is NaN,
+                // which we coerce to "" so the input stays empty visually.
+                const raw = e.target.value;
+                if (raw === "") { setDurationMin(""); return; }
+                const n = Number(raw);
+                if (Number.isNaN(n)) return;
+                setDurationMin(Math.min(720, n));
+              }}
+              onBlur={() => {
+                // On blur, snap to a valid value: empty/zero/low → 5
+                const n = Number(durationMin);
+                if (!n || n < 5) setDurationMin(5);
+              }}
               style={{
                 width: 90, padding: "8px 10px", fontSize: 14,
                 background: C.bg, border: `1.5px solid ${C.accent}`,
@@ -11781,7 +13171,7 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
               autoFocus
             />
             <span style={{ fontSize: 12, color: C.muted }}>
-              minutes ({Math.floor(durationMin / 60)}h {durationMin % 60}m)
+              minutes ({durationMin ? `${Math.floor(durationMin / 60)}h ${durationMin % 60}m` : "—"})
             </span>
           </div>
         )}
@@ -11823,7 +13213,7 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {[
                 { v: "red", l: "Red", c: "#C44545", sub: "no baby" },
-                { v: "yellow", l: "Yellow", c: "#D4A03A", sub: "partial" },
+                { v: "yellow", l: "Yellow", c: C.gold, sub: "partial" },
                 { v: "green", l: "Green", c: "#5C8E5C", sub: "ok" },
               ].map(o => (
                 <button key={o.v} onClick={() => setLevel(o.v)} style={{
@@ -11880,7 +13270,7 @@ function InlineCommitmentForm({ C, onSubmit, currentUser }) {
           flex: isFlex,
         });
       }} disabled={!label.trim()}>
-        {!label.trim() ? "Add a label first" : `Save · ${parent} · ${durationMin}m`}
+        {!label.trim() ? "Add a label first" : isEdit ? `Save changes · ${parent} · ${durationMin}m` : `Save · ${parent} · ${durationMin}m`}
       </SubmitButton>
     </>
   );
@@ -11911,6 +13301,27 @@ function PickerOption({ C, icon, label, sub, onClick, color }) {
 
 // ---- Forms ------------------------------------------------------------
 function ModalShell({ C, onClose, title, children }) {
+  // Swipe-down-to-dismiss tracking. The drag handle area listens to touches;
+  // if the user moves their finger downward more than the threshold, we
+  // close the modal. 80px threshold keeps small accidental drags from
+  // dismissing. Only the top portion listens — we don't want vertical
+  // scrolls inside long modal content to fire the handler.
+  const touchStartY = useRef(null);
+  const onTouchStart = (e) => {
+    touchStartY.current = e.touches[0]?.clientY ?? null;
+  };
+  const onTouchMove = (e) => {
+    if (touchStartY.current == null) return;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (dy > 80) {
+      touchStartY.current = null;
+      onClose();
+    }
+  };
+  const onTouchEnd = () => {
+    touchStartY.current = null;
+  };
+
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 100,
@@ -11924,7 +13335,13 @@ function ModalShell({ C, onClose, title, children }) {
         padding: "20px 18px 28px",
         maxHeight: "92vh", overflowY: "auto",
       }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+        {/* Drag handle area — listens for swipe-down to close. */}
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{ display: "flex", justifyContent: "center", marginBottom: 14, paddingBottom: 6, cursor: "grab" }}
+        >
           <div style={{ width: 36, height: 4, background: `${C.line}33`, borderRadius: 2 }} />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
@@ -12038,11 +13455,12 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
   const [source, setSource] = useState(lastFeed?.source || "BM");
   const [time, setTime] = useState("now");
   const [customTime, setCustomTime] = useState(localDateTimeNow);
-  const [selectedBottleId, setSelectedBottleId] = useState(null);
-  // When user explicitly taps "none of these," we want that choice to STICK —
-  // otherwise the auto-pick effect below re-selects the first bottle on every
-  // re-render and the button appears broken.
-  const [userClearedSelection, setUserClearedSelection] = useState(false);
+  // Multi-bottle allocations: Map<bottleId, ozUsed>. Replaces the old
+  // single selectedBottleId. v05.05bb: BM feeds force a bottle-source
+  // prompt unless the user explicitly chooses skip-inventory (e.g. a
+  // bottle from outside our tracked inventory).
+  const [allocations, setAllocations] = useState({}); // { bottleId: oz }
+  const [skipInventory, setSkipInventory] = useState(false);
   const [dreamFeed, setDreamFeed] = useState(false);
 
   // Available BM bottles (RT first, then fridge, both ordered oldest first)
@@ -12055,14 +13473,61 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
     return [...rt, ...fr];
   }, [liveInventory]);
 
-  // Auto-pick the most-likely bottle: oldest RT (use up first), or oldest fridge if no RT.
-  // Only runs when the user hasn't yet made an explicit choice (including "none").
+  // Total currently allocated across all selected bottles
+  const allocated = useMemo(
+    () => Object.values(allocations).reduce((s, n) => s + (Number(n) || 0), 0),
+    [allocations]
+  );
+  // Mix mode: only BM portion needs allocation. For "BM+Formula" we
+  // assume half-and-half for the BM half (user can override per-bottle).
+  // For pure BM, allocated should equal oz exactly.
+  const targetBmOz = source === "BM" ? oz : source === "BM+Formula" ? oz / 2 : 0;
+  const remaining = Math.max(0, targetBmOz - allocated);
+  const overshoot = allocated > targetBmOz + 0.01;
+
+  // Auto-allocate from oldest-first when feed oz changes and nothing is
+  // allocated yet. This makes the common case (single bottle, feed it
+  // all) one tap. User can adjust afterward.
   useEffect(() => {
-    if (!usesBM) { setSelectedBottleId(null); return; }
-    if (selectedBottleId) return;
-    if (userClearedSelection) return; // respect explicit "none of these"
-    if (availableBottles.length > 0) setSelectedBottleId(availableBottles[0].id);
-  }, [usesBM, availableBottles, selectedBottleId, userClearedSelection]);
+    if (!usesBM) {
+      setAllocations({});
+      setSkipInventory(false);
+      return;
+    }
+    if (Object.keys(allocations).length > 0) return; // user has touched it
+    if (skipInventory) return;
+    if (availableBottles.length === 0) return;
+    // Auto-fill from oldest bottle until target met
+    const auto = {};
+    let need = targetBmOz;
+    for (const b of availableBottles) {
+      if (need <= 0.01) break;
+      const take = Math.min(b.oz, need);
+      auto[b.id] = Math.round(take * 10) / 10;
+      need -= take;
+    }
+    setAllocations(auto);
+  }, [usesBM, targetBmOz, availableBottles, allocations, skipInventory]);
+
+  // Re-auto-fill when oz/source changes
+  useEffect(() => {
+    setAllocations({});
+  }, [oz, source]);
+
+  const setBottleOz = (bottleId, value) => {
+    const bottle = availableBottles.find(b => b.id === bottleId);
+    const max = bottle?.oz || 0;
+    const clamped = Math.max(0, Math.min(max, Number(value) || 0));
+    setAllocations(prev => {
+      const next = { ...prev };
+      if (clamped <= 0) delete next[bottleId];
+      else next[bottleId] = Math.round(clamped * 10) / 10;
+      return next;
+    });
+    setSkipInventory(false);
+  };
+
+  const canSubmit = !usesBM || skipInventory || (Math.abs(allocated - targetBmOz) < 0.05);
 
   return (
     <>
@@ -12077,61 +13542,137 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         ]} />
       </Field>
 
-      {usesBM && availableBottles.length > 0 && (
-        <Field C={C} label="Which bottle did you use?">
-          <div style={{ display: "grid", gap: 6 }}>
-            {availableBottles.map(b => {
-              const pumpedAt = new Date(b.pumpedAt);
-              const isSelected = selectedBottleId === b.id;
-              const locColor = b.location === "rt" ? "#D4A03A" : C.daddy;
-              return (
-                <button key={b.id}
-                  onClick={() => { setSelectedBottleId(b.id); setUserClearedSelection(false); }}
-                  style={{
-                    background: isSelected ? `${locColor}22` : C.bg,
-                    border: `1.5px solid ${isSelected ? locColor : C.line + "22"}`,
-                    borderRadius: 10, padding: "10px 12px",
-                    cursor: "pointer", textAlign: "left",
-                    display: "flex", alignItems: "center", gap: 10,
-                  }}>
-                  <span style={{
-                    width: 32, height: 32, borderRadius: "50%",
-                    background: locColor, color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 11, fontWeight: 700,
-                    flexShrink: 0,
-                  }}>{b.location === "rt" ? "RT" : "Fr"}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600, color: C.ink, lineHeight: 1.1 }}>
-                      {b.oz} oz · pumped {fmtTimeShort(pumpedAt)}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
-                      {b.location === "rt"
-                        ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))} · ${fmtHours(b.remaining)} left`
-                        : `fridge · ${b.remaining.toFixed(0)}h left`}
-                    </div>
-                  </div>
-                  {isSelected && <Check size={16} color={locColor} />}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => { setSelectedBottleId(null); setUserClearedSelection(true); }}
-              style={{
-                background: userClearedSelection ? `${C.accent}15` : "transparent",
-                border: `1px ${userClearedSelection ? "solid" : "dashed"} ${userClearedSelection ? C.accent : C.line + "33"}`,
-                borderRadius: 10,
-                padding: "10px 12px", fontSize: 12, cursor: "pointer",
-                color: userClearedSelection ? C.accent : C.muted,
-                fontStyle: "italic",
-                fontWeight: userClearedSelection ? 600 : 400,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                fontFamily: "inherit",
+      {usesBM && (
+        <Field C={C} label={
+          source === "BM+Formula"
+            ? `Which bottle(s) for the BM portion (${targetBmOz.toFixed(1)} oz)?`
+            : "Which bottle(s) did you use?"
+        }>
+          {availableBottles.length === 0 ? (
+            <div style={{
+              background: `${C.gold}15`, border: `1px solid ${C.gold}55`,
+              borderRadius: 10, padding: "10px 12px", fontSize: 12,
+              color: C.ink, lineHeight: 1.5,
+            }}>
+              No BM bottles in inventory. The feed will be logged but nothing will be deducted.
+            </div>
+          ) : (
+            <>
+              {/* Running total bar */}
+              <div style={{
+                background: overshoot ? `${C.accent}18` : remaining < 0.05 ? `${"#5C8E5C"}18` : C.bg,
+                border: `1px solid ${overshoot ? C.accent : remaining < 0.05 ? "#5C8E5C" : C.line + "22"}`,
+                borderRadius: 8, padding: "8px 12px", marginBottom: 8,
+                fontSize: 12, color: C.ink, fontFamily: "'JetBrains Mono', monospace",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
-              {userClearedSelection && <Check size={14} />}
-              {userClearedSelection ? "Skipping inventory deduction" : "None of these · don't deduct from inventory"}
-            </button>
-          </div>
+                <span>
+                  Allocated: <strong>{allocated.toFixed(1)}</strong> / {targetBmOz.toFixed(1)} oz
+                </span>
+                <span style={{ color: overshoot ? C.accent : remaining > 0.05 ? C.gold : "#5C8E5C", fontWeight: 600 }}>
+                  {overshoot ? `${(allocated - targetBmOz).toFixed(1)} over` :
+                   remaining > 0.05 ? `${remaining.toFixed(1)} short` :
+                   "✓ matched"}
+                </span>
+              </div>
+
+              {/* Per-bottle row with stepper */}
+              <div style={{ display: "grid", gap: 6 }}>
+                {availableBottles.map(b => {
+                  const used = allocations[b.id] || 0;
+                  const isUsed = used > 0;
+                  const pumpedAt = new Date(b.pumpedAt);
+                  const locColor = b.location === "rt" ? C.gold : C.daddy;
+                  return (
+                    <div key={b.id} style={{
+                      background: isUsed ? `${locColor}15` : C.bg,
+                      border: `1.5px solid ${isUsed ? locColor : C.line + "22"}`,
+                      borderRadius: 10, padding: "10px 12px",
+                      display: "flex", alignItems: "center", gap: 10,
+                    }}>
+                      <span style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        background: locColor, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      }}>{b.location === "rt" ? "RT" : "Fr"}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.1 }}>
+                          {b.oz} oz · pumped {fmtTimeShort(pumpedAt)}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+                          {b.location === "rt"
+                            ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`
+                            : `fridge · ${b.remaining.toFixed(0)}h left`}
+                        </div>
+                      </div>
+                      {/* Stepper: − [oz] + */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <button
+                          onClick={() => setBottleOz(b.id, used - 0.5)}
+                          disabled={used <= 0}
+                          style={{
+                            width: 28, height: 28, borderRadius: 6,
+                            border: `1px solid ${C.line}33`,
+                            background: "transparent", color: C.ink,
+                            fontSize: 16, fontWeight: 600,
+                            cursor: used > 0 ? "pointer" : "not-allowed",
+                            opacity: used > 0 ? 1 : 0.4,
+                            fontFamily: "inherit", lineHeight: 1,
+                          }}>−</button>
+                        <input
+                          type="number"
+                          min={0}
+                          max={b.oz}
+                          step={0.5}
+                          value={used || ""}
+                          onChange={e => setBottleOz(b.id, e.target.value)}
+                          placeholder="0"
+                          style={{
+                            width: 50, padding: "5px 6px",
+                            border: `1px solid ${C.line}33`, borderRadius: 6,
+                            fontSize: 13, textAlign: "center",
+                            background: C.bg, color: C.ink,
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}
+                        />
+                        <button
+                          onClick={() => setBottleOz(b.id, b.oz)}
+                          style={{
+                            width: 28, height: 28, borderRadius: 6,
+                            border: `1px solid ${C.line}33`,
+                            background: "transparent", color: C.ink,
+                            fontSize: 16, fontWeight: 600,
+                            cursor: "pointer",
+                            fontFamily: "inherit", lineHeight: 1,
+                          }} title="Use all of this bottle">⤓</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Skip-inventory option */}
+                <button
+                  onClick={() => {
+                    setAllocations({});
+                    setSkipInventory(s => !s);
+                  }}
+                  style={{
+                    background: skipInventory ? `${C.accent}15` : "transparent",
+                    border: `1px ${skipInventory ? "solid" : "dashed"} ${skipInventory ? C.accent : C.line + "33"}`,
+                    borderRadius: 10,
+                    padding: "10px 12px", fontSize: 12, cursor: "pointer",
+                    color: skipInventory ? C.accent : C.muted,
+                    fontStyle: "italic",
+                    fontWeight: skipInventory ? 600 : 400,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    fontFamily: "inherit",
+                  }}>
+                  {skipInventory && <Check size={14} />}
+                  {skipInventory ? "Skipping inventory deduction" : "None of these · don't deduct from inventory"}
+                </button>
+              </div>
+            </>
+          )}
         </Field>
       )}
 
@@ -12142,18 +13683,18 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         onClick={() => setDreamFeed(v => !v)}
         style={{
           width: "100%", marginBottom: 12,
-          background: dreamFeed ? `${C.daddy}15` : "transparent",
-          border: `1px ${dreamFeed ? "solid" : "dashed"} ${dreamFeed ? C.daddy : C.line + "33"}`,
+          background: dreamFeed ? "#7C5C8415" : "transparent",
+          border: `1px ${dreamFeed ? "solid" : "dashed"} ${dreamFeed ? "#7C5C84" : C.line + "33"}`,
           borderRadius: 10, padding: "10px 12px",
-          color: dreamFeed ? C.daddy : C.muted,
+          color: dreamFeed ? "#7C5C84" : C.muted,
           fontSize: 12, cursor: "pointer",
           display: "flex", alignItems: "flex-start", gap: 10, textAlign: "left",
           fontFamily: "inherit",
         }}>
         <span style={{
           width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-          border: `1.5px solid ${dreamFeed ? C.daddy : C.line + "55"}`,
-          background: dreamFeed ? C.daddy : "transparent",
+          border: `1.5px solid ${dreamFeed ? "#7C5C84" : C.line + "55"}`,
+          background: dreamFeed ? "#7C5C84" : "transparent",
           display: "flex", alignItems: "center", justifyContent: "center",
           marginTop: 1,
         }}>
@@ -12167,12 +13708,26 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         </span>
       </button>
 
-      <SubmitButton C={C} onClick={() => onSubmit({
-        type: "feed", oz: Number(oz), source,
-        ts: time === "now" ? new Date() : new Date(customTime),
-        usedBottleId: selectedBottleId,
-        dreamFeed,
-      })}>Log feed</SubmitButton>
+      <SubmitButton C={C} disabled={!canSubmit} onClick={() => {
+        // Build bottleAllocations array from the map. Skip-inventory and
+        // empty-inventory paths leave it empty (consumer just adds the feed
+        // event without deducting).
+        const bottleAllocations = (skipInventory || availableBottles.length === 0)
+          ? []
+          : Object.entries(allocations)
+              .filter(([_, n]) => Number(n) > 0)
+              .map(([bottleId, n]) => ({ bottleId, oz: Number(n) }));
+        onSubmit({
+          type: "feed", oz: Number(oz), source,
+          ts: time === "now" ? new Date() : new Date(customTime),
+          bottleAllocations,
+          dreamFeed,
+        });
+      }}>
+        {!canSubmit
+          ? (overshoot ? `Over by ${(allocated - targetBmOz).toFixed(1)} oz` : `${remaining.toFixed(1)} oz unallocated`)
+          : "Log feed"}
+      </SubmitButton>
     </>
   );
 }
@@ -12401,8 +13956,8 @@ function DiaperForm({ C, onSubmit }) {
     <>
       <Field C={C} label="Kind">
         <SegControl C={C} value={kind} onChange={setKind} options={[
-          { v: "wet", l: "Wet 💧" },
-          { v: "dirty", l: "Dirty 💩" },
+          { v: "wet", l: "Pee 💧" },
+          { v: "dirty", l: "Poo 💩" },
           { v: "both", l: "Both" },
         ]} />
       </Field>
@@ -13217,12 +14772,15 @@ function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
 }
 
 // ---- Doctor tab --------------------------------------------------------
-function DoctorView({ C, now, events, notes, appointments, removeNote, updateNote, addAppointment, removeAppointment, docSummary, setDocSummary }) {
+function DoctorView({ C, now, events, notes, appointments, removeNote, updateNote, addAppointment, removeAppointment, docSummary, setDocSummary, currentUser }) {
   const [showAddAppt, setShowAddAppt] = useState(false);
   const [editingNote, setEditingNote] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
+  // Viewer color for chrome — section accents in DoctorView body that
+  // aren't tied to a specific person should follow whoever's looking.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
 
   // Sort upcoming appointments
   const upcomingAppts = appointments
@@ -13271,26 +14829,47 @@ function DoctorView({ C, now, events, notes, appointments, removeNote, updateNot
           text: n.text,
         }));
 
-      // Compile feeding/sleep stats from events for context
-      const last7Days = events.filter(e => (now - new Date(e.ts)) / 86400000 < 7);
-      const feeds = last7Days.filter(e => e.type === "feed" || e.type === "breastfeed");
-      const totalFeedOz = feeds.filter(e => e.oz).reduce((s, e) => s + e.oz, 0);
-      const numFeeds = feeds.length;
-      const numDiapers = last7Days.filter(e => e.type === "diaper").length;
-      const dirtyDiapers = last7Days.filter(e => e.type === "diaper" && (e.notes === "dirty" || e.notes === "both")).length;
-      const sleeps = last7Days.filter(e => e.type === "sleep_down").length;
-
-      const stats = {
-        period: "last 7 days",
-        totalFeeds: numFeeds,
-        avgOzPerBottleFeed: feeds.filter(e => e.oz && e.type === "feed").length > 0
-          ? (feeds.filter(e => e.oz && e.type === "feed").reduce((s, e) => s + e.oz, 0) / feeds.filter(e => e.oz && e.type === "feed").length).toFixed(1)
-          : null,
-        breastfeedSessions: feeds.filter(e => e.type === "breastfeed").length,
-        diaperChanges: numDiapers,
-        dirtyDiapers: dirtyDiapers,
-        sleepSessions: sleeps,
+      // Compile stats for two periods so the model (and the fallback) can
+      // describe period-over-period change. Last 7d = recent week. Prior
+      // 7d = the week before that. v05.05bt: previously only single-period.
+      const buildStats = (start, end, label) => {
+        const inWindow = events.filter(e => {
+          const t = new Date(e.ts);
+          return t >= start && t < end;
+        });
+        const feeds = inWindow.filter(e => e.type === "feed" || e.type === "breastfeed");
+        const bottleFeeds = feeds.filter(e => e.oz && e.type === "feed");
+        const numDiapers = inWindow.filter(e => e.type === "diaper").length;
+        const dirtyDiapers = inWindow.filter(e => e.type === "diaper" && (e.notes === "dirty" || e.notes === "both")).length;
+        // Compute longest sleep stretch in window
+        const downs = inWindow.filter(e => e.type === "sleep_down").sort((a, b) => new Date(a.ts) - new Date(b.ts));
+        const ups = inWindow.filter(e => e.type === "sleep_up").sort((a, b) => new Date(a.ts) - new Date(b.ts));
+        let longestSleepMin = 0;
+        for (const d of downs) {
+          const next = ups.find(u => new Date(u.ts) > new Date(d.ts));
+          if (next) {
+            const mins = (new Date(next.ts) - new Date(d.ts)) / 60000;
+            if (mins > longestSleepMin && mins < 720) longestSleepMin = mins;
+          }
+        }
+        return {
+          label,
+          totalFeeds: feeds.length,
+          avgOzPerBottleFeed: bottleFeeds.length > 0
+            ? Number((bottleFeeds.reduce((s, e) => s + e.oz, 0) / bottleFeeds.length).toFixed(1))
+            : null,
+          breastfeedSessions: feeds.filter(e => e.type === "breastfeed").length,
+          diapersPerDay: Number((numDiapers / 7).toFixed(1)),
+          dirtyPerDay: Number((dirtyDiapers / 7).toFixed(1)),
+          sleepSessions: downs.length,
+          longestSleepHours: longestSleepMin > 0 ? Number((longestSleepMin / 60).toFixed(1)) : null,
+        };
       };
+
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+      const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+      const stats = buildStats(sevenDaysAgo, now, "last 7 days");
+      const priorStats = buildStats(fourteenDaysAgo, sevenDaysAgo, "prior 7 days (week before)");
 
       const ageStr = fmtAge(BIRTHDAY, now);
 
@@ -13299,14 +14878,17 @@ function DoctorView({ C, now, events, notes, appointments, removeNote, updateNot
 OBSERVATIONS BY DATE:
 ${recentNotesData.map(n => `- ${n.date} ${n.time} [${n.category}]: ${n.text}`).join("\n") || "(no notes recorded)"}
 
-FEEDING & CARE STATS (last 7 days):
+FEEDING & CARE STATS — LAST 7 DAYS:
 ${JSON.stringify(stats, null, 2)}
+
+FEEDING & CARE STATS — PRIOR 7 DAYS (the week before, for comparison):
+${JSON.stringify(priorStats, null, 2)}
 
 Please produce TWO outputs in JSON format:
 
-1. "copyText": A concise plain-text summary suitable to paste into MyChart or email to the doctor before the visit. Group by topic (Feeding, Sleep, Skin, Development, Mood, Questions for doctor). Use bullets. Include only the most relevant observations — tighten and de-duplicate. End with 2-4 specific questions the parent might want to ask the doctor based on the patterns.
+1. "copyText": A concise plain-text summary suitable to paste into MyChart or email to the doctor before the visit. Group by topic (Feeding, Sleep, Skin, Development, Mood, Questions for doctor). Use bullets. Include only the most relevant observations — tighten and de-duplicate. WHERE NOTABLE, mention period-over-period changes (e.g. "feeds/day increased from X to Y", "longest sleep stretch grew from Xh to Yh"). End with 2-4 specific questions the parent might want to ask the doctor based on the patterns.
 
-2. "htmlReport": A more detailed HTML report (no <html> or <body> wrapper, just inner content) organized by section with <h2>, <h3>, <ul>, <p> tags. Include all observations grouped by category, the stats summary in a small table, and a "Questions for the doctor" section. Style should be print-friendly. Use simple inline styles only where needed.
+2. "htmlReport": A more detailed HTML report (no <html> or <body> wrapper, just inner content) organized by section with <h2>, <h3>, <ul>, <p> tags. Include all observations grouped by category, BOTH stats periods in a small table side-by-side for comparison, and a "Questions for the doctor" section. Style should be print-friendly. Use simple inline styles only where needed.
 
 Respond with ONLY a valid JSON object with keys "copyText" and "htmlReport". No preamble, no markdown fences.`;
 
@@ -13333,7 +14915,109 @@ Respond with ONLY a valid JSON object with keys "copyText" and "htmlReport". No 
       setShowSummary(true);
     } catch (err) {
       console.error("Summary generation failed:", err);
-      alert("Could not generate summary. Please try again.");
+      // v05.05bt: build a structured local fallback from the stats we
+      // already computed, rather than just alerting. Not as polished as
+      // the LLM output but the parent walks into the appointment with
+      // SOMETHING in hand. Period-over-period comparison is included.
+      try {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+        const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+        const buildLocalStats = (start, end) => {
+          const inWindow = events.filter(e => {
+            const t = new Date(e.ts);
+            return t >= start && t < end;
+          });
+          const feeds = inWindow.filter(e => e.type === "feed" || e.type === "breastfeed");
+          const bottleFeeds = feeds.filter(e => e.oz && e.type === "feed");
+          const numDiapers = inWindow.filter(e => e.type === "diaper").length;
+          const dirtyDiapers = inWindow.filter(e => e.type === "diaper" && (e.notes === "dirty" || e.notes === "both")).length;
+          const downs = inWindow.filter(e => e.type === "sleep_down").sort((a, b) => new Date(a.ts) - new Date(b.ts));
+          const ups = inWindow.filter(e => e.type === "sleep_up").sort((a, b) => new Date(a.ts) - new Date(b.ts));
+          let longestSleepMin = 0;
+          for (const d of downs) {
+            const next = ups.find(u => new Date(u.ts) > new Date(d.ts));
+            if (next) {
+              const mins = (new Date(next.ts) - new Date(d.ts)) / 60000;
+              if (mins > longestSleepMin && mins < 720) longestSleepMin = mins;
+            }
+          }
+          return {
+            feedsPerDay: (feeds.length / 7).toFixed(1),
+            bottleAvgOz: bottleFeeds.length > 0 ? (bottleFeeds.reduce((s, e) => s + e.oz, 0) / bottleFeeds.length).toFixed(1) : null,
+            diapersPerDay: (numDiapers / 7).toFixed(1),
+            dirtyPerDay: (dirtyDiapers / 7).toFixed(1),
+            longestSleepHours: longestSleepMin > 0 ? (longestSleepMin / 60).toFixed(1) : null,
+          };
+        };
+        const recent = buildLocalStats(sevenDaysAgo, now);
+        const prior = buildLocalStats(fourteenDaysAgo, sevenDaysAgo);
+        const arrow = (cur, p) => {
+          if (cur == null || p == null) return "";
+          const a = parseFloat(cur), b = parseFloat(p);
+          if (Math.abs(a - b) / Math.max(0.1, b) < 0.05) return " (~no change)";
+          return a > b ? ` (↑ from ${p})` : ` (↓ from ${p})`;
+        };
+        const recentNotesGrouped = {};
+        for (const n of notes.filter(n => new Date(n.ts) >= cutoff)) {
+          if (!recentNotesGrouped[n.category]) recentNotesGrouped[n.category] = [];
+          recentNotesGrouped[n.category].push(n);
+        }
+        const noteSection = Object.keys(recentNotesGrouped).length === 0
+          ? "(no notes recorded)"
+          : Object.entries(recentNotesGrouped).map(([cat, ns]) =>
+              `${cat.toUpperCase()}:\n${ns.slice(0, 5).map(n => `  • ${new Date(n.ts).toLocaleDateString()}: ${n.text}`).join("\n")}`
+            ).join("\n\n");
+        const ageStr = fmtAge(BIRTHDAY, now);
+        const fallbackText = `SOLÈNE — visit prep summary
+${ageStr} · prepared ${new Date().toLocaleDateString()}
+(generated locally — AI summary unavailable)
+
+==== FEEDING & CARE — LAST 7 DAYS ====
+• Feeds/day: ${recent.feedsPerDay}${arrow(recent.feedsPerDay, prior.feedsPerDay)}
+• Avg oz/bottle: ${recent.bottleAvgOz || "—"}${recent.bottleAvgOz && prior.bottleAvgOz ? arrow(recent.bottleAvgOz, prior.bottleAvgOz) : ""}
+• Diapers/day: ${recent.diapersPerDay}${arrow(recent.diapersPerDay, prior.diapersPerDay)}
+• Poo/day: ${recent.dirtyPerDay}${arrow(recent.dirtyPerDay, prior.dirtyPerDay)}
+• Longest sleep stretch: ${recent.longestSleepHours ? recent.longestSleepHours + "h" : "—"}${recent.longestSleepHours && prior.longestSleepHours ? arrow(recent.longestSleepHours, prior.longestSleepHours) : ""}
+
+==== OBSERVATIONS BY CATEGORY ====
+${noteSection}
+
+==== QUESTIONS FOR DOCTOR ====
+(Ask the AI summary feature again later if you want refined questions — this fallback didn't have access to AI.)`;
+        const fallbackHtml = `
+<div style="font-family: serif; max-width: 700px;">
+  <h2>Solène — visit prep summary</h2>
+  <p><em>${ageStr} · prepared ${new Date().toLocaleDateString()}</em></p>
+  <p style="background: #FFF8E1; padding: 8px; border-left: 3px solid #C49A3A; font-size: 13px;">
+    ⚠ AI summary was unavailable; this report is generated locally from your stats. Try Generate again later for the polished version.
+  </p>
+  <h3>Feeding &amp; care · last 7 days vs prior 7 days</h3>
+  <table style="border-collapse: collapse; width: 100%;">
+    <tr><th style="text-align: left; border-bottom: 1px solid #ccc; padding: 4px;">Metric</th>
+        <th style="text-align: right; border-bottom: 1px solid #ccc; padding: 4px;">Last 7d</th>
+        <th style="text-align: right; border-bottom: 1px solid #ccc; padding: 4px;">Prior 7d</th></tr>
+    <tr><td style="padding: 4px;">Feeds/day</td><td style="text-align:right">${recent.feedsPerDay}</td><td style="text-align:right">${prior.feedsPerDay}</td></tr>
+    <tr><td style="padding: 4px;">Avg oz/bottle</td><td style="text-align:right">${recent.bottleAvgOz || "—"}</td><td style="text-align:right">${prior.bottleAvgOz || "—"}</td></tr>
+    <tr><td style="padding: 4px;">Diapers/day</td><td style="text-align:right">${recent.diapersPerDay}</td><td style="text-align:right">${prior.diapersPerDay}</td></tr>
+    <tr><td style="padding: 4px;">Poo/day</td><td style="text-align:right">${recent.dirtyPerDay}</td><td style="text-align:right">${prior.dirtyPerDay}</td></tr>
+    <tr><td style="padding: 4px;">Longest sleep</td><td style="text-align:right">${recent.longestSleepHours ? recent.longestSleepHours + "h" : "—"}</td><td style="text-align:right">${prior.longestSleepHours ? prior.longestSleepHours + "h" : "—"}</td></tr>
+  </table>
+  <h3>Observations</h3>
+  ${Object.entries(recentNotesGrouped).map(([cat, ns]) =>
+    `<h4>${cat}</h4><ul>${ns.slice(0, 8).map(n => `<li>${new Date(n.ts).toLocaleDateString()}: ${n.text.replace(/</g, "&lt;")}</li>`).join("")}</ul>`
+  ).join("")}
+</div>`;
+        setDocSummary({
+          generated: new Date().toISOString(),
+          copyText: fallbackText,
+          htmlReport: fallbackHtml,
+          isFallback: true,
+        });
+        setShowSummary(true);
+      } catch (fallbackErr) {
+        console.error("Fallback summary build also failed:", fallbackErr);
+        alert("Could not generate summary and the local fallback also failed. " + (err?.message || err));
+      }
     } finally {
       setGenerating(false);
     }
@@ -13342,7 +15026,7 @@ Respond with ONLY a valid JSON object with keys "copyText" and "htmlReport". No 
   return (
     <div style={{ marginTop: 14 }}>
       {/* Analytics & predictions */}
-      <AnalyticsSection C={C} events={events} now={now} />
+      <AnalyticsSection C={C} events={events} now={now} currentUser={currentUser} />
 
       {/* Next appointment card */}
       <Section C={C} title={nextAppt ? "Next visit" : "No upcoming visits"}>
@@ -13492,8 +15176,13 @@ Respond with ONLY a valid JSON object with keys "copyText" and "htmlReport". No 
 }
 
 // ---- Analytics --------------------------------------------------------
-function AnalyticsSection({ C, events, now }) {
+function AnalyticsSection({ C, events, now, currentUser }) {
   const [windowDays, setWindowDays] = useState(7);
+  // Viewer color — used for chrome accents on cards that aren't tied to a
+  // specific person (sleep prediction, sleep correlation, etc). On Mommy's
+  // device this is rose; on Daddy's device it's blue. Per-person data
+  // (Mommy's name, lactation flame, etc.) keeps its own color elsewhere.
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
 
   const stats = useMemo(() => {
     const cutoff = new Date(now.getTime() - windowDays * 86400000);
@@ -13584,6 +15273,37 @@ function AnalyticsSection({ C, events, now }) {
     const medianInterval = median(feedIntervals);
     const p25 = feedIntervals[Math.floor(feedIntervals.length * 0.25)] || 0;
     const p75 = feedIntervals[Math.floor(feedIntervals.length * 0.75)] || 0;
+
+    // === Per-session oz stats ===
+    // Bottle/breast feeds with a usable oz value. Breastfeeds typically don't
+    // have an oz directly; we estimate via duration × BF_OZ_PER_MIN_LOCAL
+    // (the same 0.5 oz/min approximation used for daily totals; we redefine
+    // it locally here since this scope can't see the chart's constant).
+    // Skip any feed with zero oz so the median isn't pulled toward zero
+    // by malformed events.
+    const BF_OZ_PER_MIN_LOCAL = 1 / 5;
+    const ozPerSession = allFeeds
+      .map(f => {
+        if (f.type === "breastfeed") {
+          const m = f.totalDurationMin || 0;
+          return m > 0 ? m * BF_OZ_PER_MIN_LOCAL : 0;
+        }
+        return f.oz || 0;
+      })
+      .filter(oz => oz > 0)
+      .sort((a, b) => a - b);
+    const medianOzPerSession = median(ozPerSession);
+    const ozP25 = ozPerSession[Math.floor(ozPerSession.length * 0.25)] || 0;
+    const ozP75 = ozPerSession[Math.floor(ozPerSession.length * 0.75)] || 0;
+    const ozPerSessionCount = ozPerSession.length;
+    // Age-norm comparison: status returns "below" / "in" / "above" the AAP
+    // band so the wellness card can color-code at a glance.
+    const ageMonthsForFeedNorm = (now - BIRTHDAY) / (1000 * 60 * 60 * 24 * 30.4375);
+    const ageNormsForFeed = getAgeNorms(ageMonthsForFeedNorm);
+    const ozPerSessionStatus = ageNormsForFeed?.ozPerFeed && medianOzPerSession > 0
+      ? rangeStatus(medianOzPerSession, ageNormsForFeed.ozPerFeed)
+      : null;
+    const ozPerSessionNorm = ageNormsForFeed?.ozPerFeed || null;
 
     // === Hourly activity heatmap (which hour of day has most activity) ===
     // For feeds, use sessions (clustered) so one feeding session = one tick on
@@ -13776,6 +15496,13 @@ function AnalyticsSection({ C, events, now }) {
       pumpTrend,
       newerPumpAvg, olderPumpAvg,
       predictedNextFeed,
+      // Per-session oz stats — added v05.05bb
+      medianOzPerSession,
+      ozP25,
+      ozP75,
+      ozPerSessionCount,
+      ozPerSessionStatus,
+      ozPerSessionNorm,
       medianSleep,
       longestSleep,
       sleepCount: sleepDurations.length,
@@ -13976,7 +15703,7 @@ function AnalyticsSection({ C, events, now }) {
               <div>
                 <div style={{
                   fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase",
-                  color: C.mommy, fontWeight: 700,
+                  color: viewerColor, fontWeight: 700,
                 }}>
                   snapshot · last {days} {days === 1 ? "day" : "days"}
                 </div>
@@ -14006,10 +15733,28 @@ function AnalyticsSection({ C, events, now }) {
                   if (!stats.diaperKinds) return null;
                   const wet = stats.diaperKinds.wet || 0;
                   const dirty = (stats.diaperKinds.dirty || 0) + (stats.diaperKinds.both || 0);
-                  if (wet || dirty) return `${wet} wet · ${dirty} dirty`;
+                  if (wet || dirty) return `${wet} pee · ${dirty} poo`;
                   return null;
                 })()}
               />
+              {/* Poo / day — separate metric from total diapers because
+                  pediatric guidance treats stool frequency as a distinct
+                  signal (lower bound is the concerning one — persistent
+                  <1/day for FF babies is worth a pediatrician mention).
+                  Only show if there's data and norm. */}
+              {norms.pooPerDay && stats.dirtyPerDay != null && (() => {
+                const pooStatus = rangeStatus(stats.dirtyPerDay, norms.pooPerDay);
+                return (
+                  <MetricCard
+                    topic="Poo / day"
+                    value={stats.dirtyPerDay.toFixed(1)}
+                    numericValue={stats.dirtyPerDay}
+                    range={norms.pooPerDay}
+                    status={pooStatus}
+                    note={`AAP norm ${norms.pooPerDay[0]}–${norms.pooPerDay[1]}/day`}
+                  />
+                );
+              })()}
               {longestSleepH != null && (
                 <MetricCard
                   topic="Longest stretch"
@@ -14044,6 +15789,24 @@ function AnalyticsSection({ C, events, now }) {
                   />
                 );
               })()}
+              {/* Oz per feed session vs age norm — added v05.05bb in
+                  response to the user's specific ask. Median oz across
+                  recent feed sessions, compared to AAP per-feed bands.
+                  Status drives the color band (in / above / below). */}
+              {stats.medianOzPerSession > 0 && stats.ozPerSessionNorm && (
+                <MetricCard
+                  topic="Oz per feed"
+                  value={`${stats.medianOzPerSession.toFixed(1)} oz`}
+                  numericValue={stats.medianOzPerSession}
+                  range={stats.ozPerSessionNorm}
+                  status={stats.ozPerSessionStatus}
+                  note={
+                    stats.ozP25 > 0 && stats.ozP75 > 0
+                      ? `range ${stats.ozP25.toFixed(1)}–${stats.ozP75.toFixed(1)} oz · ${stats.ozPerSessionCount} sessions · AAP norm ${stats.ozPerSessionNorm[0]}–${stats.ozPerSessionNorm[1]} oz`
+                      : `${stats.ozPerSessionCount} sessions · AAP norm ${stats.ozPerSessionNorm[0]}–${stats.ozPerSessionNorm[1]} oz`
+                  }
+                />
+              )}
               {/* Wake window — typical awake duration before next sleep.
                   Helps anticipate when Solène will be ready for next nap.
                   Soft age-based sanity bands: ~45-90m for 0-2mo, 90-150m for
@@ -14079,8 +15842,12 @@ function AnalyticsSection({ C, events, now }) {
         );
       })()}
 
-      {/* Feed interval prediction */}
-      {stats.medianInterval > 0 && (
+      {/* Predicted feed pattern — now includes amount in addition to interval.
+          Displays median oz/session next to the median interval, with the
+          IQR (P25–P75) range as soft secondary text. The next-feed line
+          shows BOTH predicted time AND predicted amount, since Daddy
+          needs to know how much to thaw/warm. */}
+      {(stats.medianInterval > 0 || stats.medianOzPerSession > 0) && (
         <div style={{
           background: `linear-gradient(135deg, ${C.accent}15, ${C.paper})`,
           borderRadius: 12, padding: 14, marginBottom: 10,
@@ -14092,19 +15859,428 @@ function AnalyticsSection({ C, events, now }) {
               Predicted feed pattern
             </span>
           </div>
-          <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.55 }}>
-            Solène typically feeds every <strong>{fmtDuration(stats.medianInterval)}</strong>
-            <span style={{ color: C.muted, fontSize: 12 }}>
-              {" "}(range {fmtDuration(stats.p25)}–{fmtDuration(stats.p75)}).
-            </span>
-          </div>
+          {stats.medianInterval > 0 && (
+            <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.55 }}>
+              Solène typically feeds every <strong>{fmtDuration(stats.medianInterval)}</strong>
+              <span style={{ color: C.muted, fontSize: 12 }}>
+                {" "}(range {fmtDuration(stats.p25)}–{fmtDuration(stats.p75)})
+              </span>
+              {stats.medianOzPerSession > 0 && (
+                <>
+                  {", taking "}<strong>{stats.medianOzPerSession.toFixed(1)} oz</strong> per session
+                  {stats.ozP25 > 0 && stats.ozP75 > 0 && (
+                    <span style={{ color: C.muted, fontSize: 12 }}>
+                      {" "}(range {stats.ozP25.toFixed(1)}–{stats.ozP75.toFixed(1)} oz)
+                    </span>
+                  )}
+                </>
+              )}
+              .
+            </div>
+          )}
           {stats.predictedNextFeed && (
             <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
               next feed predicted around {fmtTime12(stats.predictedNextFeed)}
+              {stats.medianOzPerSession > 0 && (
+                <> · ~{stats.medianOzPerSession.toFixed(1)} oz</>
+              )}
             </div>
           )}
         </div>
       )}
+
+      {/* Predicted sleep pattern — parallel to feed prediction. Uses the
+          median wake window (time between waking and next sleep) plus the
+          most recent wake event to estimate when she'll be ready for the
+          next nap. Only shown when (a) we have wake-window data (≥3 samples)
+          and (b) baby is currently awake (most recent sleep event is a
+          sleep_up). If she's currently asleep we don't predict her next
+          sleep — that's "next wake" territory which we cover via the
+          on-duty card's "asleep for" tile. */}
+      {stats.medianWakeWindow != null && stats.wakeWindowCount >= 3 && (() => {
+        // Find most recent sleep event (down or up)
+        const sleepEvents = events
+          .filter(e => e.type === "sleep_down" || e.type === "sleep_up")
+          .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+        const lastSleepEv = sleepEvents[0];
+        // Only predict next sleep when she's currently AWAKE (last event is sleep_up)
+        if (!lastSleepEv || lastSleepEv.type !== "sleep_up") return null;
+        const wakeTs = new Date(lastSleepEv.ts);
+        const predictedSleep = new Date(wakeTs.getTime() + stats.medianWakeWindow * 60000);
+        const predictedSleepLow = new Date(wakeTs.getTime() + (stats.wakeWindowP25 || stats.medianWakeWindow) * 60000);
+        const predictedSleepHigh = new Date(wakeTs.getTime() + (stats.wakeWindowP75 || stats.medianWakeWindow) * 60000);
+        const minsUntil = Math.round((predictedSleep - now) / 60000);
+        const overdue = minsUntil < -15;
+        const dueSoon = minsUntil >= -15 && minsUntil <= 15;
+
+        return (
+          <div style={{
+            background: `linear-gradient(135deg, ${viewerColor}15, ${C.paper})`,
+            borderRadius: 12, padding: 14, marginBottom: 10,
+            border: `1px solid ${viewerColor}33`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <Moon size={13} color={viewerColor} />
+              <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: viewerColor, fontWeight: 600 }}>
+                Predicted sleep pattern
+              </span>
+            </div>
+            <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.55 }}>
+              Solène typically stays awake for <strong>{fmtDuration(stats.medianWakeWindow)}</strong>
+              {stats.wakeWindowP25 != null && stats.wakeWindowP75 != null && (
+                <span style={{ color: C.muted, fontSize: 12 }}>
+                  {" "}(range {fmtDuration(stats.wakeWindowP25)}–{fmtDuration(stats.wakeWindowP75)})
+                </span>
+              )}
+              .
+            </div>
+            <div style={{
+              fontSize: 12, marginTop: 6,
+              fontFamily: "'JetBrains Mono', monospace",
+              color: overdue ? C.accent : dueSoon ? C.gold : C.muted,
+              fontWeight: overdue || dueSoon ? 600 : 400,
+            }}>
+              next sleep predicted around {fmtTime12(predictedSleep)}
+              {(stats.wakeWindowP25 != null && stats.wakeWindowP75 != null) && (
+                <span style={{ color: C.muted, fontWeight: 400 }}>
+                  {" "}(window {fmtTime12(predictedSleepLow)}–{fmtTime12(predictedSleepHigh)})
+                </span>
+              )}
+            </div>
+            {overdue && (
+              <div style={{ fontSize: 11, color: C.accent, marginTop: 4, fontStyle: "italic" }}>
+                Past typical wake window — she may be overtired.
+              </div>
+            )}
+            {dueSoon && (
+              <div style={{ fontSize: 11, color: C.gold, marginTop: 4, fontStyle: "italic" }}>
+                Approaching nap window — watch for sleep cues.
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Sleep correlation analysis — added v05.05bd in response to user
+          ask "what made her sleep the longest." Pulls features for each
+          overnight stretch and compares the top-quartile longest against
+          baseline. Filtered to ≥3h stretches starting 6pm-1am to keep
+          naps out. Uses all-time data (not the 7-day stats window) since
+          correlations need more sample.
+          IMPORTANT: framed as DESCRIPTIVE associations, not causal claims.
+          n is small, age is a confounder, reverse causality possible. */}
+      {(() => {
+        // Build feature-rich sleep stretches from full events history
+        const sortedAll = events
+          .filter(e => !e.silent)
+          .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+        const allFeedsAll = sortedAll.filter(e => e.type === "feed" || e.type === "breastfeed");
+        const allBaths = sortedAll.filter(e => e.type === "bath");
+        const allSleepEvents = sortedAll.filter(e => e.type === "sleep_down" || e.type === "sleep_up");
+
+        // Pair down→up
+        const stretches = [];
+        let openDown = null;
+        let lastUp = null;
+        for (const e of allSleepEvents) {
+          if (e.type === "sleep_down") {
+            openDown = e;
+          } else if (e.type === "sleep_up" && openDown) {
+            const downDate = new Date(openDown.ts);
+            const upDate = new Date(e.ts);
+            const mins = (upDate - downDate) / 60000;
+            // Filter to plausible overnight stretches:
+            //   ≥ 3 hours (180 min) → not a nap
+            //   started 18:00–01:00 → bedtime, not a midday nap
+            const downHour = downDate.getHours();
+            const isOvernightWindow = downHour >= 18 || downHour < 2;
+            if (mins >= 180 && mins < 720 && isOvernightWindow) {
+              // Find last feed before sleep
+              const lastFeedBefore = allFeedsAll
+                .filter(f => new Date(f.ts) < downDate)
+                .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+              const lastFeedGapMin = lastFeedBefore
+                ? (downDate - new Date(lastFeedBefore.ts)) / 60000
+                : null;
+              const feedType = lastFeedBefore
+                ? (lastFeedBefore.type === "breastfeed" ? "breastfed direct"
+                  : (lastFeedBefore.source || "").toLowerCase().includes("formula") &&
+                    !(lastFeedBefore.source || "").toLowerCase().includes("bm")
+                  ? "formula"
+                  : (lastFeedBefore.source || "").toLowerCase().includes("formula") &&
+                    (lastFeedBefore.source || "").toLowerCase().includes("bm")
+                  ? "mixed"
+                  : "BM bottle")
+                : null;
+              // Bath in the 90 min before sleep?
+              const bathBefore = allBaths.some(b => {
+                const bt = new Date(b.ts);
+                return bt < downDate && (downDate - bt) / 60000 <= 90;
+              });
+              // Preceding wake window
+              const lastUpBefore = lastUp;
+              const wakeWindowMin = lastUpBefore
+                ? (downDate - new Date(lastUpBefore.ts)) / 60000
+                : null;
+              // Bedtime clock — minutes-of-day, with overnight wrap so 11pm
+              // and 12:30am sort together not at opposite ends
+              const bedtimeMin = downHour * 60 + downDate.getMinutes();
+              // For sorting we shift 0-2h to 24-26h so it reads correctly
+              const bedtimeNorm = downHour < 6 ? bedtimeMin + 24 * 60 : bedtimeMin;
+              stretches.push({
+                downDate,
+                upDate,
+                mins,
+                feedType,
+                lastFeedGapMin,
+                bathBefore,
+                wakeWindowMin,
+                bedtimeMin,
+                bedtimeNorm,
+              });
+            }
+            openDown = null;
+          }
+          if (e.type === "sleep_up") lastUp = e;
+        }
+
+        // Need at least 8 overnight stretches for the analysis to mean anything
+        if (stretches.length < 8) {
+          return (
+            <div style={{
+              background: C.paper, borderRadius: 12, padding: 14, marginBottom: 10,
+              border: `1px solid ${C.line}15`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <Search size={13} color={C.muted} />
+                <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+                  What helps her sleep longest
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", lineHeight: 1.55 }}>
+                Need at least 8 overnight stretches to spot patterns. Currently {stretches.length} logged. Keep logging bedtimes (down + awake) and this card will fill in.
+              </div>
+            </div>
+          );
+        }
+
+        // Sort by duration
+        const byDuration = stretches.slice().sort((a, b) => b.mins - a.mins);
+        // Top quartile: top 25% (rounded up to at least 3 for stability)
+        const topN = Math.max(3, Math.ceil(byDuration.length * 0.25));
+        const top = byDuration.slice(0, topN);
+        const baseline = stretches; // compare top to ALL (top is included; that's fine)
+
+        // Helper: rate of a categorical attribute in a sample
+        const rateOf = (sample, predicate) => {
+          if (sample.length === 0) return 0;
+          return sample.filter(predicate).length / sample.length;
+        };
+        // Helper: median of a numeric attribute in a sample
+        const medianOf = (sample, getter) => {
+          const vals = sample.map(getter).filter(v => v != null && !isNaN(v)).sort((a, b) => a - b);
+          if (vals.length === 0) return null;
+          return vals.length % 2 === 1
+            ? vals[Math.floor(vals.length / 2)]
+            : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
+        };
+
+        // === Feature comparisons ===
+        // Categorical: feed type — compute distribution in top vs baseline
+        const feedTypes = ["BM bottle", "breastfed direct", "formula", "mixed"];
+        const feedTypeStats = feedTypes.map(ft => {
+          const topRate = rateOf(top, s => s.feedType === ft);
+          const baseRate = rateOf(baseline, s => s.feedType === ft);
+          const lift = baseRate > 0 ? (topRate - baseRate) / baseRate : 0;
+          const topCount = top.filter(s => s.feedType === ft).length;
+          return { ft, topRate, baseRate, lift, topCount };
+        }).filter(x => x.topCount > 0); // only show types that actually appear in top
+        feedTypeStats.sort((a, b) => b.topRate - a.topRate);
+
+        // Categorical: bath — was there a bath in 90m before sleep?
+        const bathTopRate = rateOf(top, s => s.bathBefore);
+        const bathBaseRate = rateOf(baseline, s => s.bathBefore);
+        const bathLift = bathBaseRate > 0 ? (bathTopRate - bathBaseRate) / bathBaseRate : 0;
+        const bathBaselineN = baseline.filter(s => s.bathBefore).length;
+
+        // Continuous: feed → sleep gap (minutes)
+        const topMedFeedGap = medianOf(top, s => s.lastFeedGapMin);
+        const baseMedFeedGap = medianOf(baseline, s => s.lastFeedGapMin);
+        // Continuous: bedtime clock
+        const topMedBedtime = medianOf(top, s => s.bedtimeNorm);
+        const baseMedBedtime = medianOf(baseline, s => s.bedtimeNorm);
+        // Continuous: wake window before sleep
+        const topMedWakeWin = medianOf(top, s => s.wakeWindowMin);
+        const baseMedWakeWin = medianOf(baseline, s => s.wakeWindowMin);
+
+        // Format mins-of-day → clock string, handling overnight overflow
+        const fmtClockMin = (m) => {
+          if (m == null) return "—";
+          const wrapped = m % (24 * 60);
+          const h = Math.floor(wrapped / 60);
+          const min = Math.round(wrapped % 60);
+          const ap = h >= 12 ? "PM" : "AM";
+          const h12 = h % 12 || 12;
+          return `${h12}:${String(min).padStart(2, "0")} ${ap}`;
+        };
+        const fmtMinsHM = (m) => {
+          if (m == null) return "—";
+          const h = Math.floor(m / 60);
+          const min = Math.round(m % 60);
+          return h > 0 ? `${h}h ${min}m` : `${min}m`;
+        };
+
+        // === Auto-generated insights ===
+        // Pull a few takeaway bullets — we want the user to walk away with
+        // 1-3 things that look meaningfully different in the top quartile.
+        const insights = [];
+
+        // Feed type — which feed type appears at higher rate in top vs base?
+        const topFeedType = feedTypeStats[0];
+        if (topFeedType && topFeedType.lift > 0.2 && topFeedType.topCount >= 3) {
+          insights.push({
+            label: `${topFeedType.ft} before sleep`,
+            detail: `${(topFeedType.topRate * 100).toFixed(0)}% of longest stretches followed ${topFeedType.ft}, vs ${(topFeedType.baseRate * 100).toFixed(0)}% on average.`,
+            lift: topFeedType.lift,
+          });
+        }
+
+        // Bath
+        if (bathLift > 0.3 && bathBaselineN >= 3 && bathTopRate > 0.3) {
+          insights.push({
+            label: "bath before bed",
+            detail: `${(bathTopRate * 100).toFixed(0)}% of longest stretches were preceded by a bath in the prior 90 min, vs ${(bathBaseRate * 100).toFixed(0)}% on average.`,
+            lift: bathLift,
+          });
+        }
+
+        // Feed gap
+        if (topMedFeedGap != null && baseMedFeedGap != null) {
+          const diff = topMedFeedGap - baseMedFeedGap;
+          if (Math.abs(diff) >= 15) {
+            insights.push({
+              label: diff > 0 ? "longer gap from feed → sleep" : "shorter gap from feed → sleep",
+              detail: `Top stretches: ${fmtMinsHM(topMedFeedGap)} between last feed and sleep. Average: ${fmtMinsHM(baseMedFeedGap)}.`,
+              lift: diff > 0 ? 0.5 : -0.5,
+            });
+          }
+        }
+
+        // Bedtime
+        if (topMedBedtime != null && baseMedBedtime != null) {
+          const diff = topMedBedtime - baseMedBedtime;
+          if (Math.abs(diff) >= 20) {
+            insights.push({
+              label: diff > 0 ? "later bedtime" : "earlier bedtime",
+              detail: `Top stretches went down around ${fmtClockMin(topMedBedtime)}. Average bedtime: ${fmtClockMin(baseMedBedtime)}.`,
+              lift: diff > 0 ? 0.5 : -0.5,
+            });
+          }
+        }
+
+        // Wake window
+        if (topMedWakeWin != null && baseMedWakeWin != null) {
+          const diff = topMedWakeWin - baseMedWakeWin;
+          if (Math.abs(diff) >= 15) {
+            insights.push({
+              label: diff > 0 ? "longer last wake window" : "shorter last wake window",
+              detail: `Top stretches were preceded by ${fmtMinsHM(topMedWakeWin)} of awake time. Average: ${fmtMinsHM(baseMedWakeWin)}.`,
+              lift: diff > 0 ? 0.5 : -0.5,
+            });
+          }
+        }
+
+        const topMedDuration = medianOf(top, s => s.mins);
+        const baseMedDuration = medianOf(baseline, s => s.mins);
+
+        return (
+          <div style={{
+            background: `linear-gradient(135deg, ${viewerColor}10, ${C.paper})`,
+            borderRadius: 12, padding: 14, marginBottom: 10,
+            border: `1px solid ${viewerColor}33`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <Search size={13} color={viewerColor} />
+              <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: viewerColor, fontWeight: 600 }}>
+                What helps her sleep longest
+              </span>
+            </div>
+
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.55, marginBottom: 12 }}>
+              Looking at her top {topN} longest overnight stretches{" "}
+              ({fmtMinsHM(topMedDuration)} median) vs all {baseline.length} overnight stretches{" "}
+              ({fmtMinsHM(baseMedDuration)} median). Patterns that show up disproportionately in the top group:
+            </div>
+
+            {insights.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.55, fontStyle: "italic" }}>
+                Nothing stands out yet. Her best nights and average nights look similar across feed type, timing, bath, and wake window. That's actually a good sign — the routine is consistent.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {insights.map((ins, i) => (
+                  <div key={i} style={{
+                    background: C.paper, borderRadius: 8, padding: "10px 12px",
+                    borderLeft: `3px solid ${ins.lift > 0 ? "#5C8E5C" : C.gold}`,
+                  }}>
+                    <div style={{
+                      fontSize: 11, fontWeight: 600,
+                      color: ins.lift > 0 ? "#5C8E5C" : C.gold,
+                      letterSpacing: "0.04em", textTransform: "lowercase",
+                      marginBottom: 4,
+                    }}>
+                      {ins.lift > 0 ? "↑ " : "↓ "}{ins.label}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5 }}>
+                      {ins.detail}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Detail breakdown — collapsed by default. Power-user view. */}
+            <details style={{ marginTop: 12 }}>
+              <summary style={{
+                cursor: "pointer", fontSize: 10,
+                color: C.muted, letterSpacing: "0.18em",
+                textTransform: "uppercase", fontWeight: 600,
+              }}>
+                show all features
+              </summary>
+              <div style={{
+                fontSize: 11, color: C.ink, lineHeight: 1.6,
+                fontFamily: "'JetBrains Mono', monospace",
+                marginTop: 10, paddingLeft: 10,
+                borderLeft: `2px solid ${C.line}15`,
+              }}>
+                {feedTypeStats.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ color: C.muted, marginBottom: 2 }}>feed type before sleep:</div>
+                    {feedTypeStats.map(f => (
+                      <div key={f.ft} style={{ paddingLeft: 8 }}>
+                        {f.ft}: top {(f.topRate * 100).toFixed(0)}% / base {(f.baseRate * 100).toFixed(0)}%
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div>feed → sleep gap: top {fmtMinsHM(topMedFeedGap)} / base {fmtMinsHM(baseMedFeedGap)}</div>
+                <div>bedtime clock: top {fmtClockMin(topMedBedtime)} / base {fmtClockMin(baseMedBedtime)}</div>
+                <div>preceding wake window: top {fmtMinsHM(topMedWakeWin)} / base {fmtMinsHM(baseMedWakeWin)}</div>
+                <div>bath in 90m before: top {(bathTopRate * 100).toFixed(0)}% / base {(bathBaseRate * 100).toFixed(0)}%</div>
+              </div>
+            </details>
+
+            {/* Honesty caveat — small but clear. */}
+            <div style={{
+              fontSize: 10, color: C.muted, fontStyle: "italic",
+              marginTop: 12, lineHeight: 1.5,
+            }}>
+              Descriptive associations only — small sample (n={baseline.length}), and Solène's age is changing throughout. These point toward things to try, not what's <em>causing</em> the difference.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* When things happen — redesigned 2026.05.05af to be readable at a
           glance. Old version showed three rows of normalized bars with only
@@ -14138,7 +16314,7 @@ function AnalyticsSection({ C, events, now }) {
         // where peaks fall against named periods of the day.
         const blocks = [
           { label: "early am", start: 0, end: 6, color: "#5A6E8A" },
-          { label: "morning", start: 6, end: 11, color: "#D4A03A" },
+          { label: "morning", start: 6, end: 11, color: C.gold },
           { label: "midday", start: 11, end: 14, color: "#E8B074" },
           { label: "afternoon", start: 14, end: 17, color: "#C77B8E" },
           { label: "evening", start: 17, end: 21, color: "#B85C2E" },
@@ -14248,38 +16424,12 @@ function AnalyticsSection({ C, events, now }) {
         );
       })()}
 
-      {/* BM vs Formula split */}
-      {(stats.totalBmOz + stats.totalFormulaOz) > 0 && (
-        <div style={{
-          background: C.paper, borderRadius: 12, padding: 14,
-          border: `1px solid ${C.line}15`, marginBottom: 10,
-        }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
-            BM vs Formula split (by oz)
-          </div>
-          <div style={{ display: "flex", height: 28, borderRadius: 6, overflow: "hidden", border: `1px solid ${C.line}11` }}>
-            <div style={{
-              width: `${stats.bmRatio * 100}%`,
-              background: C.mommy, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11, fontWeight: 600, minWidth: 0,
-            }}>
-              {stats.bmRatio > 0.15 && `${(stats.bmRatio * 100).toFixed(0)}% BM`}
-            </div>
-            <div style={{
-              width: `${(1 - stats.bmRatio) * 100}%`,
-              background: C.daddy, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11, fontWeight: 600, minWidth: 0,
-            }}>
-              {(1 - stats.bmRatio) > 0.15 && `${((1 - stats.bmRatio) * 100).toFixed(0)}% Formula`}
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
-            {stats.totalBmOz.toFixed(1)}oz BM · {stats.totalFormulaOz.toFixed(1)}oz Formula over {windowDays} days
-          </div>
-        </div>
-      )}
+      {/* BM vs Formula split and Pump output trend moved to the Milk tab
+          in v05.05ax — both are about supply/intake composition and feel
+          more at home next to the bottle inventory than under "wellness."
+          The DoctorView still computes the underlying stats (used in the
+          doctor visit summary text), it just no longer renders the
+          standalone cards here. */}
 
       {/* Sleep pattern — descriptive, not prescriptive. Shows typical bedtime
           and wake from main sleep stretches, plus how bedtime is drifting and
@@ -14344,11 +16494,12 @@ function AnalyticsSection({ C, events, now }) {
               </div>
             </div>
 
-            {/* Insights row — actual numbers for median, longest, total sleep
-                in the window. These are the "how much" numbers a doctor will
-                ask about. Kept compact so the card stays digestible. */}
+            {/* Insights row — drops 'longest' since the Longest stretch
+                MetricCard at the top of the page already shows it with
+                fuller context (AAP range, status). What stays is unique
+                to this card: median stretch length and how many we have. */}
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8,
+              display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8,
               padding: "10px 0",
               borderTop: `1px solid ${C.line}10`,
               borderBottom: `1px solid ${C.line}10`,
@@ -14356,7 +16507,7 @@ function AnalyticsSection({ C, events, now }) {
             }}>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
-                  median
+                  median stretch
                 </div>
                 <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
                   {fmtDuration(stats.medianSleep)}
@@ -14364,15 +16515,7 @@ function AnalyticsSection({ C, events, now }) {
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
-                  longest
-                </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: "#5C8E5C", lineHeight: 1.2, marginTop: 2 }}>
-                  {fmtDuration(stats.longestSleep)}
-                </div>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
-                  stretches
+                  stretches logged
                 </div>
                 <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
                   {stats.sleepCount}
@@ -14381,8 +16524,7 @@ function AnalyticsSection({ C, events, now }) {
             </div>
 
             <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.5 }}>
-              based on {stats.mainSleepDays} {stats.mainSleepDays === 1 ? "day" : "days"} of main sleep stretches over the last {stats.windowDays} days.
-              accuracy depends on logging — if 'awake' isn't logged the stretch won't count.
+              {stats.mainSleepDays} {stats.mainSleepDays === 1 ? "day" : "days"} of data — accuracy depends on logging both 'down' and 'awake'.
             </div>
           </div>
         );
@@ -14402,11 +16544,11 @@ function AnalyticsSection({ C, events, now }) {
             <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", border: `1px solid ${C.line}11`, marginBottom: 8 }}>
               <div style={{
                 width: `${(stats.diaperKinds.wet / total) * 100}%`,
-                background: "#A8C8E8", color: "#fff",
+                background: "#D6BC85", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 600, minWidth: 0,
               }}>
-                {(stats.diaperKinds.wet / total) > 0.18 && `wet ${stats.diaperKinds.wet}`}
+                {(stats.diaperKinds.wet / total) > 0.18 && `pee ${stats.diaperKinds.wet}`}
               </div>
               <div style={{
                 width: `${(stats.diaperKinds.dirty / total) * 100}%`,
@@ -14414,7 +16556,7 @@ function AnalyticsSection({ C, events, now }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 10, fontWeight: 600, minWidth: 0,
               }}>
-                {(stats.diaperKinds.dirty / total) > 0.18 && `dirty ${stats.diaperKinds.dirty}`}
+                {(stats.diaperKinds.dirty / total) > 0.18 && `poo ${stats.diaperKinds.dirty}`}
               </div>
               <div style={{
                 width: `${(stats.diaperKinds.both / total) * 100}%`,
@@ -14426,7 +16568,7 @@ function AnalyticsSection({ C, events, now }) {
               </div>
             </div>
             <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-              <strong>{stats.dirtyPerDay.toFixed(1)}</strong> dirty/day · about {(stats.dirtyRatio * 100).toFixed(0)}% of changes.
+              <strong>{stats.dirtyPerDay.toFixed(1)}</strong> poo diapers/day (counting both pee+poo) · about {(stats.dirtyRatio * 100).toFixed(0)}% of changes.
               {stats.dirtyPerDay >= 1 && stats.dirtyPerDay < 4 && " Within typical newborn range (1–4/day)."}
               {stats.dirtyPerDay < 1 && " Below typical — mention to pediatrician if persistent."}
             </div>
@@ -14434,49 +16576,8 @@ function AnalyticsSection({ C, events, now }) {
         );
       })()}
 
-      {/* Pump output trend */}
-      {stats.olderPumpAvg > 0 && stats.newerPumpAvg > 0 && (
-        <div style={{
-          background: C.paper, borderRadius: 12, padding: 14,
-          border: `1px solid ${C.line}15`, marginBottom: 10,
-        }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
-            Pump output trend
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
-                Earlier half
-              </div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.muted }}>
-                {stats.olderPumpAvg.toFixed(1)} oz
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
-                Recent half
-              </div>
-              <div style={{
-                fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
-                marginTop: 2, lineHeight: 1.1,
-                color: stats.pumpTrend > 5 ? "#5C8E5C" : stats.pumpTrend < -5 ? C.accent : C.ink,
-              }}>
-                {stats.newerPumpAvg.toFixed(1)} oz
-                <span style={{ fontSize: 14, marginLeft: 4 }}>
-                  {stats.pumpTrend > 5 ? "↑" : stats.pumpTrend < -5 ? "↓" : "→"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 8, fontStyle: "italic", lineHeight: 1.5 }}>
-            {Math.abs(stats.pumpTrend) < 5
-              ? "Output is steady — supply looks well-matched to demand."
-              : stats.pumpTrend > 5
-              ? `Output is up ${stats.pumpTrend.toFixed(0)}% — supply is increasing.`
-              : `Output is down ${Math.abs(stats.pumpTrend).toFixed(0)}% — consider hydration, nursing frequency, or a power pump session.`}
-          </div>
-        </div>
-      )}
+      {/* Pump output trend was here — moved to the Milk tab in v05.05ax
+          alongside BM vs Formula split. */}
     </Section>
   );
 }
@@ -14516,14 +16617,14 @@ function NextApptCard({ C, appt, now, onRemove }) {
 
   return (
     <div style={{
-      background: `linear-gradient(135deg, ${C.daddy}22, ${C.paper})`,
+      background: `linear-gradient(135deg, ${C.gold}22, ${C.paper})`,
       borderRadius: 14, padding: 18,
-      border: `1px solid ${C.daddy}55`,
+      border: `1px solid ${C.gold}55`,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <div style={{
           width: 44, height: 44, borderRadius: "50%",
-          background: C.daddy, display: "flex", alignItems: "center", justifyContent: "center",
+          background: C.gold, display: "flex", alignItems: "center", justifyContent: "center",
           color: "#fff", flexShrink: 0,
         }}>
           <Stethoscope size={22} />
@@ -14859,6 +16960,19 @@ ${summary.htmlReport}
 
   return (
     <ModalShell C={C} onClose={onClose} title="Visit summary">
+      {summary.isFallback && (
+        <div style={{
+          background: `${C.gold}15`,
+          border: `1px solid ${C.gold}55`,
+          borderRadius: 8,
+          padding: "8px 12px",
+          marginBottom: 12,
+          fontSize: 12, color: C.ink, lineHeight: 1.5,
+        }}>
+          <strong style={{ color: C.gold }}>⚠ Local fallback</strong> — AI summary was unavailable.
+          This was built from your stats only. Try Generate again later for the polished version.
+        </div>
+      )}
       <SegControl C={C} value={view} onChange={setView} options={[
         { v: "copy", l: "Copy text" },
         { v: "report", l: "Printable" },
