@@ -14,15 +14,15 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt3";
+const APP_VERSION = "2026.05.05bt6";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "FIX: Day plan shift chart now updates immediately when commitments are added/removed for today or tomorrow — no need to refresh",
+  "POLISH: 'made with care by Cyndell · for Solène ✦' colophon now sits prominently at the top of every page (under the tagline)",
+  "FIX: Day plan shift chart now updates immediately when commitments are added/removed",
   "Build fix: JS comments in JSX attribute position (rejected by Rolldown)",
   "DATA INTEGRITY: auto-snapshot before any family-code change · 'Restore from snapshot' UI",
-  "DATA INTEGRITY: confirm-gate when generating new code while already linked",
   "DATA INTEGRITY: '22:NaNa' bug fixed everywhere",
   "MILK: prominent expiration banner · sharpie label visible per bottle · auto-suggest next letter",
   "JOURNAL: pump entries show start–end range",
@@ -30,6 +30,9 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt6", summary: "Cyndell font softened (lighter weight, warmer color) · Day vs Dusk theme toggle removed" },
+  { version: "2026.05.05bt5", summary: "Maker's name corrected: Cyndi → Cyndell" },
+  { version: "2026.05.05bt4", summary: "Maker's colophon promoted to header (quiet italic line under the tagline)" },
   { version: "2026.05.05bt3", summary: "Day plan chart now reflects new commitments immediately (force-remount on commitment count change)" },
   { version: "2026.05.05bt2", summary: "Build fix for v05.05bt — Rolldown rejected JS comments in JSX attribute position" },
   { version: "2026.05.05bt", summary: "DATA INTEGRITY: auto-backup before code change + restore UI · 22:NaNa fix · expiration banner · sharpie sync · pump time-range · awake-7h flag · doctor summary fallback + period-over-period" },
@@ -3675,6 +3678,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             }}>
               A journal of care, rhythm &amp; handoff
             </div>
+            {/* Maker's colophon — quiet credit line that lives at the top
+                of every page so Cyndell gets her named credit prominently
+                without competing with the wordmark or tagline. v05.05bt6:
+                softened the Cyndell weight from 600 (semibold) to 500
+                (medium) and shifted the color from C.ink (near-black) to
+                a warmer two-step interpolation — name was reading as too
+                hard against the cream palette. */}
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 12, fontStyle: "italic",
+              color: C.muted, marginTop: 2, lineHeight: 1.3,
+              opacity: 0.85,
+            }}>
+              made with care by <span style={{ color: C.muted, fontWeight: 500, fontStyle: "italic" }}>Cyndell</span>
+              <span style={{ color: C.gold, margin: "0 4px" }}>·</span>
+              for <span style={{ color: userTint, fontWeight: 500 }}>Solène</span>
+              <span style={{ color: C.gold, marginLeft: 3 }}>✦</span>
+            </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 6, letterSpacing: "0.08em", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span style={{ color: userTint, fontWeight: 600 }}>{fmtAge(BIRTHDAY, now)}</span>
               <span style={{ opacity: 0.5 }}>·</span>
@@ -5749,57 +5770,10 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
       {/* Theme toggle — Day vs Dusk. Per-device preference (not synced).
           Sits right after profile selection because it's a personal/visual
           setting that changes immediately and locally. */}
-      {setThemeOverride && (
-        <div style={{ marginTop: 18 }}>
-          <div style={{
-            fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
-            color: C.muted, fontWeight: 600, marginBottom: 8,
-          }}>
-            Appearance
-          </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
-          }}>
-            {[
-              { v: "day", l: "Day", icon: "☀", desc: "warm cream" },
-              { v: "dusk", l: "Dusk", icon: "🌙", desc: "warm dark" },
-            ].map(opt => {
-              const active = themeOverride === opt.v;
-              return (
-                <button
-                  key={opt.v}
-                  onClick={() => setThemeOverride(opt.v)}
-                  style={{
-                    background: active ? C.accent : C.paper,
-                    color: active ? "#fff" : C.ink,
-                    border: `1.5px solid ${active ? C.accent : C.line + "40"}`,
-                    borderRadius: 12, padding: "12px 14px", cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 10,
-                    textAlign: "left", fontFamily: "inherit",
-                    transition: "background 0.15s, border-color 0.15s",
-                  }}>
-                  <div style={{
-                    fontSize: 20, lineHeight: 1, flexShrink: 0,
-                  }}>{opt.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
-                      fontSize: 18, fontWeight: 500, lineHeight: 1.1,
-                    }}>{opt.l}</div>
-                    <div style={{ fontSize: 11, opacity: 0.75, marginTop: 1 }}>
-                      {opt.desc}
-                    </div>
-                  </div>
-                  {active && <Check size={14} />}
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 6, textAlign: "center" }}>
-            saved on this device only — your partner's device keeps its own preference
-          </div>
-        </div>
-      )}
+      {/* v05.05bt6: Day vs Dusk option removed — palette is tuned for the
+          warm-cream day mode and the dusk option was unused. State plumbing
+          (themeOverride, setThemeOverride) is still in App in case we want
+          to surface a different appearance toggle later. */}
 
       {/* Clear stuck takeover — only when one is active */}
       {takeover && (
@@ -5892,7 +5866,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
             fontStyle: "italic", fontSize: 12,
             color: C.muted, lineHeight: 1.5,
           }}>
-            made with care by Cyndi · for Solène <span style={{ color: C.gold }}>✦</span>
+            made with care by Cyndell · for Solène <span style={{ color: C.gold }}>✦</span>
           </div>
         </div>
       </div>
