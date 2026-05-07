@@ -1,0 +1,36 @@
+{
+  "name": "Little Ledger",
+  "short_name": "Little Ledger",
+  "description": "A journal of care, rhythm & handoff for Solène",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FCF7EB",
+  "theme_color": "#C77893",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/little-ledger-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/little-ledger-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/little-ledger-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/little-ledger-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
