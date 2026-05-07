@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt6";
+const APP_VERSION = "2026.05.05bt7";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,6 +30,7 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt7", summary: "Wake-check banner: belt-and-suspenders dismiss — any wake_confirmed or sleep_down within last hour hides the banner regardless of feed-relative timing" },
   { version: "2026.05.05bt6", summary: "Cyndell font softened (lighter weight, warmer color) · Day vs Dusk theme toggle removed" },
   { version: "2026.05.05bt5", summary: "Maker's name corrected: Cyndi → Cyndell" },
   { version: "2026.05.05bt4", summary: "Maker's colophon promoted to header (quiet italic line under the tagline)" },
@@ -3924,6 +3925,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           lastSleep={lastSleep}
           lastWake={lastWake}
           lastWakeConfirmed={lastWakeConfirmed}
+          events={events}
           now={now}
           totalSafeOz={totalSafeOz}
           rtSafeOz={rtSafeOz}
@@ -6526,7 +6528,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
   );
 }
 
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, currentUser, rtItems, fridgeItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, currentUser, rtItems, fridgeItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -6579,7 +6581,19 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     if (minsSinceFeed < 90) return null;
     if (minsSinceFeed > 240) return null; // >4hr is a different story (forgot to log a feed)
     if (lastSleep && new Date(lastSleep.ts) > new Date(lastFeed.ts)) return null;
-    // Check if a wake_confirmed exists since last feed (the user already said "still awake")
+    // v05.05bt7: belt-and-suspenders dismiss check. ANY recent (within last
+    // hour) wake_confirmed or sleep_down should hide the banner. This catches
+    // edge cases where lastFeed is stale-but-newer than the new wake/sleep
+    // event, or where cloud sync is mid-flight. The banner is a check-in,
+    // not a critical alert; bias to dismissing rather than persisting.
+    const oneHourAgo = new Date(now.getTime() - 60 * 60000);
+    const recentWakeOrSleep = events.find(e =>
+      (e.type === "wake_confirmed" || e.type === "sleep_down") &&
+      new Date(e.ts) >= oneHourAgo
+    );
+    if (recentWakeOrSleep) return null;
+    // Original check: if a wake_confirmed exists since last feed (the user
+    // already said "still awake")
     if (lastWakeConfirmed && new Date(lastWakeConfirmed.ts) > new Date(lastFeed.ts)) {
       // Re-prompt only if it's been another 60+ min since they confirmed awake
       const minsSinceConfirm = (now - new Date(lastWakeConfirmed.ts)) / 60000;
