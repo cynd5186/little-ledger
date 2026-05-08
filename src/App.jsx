@@ -6,6 +6,7 @@ import {
   Play, Pause, RotateCcw, Flame, Package, Coffee, Timer, MapPin,
   BookOpen, Stethoscope, FileText, Copy, Printer, MessageSquare, Star,
   ArrowRightLeft, Gift, Volume2, AlarmClock, Search,
+  Home, PiggyBank,
 } from "lucide-react";
 
 // ---- App identity ------------------------------------------------------
@@ -14,18 +15,18 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt46";
+const APP_VERSION = "2026.05.05bt47";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "BOTTOM PANEL warm-sand color. The tab bar previously used C.paper which was within ~1pt of C.bg, so the panel visually disappeared into the page. Now uses a new C.panel color (#F0E8D2 in day mode) — a quiet step toward gold that stays in the warm-cream family but is unambiguously separated from the page. Picked from a 6-option mockup. The hairline at the top moved from a stacked boxShadow segment to an explicit borderTop so it reads as a deliberate boundary; elevation shadow strengthened slightly (0.06 → 0.08 alpha).",
-  "BOTTOM PANEL secondary fix: LOG button ring switched from C.bg to C.panel. The ring previously matched the page so the floating button blended in; now it matches the panel backdrop, so the ring blends where most of the button sits (over the panel) and shows as a soft sand halo where the button extends above the panel onto the page. Reads as 'emerging from the panel.'",
-  "Carryover from bt45: frozen top brand strip (logo + 'Little Ledger' wordmark + viewer/profile chip).",
-  "Carryover from bt44: iOS audio unlock fix.",
+  "TAB ICONS: each tab in the bottom panel now shows an icon above its label. Now → Home, Journal → BookOpen, Wellness → Stethoscope, Milk → Milk, Schedule → Calendar, Bank → PiggyBank. Icons are 18px lucide-react glyphs that change stroke weight on the active tab (1.75 → 2.25) for a subtle 'this is selected' affordance beyond the color/indicator. Label sized down to 10px so the icon+label stack fits inside the 52px tap target without growing the panel height.",
+  "Carryover from bt46: warm-sand bottom panel + LOG button ring matched to panel color.",
+  "Carryover from bt45: frozen top brand strip.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt47", summary: "TAB ICONS added to bottom panel. Each tab now stacks a lucide-react icon (18px) above its label (10px, was 12px) with 3px gap: Now/Home, Journal/BookOpen, Wellness/Stethoscope, Milk/Milk, Schedule/Calendar, Bank/PiggyBank. Active tab uses bolder stroke weight (2.25 vs 1.75) in addition to the existing viewer-color tint and top-edge indicator bar — three visual cues for active state. Padding reduced from 18/2/18 to 10/2/8 so the icon + label stack fits inside the existing 52px minHeight tap target without making the panel taller. Layout switched from baseline-aligned label-only to flex column with center alignment." },
   { version: "2026.05.05bt46", summary: "BOTTOM PANEL warm-sand color treatment per user pick from 6-option mockup. (a) Added new `panel` field to all four PALETTES (day/dawn: #F0E8D2 warm sand; dusk/night: #322A2F slightly-warmer-than-paper dark). (b) TabBar background changed from C.paper to C.panel — the bar visually disappeared before because C.paper was within ~1pt of C.bg. (c) Hairline moved from stacked boxShadow (`0 -1px 0 ${C.line}15`) to an explicit `borderTop: 1px solid ${C.line}30` so the top edge reads as a deliberate boundary, not a shadow artifact. (d) Elevation shadow strengthened from 0.06 to 0.08 alpha so the panel feels 'set down on' the page rather than floating against it. (e) CentralLogButton ring switched from C.bg to C.panel — the floating LOG button straddles the panel-page boundary, so the ring now blends with the panel backdrop where most of the button sits, and reads as a soft sand halo where the button extends above the panel onto the page. Reads as 'emerging from the panel.'" },
   { version: "2026.05.05bt45", summary: "TOP BAR FROZEN. New sticky brand strip pinned at top via position:sticky/top:0/zIndex:5 — contains a 32px LittleLedgerLogo, 'Little Ledger' wordmark in Cormorant italic, and the viewer/profile-switcher chip. The strip carries env(safe-area-inset-top) padding for iPhone notches. The previous in-header brand row + right-column profile switcher button were both REMOVED from the editorial header below — they no longer render twice. The big Solène serif + tagline + colophon + age/date/sync row remain in the editorial header and scroll away normally." },
   { version: "2026.05.05bt44", summary: "Critical iOS PWA audio-unlock fix. Two changes. (a) SoundToggleButton: removed setTimeout(80ms) wrapper around the test chime — that delay broke the iOS Safari rule that audio playback must occur SYNCHRONOUSLY inside the gesture handler. With the delay, the gesture context was lost by the time playNotificationSound fired and iOS silently refused to emit. The chime now plays on the same tick as the tap, with an explicit _unlockAudio() call preceding it. (b) Added _unlockAudio() helper and folded it into the global tap/click/keydown unlock listener. The helper plays a 1-sample silent buffer (createBuffer(1, 1, 22050)) synchronously inside the gesture — this is the canonical iOS PWA primer that 'kicks' the AudioContext output path. ctx.resume() alone is insufficient on iOS; the silent buffer is what actually unlocks output. After a successful tap on the toggle (or any tap that hits the global unlocker), every subsequent banner chime in the session plays correctly. Net effect: notes, takeovers, sleep prompts, bedtime banners, diaper-urgent alerts, and prediction-success chimes are all reliably audible after the first tap. iOS silent switch (orange-dot ringer toggle on side of phone) remains an independent gate — nothing the app can do about that one." },
@@ -15037,13 +15038,18 @@ function TabBar({ C, tab, setTab, currentUser }) {
   // button it forms a coherent docked panel claimed by the viewer.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   const tabs = [
-    { id: "now", label: "Now" },
-    { id: "log", label: "Journal" },
-    { id: "doctor", label: "Wellness" },
+    // v05.05bt47: each tab now carries an icon for at-a-glance recognition.
+    // Lucide-react glyphs picked to match each tab's domain: Home for the
+    // landing/Now state, BookOpen for the Journal, Stethoscope for Wellness
+    // (medical/check-in feel), Milk literally for the Milk tab,
+    // Calendar for Schedule, PiggyBank for Bank.
+    { id: "now",       label: "Now",      icon: Home },
+    { id: "log",       label: "Journal",  icon: BookOpen },
+    { id: "doctor",    label: "Wellness", icon: Stethoscope },
     { id: "_spacer" },
-    { id: "inventory", label: "Milk" },
-    { id: "shifts", label: "Schedule" },
-    { id: "bank", label: "Bank" },
+    { id: "inventory", label: "Milk",     icon: Milk },
+    { id: "shifts",    label: "Schedule", icon: Calendar },
+    { id: "bank",      label: "Bank",     icon: PiggyBank },
   ];
   return (
     <div style={{
@@ -15086,18 +15092,23 @@ function TabBar({ C, tab, setTab, currentUser }) {
         ) : (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: "transparent", border: "none",
-            // v05.05bt35: bumped from 14/2/14 to 18/2/18 + minHeight 52
-            // so phone tap targets clear iOS's 44pt accessibility minimum.
-            // Font also bumped 11→12 for legibility on small screens.
-            padding: "18px 2px 18px",
+            // v05.05bt47: padding tightened (was 18/2/18) so the icon +
+            // label stack still fits inside a 52px minHeight tap target
+            // — total content height ~38px (18 icon + 3 gap + 13 label)
+            // sits comfortably with ~7px top + 7px bottom padding.
+            padding: "10px 2px 8px",
             minHeight: 52,
             color: tab === t.id ? viewerColor : C.muted,
             fontWeight: tab === t.id ? 600 : 500,
-            fontSize: 12, cursor: "pointer",
+            fontSize: 10, cursor: "pointer",
             position: "relative",
-            letterSpacing: "0.03em",
+            letterSpacing: "0.04em",
             fontFamily: "inherit",
+            // Stack icon above label.
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 3,
           }}>
+            {t.icon && <t.icon size={18} strokeWidth={tab === t.id ? 2.25 : 1.75} />}
             {t.label}
             {tab === t.id && (
               <span style={{
