@@ -14,18 +14,23 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt42";
+const APP_VERSION = "2026.05.05bt46";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "NOTIFICATION SOUNDS extended to three more banner surfaces that previously rendered silently: (1) incoming handoff note from partner, (2) partner-initiated takeover (when they tap 'I'll cover' on their device and cloud sync brings it to yours), (3) active covering commitment when it starts. Plus a new 'note' tone — soft ascending two-tone (C5→E5, sine wave) — distinct from wake/info/urgent so you can audibly differentiate without looking at the screen.",
-  "Carryover from bt41: Bank Redeem usable with any positive credit, picker step 5m, 15m preset added.",
-  "Carryover from bt40: Nap quality age norms inline + column header on distribution + explicit unit labels.",
+  "BOTTOM PANEL warm-sand color. The tab bar previously used C.paper which was within ~1pt of C.bg, so the panel visually disappeared into the page. Now uses a new C.panel color (#F0E8D2 in day mode) — a quiet step toward gold that stays in the warm-cream family but is unambiguously separated from the page. Picked from a 6-option mockup. The hairline at the top moved from a stacked boxShadow segment to an explicit borderTop so it reads as a deliberate boundary; elevation shadow strengthened slightly (0.06 → 0.08 alpha).",
+  "BOTTOM PANEL secondary fix: LOG button ring switched from C.bg to C.panel. The ring previously matched the page so the floating button blended in; now it matches the panel backdrop, so the ring blends where most of the button sits (over the panel) and shows as a soft sand halo where the button extends above the panel onto the page. Reads as 'emerging from the panel.'",
+  "Carryover from bt45: frozen top brand strip (logo + 'Little Ledger' wordmark + viewer/profile chip).",
+  "Carryover from bt44: iOS audio unlock fix.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt42", summary: "NOTIFICATION SOUNDS extended to notes + previously-silent banners. (a) Incoming handoff note from partner (showInlineNote) now plays a soft 'note' tone — ascending C5→E5 sine wave double-tone, lower amplitude than urgent. (b) Partner-initiated takeover plays an info chime when the cloud sync brings the takeover state with coveringParent !== currentUser to your device. (c) activeCoveringCommitment banner plays an info chime when the obligation starts. All use useNotificationSound's transition-based gating so they only fire on falsy→truthy edge, never on re-render. The new 'note' waveform is intentionally distinct from wake (descending), info (single tone), and urgent (triangle) so you can differentiate notification types audibly." },
+  { version: "2026.05.05bt46", summary: "BOTTOM PANEL warm-sand color treatment per user pick from 6-option mockup. (a) Added new `panel` field to all four PALETTES (day/dawn: #F0E8D2 warm sand; dusk/night: #322A2F slightly-warmer-than-paper dark). (b) TabBar background changed from C.paper to C.panel — the bar visually disappeared before because C.paper was within ~1pt of C.bg. (c) Hairline moved from stacked boxShadow (`0 -1px 0 ${C.line}15`) to an explicit `borderTop: 1px solid ${C.line}30` so the top edge reads as a deliberate boundary, not a shadow artifact. (d) Elevation shadow strengthened from 0.06 to 0.08 alpha so the panel feels 'set down on' the page rather than floating against it. (e) CentralLogButton ring switched from C.bg to C.panel — the floating LOG button straddles the panel-page boundary, so the ring now blends with the panel backdrop where most of the button sits, and reads as a soft sand halo where the button extends above the panel onto the page. Reads as 'emerging from the panel.'" },
+  { version: "2026.05.05bt45", summary: "TOP BAR FROZEN. New sticky brand strip pinned at top via position:sticky/top:0/zIndex:5 — contains a 32px LittleLedgerLogo, 'Little Ledger' wordmark in Cormorant italic, and the viewer/profile-switcher chip. The strip carries env(safe-area-inset-top) padding for iPhone notches. The previous in-header brand row + right-column profile switcher button were both REMOVED from the editorial header below — they no longer render twice. The big Solène serif + tagline + colophon + age/date/sync row remain in the editorial header and scroll away normally." },
+  { version: "2026.05.05bt44", summary: "Critical iOS PWA audio-unlock fix. Two changes. (a) SoundToggleButton: removed setTimeout(80ms) wrapper around the test chime — that delay broke the iOS Safari rule that audio playback must occur SYNCHRONOUSLY inside the gesture handler. With the delay, the gesture context was lost by the time playNotificationSound fired and iOS silently refused to emit. The chime now plays on the same tick as the tap, with an explicit _unlockAudio() call preceding it. (b) Added _unlockAudio() helper and folded it into the global tap/click/keydown unlock listener. The helper plays a 1-sample silent buffer (createBuffer(1, 1, 22050)) synchronously inside the gesture — this is the canonical iOS PWA primer that 'kicks' the AudioContext output path. ctx.resume() alone is insufficient on iOS; the silent buffer is what actually unlocks output. After a successful tap on the toggle (or any tap that hits the global unlocker), every subsequent banner chime in the session plays correctly. Net effect: notes, takeovers, sleep prompts, bedtime banners, diaper-urgent alerts, and prediction-success chimes are all reliably audible after the first tap. iOS silent switch (orange-dot ringer toggle on side of phone) remains an independent gate — nothing the app can do about that one." },
+  { version: "2026.05.05bt43", summary: "Bottom panel freeze + LOG button glow. (a) Removed overflow:hidden from the App wrapper — on iOS Safari this was causing fixed-position children (TabBar + LOG button) to scroll with content instead of pinning. Translation: the bottom panel now reliably stays at the bottom of the viewport regardless of scroll. (b) LOG button gets a soft breathing-halo glow on a 2.6s cycle — box-shadow pulses 20px→28px with a 22px outer halo, plus a 2.5% scale pulse so it feels alive. The glow color adapts per viewer via --glow-color / --glow-color-strong CSS custom properties consumed by the .log-glow keyframe." },
+  { version: "2026.05.05bt42", summary: "NOTIFICATION SOUNDS extended to notes + previously-silent banners — incoming handoff note (new soft ascending C5→E5 'note' tone), partner-initiated takeover, and activeCoveringCommitment. All use transition-based gating so they only fire on falsy→truthy edge." },
   { version: "2026.05.05bt41", summary: "Bank Redeem threshold lowered from ≥30m to any positive credit (≥1m). All three gates updated. RedeemModal picker step reduced from 15m to 5m and 15m added to the preset list. Helper micro-copy reworded throughout." },
   { version: "2026.05.05bt40", summary: "NAP QUALITY card now shows age-appropriate pediatric norms inline. Each headline metric (median nap, naps/day, daytime sleep total) carries a status indicator (✓ in range / ↓ below / ↑ above) plus the typical range string for Solène's current age band. Norms synthesized from cross-referenced pediatric sleep-medicine guidance and stored as a NAP_NORMS table at module scope. Plus column headers added to the distribution histogram and explicit unit labels on the right-column count ('12 naps · 45%')." },
   { version: "2026.05.05bt39", summary: "Bank tab Redeem visibility fix. Promoted Redeem to a permanent fourth tile in the quick-actions grid (alongside Log debt / Send gift / Log payback) so it's discoverable regardless of balance state. When eligible (partner owes ≥30m): primary-colored, with a helper line and a hero CTA below the grid. When ineligible (you owe, or balance <30m): muted/disabled, with explanatory micro-copy clarifying the gating. The underlying flow (RedeemModal with day/time picker → synthetic red meeting → projection auto-swap) is unchanged." },
@@ -1139,16 +1144,38 @@ function _ensureAudioCtx() {
 if (typeof window !== "undefined" && !window.__solene_audio_unlock_attached) {
   window.__solene_audio_unlock_attached = true;
   const unlock = () => {
-    const ctx = _ensureAudioCtx();
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume().then(() => { _audioUnlocked = true; }).catch(() => {});
-    } else if (ctx) {
-      _audioUnlocked = true;
-    }
+    _unlockAudio();
   };
   window.addEventListener("touchstart", unlock, { passive: true });
   window.addEventListener("click", unlock, { passive: true });
   window.addEventListener("keydown", unlock, { passive: true });
+}
+// v05.05bt43 — robust iOS PWA audio unlock. The previous version relied on
+// ctx.resume() alone, which on iOS sometimes resolves successfully but leaves
+// the context effectively muted until a "primer" sound has played. The
+// canonical fix is to play a 1-sample silent buffer synchronously inside the
+// gesture handler — that primes the audio output path and subsequent tones
+// actually emit. Exposed so SoundToggleButton (and anywhere else with a
+// gesture) can force-unlock without waiting for the global listener race.
+function _unlockAudio() {
+  const ctx = _ensureAudioCtx();
+  if (!ctx) return false;
+  // Silent-buffer primer (essential for iOS PWA). createBuffer(1, 1, 22050)
+  // = 1 channel, 1 sample frame, 22050Hz — smallest valid buffer.
+  try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+  } catch (e) { /* primer failure is non-fatal */ }
+  if (ctx.state === "suspended") {
+    // Resume can be async, but the primer above already kicks output;
+    // the resume() is belt-and-suspenders for older iOS versions.
+    ctx.resume().catch(() => {});
+  }
+  _audioUnlocked = true;
+  return true;
 }
 function _soundEnabled() {
   try {
@@ -1317,13 +1344,18 @@ function getTimeMode(d = new Date()) {
 // Dusk/night versions (#BFA0BC) are lifted proportionally to how Daddy's
 // blue gets lifted in dark mode, preserving the day↔dark contrast curve.
 const PALETTES = {
-  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+  // v05.05bt46: added `panel` — warm-sand surface color for the docked
+  // bottom tab bar so it visually separates from the page bg without
+  // breaking the warm-cream family. Day picks #F0E8D2 (a quiet step
+  // toward gold). Dark modes pick a slightly-warmer-than-paper tone so
+  // the panel still reads as a distinct elevated surface.
+  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
            mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
-  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
            mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
-  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
+  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
-  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
+  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
 };
 
@@ -4348,7 +4380,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       transition: "background 1.5s ease, color 1.5s ease",
       paddingBottom: 130,
       position: "relative",
-      overflow: "hidden",
+      // v05.05bt43 — overflow:hidden REMOVED. It was causing fixed-position
+      // children (TabBar, CentralLogButton) to scroll with content on iOS
+      // Safari instead of pinning to the viewport. The fixed view-tint
+      // overlays inside don't need parent clipping — they're already
+      // viewport-anchored via position:fixed and clipped by the viewport.
     }}>
       {/* Per-user view tint — drastically stronger for cross-room recognition.
           v05.05bb: Daddy's blue wash is much more present so Mommy can tell
@@ -4509,22 +4545,67 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         </div>
       )}
 
+      {/* v05.05bt45 — Sticky brand strip pinned to the top of the viewport.
+          Contains logo + "Little Ledger" wordmark + viewer/profile-switcher
+          chip. Stays visible when content scrolls so the brand identity
+          and the "viewing as" affordance are always at hand. The big
+          editorial title page (Solène 42px serif + tagline + colophon +
+          date/sync row) lives below this strip and scrolls away normally
+          — that addresses the bt38 feedback that having BOTH a sticky
+          compact bar AND the editorial header felt redundant. Now there's
+          only ONE place where the brand+profile chip live (this strip),
+          and the editorial header is purely the "title page" of the
+          journal. */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 5,
+        background: C.bg,
+        borderBottom: `1px solid ${C.line}25`,
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        boxShadow: `0 2px 12px rgba(31, 27, 22, 0.04)`,
+      }}>
+        <div style={{
+          maxWidth: 720, margin: "0 auto",
+          padding: "10px 18px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+            <LittleLedgerLogo C={C} size={32} currentUser={currentUser} />
+            <span style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 16, fontStyle: "italic",
+              color: C.muted, fontWeight: 500,
+              letterSpacing: "0.04em",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>Little Ledger</span>
+          </div>
+          <button onClick={() => setShowProfileSwitcher(true)} style={{
+            background: currentUser === "Mommy" ? C.mommy : C.daddy,
+            color: "#fff", border: "none",
+            borderRadius: 20, padding: "5px 11px 5px 5px",
+            fontSize: 12, fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 7,
+            fontFamily: "'Inter', sans-serif", letterSpacing: "0.04em",
+            flexShrink: 0,
+            boxShadow: `0 2px 6px ${currentUser === "Mommy" ? C.mommy : C.daddy}55`,
+          }}>
+            <span style={{
+              width: 24, height: 24, borderRadius: "50%",
+              background: "#fff", color: currentUser === "Mommy" ? C.mommy : C.daddy,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 15, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>{currentUser[0]}</span>
+            <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.05 }}>
+              <span style={{ fontSize: 8, opacity: 0.85, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>viewing as</span>
+              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 600, fontStyle: "italic" }}>{currentUser}</span>
+            </span>
+          </button>
+        </div>
+      </div>
+
       <header style={{ padding: "20px 18px 8px", maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
-            {/* Little Ledger mark — full-presence brand glyph */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 11,
-              marginBottom: 10,
-            }}>
-              <LittleLedgerLogo C={C} size={44} currentUser={currentUser} />
-              <span style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 17, fontStyle: "italic",
-                color: C.muted, fontWeight: 500,
-                letterSpacing: "0.04em",
-              }}>Little Ledger</span>
-            </div>
             <h1 style={{
               fontFamily: "'Cormorant Garamond', serif",
               fontSize: 42, fontWeight: 500,
@@ -4591,31 +4672,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 </span>
               </span>
             </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <button onClick={() => setShowProfileSwitcher(true)} style={{
-              background: currentUser === "Mommy" ? C.mommy : C.daddy,
-              color: "#fff",
-              border: "none",
-              borderRadius: 24, padding: "6px 14px 6px 6px",
-              fontSize: 13, fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", gap: 8,
-              fontFamily: "'Inter', sans-serif", letterSpacing: "0.04em",
-              boxShadow: `0 2px 8px ${currentUser === "Mommy" ? C.mommy : C.daddy}55`,
-            }}>
-              <span style={{
-                width: 28, height: 28, borderRadius: "50%",
-                background: "#fff", color: currentUser === "Mommy" ? C.mommy : C.daddy,
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 18, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>{currentUser[0]}</span>
-              <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.05 }}>
-                <span style={{ fontSize: 9, opacity: 0.85, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600 }}>viewing as</span>
-                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, fontWeight: 600, fontStyle: "italic" }}>{currentUser}</span>
-              </span>
-              <ChevronRight size={14} style={{ transform: "rotate(90deg)", opacity: 0.85 }} />
-            </button>
           </div>
         </div>
       </header>
@@ -7090,13 +7146,20 @@ function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
 function SoundToggleButton({ C }) {
   const [enabled, setEnabled] = useState(_soundEnabled());
   const toggle = () => {
+    // v05.05bt43 — Critical iOS gesture-context fix. The previous version
+    // wrapped playNotificationSound in setTimeout(80ms) "to let the
+    // animation flicker" — but that broke the iOS rule that audio MUST
+    // play SYNCHRONOUSLY inside the gesture handler. By the time
+    // setTimeout fired, the gesture context was lost and iOS silently
+    // refused to emit. Now: explicit _unlockAudio() (silent-buffer primer
+    // + resume) followed by SYNCHRONOUS playNotificationSound, all inside
+    // this onClick handler. This is the only reliable iOS PWA pattern.
     const next = !enabled;
     setEnabled(next);
     try { localStorage.setItem("solene:soundEnabled", next ? "true" : "false"); } catch {}
     if (next) {
-      // Play a test chime on the same gesture so audio is unlocked AND
-      // the user gets immediate feedback that it works.
-      setTimeout(() => playNotificationSound("info"), 80);
+      _unlockAudio();
+      playNotificationSound("info");
     }
   };
   return (
@@ -7816,9 +7879,33 @@ function FontImports() {
       @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes pulse-soft { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+      /* v05.05bt43 — LOG button glow. Uses CSS custom properties
+         (--glow-color, --glow-color-strong) set inline on the button so
+         the same keyframe adapts to the viewer's color (mauve/Mommy or
+         slate-blue/Daddy) without separate keyframes per user. The first
+         shadow is the always-on lift; the second shadow is the breathing
+         halo. The transform also pulses ~2% larger at peak so the glow
+         feels alive rather than just blinking. translateZ(0) preserved
+         from the base style so iOS layer-promotion isn't lost during
+         animation. */
+      @keyframes log-glow {
+        0%, 100% {
+          box-shadow:
+            0 6px 20px var(--glow-color, rgba(0,0,0,0.4)),
+            0 0 0 0 var(--glow-color, rgba(0,0,0,0));
+          transform: translate(-50%, 0) translateZ(0) scale(1);
+        }
+        50% {
+          box-shadow:
+            0 8px 28px var(--glow-color-strong, rgba(0,0,0,0.6)),
+            0 0 22px 2px var(--glow-color, rgba(0,0,0,0.4));
+          transform: translate(-50%, 0) translateZ(0) scale(1.025);
+        }
+      }
       .fade-up { animation: fadeUp 0.5s ease-out both; }
       .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
       .slide-up { animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+      .log-glow { animation: log-glow 2.6s ease-in-out infinite; }
     `}</style>
   );
 }
@@ -14896,7 +14983,7 @@ function CentralLogButton({ C, mode, onClick, currentUser }) {
   // so the button reads as having depth rather than flat fill.
   const viewerDarker = currentUser === "Daddy" ? "#4F6E96" : "#7B6177";
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} className="log-glow" style={{
       position: "fixed",
       bottom: 38, left: "50%", transform: "translate(-50%, 0) translateZ(0)",
       // v05.05bt37: translateZ(0) + willChange force iOS Safari to promote
@@ -14910,17 +14997,30 @@ function CentralLogButton({ C, mode, onClick, currentUser }) {
       width: 64, height: 64, borderRadius: "50%",
       background: `linear-gradient(135deg, ${viewerColor}, ${viewerDarker})`,
       color: "#fff",
-      // Ring stays the page bg color so the button reads as floating above
-      // the tab bar. Was viewer-color before; not needed now that the button
-      // base IS viewer-color.
-      border: `4px solid ${C.bg}`,
+      // Ring matches the bottom panel color so the LOG button reads as
+      // "emerging from" the panel rather than punching a hole through it.
+      // v05.05bt46: was C.bg (page cream) — that worked fine when the
+      // panel was C.paper (almost identical to bg), but with the new
+      // warm-sand C.panel, a C.bg ring would look like a cutout. Setting
+      // ring to C.panel makes the ring blend with the panel backdrop
+      // where most of the button sits, while showing as a soft sand
+      // halo where the button extends above the panel onto the page.
+      border: `4px solid ${C.panel}`,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
       cursor: "pointer",
       fontFamily: "'Cormorant Garamond', serif",
       fontSize: 13, fontWeight: 600, letterSpacing: "0.1em",
-      // Soft shadow gives the button physical lift. Tint the shadow with
-      // the viewer color so the underglow matches.
+      // v05.05bt43 — box-shadow now overridden by .log-glow keyframe, but
+      // preserved as a fallback for browsers that don't render the
+      // animation. The keyframe pulls --glow-color / --glow-color-strong
+      // from the inline CSS custom properties below so the breathing halo
+      // matches the viewer.
       boxShadow: `0 6px 20px ${viewerColor}66`,
+      // CSS custom properties consumed by the .log-glow @keyframes. ~40%
+      // alpha at rest, ~80% at peak, so the halo is noticeable without
+      // being visually loud. Hex appended alpha (66 = 40%, cc = 80%).
+      "--glow-color": `${viewerColor}66`,
+      "--glow-color-strong": `${viewerColor}cc`,
     }}>
       <Plus size={22} strokeWidth={2.5} />
       <span style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", fontFamily: "'Inter', sans-serif", fontWeight: 700 }}>
@@ -14957,14 +15057,20 @@ function TabBar({ C, tab, setTab, currentUser }) {
       transform: "translateZ(0)",
       WebkitTransform: "translateZ(0)",
       willChange: "transform",
-      // Use C.paper (warmer cream than page bg) so the bar visually separates
-      // from the scrollable area above. Adds proper "this is a docked panel"
-      // affordance instead of looking like transparent buttons over the page.
-      background: C.paper,
-      // Soft elevation shadow above (instead of a thin hairline border) gives
-      // the bar physical presence — like it's resting in front of the page.
-      // Lower alpha shadow to keep it subtle in day mode.
-      boxShadow: `0 -8px 24px rgba(31, 27, 22, 0.06), 0 -1px 0 ${C.line}15`,
+      // v05.05bt46: switched from C.paper (which was nearly identical to
+      // C.bg — only ~1pt difference, so the bar visually disappeared into
+      // the page) to C.panel — warm-sand #F0E8D2 in day mode, a quiet
+      // step toward gold that stays in the warm-cream family but is
+      // unambiguously separated from the page surface above. Also moved
+      // the hairline from the combined boxShadow to an explicit borderTop
+      // so the top edge reads as a deliberate boundary, not an artifact
+      // of the elevation shadow.
+      background: C.panel,
+      borderTop: `1px solid ${C.line}30`,
+      // Soft elevation shadow above the panel — slightly stronger than
+      // bt43's value (0.08 vs 0.06) so the panel feels "set down on" the
+      // page rather than floating against it.
+      boxShadow: `0 -10px 28px rgba(31, 27, 22, 0.08)`,
       zIndex: 6,
       // Extend background into the iOS home-indicator safe area so the
       // strip below the tab bar isn't bare white. The buttons stay above
