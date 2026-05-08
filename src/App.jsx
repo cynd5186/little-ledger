@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt26";
+const APP_VERSION = "2026.05.05bt30";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,6 +30,10 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt30", summary: "Add bottle from non-empty picker — Use mode now has a '+ Add another bottle to [location]' button (above log-anyway escape hatch). Manage mode also gets a '+ Add a new bottle to [location]' button between bottle list and bulk action bar. Both routes open the existing EditBottleModal in add mode (oz, location, label, pumped time). Manage mode also now shows bottle labels next to oz." },
+  { version: "2026.05.05bt29", summary: "Added always-visible inline edit + delete buttons to MeetingRow (commitments on Schedule tab Today/Tomorrow cards). Swipe gesture and body tap still work as before; these are just an always-visible fallback for users who don't discover the swipe." },
+  { version: "2026.05.05bt28", summary: "Bug fix: auto-repayment indicator (↩ sage green) was silently never rendering on either the landing page Today's Plan or the Schedule tab Today/Tomorrow cards. Root cause: stripAnnotations whitelist in activeShifts dropped _isAutoRepayment and _autoRepayDurationMin flags. Now preserved through projection. When Daddy covers Mommy's 5-6a meeting, the shift she's automatically repaying him on now shows the indicator on both surfaces." },
+  { version: "2026.05.05bt27", summary: "Schedule tab Today/Tomorrow cards now use the same two-column shift list as the landing page (Mommy | Daddy with annotation indicators on the left of each adjusted shift) instead of the visual bar strip. ShiftListGrid component extracted from TodaysPlanCard so both surfaces render identically. Tomorrow's card never shows the current-block pulse dot." },
   { version: "2026.05.05bt26", summary: "Bug fix: 'now is not defined' render crash when expanding Today/Tomorrow cards on Schedule tab. DayPlanCard wasn't accepting `now` as a prop but was forwarding it to inner DayPlanShiftStrip. Now properly threaded through." },
   { version: "2026.05.05bt25", summary: "Bath after dismissing 'no bath tonight' — (1) logging a bath auto-supersedes any same-day bath_skipped events so the journal stays clean, (2) bath_skipped events now show in journal as muted italic '🛁 No bath tonight' with an inline '↻ undo · log bath' affordance that opens the bath logger directly. No new buttons added to the LOG sheet." },
   { version: "2026.05.05bt24", summary: "VISIBLE GUARD BANNER — peak-count safety net now surfaces a terracotta banner at the top of the app when it blocks a cloud push, with diagnostic info (X → Y entries) and two actions: 'Dismiss' (keeps local data, no push) or 'It's intentional · Push anyway' (calls acknowledgeShrink and force-pushes). Hydration + write-pause guards remain silent (they're routine)." },
@@ -3722,6 +3726,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         start: s.start, end: s.end,
         _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice,
         _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin,
+        // v05.05bt28: also preserve auto-repayment annotations so the ↩
+        // (sage green) indicator fires on the shift used to repay an
+        // earlier coverage. Without these flags, the indicator silently
+        // never rendered — affected both the landing page Today's Plan
+        // and the Schedule tab Today/Tomorrow cards.
+        _isAutoRepayment: s._isAutoRepayment, _autoRepayDurationMin: s._autoRepayDurationMin,
         // v05.05bt8: preserve carve/cover annotations so Today's DayPlanCard
         // chart can render the + (covering) and ! (conflict) indicators
         // matching what Tomorrow's chart shows. The original "strip" was
@@ -3735,6 +3745,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         start: s.start, end: s.end,
         _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice,
         _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin,
+        _isAutoRepayment: s._isAutoRepayment, _autoRepayDurationMin: s._autoRepayDurationMin,
         _coveringFor: s._coveringFor, _conflict: s._conflict, _reason: s._reason,
         _isCarvedSlice: s._isCarvedSlice, _isCarvedFree: s._isCarvedFree,
       })),
@@ -5819,6 +5830,29 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                 </div>
               )}
 
+              {/* v05.05bt30: "+ Add another bottle" affordance in Use mode
+                  too, not just empty-state. Sometimes the user has a real
+                  pumped bottle that wasn't auto-tracked (e.g. partner
+                  pumped, manual bottle from older batch, etc.) — they want
+                  it tracked as inventory, not just logged as a one-off
+                  feed. Different intent from "log anyway" below. */}
+              {onAddBottle && (
+                <button
+                  onClick={() => { onAddBottle(location); onClose(); }}
+                  style={{
+                    width: "100%",
+                    marginTop: 12,
+                    background: "transparent", color: locColor,
+                    border: `1.5px dashed ${locColor}66`,
+                    borderRadius: 8, padding: "10px 12px",
+                    fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  }}>
+                  + Add another bottle to {locLabel.toLowerCase()}
+                </button>
+              )}
+
               {/* "Bottle not in list — log anyway" escape hatch.
                   When inventory tracking misses a bottle (forgot to log a
                   pump, milk came from a different batch, etc.), the parent
@@ -5940,6 +5974,13 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
                           {b.oz.toFixed(1)} oz
+                          {b.bottleLabel && (
+                            <span style={{
+                              fontSize: 11, color: locColor, marginLeft: 6,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontWeight: 700, letterSpacing: "0.04em",
+                            }}>· Bottle {b.bottleLabel}</span>
+                          )}
                           {isRisky && <span style={{ fontSize: 10, color: C.accent, marginLeft: 6, fontWeight: 600 }}>RISKY</span>}
                         </div>
                         <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
@@ -5950,6 +5991,27 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                   );
                 })}
               </div>
+
+              {/* v05.05bt30: "+ Add a new bottle" button in Manage mode.
+                  Lets the user manually add a bottle with custom oz,
+                  location, label, and pumped time. Useful when a pump
+                  happened but wasn't logged, or for backfilling stock. */}
+              {onAddBottle && (
+                <button
+                  onClick={() => { onAddBottle(location); onClose(); }}
+                  style={{
+                    width: "100%",
+                    background: "transparent", color: locColor,
+                    border: `1.5px dashed ${locColor}66`,
+                    borderRadius: 10, padding: "10px 12px",
+                    fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                    marginBottom: 14,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}>
+                  + Add a new bottle to {locLabel.toLowerCase()}
+                </button>
+              )}
 
               {/* Bulk action bar — only enabled when something is selected */}
               <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr" : "1fr", gap: 8 }}>
@@ -9366,10 +9428,12 @@ function SleepPlanCard({ C, events, now }) {
   );
 }
 
-function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDispute }) {
-  const hasSwaps = swaps && swaps.length > 0;
-  const [adjExpanded, setAdjExpanded] = useState(false);
-  // Build a map of which blocks were swapped, for highlight purposes
+// v05.05bt27: ShiftListGrid — the two-column "Mommy | Daddy" shift list
+// with annotation indicators (+/↔/↩/⚖/⏸) to the left of each adjusted
+// shift and a pulsing dot for the currently-active block (today only).
+// Extracted from TodaysPlanCard so the Schedule tab's DayPlanCard can
+// use the same renderer instead of the bar-graphic strip it had before.
+function ShiftListGrid({ C, shifts, swaps, isToday, now }) {
   const swappedKeys = useMemo(() => {
     const map = {};
     for (const s of swaps || []) {
@@ -9379,14 +9443,91 @@ function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDisp
     return map;
   }, [swaps]);
 
-  // Determine which shift block is "now" so we can mark it
-  const currentMin = now.getHours() * 60 + now.getMinutes();
+  const currentMin = now ? now.getHours() * 60 + now.getMinutes() : -1;
   const isCurrentBlock = (s) => {
+    if (!isToday || !now) return false;
     const a = toMin(s.start);
     const b = toMin(s.end);
     return a < b ? currentMin >= a && currentMin < b : currentMin >= a || currentMin < b;
   };
 
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+      {["Mommy", "Daddy"].map(parent => {
+        const color = parent === "Mommy" ? C.mommy : C.daddy;
+        const list = shifts[parent] || [];
+        return (
+          <div key={parent} style={{
+            padding: "10px 12px",
+            borderTop: `3px solid ${color}`,
+            borderRight: parent === "Mommy" ? `1px solid ${C.line}10` : "none",
+          }}>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600,
+              color, lineHeight: 1, marginBottom: 6,
+            }}>
+              {parent}
+            </div>
+            {list.length === 0 ? (
+              <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>—</div>
+            ) : list.map((s, i) => {
+              const k = `${s.start}-${s.end}`;
+              const swap = swappedKeys[k];
+              const wasMoved = swap && swap.coveringParent === parent;
+              const isBalance = swap && swap.kind === "balance";
+              const isAntiCluster = swap && swap.kind === "anti-cluster";
+              const isAutoRepayment = swap && swap.kind === "auto-repayment";
+              const isRepaymentShift = s._isRepayment === true;
+              const isAutoRepaymentShift = s._isAutoRepayment === true;
+              const isTakeoverSlice = s._isTakeoverSlice === true;
+              const current = isCurrentBlock(s);
+              return (
+                <div key={i} style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12,
+                  padding: "3px 0",
+                  color: C.ink,
+                  fontWeight: current ? 700 : (wasMoved || isRepaymentShift || isAutoRepaymentShift || isTakeoverSlice ? 600 : 400),
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  {current && (
+                    <span style={{
+                      display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+                      background: color, flexShrink: 0,
+                    }} className="pulse-soft" />
+                  )}
+                  {wasMoved && !isBalance && !isAntiCluster && !isAutoRepayment && swap?.kind !== "takeover" && swap?.kind !== "repayment" && (
+                    <span style={{ fontSize: 10, color: C.accent, flexShrink: 0 }}>+</span>
+                  )}
+                  {isTakeoverSlice && (
+                    <span style={{ fontSize: 10, color: C.accent, flexShrink: 0 }} title={`Took over for ${s._takeoverDurationMin}m`}>↔</span>
+                  )}
+                  {isRepaymentShift && (
+                    <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Repaying ${s._takeoverDurationMin}m takeover`}>↩</span>
+                  )}
+                  {isAutoRepaymentShift && (
+                    <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Auto-repaying ${s._autoRepayDurationMin}m coverage from earlier`}>↩</span>
+                  )}
+                  {wasMoved && isBalance && (
+                    <span style={{ fontSize: 10, color: color, flexShrink: 0 }}>⚖</span>
+                  )}
+                  {wasMoved && isAntiCluster && (
+                    <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title="Breaking a 4h+ stretch for the other parent">⏸</span>
+                  )}
+                  <span>{fmtShiftRange(s)}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDispute }) {
+  const hasSwaps = swaps && swaps.length > 0;
+  const [adjExpanded, setAdjExpanded] = useState(false);
   // Sort swaps so the ones impacting currentUser sort first
   const sortedSwaps = useMemo(() => {
     const arr = [...(swaps || [])];
@@ -9428,76 +9569,7 @@ function TodaysPlanCard({ C, shifts, baseShifts, swaps, now, currentUser, onDisp
           <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>matches base</span>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-        {["Mommy", "Daddy"].map(parent => {
-          const color = parent === "Mommy" ? C.mommy : C.daddy;
-          const list = shifts[parent] || [];
-          return (
-            <div key={parent} style={{
-              padding: "10px 12px",
-              borderTop: `3px solid ${color}`,
-              borderRight: parent === "Mommy" ? `1px solid ${C.line}10` : "none",
-            }}>
-              <div style={{
-                fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600,
-                color, lineHeight: 1, marginBottom: 6,
-              }}>
-                {parent}
-              </div>
-              {list.length === 0 ? (
-                <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>—</div>
-              ) : list.map((s, i) => {
-                const k = `${s.start}-${s.end}`;
-                const swap = swappedKeys[k];
-                const wasMoved = swap && swap.coveringParent === parent;
-                const isBalance = swap && swap.kind === "balance";
-                const isAntiCluster = swap && swap.kind === "anti-cluster";
-                const isAutoRepayment = swap && swap.kind === "auto-repayment";
-                const isRepaymentShift = s._isRepayment === true;
-                const isAutoRepaymentShift = s._isAutoRepayment === true;
-                const isTakeoverSlice = s._isTakeoverSlice === true;
-                const current = isCurrentBlock(s);
-                return (
-                  <div key={i} style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 12,
-                    padding: "3px 0",
-                    color: current ? C.ink : C.ink,
-                    fontWeight: current ? 700 : (wasMoved || isRepaymentShift || isAutoRepaymentShift || isTakeoverSlice ? 600 : 400),
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}>
-                    {current && (
-                      <span style={{
-                        display: "inline-block", width: 5, height: 5, borderRadius: "50%",
-                        background: color, flexShrink: 0,
-                      }} className="pulse-soft" />
-                    )}
-                    {wasMoved && !isBalance && !isAntiCluster && !isAutoRepayment && swap?.kind !== "takeover" && swap?.kind !== "repayment" && (
-                      <span style={{ fontSize: 10, color: C.accent, flexShrink: 0 }}>+</span>
-                    )}
-                    {isTakeoverSlice && (
-                      <span style={{ fontSize: 10, color: C.accent, flexShrink: 0 }} title={`Took over for ${s._takeoverDurationMin}m`}>↔</span>
-                    )}
-                    {isRepaymentShift && (
-                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Repaying ${s._takeoverDurationMin}m takeover`}>↩</span>
-                    )}
-                    {isAutoRepaymentShift && (
-                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title={`Auto-repaying ${s._autoRepayDurationMin}m coverage from earlier`}>↩</span>
-                    )}
-                    {wasMoved && isBalance && (
-                      <span style={{ fontSize: 10, color: color, flexShrink: 0 }}>⚖</span>
-                    )}
-                    {wasMoved && isAntiCluster && (
-                      <span style={{ fontSize: 10, color: "#7B9B6E", flexShrink: 0 }} title="Breaking a 4h+ stretch for the other parent">⏸</span>
-                    )}
-                    <span>{fmtShiftRange(s)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+      <ShiftListGrid C={C} shifts={shifts} swaps={swaps} isToday={true} now={now} />
 
       {/* Adjustments — collapsible drawer with explanations */}
       {hasSwaps && (
@@ -10997,19 +11069,26 @@ function DayPlanCard({
       {/* Body — only when open */}
       {open && (
         <div style={{ padding: "0 14px 14px" }}>
-          {/* Visual hour-block strip — replaces the old per-parent text-list.
-              v05.05bt10: shows each hour of the day colored by who's on duty
-              (mauve = Mommy, blue = Daddy), with carve/conflict indicators
-              layered on top. Mirrors the landing-page treatment but for a
-              specific calendar day (today or tomorrow), not a rolling
-              next-24h window. */}
-          <DayPlanShiftStrip
-            C={C}
-            shiftBlocks={shiftBlocks}
-            commitments={commitments}
-            isToday={isToday}
-            now={now}
-          />
+          {/* v05.05bt27: replaced the bar graphic (DayPlanShiftStrip) with
+              the same two-column shift list rendering used on the landing
+              page's Today's Plan card. Annotation indicators (+/↔/↩/⚖/⏸)
+              appear to the left of each adjusted shift; bold weight
+              indicates a moved/repayment/takeover shift. The pulsing
+              current-block dot only renders for today, never tomorrow. */}
+          <div style={{
+            border: `1px solid ${C.line}15`,
+            borderRadius: 8,
+            overflow: "hidden",
+            marginBottom: 12,
+          }}>
+            <ShiftListGrid
+              C={C}
+              shifts={shiftBlocks}
+              swaps={daySwaps}
+              isToday={isToday}
+              now={now}
+            />
+          </div>
 
           {/* Auto-swap summary — collapsed by default. Header shows just
               the count chip; tap to expand and see why each adjustment
@@ -13418,10 +13497,38 @@ function MeetingRow({ m, C, onRemove, onEdit }) {
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
           background: colors.bg, color: colors.fg,
-          padding: "3px 6px", borderRadius: 4, marginRight: 12,
+          padding: "3px 6px", borderRadius: 4,
         }}>
           {colors.label}
         </span>
+        {/* v05.05bt29: visible inline edit + delete buttons as fallback
+            for users who don't discover the swipe gesture. The swipe and
+            the body tap still work as before; these are just an
+            always-visible alternative. */}
+        {onEdit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            aria-label="Edit"
+            style={{
+              background: "transparent", border: "none", color: C.muted,
+              cursor: "pointer", padding: "8px 4px", opacity: 0.6,
+              display: "flex", alignItems: "center",
+            }}>
+            <Edit3 size={13} />
+          </button>
+        )}
+        {onRemove && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            aria-label="Delete"
+            style={{
+              background: "transparent", border: "none", color: C.muted,
+              cursor: "pointer", padding: "8px 12px 8px 4px", opacity: 0.6,
+              display: "flex", alignItems: "center",
+            }}>
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </SwipeableRow>
   );
