@@ -14,19 +14,19 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt41";
+const APP_VERSION = "2026.05.05bt42";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "BANK: Redeem now usable with ANY positive credit (was gated at ≥30m). Three gates lowered: TimeBankCard pip, BankView quick-action tile, BankView hero CTA. Helper text reworded — no more 'need at least 30m'.",
-  "BANK: RedeemModal picker step lowered from 15m to 5m so small balances are practical. Presets now [15, 30, 60, 90, 120, 180, 240] (added 15m).",
+  "NOTIFICATION SOUNDS extended to three more banner surfaces that previously rendered silently: (1) incoming handoff note from partner, (2) partner-initiated takeover (when they tap 'I'll cover' on their device and cloud sync brings it to yours), (3) active covering commitment when it starts. Plus a new 'note' tone — soft ascending two-tone (C5→E5, sine wave) — distinct from wake/info/urgent so you can audibly differentiate without looking at the screen.",
+  "Carryover from bt41: Bank Redeem usable with any positive credit, picker step 5m, 15m preset added.",
   "Carryover from bt40: Nap quality age norms inline + column header on distribution + explicit unit labels.",
-  "Carryover from bt39: Bank Redeem visibility — permanent fourth quick-action tile, helper line, hero CTA when eligible.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt41", summary: "Bank Redeem threshold lowered from ≥30m to any positive credit (≥1m) per user feedback. All three gates (TimeBankCard pip on Now tab, BankView quick-action tile, BankView hero CTA) updated. RedeemModal picker step reduced from 15m to 5m and 15m added to the preset list — small balances are now practical to redeem without awkward picker friction. Helper micro-copy reworded throughout: 'Need at least 30m' → 'Redeem unlocks once partner owes you any coverage time.'" },
+  { version: "2026.05.05bt42", summary: "NOTIFICATION SOUNDS extended to notes + previously-silent banners. (a) Incoming handoff note from partner (showInlineNote) now plays a soft 'note' tone — ascending C5→E5 sine wave double-tone, lower amplitude than urgent. (b) Partner-initiated takeover plays an info chime when the cloud sync brings the takeover state with coveringParent !== currentUser to your device. (c) activeCoveringCommitment banner plays an info chime when the obligation starts. All use useNotificationSound's transition-based gating so they only fire on falsy→truthy edge, never on re-render. The new 'note' waveform is intentionally distinct from wake (descending), info (single tone), and urgent (triangle) so you can differentiate notification types audibly." },
+  { version: "2026.05.05bt41", summary: "Bank Redeem threshold lowered from ≥30m to any positive credit (≥1m). All three gates updated. RedeemModal picker step reduced from 15m to 5m and 15m added to the preset list. Helper micro-copy reworded throughout." },
   { version: "2026.05.05bt40", summary: "NAP QUALITY card now shows age-appropriate pediatric norms inline. Each headline metric (median nap, naps/day, daytime sleep total) carries a status indicator (✓ in range / ↓ below / ↑ above) plus the typical range string for Solène's current age band. Norms synthesized from cross-referenced pediatric sleep-medicine guidance and stored as a NAP_NORMS table at module scope. Plus column headers added to the distribution histogram and explicit unit labels on the right-column count ('12 naps · 45%')." },
   { version: "2026.05.05bt39", summary: "Bank tab Redeem visibility fix. Promoted Redeem to a permanent fourth tile in the quick-actions grid (alongside Log debt / Send gift / Log payback) so it's discoverable regardless of balance state. When eligible (partner owes ≥30m): primary-colored, with a helper line and a hero CTA below the grid. When ineligible (you owe, or balance <30m): muted/disabled, with explanatory micro-copy clarifying the gating. The underlying flow (RedeemModal with day/time picker → synthetic red meeting → projection auto-swap) is unchanged." },
   { version: "2026.05.05bt38", summary: "REMOVED the sticky compact header introduced in bt35. Per user feedback it was redundant with the existing big editorial header (Little Ledger / Solène appeared in both). Page scrolls as it did in bt34 — no freeze feature. All other bt35–bt37 features remain." },
@@ -1191,6 +1191,14 @@ function playNotificationSound(type) {
   } else if (type === "urgent") {
     _playTone(660, 130, { gain: 0.08, type: "triangle", attack: 0.005 });
     _playTone(880, 180, { gain: 0.08, type: "triangle", attack: 0.005, startOffset: 120 });
+  } else if (type === "note") {
+    // v05.05bt42 — soft ascending two-tone for incoming-message feel.
+    // Lower amplitude + sine waveform = warm, non-startling "you've got
+    // a note from your partner" chime. Distinct from "wake" (which is
+    // descending) and "info" (single tone) so the user can audibly
+    // differentiate without looking at the screen.
+    _playTone(523, 140, { gain: 0.04, type: "sine" });           // C5
+    _playTone(659, 180, { gain: 0.045, type: "sine", startOffset: 110 }); // E5
   } else {
     _playTone(660, 220, { gain: 0.05, type: "sine" });
   }
@@ -8233,6 +8241,26 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     return hoursSince >= URGENT_H;
   })();
   useNotificationSound(diaperUrgent, "urgent");
+  // v05.05bt42 — additional notification surfaces that previously rendered
+  // silently. All three use useNotificationSound's transition-based gating
+  // (only fires on falsy→truthy edge), so they don't re-chime on re-renders.
+  // 1. Incoming handoff note — partner left you a message and it's
+  //    unacknowledged. The "note" tone is a soft ascending two-tone so
+  //    it's audibly distinct from baby-care alerts.
+  useNotificationSound(!!showInlineNote, "note");
+  // 2. Partner-initiated takeover — when partner taps "I'll cover" on
+  //    their device, the cloud sync brings the takeover state to your
+  //    phone. You should hear it so you know coverage has shifted.
+  //    Filtered to coveringParent !== currentUser so you don't chime at
+  //    yourself when YOU initiated.
+  useNotificationSound(
+    !!takeover && takeover.coveringParent && takeover.coveringParent !== currentUser,
+    "info"
+  );
+  // 3. Active covering commitment — when a meeting where partner is
+  //    covering for you starts (or vice versa), the banner appears. Soft
+  //    info chime so the obligation start is announced.
+  useNotificationSound(!!activeCoveringCommitment, "info");
 
   return (
     <div className="fade-up" style={{
