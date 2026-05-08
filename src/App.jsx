@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt31";
+const APP_VERSION = "2026.05.05bt34";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,6 +30,9 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt34", summary: "PUMP-END SYNC FIX: previously, ending a pump fired two unbatched cloud pushes (clear activePump + add pump event) which could race with a poll and leave activePump stuck. Now wraps the transaction in cloudWritePaused (same mechanism imports use) and force-pushes all 3 keys after a 500ms settle. Also added DEV button 'Clear stuck active pump' in Profile Switcher for one-time cleanup of any existing stuck state." },
+  { version: "2026.05.05bt33", summary: "LOG → Feed bottle picker now shows 'Bottle X' label next to oz when bottles have one. Also handles freezer bottles (was previously filtered out — only RT and fridge were shown). Freezer bottles get the Fz badge and a 'Xd frozen' caption." },
+  { version: "2026.05.05bt32", summary: "Bug fix: Log → Feed with BM was disabled when inventory was empty, despite the empty-state message saying 'feed will be logged.' canSubmit now allows submission when no BM bottles exist. The feed is logged with inventoryReconcileNeeded:true so it shows ⚠ in journal — tap to reconcile later by adding the missing bottle and marking resolved. Same flow that already worked from the bottle picker." },
   { version: "2026.05.05bt31", summary: "Tile eyebrow text now reads 'tap to use or add' when populated (was 'tap to use'). Surfaces the bt30 add-bottle affordance to the user before they tap. Applied to RT, Fridge, and Freezer." },
   { version: "2026.05.05bt30", summary: "Add bottle from non-empty picker — Use mode now has a '+ Add another bottle to [location]' button (above log-anyway escape hatch). Manage mode also gets a '+ Add a new bottle to [location]' button between bottle list and bulk action bar. Both routes open the existing EditBottleModal in add mode (oz, location, label, pumped time). Manage mode also now shows bottle labels next to oz." },
   { version: "2026.05.05bt29", summary: "Added always-visible inline edit + delete buttons to MeetingRow (commitments on Schedule tab Today/Tomorrow cards). Swipe gesture and body tap still work as before; these are just an always-visible fallback for users who don't discover the swipe." },
@@ -4998,6 +5001,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             });
             return { cleared };
           }}
+          onClearStuckActivePump={() => {
+            // v05.05bt34: clear a stuck activePump that wasn't cleared by
+            // the normal end-pump flow (cloud sync race). Just sets it to
+            // null so subsequent pump start works. Cloud syncs the clear.
+            setActivePump(null);
+          }}
           onOpenFamilyCodeSetup={() => {
             setShowProfileSwitcher(false);
             // Clear the dismiss flag so the modal can show even if previously
@@ -5427,6 +5436,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               const durationMin = wasPower && Math.abs(wallMin - POWER_PUMP_TOTAL_MIN) <= 2
                 ? POWER_PUMP_TOTAL_MIN
                 : wallMin;
+              // v05.05bt34: pause cloud writes during the pump-end
+              // multi-step transaction. Without this, setActivePump(null)
+              // and addEvent fire two separate cloud pushes; if a poll
+              // runs between them and pulls the OLD activePump from cloud,
+              // it overwrites our just-cleared local state. Pause + force
+              // push both keys after a brief settle.
+              storage.setCloudContext({ cloudWritePaused: true });
               // Clear timer FIRST so even if a downstream call throws,
               // the user isn't stuck with a stale active-pump state.
               setActivePump(null);
@@ -5447,8 +5463,20 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 bottleLabel,
                 ...(wasPower ? { pumpType: "power" } : {}),
               });
+              // Unpause + force-push both keys after React settles all
+              // the state updates above. 500ms matches the import path.
+              setTimeout(() => {
+                storage.setCloudContext({ cloudWritePaused: false });
+                // Functional setState to read the post-merge state and
+                // force a fresh cloud push for both keys.
+                setEvents(curr => { storage.set("solene:events", curr); return curr; });
+                setInventory(curr => { storage.set("solene:inventory", curr); return curr; });
+                storage.set("solene:activePump", null);
+              }, 500);
             } catch (err) {
               console.error("[FinishPumpModal.onSubmit] failed:", err);
+              // v05.05bt34: release cloud-write-pause on error too.
+              storage.setCloudContext({ cloudWritePaused: false });
               // Even on error, clear the modal so the user isn't stuck
               setShowFinishPump(false);
               alert("Couldn't fully log the pump — please check the Journal and inventory. Error: " + (err?.message || err));
@@ -6634,7 +6662,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
 }
 
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Viewer color for chrome — cloud sync section, etc.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
@@ -7251,6 +7279,19 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
                 fontSize: 11, cursor: "pointer", fontFamily: "inherit",
               }}>
                 Reset today's bath/skip events (re-test bedtime banner)
+              </button>
+            )}
+            {onClearStuckActivePump && (
+              <button onClick={() => {
+                onClearStuckActivePump();
+                alert("Cleared activePump. If a pump session was actually running, you'll need to start it again.");
+              }} style={{
+                width: "100%", marginTop: 6,
+                background: "transparent", color: C.muted,
+                border: `1px dashed ${C.line}33`, borderRadius: 6, padding: "8px",
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              }}>
+                Clear stuck active pump (sync race recovery)
               </button>
             )}
           </div>
@@ -15207,7 +15248,11 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
     const valid = liveInventory.filter(i => !i.expired);
     const rt = valid.filter(i => i.location === "rt").sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
     const fr = valid.filter(i => i.location === "fridge").sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
-    return [...rt, ...fr];
+    // v05.05bt33: include freezer too. Order: RT first (most urgent expiry),
+    // then fridge, then freezer last (longest life — typically only used
+    // when nothing fresher is available).
+    const fz = valid.filter(i => i.location === "freezer").sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
+    return [...rt, ...fr, ...fz];
   }, [liveInventory]);
 
   // Total currently allocated across all selected bottles
@@ -15264,7 +15309,20 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
     setSkipInventory(false);
   };
 
-  const canSubmit = !usesBM || skipInventory || (Math.abs(allocated - targetBmOz) < 0.05);
+  // canSubmit: BM feeds normally require allocation to match the BM oz total.
+  // Three exceptions where we let it through:
+  //   - source isn't BM (Formula / Mix-without-BM-portion)
+  //   - user explicitly toggled skipInventory
+  //   - there's literally no BM in inventory to allocate from (the empty-state
+  //     message tells them this is fine; the submit handler already sends
+  //     empty bottleAllocations and skips the drain)
+  // v05.05bt32: previously the empty-inventory case wasn't in this list, so
+  // the button was disabled despite the empty-state message saying "the feed
+  // will be logged but nothing will be deducted." Classic UI lie. Fixed.
+  const canSubmit = !usesBM
+    || skipInventory
+    || availableBottles.length === 0
+    || (Math.abs(allocated - targetBmOz) < 0.05);
 
   return (
     <>
@@ -15291,7 +15349,7 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
               borderRadius: 10, padding: "10px 12px", fontSize: 12,
               color: C.ink, lineHeight: 1.5,
             }}>
-              No BM bottles in inventory. The feed will be logged but nothing will be deducted.
+              No BM bottles in inventory. The feed will be logged with a ⚠ flag — tap it later in the journal to reconcile (add the missing bottle and mark resolved).
             </div>
           ) : (
             <>
@@ -15319,7 +15377,12 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
                   const used = allocations[b.id] || 0;
                   const isUsed = used > 0;
                   const pumpedAt = new Date(b.pumpedAt);
-                  const locColor = b.location === "rt" ? C.gold : C.daddy;
+                  const locColor = b.location === "rt" ? C.gold
+                    : b.location === "freezer" ? "#5A7E9C"
+                    : C.daddy;
+                  const locBadge = b.location === "rt" ? "RT"
+                    : b.location === "freezer" ? "Fz"
+                    : "Fr";
                   return (
                     <div key={b.id} style={{
                       background: isUsed ? `${locColor}15` : C.bg,
@@ -15332,15 +15395,27 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
                         background: locColor, color: "#fff",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 11, fontWeight: 700, flexShrink: 0,
-                      }}>{b.location === "rt" ? "RT" : "Fr"}</span>
+                      }}>{locBadge}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.1 }}>
-                          {b.oz} oz · pumped {fmtTimeShort(pumpedAt)}
+                          {b.oz} oz
+                          {b.bottleLabel && (
+                            <span style={{
+                              fontSize: 12, color: locColor, marginLeft: 6,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontWeight: 700, letterSpacing: "0.04em",
+                            }}>· Bottle {b.bottleLabel}</span>
+                          )}
+                          <span style={{ color: C.muted, fontStyle: "italic", fontSize: 13, marginLeft: 6 }}>
+                            · pumped {fmtTimeShort(pumpedAt)}
+                          </span>
                         </div>
                         <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
                           {b.location === "rt"
                             ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`
-                            : `fridge · ${b.remaining.toFixed(0)}h left`}
+                            : b.location === "freezer"
+                              ? `freezer · ${Math.round((Date.now() - pumpedAt.getTime()) / 86400000)}d frozen`
+                              : `fridge · ${b.remaining.toFixed(0)}h left`}
                         </div>
                       </div>
                       {/* Stepper: − [oz] + */}
@@ -15449,7 +15524,8 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         // Build bottleAllocations array from the map. Skip-inventory and
         // empty-inventory paths leave it empty (consumer just adds the feed
         // event without deducting).
-        const bottleAllocations = (skipInventory || availableBottles.length === 0)
+        const noBottlePicked = skipInventory || availableBottles.length === 0;
+        const bottleAllocations = noBottlePicked
           ? []
           : Object.entries(allocations)
               .filter(([_, n]) => Number(n) > 0)
@@ -15459,6 +15535,10 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
           ts: time === "now" ? new Date() : new Date(customTime),
           bottleAllocations,
           dreamFeed,
+          // v05.05bt32: flag for reconciliation when logged without bottle
+          // tracking. Surfaces ⚠ in journal so the user can later add the
+          // missing bottle and mark the feed resolved.
+          inventoryReconcileNeeded: noBottlePicked && usesBM,
         });
       }}>
         {!canSubmit
