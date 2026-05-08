@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt22";
+const APP_VERSION = "2026.05.05bt25";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,7 +30,10 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt22", summary: "Pump edit form gains bottle-label field (syncs to inventory bottle by ts ↔ pumpedAt match) · journal + today's rhythm pump labels show 'Bottle X' suffix · inventory tile bottle label upgraded from subtle italic to bold 'Bottle X' monospace + added to fridge tile (was missing) · fridge tile clickable when 0 oz to allow manual add" },
+  { version: "2026.05.05bt25", summary: "Bath after dismissing 'no bath tonight' — (1) logging a bath auto-supersedes any same-day bath_skipped events so the journal stays clean, (2) bath_skipped events now show in journal as muted italic '🛁 No bath tonight' with an inline '↻ undo · log bath' affordance that opens the bath logger directly. No new buttons added to the LOG sheet." },
+  { version: "2026.05.05bt24", summary: "VISIBLE GUARD BANNER — peak-count safety net now surfaces a terracotta banner at the top of the app when it blocks a cloud push, with diagnostic info (X → Y entries) and two actions: 'Dismiss' (keeps local data, no push) or 'It's intentional · Push anyway' (calls acknowledgeShrink and force-pushes). Hydration + write-pause guards remain silent (they're routine)." },
+  { version: "2026.05.05bt23", summary: "CLOUD SYNC RACE FIXES — three-layer protection against the data loss seen tonight: (1) hydration guard prevents cloud writes until first successful poll completes (stops boot race), (2) write-pause flag disables cloud pushes during multi-step imports, force-pushes consolidated state after merge, (3) peak-event-count safety net aborts pushes that would shrink the events array by 5+ from peak. New acknowledgeShrink() method for legitimate bulk deletes. wipeAll calls it. Console.log warnings on guard fires for diagnostic visibility." },
+  { version: "2026.05.05bt22", summary: "Pump edit form gains bottle-label field · journal + today's rhythm pump labels show 'Bottle X' suffix · inventory tile bottle label upgraded · fridge tile clickable when 0 oz" },
   { version: "2026.05.05bt21", summary: "Freezer milk: new strip below RT/Fridge tiles · picker shows 'frozen Xd ago' captions · feeds from freezer auto-tag source as BM-thawed · NEW 'Bottle not in list — log anyway' escape hatch · edit modal on flagged feeds shows reconciliation banner · BM-thawed added to feed source picker" },
   { version: "2026.05.05bt20", summary: "Removed bt19 diagnostic · added 'Reset today's bath/skip events' button in DEV section · ⚡ Power pump indicator added to journal + today's rhythm pump labels" },
   { version: "2026.05.05bt19", summary: "TEMP: diagnostic banner inside OnDutyCard reports why bedtime banner is/isn't showing — surfaces current now value, window check, and any blocking conditions. Will remove after root cause found." },
@@ -1124,12 +1127,39 @@ const storage = {
   // Reset can clear them cleanly.
   _familyCode: null,
   _syncingFromCloud: false,
-  _onCloudWriteError: null, // callback for offline-pip UI
+  _onCloudWriteError: null, // callback for offline-pip UI (network failure)
+  _onCloudWriteBlocked: null, // v05.05bt23: callback when peak-count safety net fires (data loss prevention)
+  // v05.05bt23: cloud write protection.
+  // _cloudHydrated: only true after the first cloud poll has completed
+  // successfully. Until then, NO cloud writes happen. Prevents the boot
+  // race where the app's autosave effects fire before the cloud pull has
+  // populated state, pushing an empty/stale local state up and overwriting
+  // good cloud data.
+  // _cloudWritePaused: temporarily disables cloud writes during multi-step
+  // state mutations (imports, restores). Caller is responsible for clearing
+  // and triggering a fresh push.
+  // _peakEventCount: highest events array length we've seen this session.
+  // If we're about to push an events array meaningfully smaller (>5 fewer),
+  // abort and warn — this is the defensive net for race conditions we
+  // didn't catch otherwise.
+  _cloudHydrated: false,
+  _cloudWritePaused: false,
+  _peakEventCount: 0,
 
-  setCloudContext({ familyCode, syncingFromCloud, onCloudWriteError }) {
+  setCloudContext({ familyCode, syncingFromCloud, onCloudWriteError, onCloudWriteBlocked, cloudHydrated, cloudWritePaused }) {
     if (familyCode !== undefined) this._familyCode = familyCode;
     if (syncingFromCloud !== undefined) this._syncingFromCloud = syncingFromCloud;
     if (onCloudWriteError !== undefined) this._onCloudWriteError = onCloudWriteError;
+    if (onCloudWriteBlocked !== undefined) this._onCloudWriteBlocked = onCloudWriteBlocked;
+    if (cloudHydrated !== undefined) this._cloudHydrated = cloudHydrated;
+    if (cloudWritePaused !== undefined) this._cloudWritePaused = cloudWritePaused;
+  },
+
+  // v05.05bt23: explicitly allow the next push to shrink the events array
+  // (used after legitimate bulk delete or reset). Resets the peak counter
+  // so the next setEvents push isn't blocked by the safety check.
+  acknowledgeShrink() {
+    this._peakEventCount = 0;
   },
 
   // Wipe marker sentinel: if this localStorage key exists, the user just
@@ -1202,12 +1232,60 @@ const storage = {
     // the UI never blocks on network. On failure we ping the offline-indicator
     // callback so the header can show a "sync paused" pip.
     //
+    // v05.05bt23 protections:
+    //   - _cloudHydrated: don't push before first cloud pull has confirmed
+    //     received state (stops boot race)
+    //   - _cloudWritePaused: lets imports temporarily disable pushes during
+    //     multi-step mutations
+    //   - peak event count check: refuse to push solene:events if we're
+    //     about to wipe a meaningful number of entries (defensive net)
+    //
     // Why we exclude solene:meta:* keys: those are local-only infrastructure
     // (wipe marker, daily-content cache, etc.) that don't belong on the
     // cloud. Pushing them would pollute the namespace and could even loop
     // (the wipe marker push on Device A would propagate to Device B and
     // confuse its hydrate).
     if (this._familyCode && !this._syncingFromCloud && !key.startsWith("solene:meta:")) {
+      // Hydration guard: silently swallow the push if we haven't yet
+      // confirmed a successful cloud pull. localStorage already has the
+      // value; cloud will catch up on the first push after hydration.
+      if (!this._cloudHydrated) {
+        console.log("[storage] skipping cloud push (not hydrated yet):", key);
+        return;
+      }
+      // Pause guard: imports/restores set this so multi-step state changes
+      // don't generate intermediate cloud pushes.
+      if (this._cloudWritePaused) {
+        console.log("[storage] skipping cloud push (writes paused):", key);
+        return;
+      }
+      // Peak-count safety check: only applies to solene:events. If the
+      // value we're pushing has 5+ fewer entries than the largest we've
+      // seen this session, that's suspicious — abort the push and log a
+      // warning. The user can still see the data locally; manual
+      // intervention is needed to push.
+      if (key === "solene:events" && Array.isArray(value)) {
+        if (value.length > this._peakEventCount) {
+          this._peakEventCount = value.length;
+        } else if (this._peakEventCount - value.length >= 5) {
+          console.error(
+            "[storage] CLOUD PUSH ABORTED: events array shrunk from peak " +
+            `${this._peakEventCount} to ${value.length}. ` +
+            "This looks like data loss. Push blocked. " +
+            "Banner shown to user with override option."
+          );
+          if (this._onCloudWriteBlocked) {
+            try {
+              this._onCloudWriteBlocked({
+                peakCount: this._peakEventCount,
+                currentCount: value.length,
+                droppedCount: this._peakEventCount - value.length,
+              });
+            } catch {}
+          }
+          return;
+        }
+      }
       // Pushing the parsed value (not the JSON string) so the server stores
       // it as a structured object, matching what cloudGet returns.
       this.cloudSet(this._familyCode, key, value).then(ok => {
@@ -1225,7 +1303,9 @@ const storage = {
       }
     } catch {}
     // Mirror the delete to the cloud so other devices stop seeing this key.
-    if (this._familyCode && !this._syncingFromCloud && !key.startsWith("solene:meta:")) {
+    // v05.05bt23: also gated by _cloudHydrated and _cloudWritePaused.
+    if (this._familyCode && !this._syncingFromCloud && !key.startsWith("solene:meta:")
+        && this._cloudHydrated && !this._cloudWritePaused) {
       this.cloudDel(this._familyCode, key).catch(() => {});
     }
   },
@@ -1235,6 +1315,9 @@ const storage = {
     try {
       localStorage.setItem(this.WIPE_MARKER_KEY, String(Date.now()));
     } catch {}
+    // v05.05bt23: explicitly acknowledge that we're about to shrink things,
+    // so the peak-count guard doesn't block the wipe pushes.
+    this.acknowledgeShrink();
 
     // List ALL solene:* keys we know about. If the artifact storage API doesn't expose
     // a list operation we can't enumerate dynamically, so this list must stay current.
@@ -1578,6 +1661,10 @@ function SoleneHandoffInner() {
   //   "syncing" → an initial sync (upload-on-Generate or download-on-Enter) is in progress
   // The header shows a small pip in the LIVE area whose color reflects this.
   const [cloudSyncStatus, setCloudSyncStatus] = useState("ok"); // "ok" | "offline" | "syncing"
+  // v05.05bt23: when the peak-count safety net fires, we set this with
+  // diagnostic info so the UI can show a banner. null = no warning.
+  // Shape: { peakCount, currentCount, droppedCount }
+  const [cloudGuardWarning, setCloudGuardWarning] = useState(null);
   // syncingFromCloudRef is set to true while we're applying a poll result to
   // React state. The autosave effects (and storage.set internally) check this
   // to skip re-pushing to cloud, which would otherwise create a feedback loop.
@@ -1666,6 +1753,88 @@ function SoleneHandoffInner() {
   // to every `now` read. Session-only (not persisted) so a page reload
   // returns to real time. Configured in Profile Switcher → DEV section.
   const [timeTravelOffset, setTimeTravelOffset] = useState(0);
+
+  // v05.05bt23: Update-available detection. On boot we capture the
+  // currently-running JS bundle filename (Vite content-hashes it, so it
+  // changes on every deploy). Periodically we re-fetch index.html and
+  // compare. If the deployed bundle name differs from the running one,
+  // there's a newer version on the server. Show a banner so the user knows
+  // to refresh — solves the "phone stuck on stale code" problem we hit
+  // when the home-screen shortcut's PWA cache served bt7 long after bt22
+  // was deployed.
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [bundleHash, setBundleHash] = useState(null); // running version
+  const [latestBundleHash, setLatestBundleHash] = useState(null); // deployed
+  const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
+
+  // Capture the running bundle hash once on mount.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try {
+      const scripts = document.querySelectorAll('script[src*="/assets/"]');
+      // Take the first matching one — Vite emits index-XXX.js as the entry.
+      for (const s of scripts) {
+        const src = s.getAttribute("src") || "";
+        if (src.includes("/assets/") && src.endsWith(".js")) {
+          // Extract just the filename part for comparison
+          const filename = src.split("/").pop();
+          setBundleHash(filename);
+          break;
+        }
+      }
+    } catch (e) { console.warn("[update-check] couldn't read running bundle hash", e); }
+  }, []);
+
+  // Periodically fetch index.html and check whether the deployed bundle
+  // differs from what's running. Skip the first 30 seconds to avoid noise
+  // during deploy windows. Fetch with no-store to bypass any PWA cache.
+  useEffect(() => {
+    if (!bundleHash) return; // wait until we have our own hash
+    let cancelled = false;
+    const checkForUpdate = async () => {
+      if (cancelled) return;
+      try {
+        const url = `/index.html?_v=${Date.now()}`;
+        const resp = await fetch(url, { cache: "no-store" });
+        if (!resp.ok) {
+          setUpdateCheckFailed(true);
+          return;
+        }
+        const text = await resp.text();
+        // Parse out the bundle filename from the script tag in the HTML
+        const match = text.match(/<script[^>]*src="[^"]*\/assets\/([^"]+\.js)"/);
+        if (!match) {
+          setUpdateCheckFailed(true);
+          return;
+        }
+        const deployedFilename = match[1];
+        if (cancelled) return;
+        setLatestBundleHash(deployedFilename);
+        setUpdateCheckFailed(false);
+        if (deployedFilename !== bundleHash) {
+          setUpdateAvailable(true);
+        }
+      } catch (e) {
+        if (!cancelled) setUpdateCheckFailed(true);
+        // Non-fatal — could be offline. We just don't set updateAvailable.
+      }
+    };
+    // First check after 30 seconds (avoid deploy-window noise)
+    const initial = setTimeout(checkForUpdate, 30000);
+    // Then every 10 minutes
+    const interval = setInterval(checkForUpdate, 10 * 60000);
+    // Also check when tab regains visibility (user comes back)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      clearTimeout(initial);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [bundleHash]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date(Date.now() + timeTravelOffset)), 15000);
@@ -1885,6 +2054,10 @@ function SoleneHandoffInner() {
         // are handled separately. We only flip to offline during steady-state.
         setCloudSyncStatus(prev => prev === "syncing" ? prev : "offline");
       },
+      // v05.05bt23: peak-count guard — surfaces a banner with override
+      onCloudWriteBlocked: (info) => {
+        setCloudGuardWarning(info);
+      },
     });
   }, [familyCode]);
 
@@ -1955,6 +2128,10 @@ function SoleneHandoffInner() {
         if (serverTs <= lastCloudTimestampRef.current) {
           // Nothing new. Just confirm we're online.
           setCloudSyncStatus(prev => prev === "syncing" ? prev : "ok");
+          // v05.05bt23: even though there was nothing new, we successfully
+          // contacted the cloud and confirmed our local state matches.
+          // Lift the hydration guard so subsequent local edits push.
+          storage.setCloudContext({ cloudHydrated: true });
           return;
         }
 
@@ -1982,7 +2159,9 @@ function SoleneHandoffInner() {
         // happen async so we need to make sure none are in flight.
         setTimeout(() => {
           syncingFromCloudRef.current = false;
-          storage.setCloudContext({ syncingFromCloud: false });
+          // v05.05bt23: lift the hydration guard now that we've pulled
+          // and applied the cloud's state. Future local edits will push.
+          storage.setCloudContext({ syncingFromCloud: false, cloudHydrated: true });
         }, 200);
       } catch (e) {
         console.warn("[poll] error:", e);
@@ -2286,13 +2465,36 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       const next = [...prev];
       if (autoWakeEvent) next.push(autoWakeEvent);
       next.push(newEv);
+      // v05.05bt25 — Option 2: bath supersedes same-day bath_skipped.
+      // When the user logs an actual bath, any "no bath tonight" decision
+      // from earlier today is invalidated. Remove the skip events from the
+      // same calendar day. We use the new event's date as the anchor so
+      // late-night baths (after midnight) don't accidentally clear next-day
+      // skip events.
+      let result = next;
+      if (newEv.type === "bath") {
+        const newEvDate = new Date(newEv.ts);
+        const startOfDay = new Date(newEvDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        const before = result.length;
+        result = result.filter(e => {
+          if (e.type !== "bath_skipped") return true;
+          const t = new Date(e.ts);
+          return !(t >= startOfDay && t < endOfDay);
+        });
+        if (result.length < before) {
+          console.log(`[addEvent] bath supersedes ${before - result.length} bath_skipped event(s) from today`);
+        }
+      }
       // SYNC PERSIST: write straight to localStorage so data is durable
       // even if the runtime tears down before the React effect runs.
       try {
-        localStorage.setItem("solene:events", JSON.stringify(next));
+        localStorage.setItem("solene:events", JSON.stringify(result));
         localStorage.setItem("solene:events:backup", JSON.stringify(prev));
       } catch (e) { console.warn("[addEvent] sync persist failed", e); }
-      return next;
+      return result;
     });
 
     if (ev.type === "feed" && ev.source && ev.source.includes("BM") && ev.oz && !ev.inventoryReconcileNeeded) {
@@ -3737,6 +3939,34 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       <FontImports />
       <PaperGrain mode={mode} />
 
+      {/* Update-available banner — appears when a newer JS bundle is
+          deployed than the one currently running. Tap to reload with
+          cache-bust. v05.05bt23. Solves the "phone stuck on stale code"
+          problem (e.g. PWA shortcut serving bt7 long after bt22 was
+          deployed). The user gets a visible signal rather than silently
+          running outdated code. */}
+      {updateAvailable && (
+        <div onClick={() => {
+          // Reload with cache-bust query so even aggressive PWA caches yield.
+          const url = new URL(window.location.href);
+          url.searchParams.set("_v", Date.now().toString());
+          window.location.replace(url.toString());
+        }} style={{
+          background: C.accent,
+          color: "#fff",
+          padding: "8px 14px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, fontWeight: 600,
+          textAlign: "center",
+          cursor: "pointer",
+          letterSpacing: "0.04em",
+          position: "relative", zIndex: 6,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+        }}>
+          ↻ UPDATE AVAILABLE · tap to refresh and load the latest version
+        </div>
+      )}
+
       {/* Time-travel indicator — only renders when an offset is active.
           Quick-exit by clicking anywhere on the banner. v05.05bt16. */}
       {timeTravelOffset !== 0 && (
@@ -3752,6 +3982,94 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           position: "relative", zIndex: 5,
         }}>
           ⏱ TIME TRAVEL · app sees {now.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })} · tap to exit
+        </div>
+      )}
+
+      {/* Cloud sync guard banner — persistent until user acts. Fires when
+          the peak-event-count safety net blocks a cloud push because the
+          events array shrunk by 5+. Either real data loss prevented (good)
+          or a legitimate bulk delete (false positive). User decides.
+          v05.05bt23. */}
+      {cloudGuardWarning && (
+        <div style={{
+          background: "#8A4A35", // terracotta — caution but not alarming
+          color: "#FCF7EB",
+          padding: "12px 16px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11,
+          position: "relative", zIndex: 5,
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0, marginTop: -1 }}>⚠</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, letterSpacing: "0.04em", marginBottom: 3 }}>
+                CLOUD SYNC PAUSED — POSSIBLE DATA LOSS PREVENTED
+              </div>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: 14, fontStyle: "italic", lineHeight: 1.4,
+                fontWeight: 500,
+              }}>
+                Blocked an update that would have removed{" "}
+                <span style={{ fontWeight: 700 }}>
+                  {cloudGuardWarning.droppedCount} entries
+                </span>{" "}
+                ({cloudGuardWarning.peakCount} → {cloudGuardWarning.currentCount}).
+                Your local data is unchanged.
+              </div>
+            </div>
+          </div>
+          <div style={{
+            display: "flex", gap: 8, justifyContent: "flex-end",
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <button
+              onClick={() => setCloudGuardWarning(null)}
+              style={{
+                background: "transparent",
+                color: "#FCF7EB",
+                border: "1px solid #FCF7EB66",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontSize: 10, fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                letterSpacing: "0.04em",
+              }}>
+              DISMISS
+            </button>
+            <button
+              onClick={() => {
+                // User confirms the shrink is intentional. Reset the peak
+                // counter so the next push goes through, then trigger a
+                // fresh push of current events to cloud.
+                storage.acknowledgeShrink();
+                // Use functional setState to read the current events and
+                // immediately trigger the autosave effect.
+                setEvents(curr => {
+                  storage.set("solene:events", curr);
+                  return curr;
+                });
+                setCloudGuardWarning(null);
+              }}
+              style={{
+                background: "#FCF7EB",
+                color: "#8A4A35",
+                border: "none",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontSize: 10, fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                letterSpacing: "0.04em",
+              }}>
+              IT'S INTENTIONAL · PUSH ANYWAY
+            </button>
+          </div>
         </div>
       )}
 
@@ -4205,7 +4523,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           />
         )}
         {tab === "log" && (
-          <LogView C={C} events={events} removeEvent={removeEvent} updateEvent={updateEvent} now={now} />
+          <LogView C={C} events={events} removeEvent={removeEvent} updateEvent={updateEvent} now={now} onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }} />
         )}
         {tab === "shifts" && (
           <ShiftsView
@@ -4617,6 +4935,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
               initialSyncDoneRef.current = true;
               setCloudSyncStatus("ok");
+              // v05.05bt23: explicit hydration after initial setup completes.
+              storage.setCloudContext({ cloudHydrated: true });
             } catch (e) {
               console.warn("[initial sync] failed:", e);
               alert("Cloud sync setup hit an error: " + (e.message || e) + "\n\nYour local data is safe. Try resetting the family code from Profile Switcher.");
@@ -4763,6 +5083,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               if (parsed.schemaVersion !== 1) {
                 throw new Error(`Unknown schema version ${parsed.schemaVersion} (expected 1)`);
               }
+              // v05.05bt23: pause cloud writes during the multi-step import.
+              // This prevents intermediate state pushes (after each individual
+              // setX call) from racing with cloud polls and producing partial
+              // states on other devices. After all setX calls have fired, we
+              // unpause + force a single push to capture the final merged
+              // state. 500ms gives React time to batch and run all the
+              // autosave effects before the unpause fires.
+              storage.setCloudContext({ cloudWritePaused: true });
               const d = parsed.data;
 
               // --- Helpers ---
@@ -4927,6 +5255,29 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
               const totalAdded = Object.values(added).reduce((s, n) => s + n, 0);
               const totalSkipped = Object.values(skipped).reduce((s, n) => s + n, 0);
+              // v05.05bt23: schedule the cloud-write-pause release after a
+              // delay long enough for React to batch all the setX calls
+              // above and run their autosave effects. The autosaves are
+              // currently no-ops (paused), but as soon as we unpause, the
+              // NEXT state change will trigger a push capturing the final
+              // merged state. We force-push the events array immediately
+              // on unpause to make sure the merged state lands on cloud
+              // even if no further state changes happen.
+              setTimeout(() => {
+                storage.setCloudContext({ cloudWritePaused: false });
+                // Force an immediate push of the merged state to cloud.
+                // Reading from a setState callback to get the post-merge
+                // events; the actual push happens via storage.set().
+                setEvents(curr => {
+                  storage.set("solene:events", curr);
+                  return curr;
+                });
+                setMeetings(curr => { storage.set("solene:meetings", curr); return curr; });
+                setInventory(curr => { storage.set("solene:inventory", curr); return curr; });
+                setNotes(curr => { storage.set("solene:notes", curr); return curr; });
+                setNoteArchive(curr => { storage.set("solene:noteArchive", curr); return curr; });
+                setTimeBank(curr => { storage.set("solene:timeBank", curr); return curr; });
+              }, 500);
               return {
                 ok: true,
                 count: totalAdded,
@@ -4935,6 +5286,9 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 summary: `Added ${totalAdded} new entries · skipped ${totalSkipped} duplicates`,
               };
             } catch (err) {
+              // v05.05bt23: release cloud-write-pause on error too, otherwise
+              // the app is permanently locked out of cloud writes.
+              storage.setCloudContext({ cloudWritePaused: false });
               return { ok: false, error: err.message || String(err) };
             }
           }}
@@ -5025,6 +5379,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               window.location.reload();
             }
           }}
+          updateAvailable={updateAvailable}
+          latestBundleHash={latestBundleHash}
+          bundleHash={bundleHash}
+          updateCheckFailed={updateCheckFailed}
         />
       )}
 
@@ -6212,7 +6570,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
 }
 
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Viewer color for chrome — cloud sync section, etc.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
@@ -6313,10 +6671,59 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           <div style={{
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 11, color: C.accent, fontWeight: 600,
-            letterSpacing: "0.06em", marginBottom: 10,
+            letterSpacing: "0.06em", marginBottom: 6,
           }}>
             v{APP_VERSION}
           </div>
+          {/* v05.05bt23: update-check status. Three states:
+                - update available: coral with refresh prompt
+                - up-to-date: sage with confirmation
+                - check failed / unknown: muted dash */}
+          {updateAvailable ? (
+            <button onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set("_v", Date.now().toString());
+              window.location.replace(url.toString());
+            }} style={{
+              background: `${C.accent}15`,
+              border: `1px solid ${C.accent}55`,
+              color: C.accent,
+              padding: "6px 10px", borderRadius: 6,
+              fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.04em", cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace",
+              marginBottom: 10,
+              display: "flex", alignItems: "center", gap: 5,
+              width: "100%", textAlign: "left",
+            }}>
+              ↻ Update available — tap to refresh
+            </button>
+          ) : updateCheckFailed ? (
+            <div style={{
+              fontSize: 10, color: C.muted, fontStyle: "italic",
+              marginBottom: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              · update check unavailable (offline?)
+            </div>
+          ) : latestBundleHash ? (
+            <div style={{
+              fontSize: 10, color: "#7B9B6E", fontWeight: 600,
+              marginBottom: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.04em",
+            }}>
+              ✓ up to date
+            </div>
+          ) : (
+            <div style={{
+              fontSize: 10, color: C.muted, fontStyle: "italic",
+              marginBottom: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              · checking for updates…
+            </div>
+          )}
           {APP_BUILD_NOTES.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 6 }}>
@@ -9592,6 +9999,7 @@ function TimelineEvent({ ev, C, now }) {
     sleep_down: "Down for sleep",
     sleep_up: "Awake",
     bath: `${BATH_TYPES[ev.bathType]?.icon || "🛁"} ${BATH_TYPES[ev.bathType]?.label || "Bath"}`,
+    bath_skipped: "🛁 No bath tonight",
     skincare: `${ev.routine === "AM" ? "☀️ AM" : "🌙 PM"} routine done`,
     activity: activityInfo ? `${activityInfo.emoji} ${activityInfo.l}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}` : `Activity${ev.durationMin ? ` · ${ev.durationMin}m` : ""}`,
     takeover: `Takeover · ${ev.coveringParent} covered ${ev.originalParent}${ev.durationMin ? ` for ${fmtBalance(ev.durationMin)}` : ""}`,
@@ -9755,9 +10163,12 @@ function ShiftStrip({ C, shifts, now }) {
   );
 }
 
-function LogView({ C, events, removeEvent, updateEvent, now }) {
+function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
   const [editing, setEditing] = useState(null); // event being edited
-  const visibleEvents = events.filter(e => !e.silent);
+  // v05.05bt25 — show bath_skipped events in journal (even though silent)
+  // so users can see + undo their "no bath tonight" decision. Other silent
+  // events (wake_confirmed) stay hidden.
+  const visibleEvents = events.filter(e => !e.silent || e.type === "bath_skipped");
   const sorted = [...visibleEvents].sort((a, b) => new Date(b.ts) - new Date(a.ts));
   const grouped = {};
   for (const e of sorted) {
@@ -9801,13 +10212,24 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
 
           const dayBody = (
             <div style={{ background: C.paper, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}15`, marginTop: 8 }}>
-              {evs.map((e, i) => (
+              {evs.map((e, i) => {
+                // v05.05bt25 — bath_skipped rows are special: tapping them
+                // opens the bath logger (so the user can change their mind).
+                // The Option-2 logic in addEvent will auto-remove this skip
+                // event when the bath is logged.
+                const isSkippedBath = e.type === "bath_skipped";
+                const rowOnClick = isSkippedBath
+                  ? () => onOpenBathLog && onOpenBathLog()
+                  : () => setEditing(e);
+                return (
                 <div key={e.id} style={{
                   display: "flex", alignItems: "center", gap: 10,
                   borderTop: i === 0 ? "none" : `1px solid ${C.line}10`,
+                  opacity: isSkippedBath ? 0.7 : 1,
+                  fontStyle: isSkippedBath ? "italic" : "normal",
                 }}>
                   <button
-                    onClick={() => setEditing(e)}
+                    onClick={rowOnClick}
                     style={{
                       flex: 1, display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 14px",
@@ -9840,6 +10262,7 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                       {e.type === "sleep_down" && `Down for sleep${e.estimated ? " (est.)" : ""}`}
                       {e.type === "sleep_up" && "Awake"}
                       {e.type === "bath" && `${BATH_TYPES[e.bathType]?.icon} ${BATH_TYPES[e.bathType]?.label}`}
+                      {e.type === "bath_skipped" && "🛁 No bath tonight"}
                       {e.type === "skincare" && `${e.routine === "AM" ? "☀️" : "🌙"} ${e.routine} routine`}
                       {e.type === "activity" && (() => {
                         const a = ACTIVITIES.find(x => x.v === e.activityType);
@@ -9847,7 +10270,18 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                       })()}
                       {e.type === "takeover" && `↔ ${e.coveringParent} covered ${e.originalParent}${e.durationMin ? ` · ${e.durationMin}m` : ""}`}
                     </span>
-                    <Edit3 size={11} color={C.muted} style={{ opacity: 0.4 }} />
+                    {isSkippedBath ? (
+                      <span style={{
+                        fontSize: 10, color: C.accent,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontStyle: "normal", fontWeight: 600,
+                        whiteSpace: "nowrap",
+                      }}>
+                        ↻ undo · log bath
+                      </span>
+                    ) : (
+                      <Edit3 size={11} color={C.muted} style={{ opacity: 0.4 }} />
+                    )}
                   </button>
                   <button onClick={(ev) => { ev.stopPropagation(); removeEvent(e.id); }} style={{
                     background: "transparent", border: "none", color: C.muted, cursor: "pointer",
@@ -9856,7 +10290,8 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                     <Trash2 size={13} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           );
 
