@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt30";
+const APP_VERSION = "2026.05.05bt31";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,6 +30,7 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt31", summary: "Tile eyebrow text now reads 'tap to use or add' when populated (was 'tap to use'). Surfaces the bt30 add-bottle affordance to the user before they tap. Applied to RT, Fridge, and Freezer." },
   { version: "2026.05.05bt30", summary: "Add bottle from non-empty picker — Use mode now has a '+ Add another bottle to [location]' button (above log-anyway escape hatch). Manage mode also gets a '+ Add a new bottle to [location]' button between bottle list and bulk action bar. Both routes open the existing EditBottleModal in add mode (oz, location, label, pumped time). Manage mode also now shows bottle labels next to oz." },
   { version: "2026.05.05bt29", summary: "Added always-visible inline edit + delete buttons to MeetingRow (commitments on Schedule tab Today/Tomorrow cards). Swipe gesture and body tap still work as before; these are just an always-visible fallback for users who don't discover the swipe." },
   { version: "2026.05.05bt28", summary: "Bug fix: auto-repayment indicator (↩ sage green) was silently never rendering on either the landing page Today's Plan or the Schedule tab Today/Tomorrow cards. Root cause: stripAnnotations whitelist in activeShifts dropped _isAutoRepayment and _autoRepayDurationMin flags. Now preserved through projection. When Daddy covers Mommy's 5-6a meeting, the shift she's automatically repaying him on now shows the indicator on both surfaces." },
@@ -8517,7 +8518,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           }}>
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
             Room temp
-            {rtSafeOz > 0 ? <span style={{ opacity: 0.6 }}> · tap to use</span> : <span style={{ opacity: 0.6 }}> · tap to add</span>}
+            {rtSafeOz > 0 ? <span style={{ opacity: 0.6 }}> · tap to use or add</span> : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
@@ -8594,7 +8595,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
             Fridge
             {fridgeOz > 0
-              ? <span style={{ opacity: 0.6 }}> · tap to use</span>
+              ? <span style={{ opacity: 0.6 }}> · tap to use or add</span>
               : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
@@ -8699,7 +8700,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
               }}>
                 Freezer
                 <span style={{ opacity: 0.6 }}>
-                  {hasFreezer ? " · tap to use" : " · tap to add a frozen bottle"}
+                  {hasFreezer ? " · tap to use or add" : " · tap to add a frozen bottle"}
                 </span>
               </div>
               {hasFreezer ? (
