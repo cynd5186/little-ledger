@@ -14,22 +14,25 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt34";
+const APP_VERSION = "2026.05.05bt41";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "POLISH: 'made with care by Cyndell · for Solène ✦' colophon now sits prominently at the top of every page (under the tagline)",
-  "FIX: Day plan shift chart now updates immediately when commitments are added/removed",
-  "Build fix: JS comments in JSX attribute position (rejected by Rolldown)",
-  "DATA INTEGRITY: auto-snapshot before any family-code change · 'Restore from snapshot' UI",
-  "DATA INTEGRITY: '22:NaNa' bug fixed everywhere",
-  "MILK: prominent expiration banner · sharpie label visible per bottle · auto-suggest next letter",
-  "JOURNAL: pump entries show start–end range",
-  "WELLNESS: awake-7h impossibility flag · doctor summary period-over-period + local fallback",
+  "BANK: Redeem now usable with ANY positive credit (was gated at ≥30m). Three gates lowered: TimeBankCard pip, BankView quick-action tile, BankView hero CTA. Helper text reworded — no more 'need at least 30m'.",
+  "BANK: RedeemModal picker step lowered from 15m to 5m so small balances are practical. Presets now [15, 30, 60, 90, 120, 180, 240] (added 15m).",
+  "Carryover from bt40: Nap quality age norms inline + column header on distribution + explicit unit labels.",
+  "Carryover from bt39: Bank Redeem visibility — permanent fourth quick-action tile, helper line, hero CTA when eligible.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt41", summary: "Bank Redeem threshold lowered from ≥30m to any positive credit (≥1m) per user feedback. All three gates (TimeBankCard pip on Now tab, BankView quick-action tile, BankView hero CTA) updated. RedeemModal picker step reduced from 15m to 5m and 15m added to the preset list — small balances are now practical to redeem without awkward picker friction. Helper micro-copy reworded throughout: 'Need at least 30m' → 'Redeem unlocks once partner owes you any coverage time.'" },
+  { version: "2026.05.05bt40", summary: "NAP QUALITY card now shows age-appropriate pediatric norms inline. Each headline metric (median nap, naps/day, daytime sleep total) carries a status indicator (✓ in range / ↓ below / ↑ above) plus the typical range string for Solène's current age band. Norms synthesized from cross-referenced pediatric sleep-medicine guidance and stored as a NAP_NORMS table at module scope. Plus column headers added to the distribution histogram and explicit unit labels on the right-column count ('12 naps · 45%')." },
+  { version: "2026.05.05bt39", summary: "Bank tab Redeem visibility fix. Promoted Redeem to a permanent fourth tile in the quick-actions grid (alongside Log debt / Send gift / Log payback) so it's discoverable regardless of balance state. When eligible (partner owes ≥30m): primary-colored, with a helper line and a hero CTA below the grid. When ineligible (you owe, or balance <30m): muted/disabled, with explanatory micro-copy clarifying the gating. The underlying flow (RedeemModal with day/time picker → synthetic red meeting → projection auto-swap) is unchanged." },
+  { version: "2026.05.05bt38", summary: "REMOVED the sticky compact header introduced in bt35. Per user feedback it was redundant with the existing big editorial header (Little Ledger / Solène appeared in both). Page scrolls as it did in bt34 — no freeze feature. All other bt35–bt37 features remain." },
+  { version: "2026.05.05bt37", summary: "NAP QUALITY analytics card — daytime sleep stretches (excludes each day's main/longest sleep) split into short<25m / medium 25-50m / long 50-90m / very-long 90+m. Shows median, p25/p75, naps/day, total daytime sleep, and recent-vs-older-half trend so you can see whether naps are consolidating. Threshold: 6am-7pm sleep_down to count as nap. Plus iOS layer-promotion hints on TabBar + LOG button (translateZ(0) + willChange) to make the fixed bottom panel more robust on iOS Safari." },
+  { version: "2026.05.05bt36", summary: "PREDICTION ACCURACY tracking. Each feed/breastfeed/sleep_down snapshots predicted time at log time and stores signed delta in minutes. Journal rows show per-event chip ('✓ on time' / '+12m late' / '−8m early'). Wellness prediction cards show aggregate accuracy ('78% within 15m · n=24') over the analytics window. Soft info chime plays when actual lands within ±10m of predicted. Predictions for feeds use median inter-feed interval (≥3 prior sessions, last 7d); predictions for sleep_down use median wake-window from latest sleep_up (≥3 prior pairs, last 7d)." },
+  { version: "2026.05.05bt35", summary: "Sticky compact brand+status header · bigger bottom-tab targets · takeover auto-end at shift boundary · sleep/wake trace inline duration labels · feed→sleep latency by time-of-day card · notification sounds (wake/info/urgent) · meeting red>yellow>green precedence rule" },
   { version: "2026.05.05bt34", summary: "PUMP-END SYNC FIX: previously, ending a pump fired two unbatched cloud pushes (clear activePump + add pump event) which could race with a poll and leave activePump stuck. Now wraps the transaction in cloudWritePaused (same mechanism imports use) and force-pushes all 3 keys after a 500ms settle. Also added DEV button 'Clear stuck active pump' in Profile Switcher for one-time cleanup of any existing stuck state." },
   { version: "2026.05.05bt33", summary: "LOG → Feed bottle picker now shows 'Bottle X' label next to oz when bottles have one. Also handles freezer bottles (was previously filtered out — only RT and fridge were shown). Freezer bottles get the Fz badge and a 'Xd frozen' caption." },
   { version: "2026.05.05bt32", summary: "Bug fix: Log → Feed with BM was disabled when inventory was empty, despite the empty-state message saying 'feed will be logged.' canSubmit now allows submission when no BM bottles exist. The feed is logged with inventoryReconcileNeeded:true so it shows ⚠ in journal — tap to reconcile later by adding the missing bottle and marking resolved. Same flow that already worked from the bottle picker." },
@@ -623,6 +626,43 @@ const DIAPER_URGENT_HOURS = 4;
 const KCAL_PER_OZ_BM = 22;          // ~20 kcal/oz milk + ~10% production overhead
 const KCAL_PER_BF_MINUTE = 4.5;     // average per minute of active nursing
 
+// ---- Pediatric nap norms by age band (v05.05bt40) -----------------------
+// Synthesized from cross-referenced sleep-medicine guidance (AASM/AAP-aligned
+// consensus + Little Ones, Huckleberry, Taking Cara Babies, Mayo Clinic,
+// Baby Sleep Site). These are RANGES — every baby varies — meant to give
+// the user "is she in the typical zone or way outside?" context, not to
+// prescribe a target. Fields:
+//   from/to     — age in days (inclusive lower, exclusive upper)
+//   napsLow/Hi  — typical naps/day count
+//   totalLow/Hi — typical total daytime sleep, MINUTES per day
+//   indivLow/Hi — typical individual nap duration band, MINUTES (rough)
+//   label       — short descriptor for the eyebrow
+// At Solène's age (~3.5 mo / 105 days) she's in the 90–180 day band:
+// 3-4 naps, 3.5-5h daytime, 30-90 min per nap typical.
+const NAP_NORMS = [
+  { from:    0, to:   30, napsLow: 4, napsHi: 6, totalLow: 240, totalHi: 360, indivLow: 30, indivHi: 180, label: "Newborn" },
+  { from:   30, to:   90, napsLow: 3, napsHi: 5, totalLow: 240, totalHi: 300, indivLow: 30, indivHi: 120, label: "1–3 mo" },
+  { from:   90, to:  180, napsLow: 3, napsHi: 4, totalLow: 180, totalHi: 300, indivLow: 30, indivHi:  90, label: "3–6 mo" },
+  { from:  180, to:  270, napsLow: 2, napsHi: 3, totalLow: 120, totalHi: 240, indivLow: 45, indivHi: 120, label: "6–9 mo" },
+  { from:  270, to:  365, napsLow: 2, napsHi: 2, totalLow: 120, totalHi: 180, indivLow: 60, indivHi: 120, label: "9–12 mo" },
+  { from:  365, to:  540, napsLow: 1, napsHi: 2, totalLow:  90, totalHi: 180, indivLow: 60, indivHi: 150, label: "12–18 mo" },
+  { from:  540, to: 1095, napsLow: 1, napsHi: 1, totalLow:  60, totalHi: 120, indivLow: 60, indivHi: 150, label: "18 mo–3 yr" },
+];
+function napNormForAgeDays(ageDays) {
+  for (const band of NAP_NORMS) {
+    if (ageDays >= band.from && ageDays < band.to) return band;
+  }
+  // Fall back to the closest band on either edge
+  return ageDays < 0 ? NAP_NORMS[0] : NAP_NORMS[NAP_NORMS.length - 1];
+}
+// Compare a measured value to a [low, high] range. Returns "low" | "ok" | "high".
+function statusVsRange(value, low, hi) {
+  if (value == null || isNaN(value)) return "ok";
+  if (value < low) return "low";
+  if (value > hi) return "high";
+  return "ok";
+}
+
 // Format minutes as a human-readable duration. Below 60min returns "45m"
 // (no hours block), at-or-above 60 returns "1h" / "1h 15m" / "8h 30m" —
 // never fractional hours like "1.5h" because those read as math, not time.
@@ -958,6 +998,212 @@ function whoIsOn(shifts, now = new Date()) {
     }
   }
   return { parent: "Mommy", shift: shifts.Mommy[0] };
+}
+
+// ---- Meeting priority (v05.05bt35) --------------------------------------
+// red > yellow > green. Used by the projection logic when both parents have
+// meetings overlapping a shift window: the higher-priority (red) is protected
+// and the lower-priority (yellow) parent covers. Same-priority conflicts
+// (both red or both yellow) still flag as a manual-resolution conflict.
+function meetingPriority(m) {
+  if (!m) return 0;
+  if (m.level === "red") return 2;
+  if (m.level === "yellow") return 1;
+  return 0; // green or unknown
+}
+
+// ---- Prediction helpers (v05.05bt36) ------------------------------------
+// Compute predicted next-feed-time using the same logic as DoctorView's
+// stats useMemo, but as a pure function callable at the moment of logging
+// a new event. Snapshotting the prediction-at-time-of-logging into the
+// event itself lets us track accuracy retroactively without re-deriving
+// historical predictions (which would require backing out future events
+// from the data — fragile and expensive).
+//
+// Returns { ts: Date, basis: { medianIntervalMin, sampleCount } } or null
+// if there isn't enough data to predict (need ≥3 prior feed sessions in
+// the trailing 7-day window, with computable inter-feed intervals).
+function computePredictedNextFeed(eventsList, now) {
+  const cutoff = new Date(now.getTime() - 7 * 86400000);
+  const recent = (eventsList || []).filter(e =>
+    !e.silent && new Date(e.ts) >= cutoff && new Date(e.ts) <= now
+  );
+  const allFeeds = recent
+    .filter(e => e.type === "feed" || e.type === "breastfeed")
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  const sessions = clusterFeeds(allFeeds, 10);
+  if (sessions.length < 3) return null;
+
+  const intervals = [];
+  for (let i = 1; i < sessions.length; i++) {
+    const m = (new Date(sessions[i].ts) - new Date(sessions[i - 1].ts)) / 60000;
+    if (m > 0 && m < 360) intervals.push(m); // bound at 6h to drop overnight
+  }
+  if (intervals.length === 0) return null;
+  intervals.sort((a, b) => a - b);
+  const median = intervals.length % 2 === 1
+    ? intervals[Math.floor(intervals.length / 2)]
+    : (intervals[intervals.length / 2 - 1] + intervals[intervals.length / 2]) / 2;
+  if (median <= 0) return null;
+
+  const lastTs = new Date(sessions[sessions.length - 1].ts);
+  if (isNaN(lastTs.getTime())) return null;
+  return {
+    ts: new Date(lastTs.getTime() + median * 60000),
+    basis: { medianIntervalMin: median, sampleCount: intervals.length },
+  };
+}
+
+// Compute predicted next sleep-down. Requires that baby is currently AWAKE
+// (most recent sleep event is a sleep_up) and that we have ≥3 wake-window
+// samples in the trailing 7d. Returns { ts, basis } or null.
+function computePredictedNextSleepDown(eventsList, now) {
+  const cutoff = new Date(now.getTime() - 7 * 86400000);
+  const sleepEv = (eventsList || [])
+    .filter(e => (e.type === "sleep_down" || e.type === "sleep_up") &&
+                 !e.silent && new Date(e.ts) >= cutoff && new Date(e.ts) <= now)
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  if (sleepEv.length === 0) return null;
+
+  // Wake windows = sleep_up → next sleep_down (only valid pairs)
+  const wakeWindows = [];
+  for (let i = 0; i < sleepEv.length - 1; i++) {
+    if (sleepEv[i].type === "sleep_up" && sleepEv[i + 1].type === "sleep_down") {
+      const w = (new Date(sleepEv[i + 1].ts) - new Date(sleepEv[i].ts)) / 60000;
+      if (w > 5 && w < 480) wakeWindows.push(w); // 5min–8h band
+    }
+  }
+  if (wakeWindows.length < 3) return null;
+  wakeWindows.sort((a, b) => a - b);
+  const median = wakeWindows.length % 2 === 1
+    ? wakeWindows[Math.floor(wakeWindows.length / 2)]
+    : (wakeWindows[wakeWindows.length / 2 - 1] + wakeWindows[wakeWindows.length / 2]) / 2;
+  if (median <= 0) return null;
+
+  // Latest event must be a sleep_up — otherwise baby is currently asleep
+  // and there's no wake-window to base "next sleep" on.
+  const latest = sleepEv[sleepEv.length - 1];
+  if (latest.type !== "sleep_up") return null;
+  return {
+    ts: new Date(new Date(latest.ts).getTime() + median * 60000),
+    basis: { medianWakeWindowMin: median, sampleCount: wakeWindows.length },
+  };
+}
+
+// Format a signed minute delta for display ("+12m late", "−8m early",
+// "✓ on time" if within 5m). Returns { label, tone } where tone is
+// "hit" | "near" | "miss" so the chip can pick a color.
+function formatPredictionDelta(deltaMin) {
+  if (deltaMin == null || isNaN(deltaMin)) return null;
+  const abs = Math.abs(deltaMin);
+  const rounded = Math.round(abs);
+  let tone;
+  if (abs <= 10) tone = "hit";
+  else if (abs <= 25) tone = "near";
+  else tone = "miss";
+  if (abs < 5) return { label: "✓ on time", tone };
+  const sign = deltaMin > 0 ? "+" : "−";
+  const word = deltaMin > 0 ? "late" : "early";
+  return { label: `${sign}${rounded}m ${word}`, tone };
+}
+
+// ---- Notification sound (v05.05bt35) ------------------------------------
+// Synthesizes short tones for in-app banners using Web Audio API. No external
+// assets — keeps the bundle lean.
+//   - "wake"    — two-tone descending chime (~880→660 Hz), wake-check banners
+//   - "info"    — single soft mid tone (~660 Hz), routine prompts (bedtime,
+//                 reminder pips)
+//   - "urgent"  — two-tone ascending alert (660→880 Hz), diaper urgent /
+//                 pump overdue / cloud-push guard
+//
+// iOS PWA caveat: AudioContext starts "suspended" and only resume() inside
+// a gesture handler succeeds. We attach a one-time global listener that
+// resumes on first tap/click; subsequent banner sounds play silently. If a
+// banner appears before any user interaction in a session, it'll be silent
+// — no fallback, no noisy console error.
+let _audioCtx = null;
+let _audioUnlocked = false;
+function _ensureAudioCtx() {
+  if (_audioCtx) return _audioCtx;
+  try {
+    const Ctor = (typeof window !== "undefined") &&
+      (window.AudioContext || window.webkitAudioContext);
+    if (!Ctor) return null;
+    _audioCtx = new Ctor();
+    return _audioCtx;
+  } catch (e) {
+    console.warn("[sound] AudioContext unavailable", e);
+    return null;
+  }
+}
+if (typeof window !== "undefined" && !window.__solene_audio_unlock_attached) {
+  window.__solene_audio_unlock_attached = true;
+  const unlock = () => {
+    const ctx = _ensureAudioCtx();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().then(() => { _audioUnlocked = true; }).catch(() => {});
+    } else if (ctx) {
+      _audioUnlocked = true;
+    }
+  };
+  window.addEventListener("touchstart", unlock, { passive: true });
+  window.addEventListener("click", unlock, { passive: true });
+  window.addEventListener("keydown", unlock, { passive: true });
+}
+function _soundEnabled() {
+  try {
+    const pref = localStorage.getItem("solene:soundEnabled");
+    return pref !== "false"; // default ON
+  } catch { return true; }
+}
+function _playTone(freq, durationMs, opts = {}) {
+  const ctx = _ensureAudioCtx();
+  if (!ctx) return;
+  if (!_audioUnlocked && ctx.state !== "running") return;
+  try {
+    const startOffset = opts.startOffset || 0;
+    const t0 = ctx.currentTime + startOffset / 1000;
+    const dur = durationMs / 1000;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = opts.type || "sine";
+    osc.frequency.value = freq;
+    const peakGain = (opts.gain != null) ? opts.gain : 0.06;
+    const attackS = (opts.attack != null) ? opts.attack : 0.012;
+    const releaseS = (opts.release != null) ? opts.release : 0.08;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(peakGain, t0 + attackS);
+    gain.gain.linearRampToValueAtTime(peakGain * 0.85, t0 + dur - releaseS);
+    gain.gain.linearRampToValueAtTime(0, t0 + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  } catch (e) {
+    console.warn("[sound] tone failed", e);
+  }
+}
+function playNotificationSound(type) {
+  if (!_soundEnabled()) return;
+  if (type === "wake") {
+    _playTone(880, 160, { gain: 0.05, type: "sine" });
+    _playTone(660, 200, { gain: 0.05, type: "sine", startOffset: 140 });
+  } else if (type === "urgent") {
+    _playTone(660, 130, { gain: 0.08, type: "triangle", attack: 0.005 });
+    _playTone(880, 180, { gain: 0.08, type: "triangle", attack: 0.005, startOffset: 120 });
+  } else {
+    _playTone(660, 220, { gain: 0.05, type: "sine" });
+  }
+}
+// React hook: plays `type` sound when `condition` transitions falsy→truthy.
+function useNotificationSound(condition, type) {
+  const prevRef = useRef(false);
+  useEffect(() => {
+    const wasOn = prevRef.current;
+    const isOn = !!condition;
+    if (!wasOn && isOn) playNotificationSound(type);
+    prevRef.current = isOn;
+  }, [condition, type]);
 }
 
 function nextHandoff(shifts, now = new Date(), currentOnDutyParent = null) {
@@ -2439,6 +2685,48 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     const tsISO = dateObj.toISOString();
     const newEv = { ...ev, id: crypto.randomUUID(), ts: tsISO };
 
+    // v05.05bt36: prediction-accuracy snapshot.
+    // For event types that have a model-based prediction (feed, breastfeed,
+    // sleep_down), compute what the prediction WOULD HAVE BEEN given only
+    // the data prior to this new event. Store the predicted timestamp +
+    // signed minute delta on the event itself. This lets the journal show
+    // a per-event accuracy chip without re-deriving historical predictions
+    // (which would require backing out future events from the data — fragile
+    // and expensive). Predictions are deliberately computed from the SAME
+    // logic as the live Wellness cards, so badge values track what the user
+    // sees on the prediction surface.
+    try {
+      const eventTime = new Date(tsISO);
+      let prediction = null;
+      if (ev.type === "feed" || ev.type === "breastfeed") {
+        prediction = computePredictedNextFeed(events, eventTime);
+      } else if (ev.type === "sleep_down") {
+        prediction = computePredictedNextSleepDown(events, eventTime);
+      }
+      if (prediction && prediction.ts) {
+        const deltaMin = (eventTime.getTime() - prediction.ts.getTime()) / 60000;
+        // Sanity bound: drop predictions more than 6h off — these are noise
+        // (e.g. baby missed a feed window entirely; not a useful accuracy data
+        // point). Keeping them would skew the aggregate hit-rate metric.
+        if (Math.abs(deltaMin) <= 360) {
+          newEv._predictionAt = prediction.ts.toISOString();
+          newEv._predictionDeltaMin = Math.round(deltaMin * 10) / 10; // 0.1m precision
+          newEv._predictionBasis = prediction.basis;
+          // Positive feedback chime: when the actual lands within ±10m of
+          // the prediction, play a soft "info" tone. Don't nag for misses.
+          if (Math.abs(deltaMin) <= 10) {
+            // Defer slightly so the chime plays AFTER React commits the
+            // new event (and any banner clearing). Also gives any
+            // user-gesture audio-unlock time to settle.
+            setTimeout(() => playNotificationSound("info"), 120);
+          }
+        }
+      }
+    } catch (predErr) {
+      // Prediction failure is never fatal — just log and proceed without it.
+      console.warn("[addEvent] prediction snapshot failed", predErr);
+    }
+
     // Auto-wake inference: if baby is currently down (last sleep event is sleep_down,
     // no sleep_up after) and the user is now logging an event that implies baby is awake,
     // insert a synthetic sleep_up event 1 min before the new event.
@@ -2874,7 +3162,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     const projected = { Mommy: [], Daddy: [] };
     const swaps = []; // { originalParent, coveringParent, shift, reason, blocked? }
 
-    // Helper: is a parent blocked (red or yellow) at the given absolute time window?
+    // Helper: is a parent EFFECTIVELY blocked at the given window, given
+    // THIS parent's blocking priority? v05.05bt35 — under the red>yellow>green
+    // rule, the other parent is only "blocked" if their meeting at this time
+    // outranks (or ties) my own. If my meeting is RED and theirs is YELLOW,
+    // they can still cover (their lower-priority meeting becomes background).
+    // Returns the other-parent's blocking meeting (or null) so callers can
+    // also decide what to display.
+    const findOtherBlockingMeeting = (other, windowStart, windowEnd) => {
+      return meetingsToday.find(m => {
+        if (m.parent !== other) return false;
+        if (m.level === "green") return false;
+        const ms = new Date(m.start);
+        const me = new Date(m.end);
+        return ms < windowEnd && me > windowStart;
+      }) || null;
+    };
+    // Legacy helper kept for external callers. Returns true only if other
+    // parent has any non-green meeting in the window (no priority compare).
     const isParentBlocked = (parent, windowStart, windowEnd) => {
       return meetingsToday.some(m => {
         if (m.parent !== parent) return false;
@@ -2909,7 +3214,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           const isRedemption = (blocking.label || "").startsWith("Time bank:");
           const isTakeover = blocking.synthetic === true && !blocking.isRepayment;
           const isRepayment = blocking.isRepayment === true;
-          const otherBlocked = isParentBlocked(otherParent, sStart, sEnd);
+          // v05.05bt35: priority-aware "other blocked" check. Other parent
+          // is treated as blocked only if their meeting outranks or ties
+          // mine. Lower-priority other parent can still cover.
+          const otherBlocking = findOtherBlockingMeeting(otherParent, sStart, sEnd);
+          const myPri = meetingPriority(blocking);
+          const otherPri = meetingPriority(otherBlocking);
+          const otherBlocked = otherBlocking != null && otherPri >= myPri;
           // CARVING for ordinary commitments: when a commitment overlaps PART
           // of a shift (not the whole thing), split the shift into "free →
           // covered → free" slices instead of swapping the whole shift. This
@@ -3014,18 +3325,41 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               takeoverDurationMin: blocking.takeoverDurationMin,
             });
           } else {
-            // Both blocked — keep on original parent, flag for manual resolution
-            projected[parent].push({ ...s, _conflict: true, _reason: blocking.label || "commitment" });
-            swaps.push({
-              originalParent: parent,
-              coveringParent: null,
-              shift: s,
-              reason: blocking.label || "commitment",
-              level: blocking.level,
-              blocked: true,
-              kind: isRepayment ? "repayment" : isTakeover ? "takeover" : isRedemption ? "redemption" : "commitment",
-              meetingId: blocking.id,
-            });
+            // Both effectively blocked. Two sub-cases:
+            // v05.05bt35: red>yellow precedence rule.
+            //   (a) myPri < otherPri  → THIS parent stays on shift with
+            //       their lower-priority meeting in the background. The
+            //       other parent's higher-priority meeting is protected.
+            //       (e.g. I'm yellow, other is red → I cover with friction.)
+            //   (b) myPri === otherPri (both red, or both yellow) → genuine
+            //       conflict, manual resolution required.
+            // (myPri > otherPri case can't happen here because otherBlocked
+            // would be false, taking the !otherBlocked branch above.)
+            if (myPri < otherPri) {
+              projected[parent].push({
+                ...s,
+                _yellowSelfCover: true,
+                _selfCoverLevel: blocking.level,
+                _otherProtectedLevel: otherBlocking ? otherBlocking.level : null,
+                _otherProtectedLabel: otherBlocking ? otherBlocking.label : null,
+                _reason: blocking.label || "commitment",
+              });
+              // Note: no swap entry — parent stays on their own shift.
+              // The shift is marked with friction flags for UI surfacing.
+            } else {
+              // Both blocked — keep on original parent, flag for manual resolution
+              projected[parent].push({ ...s, _conflict: true, _reason: blocking.label || "commitment" });
+              swaps.push({
+                originalParent: parent,
+                coveringParent: null,
+                shift: s,
+                reason: blocking.label || "commitment",
+                level: blocking.level,
+                blocked: true,
+                kind: isRepayment ? "repayment" : isTakeover ? "takeover" : isRedemption ? "redemption" : "commitment",
+                meetingId: blocking.id,
+              });
+            }
           }
         } else {
           projected[parent].push(s);
@@ -3496,6 +3830,17 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       return t >= tomorrow && t < dayAfter;
     });
 
+    // v05.05bt35: priority-aware "other blocked" support for tomorrow.
+    // Mirrors the helpers used in today's projection.
+    const findOtherBlockingMeetingT = (other, windowStart, windowEnd) => {
+      return meetingsTomorrow.find(m => {
+        if (m.parent !== other) return false;
+        if (m.level === "green") return false;
+        const ms = new Date(m.start);
+        const me = new Date(m.end);
+        return ms < windowEnd && me > windowStart;
+      }) || null;
+    };
     const isParentBlocked = (parent, windowStart, windowEnd) => {
       return meetingsTomorrow.some(m => {
         if (m.parent !== parent) return false;
@@ -3528,7 +3873,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         });
 
         if (blocking) {
-          const otherBlocked = isParentBlocked(otherParent, sStart, sEnd);
+          // v05.05bt35: priority-aware "other blocked" check for tomorrow.
+          // Same red>yellow precedence as today's projection.
+          const otherBlocking = findOtherBlockingMeetingT(otherParent, sStart, sEnd);
+          const myPri = meetingPriority(blocking);
+          const otherPri = meetingPriority(otherBlocking);
+          const otherBlocked = otherBlocking != null && otherPri >= myPri;
           // CARVING (mirrors today's projection): split shift into free →
           // covered → free slices when commitment overlaps only part of it.
           const commitStart = new Date(blocking.start);
@@ -3597,17 +3947,32 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               meetingId: blocking.id,
             });
           } else {
-            projected[parent].push({ ...s, _conflict: true, _reason: blocking.label || "commitment" });
-            swaps.push({
-              originalParent: parent,
-              coveringParent: null,
-              shift: s,
-              reason: blocking.label || "commitment",
-              level: blocking.level,
-              blocked: true,
-              kind: "commitment",
-              meetingId: blocking.id,
-            });
+            // v05.05bt35: same red>yellow precedence as today's projection.
+            // If my priority is LOWER than other's, I stay on shift with my
+            // lower-priority meeting in the background (yellow self-cover).
+            // Same priority on both sides → genuine conflict, manual resolution.
+            if (myPri < otherPri) {
+              projected[parent].push({
+                ...s,
+                _yellowSelfCover: true,
+                _selfCoverLevel: blocking.level,
+                _otherProtectedLevel: otherBlocking ? otherBlocking.level : null,
+                _otherProtectedLabel: otherBlocking ? otherBlocking.label : null,
+                _reason: blocking.label || "commitment",
+              });
+            } else {
+              projected[parent].push({ ...s, _conflict: true, _reason: blocking.label || "commitment" });
+              swaps.push({
+                originalParent: parent,
+                coveringParent: null,
+                shift: s,
+                reason: blocking.label || "commitment",
+                level: blocking.level,
+                blocked: true,
+                kind: "commitment",
+                meetingId: blocking.id,
+              });
+            }
           }
         } else {
           projected[parent].push(s);
@@ -3887,6 +4252,53 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     }
     prevOnDutyRef.current = onDuty.parent;
   }, [onDuty.parent, hydrated, currentUser]);
+
+  // v05.05bt35 — Auto-end takeover at shift boundary.
+  // When the covering parent's own scheduled shift starts (i.e. baseOnDuty
+  // becomes equal to takeover.coveringParent), the takeover is no longer
+  // "unplanned coverage" — they're just on duty. Auto-end: bank elapsed
+  // minutes to the time bank, log a journal entry, clear takeover. Same
+  // semantics as the user pressing "Take back" / "I'm done covering",
+  // just triggered automatically when the schedule catches up.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!takeover) return;
+    if (baseOnDuty.parent !== takeover.coveringParent) return;
+    // Edge case guard: don't auto-end immediately on the same tick the
+    // takeover was created (e.g. user tagged in DURING the covering
+    // parent's already-active shift, which shouldn't happen but be safe).
+    const ageMs = Date.now() - new Date(takeover.startedAt).getTime();
+    if (ageMs < 30 * 1000) return;
+
+    const startMs = new Date(takeover.startedAt).getTime();
+    const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
+    setTakeover(null);
+    try { localStorage.setItem("solene:takeover", "null"); } catch {}
+    const newTransactions = [
+      ...timeBank.transactions,
+      {
+        id: crypto.randomUUID(),
+        ts: new Date().toISOString(),
+        kind: "owed",
+        from: takeover.coveringParent,
+        to: takeover.originalParent,
+        mins,
+        reason: "Impromptu takeover (auto-ended at shift boundary)",
+      },
+    ];
+    setTimeBank({
+      balance: computeTimeBankBalance(newTransactions),
+      transactions: newTransactions,
+    });
+    addEvent({
+      type: "takeover",
+      ts: new Date(takeover.startedAt),
+      durationMin: mins,
+      coveringParent: takeover.coveringParent,
+      originalParent: takeover.originalParent,
+      autoEnded: true,
+    });
+  }, [hydrated, takeover, baseOnDuty.parent]);
 
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
@@ -6662,6 +7074,40 @@ function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
 }
 
 
+// v05.05bt35: SoundToggleButton — small toggle that lives in the DEV
+// section of Profile Switcher. Persists choice via localStorage so
+// reloads remember it. Tap plays a test "info" chime so the user can
+// confirm audio is actually unlocked (iOS PWAs require a gesture to
+// unlock AudioContext; this tap satisfies that).
+function SoundToggleButton({ C }) {
+  const [enabled, setEnabled] = useState(_soundEnabled());
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    try { localStorage.setItem("solene:soundEnabled", next ? "true" : "false"); } catch {}
+    if (next) {
+      // Play a test chime on the same gesture so audio is unlocked AND
+      // the user gets immediate feedback that it works.
+      setTimeout(() => playNotificationSound("info"), 80);
+    }
+  };
+  return (
+    <button onClick={toggle} style={{
+      width: "100%", marginTop: 6,
+      background: enabled ? `${C.gold}15` : "transparent",
+      color: enabled ? C.gold : C.muted,
+      border: `1px dashed ${enabled ? C.gold + "55" : C.line + "33"}`,
+      borderRadius: 6, padding: "8px",
+      fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    }}>
+      <Bell size={11} />
+      Notification sounds: {enabled ? "ON" : "off"}
+      {enabled && <span style={{ fontSize: 9, opacity: 0.7 }}>(tap to test)</span>}
+    </button>
+  );
+}
+
 function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Viewer color for chrome — cloud sync section, etc.
@@ -7294,6 +7740,12 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
                 Clear stuck active pump (sync race recovery)
               </button>
             )}
+            {/* v05.05bt35: notification sound toggle. Persists in localStorage
+                under 'solene:soundEnabled' so the choice survives reloads.
+                Default: ON. Tap plays a test "info" chime to verify audio
+                unlocked. Note: if audio is fully muted on the device (silent
+                switch on iPhone), no chime plays regardless of this setting. */}
+            <SoundToggleButton C={C} />
           </div>
         );
       })()}
@@ -7763,6 +8215,24 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
       : null;
     return { latestFeedTimeStr };
   })();
+
+  // v05.05bt35: notification sounds.
+  // Trigger short chimes whenever a banner transitions from hidden→visible
+  // so the parent doesn't miss a check-in if the phone is set down. The
+  // hook plays nothing on subsequent renders while the banner stays open.
+  // iOS PWA caveat: AudioContext requires a user gesture to unlock — the
+  // module-level listener catches the first tap; the very first banner of
+  // a session may be silent until that first tap occurs.
+  useNotificationSound(!!sleepInfo, "wake");
+  useNotificationSound(!!bedtimeInfo, "info");
+  // Urgent banners: any diaper that's crossed the urgent threshold (typically
+  // 4h+ since last change) deserves an audible nudge.
+  const diaperUrgent = (() => {
+    if (!lastDiaper) return false;
+    const hoursSince = (now - new Date(lastDiaper.ts)) / 3600000;
+    return hoursSince >= URGENT_H;
+  })();
+  useNotificationSound(diaperUrgent, "urgent");
 
   return (
     <div className="fade-up" style={{
@@ -10385,6 +10855,40 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                       })()}
                       {e.type === "takeover" && `↔ ${e.coveringParent} covered ${e.originalParent}${e.durationMin ? ` · ${e.durationMin}m` : ""}`}
                     </span>
+                    {/* v05.05bt36: prediction-accuracy chip.
+                        Renders inline only when the event captured a
+                        prediction snapshot at log time (feed / breastfeed /
+                        sleep_down with sufficient prior data). Three tones:
+                          hit  = within 10m → sage green ("✓ on time" or "+8m late")
+                          near = 10–25m off → gold
+                          miss = >25m off  → muted (still informative but visually quiet) */}
+                    {e._predictionDeltaMin != null && (() => {
+                      const fmt = formatPredictionDelta(e._predictionDeltaMin);
+                      if (!fmt) return null;
+                      const toneColor = fmt.tone === "hit" ? "#5C8E5C"
+                        : fmt.tone === "near" ? C.gold
+                        : C.muted;
+                      const toneBg = fmt.tone === "hit" ? "#5C8E5C18"
+                        : fmt.tone === "near" ? `${C.gold}18`
+                        : `${C.muted}10`;
+                      return (
+                        <span
+                          title={e._predictionAt
+                            ? `Predicted: ${fmtTimeShort(new Date(e._predictionAt))}`
+                            : "Prediction snapshot"}
+                          style={{
+                            fontSize: 9, fontWeight: 600,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            color: toneColor, background: toneBg,
+                            padding: "2px 6px", borderRadius: 6,
+                            letterSpacing: "0.02em",
+                            whiteSpace: "nowrap", flexShrink: 0,
+                            marginRight: 2,
+                          }}>
+                          {fmt.label}
+                        </span>
+                      );
+                    })()}
                     {isSkippedBath ? (
                       <span style={{
                         fontSize: 10, color: C.accent,
@@ -11927,8 +12431,10 @@ function TimeBankCard({ C, timeBank, onOpen, currentUser, onRedeem }) {
         <ChevronRight size={18} color={C.muted} />
       </div>
 
-      {/* Redeem button — only show if partner owes currentUser */}
-      {youOwe === false && Math.abs(balance) >= 30 && (
+      {/* Redeem button — show whenever currentUser has any positive credit.
+          v05.05bt41: lowered from ≥30m to ≥1m per user feedback. The picker
+          step is now 5m, so even small balances are practical to redeem. */}
+      {youOwe === false && Math.abs(balance) >= 1 && (
         <button onClick={onRedeem} style={{
           marginTop: 12, width: "100%",
           background: youColor, color: "#fff", border: "none",
@@ -12341,8 +12847,8 @@ function RedeemModal({ C, timeBank, setTimeBank, setMeetings, currentUser, now, 
       </div>
 
       <Field C={C} label="How much time?">
-        <BigNumberPicker C={C} value={mins} onChange={setMins} step={15}
-          presets={[30, 60, 90, 120, 180, 240].filter(p => p <= owedToYou)}
+        <BigNumberPicker C={C} value={mins} onChange={setMins} step={5}
+          presets={[15, 30, 60, 90, 120, 180, 240].filter(p => p <= owedToYou)}
           unit="MINUTES" />
         {mins > owedToYou && (
           <div style={{ fontSize: 11, color: C.accent, marginTop: 4 }}>
@@ -12605,42 +13111,101 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, pen
         )}
       </div>
 
-      {/* === Quick actions === */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-        gap: 8, marginBottom: 14,
-      }}>
-        <button onClick={() => { setAddInitialMode("owed"); setShowAddModal(true); }} style={{
-          background: C.paper, border: `1.5px solid ${C.line}30`,
-          borderRadius: 10, padding: "12px 8px",
-          cursor: "pointer", fontFamily: "inherit",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-        }}>
-          <ArrowRightLeft size={16} color={C.accent} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log debt</span>
-        </button>
-        <button onClick={() => { setAddInitialMode("gift"); setShowAddModal(true); }} style={{
-          background: C.paper, border: `1.5px solid ${C.line}30`,
-          borderRadius: 10, padding: "12px 8px",
-          cursor: "pointer", fontFamily: "inherit",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-        }}>
-          <Gift size={16} color={C.gold} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Send gift</span>
-        </button>
-        <button onClick={() => { setAddInitialMode("paid"); setShowAddModal(true); }} style={{
-          background: C.paper, border: `1.5px solid ${C.line}30`,
-          borderRadius: 10, padding: "12px 8px",
-          cursor: "pointer", fontFamily: "inherit",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-        }}>
-          <Check size={16} color={youColor} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log payback</span>
-        </button>
-      </div>
+      {/* === Quick actions ===
+          v05.05bt39: 4-column grid (was 3). Redeem promoted from
+          conditional standalone button to a permanent quick-action so it's
+          always discoverable. When ineligible (you currently owe, or
+          partner's debt is <30m), the tile renders disabled with explanatory
+          micro-copy below the grid; when eligible, primary-colored. */}
+      {(() => {
+        const canRedeem = youOwe === false && Math.abs(balance) >= 1;
+        return (
+          <>
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+              gap: 8, marginBottom: canRedeem ? 8 : 6,
+            }}>
+              <button onClick={() => { setAddInitialMode("owed"); setShowAddModal(true); }} style={{
+                background: C.paper, border: `1.5px solid ${C.line}30`,
+                borderRadius: 10, padding: "12px 6px",
+                cursor: "pointer", fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }}>
+                <ArrowRightLeft size={16} color={C.accent} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log debt</span>
+              </button>
+              <button onClick={() => { setAddInitialMode("gift"); setShowAddModal(true); }} style={{
+                background: C.paper, border: `1.5px solid ${C.line}30`,
+                borderRadius: 10, padding: "12px 6px",
+                cursor: "pointer", fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }}>
+                <Gift size={16} color={C.gold} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Send gift</span>
+              </button>
+              <button onClick={() => { setAddInitialMode("paid"); setShowAddModal(true); }} style={{
+                background: C.paper, border: `1.5px solid ${C.line}30`,
+                borderRadius: 10, padding: "12px 6px",
+                cursor: "pointer", fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              }}>
+                <Check size={16} color={youColor} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.ink }}>Log payback</span>
+              </button>
+              {/* Redeem — permanent fourth tile. Eligible: primary-colored
+                  with subtle glow. Ineligible: disabled, muted, no hover. */}
+              <button
+                onClick={canRedeem ? () => setShowRedeem(true) : undefined}
+                disabled={!canRedeem}
+                style={{
+                  background: canRedeem ? youColor : C.paper,
+                  border: canRedeem ? "none" : `1.5px solid ${C.line}30`,
+                  borderRadius: 10, padding: "12px 6px",
+                  cursor: canRedeem ? "pointer" : "not-allowed",
+                  fontFamily: "inherit",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  opacity: canRedeem ? 1 : 0.55,
+                  boxShadow: canRedeem ? `0 2px 8px ${youColor}55` : "none",
+                  transition: "opacity 0.2s, box-shadow 0.2s",
+                }}>
+                <Sparkles size={16} color={canRedeem ? "#fff" : C.muted} />
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  color: canRedeem ? "#fff" : C.muted,
+                }}>
+                  Redeem
+                </span>
+              </button>
+            </div>
+            {/* Helper line — explains why Redeem is disabled, OR what
+                Redeem will do when eligible. Always renders so the user
+                understands the affordance. */}
+            <div style={{
+              fontSize: 10, color: C.muted, fontStyle: "italic",
+              marginBottom: 14, lineHeight: 1.45,
+              padding: "0 2px",
+            }}>
+              {canRedeem ? (
+                <>
+                  ✦ <strong style={{ color: youColor, fontStyle: "normal", fontWeight: 600 }}>Redeem</strong> available — pick a day &amp; time and {partner} will auto-cover that shift, drawing down your{" "}
+                  <strong style={{ color: youColor, fontStyle: "normal", fontWeight: 600 }}>{fmtBalance(Math.abs(balance))}</strong>.
+                </>
+              ) : balance === 0 ? (
+                <>Redeem unlocks once {partner} owes you any coverage time.</>
+              ) : (
+                <>Redeem is for the creditor — right now {partner} is owed, so you can't redeem (you'd log a payback to settle).</>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
-      {/* === Redeem button — only when partner owes you ≥30m === */}
-      {youOwe === false && Math.abs(balance) >= 30 && (
+      {/* === Hero redeem CTA — large primary button shown when there's any
+          positive credit. v05.05bt41: lowered from ≥30m to ≥1m per user
+          feedback. The picker step in RedeemModal is now 5m, so even
+          small balances (e.g. 12m) can be redeemed without awkward picker
+          friction. */}
+      {youOwe === false && Math.abs(balance) >= 1 && (
         <button onClick={() => setShowRedeem(true)} style={{
           width: "100%", marginBottom: 14,
           background: youColor, color: "#fff", border: "none",
@@ -12650,7 +13215,7 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, pen
           fontFamily: "inherit",
           boxShadow: `0 2px 8px ${youColor}55`,
         }}>
-          <Gift size={16} /> Cash in: have {partner} cover a shift
+          <Gift size={16} /> Cash in {fmtBalance(Math.abs(balance))} — pick day &amp; time
         </button>
       )}
 
@@ -14305,7 +14870,14 @@ function CentralLogButton({ C, mode, onClick, currentUser }) {
   return (
     <button onClick={onClick} style={{
       position: "fixed",
-      bottom: 38, left: "50%", transform: "translateX(-50%)",
+      bottom: 38, left: "50%", transform: "translate(-50%, 0) translateZ(0)",
+      // v05.05bt37: translateZ(0) + willChange force iOS Safari to promote
+      // this element to its own composited layer, which is the documented
+      // workaround for fixed-position elements that occasionally jitter or
+      // detach on certain iOS Safari versions when the parent has overflow:
+      // hidden + min-height: 100vh (our App's wrapper).
+      WebkitTransform: "translate(-50%, 0) translateZ(0)",
+      willChange: "transform",
       zIndex: 7,
       width: 64, height: 64, borderRadius: "50%",
       background: `linear-gradient(135deg, ${viewerColor}, ${viewerDarker})`,
@@ -14348,6 +14920,15 @@ function TabBar({ C, tab, setTab, currentUser }) {
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
+      // v05.05bt37: translateZ(0) + willChange promote the tab bar to its
+      // own composited layer. Documented workaround for iOS Safari edge
+      // cases where fixed-position children of an `overflow: hidden` +
+      // `min-height: 100vh` parent occasionally detach or scroll with
+      // content. Belt-and-suspenders — the bar should already stay fixed
+      // for most users, but this ensures it for everyone.
+      transform: "translateZ(0)",
+      WebkitTransform: "translateZ(0)",
+      willChange: "transform",
       // Use C.paper (warmer cream than page bg) so the bar visually separates
       // from the scrollable area above. Adds proper "this is a docked panel"
       // affordance instead of looking like transparent buttons over the page.
@@ -14371,19 +14952,23 @@ function TabBar({ C, tab, setTab, currentUser }) {
         ) : (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             background: "transparent", border: "none",
-            padding: "14px 2px 14px",
+            // v05.05bt35: bumped from 14/2/14 to 18/2/18 + minHeight 52
+            // so phone tap targets clear iOS's 44pt accessibility minimum.
+            // Font also bumped 11→12 for legibility on small screens.
+            padding: "18px 2px 18px",
+            minHeight: 52,
             color: tab === t.id ? viewerColor : C.muted,
             fontWeight: tab === t.id ? 600 : 500,
-            fontSize: 11, cursor: "pointer",
+            fontSize: 12, cursor: "pointer",
             position: "relative",
-            letterSpacing: "0.04em",
+            letterSpacing: "0.03em",
             fontFamily: "inherit",
           }}>
             {t.label}
             {tab === t.id && (
               <span style={{
                 position: "absolute", top: 0, left: "25%", right: "25%",
-                height: 2.5, background: viewerColor, borderRadius: 2,
+                height: 3, background: viewerColor, borderRadius: 2,
               }} />
             )}
           </button>
@@ -17258,6 +17843,33 @@ function SleepWakeChart({ C, events, now, currentUser }) {
           areaD += `L ${xAt(row.segments[row.segments.length - 1].end)} ${yAxisBottom} Z`;
         }
 
+        // v05.05bt35: pre-compute per-segment label data for inline duration
+        // text. Each segment gets a midpoint x and a formatted duration string.
+        // Skip labels on segments narrower than ~70 SVG units (out of 1000)
+        // to avoid overlap clutter — those still render on the trace, and
+        // the tap-tooltip surfaces the duration on demand.
+        const fmtSegDur = (ms) => {
+          const totalMin = Math.round(ms / 60000);
+          if (totalMin < 1) return "<1m";
+          const h = Math.floor(totalMin / 60);
+          const m = totalMin % 60;
+          if (h === 0) return `${m}m`;
+          if (m === 0) return `${h}h`;
+          return `${h}h ${m}m`;
+        };
+        const segLabels = row.segments.map((seg) => {
+          const x1 = xAt(seg.start);
+          const x2 = xAt(seg.end);
+          const width = x2 - x1;
+          if (width < 70) return null;
+          return {
+            xMid: (x1 + x2) / 2,
+            state: seg.state,
+            label: fmtSegDur(seg.end.getTime() - seg.start.getTime()),
+            inferred: seg.inferred,
+          };
+        });
+
         // Time gridlines — every 6h for 24h, every 6h within day for 7d
         const gridTimes = [];
         if (mode === "24h") {
@@ -17346,6 +17958,31 @@ function SleepWakeChart({ C, events, now, currentUser }) {
                   <path d={pathD} fill="none" stroke={viewerColor} strokeWidth={2.5}
                     strokeLinejoin="miter" strokeLinecap="square" />
                 )}
+                {/* v05.05bt35: per-segment duration labels.
+                    Asleep segments → label sits ~5px above the asleep
+                    line (the bottom rail), inside the gap between rails.
+                    Awake segments → label sits ~11px below the awake
+                    line (the top rail), in the same gap. Both end up in
+                    the visually empty middle band, so they never overlap
+                    the trace itself or the marker dots. */}
+                {segLabels.map((sl, si) => {
+                  if (!sl) return null;
+                  const isAsleep = sl.state === "asleep";
+                  const y = isAsleep ? yAxisBottom - 5 : yAxisTop + 11;
+                  return (
+                    <text key={`segdur-${si}`}
+                      x={sl.xMid} y={y}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontFamily="'JetBrains Mono', monospace"
+                      fontWeight={500}
+                      fill={isAsleep ? viewerColor : C.gold}
+                      fillOpacity={sl.inferred ? 0.55 : 0.85}
+                      style={{ pointerEvents: "none" }}>
+                      {sl.label}
+                    </text>
+                  );
+                })}
                 {/* Transition markers — small filled circles at each transition point.
                     v05.05bt14: each marker has a transparent larger hit-circle
                     on top for hover/tap tooltip support. Tooltip surfaces the
@@ -17757,6 +18394,75 @@ function AnalyticsSection({ C, events, now, currentUser }) {
       }
     }
     const mainSleeps = Object.values(dayMainSleep);
+
+    // === Nap analytics (v05.05bt37) ===
+    // A "nap" is a daytime sleep stretch that ISN'T the day's main (longest)
+    // sleep. We use dayMainSleep above to pick the longest pair per day, then
+    // exclude those from the nap pool. Daytime cutoff: sleep_down between
+    // 06:00 and 19:00 (so an evening sleep stretch that turns into night
+    // sleep is correctly excluded). Each nap carries its duration in minutes.
+    const NAP_HOUR_START = 6;
+    const NAP_HOUR_END = 19;
+    const dayMainPairKeys = new Set(
+      Object.values(dayMainSleep).map(p =>
+        `${p.downTs.getTime()}-${p.upTs ? p.upTs.getTime() : "x"}`
+      )
+    );
+    const naps = sleepPairs.filter(p => {
+      const h = p.downTs.getHours();
+      if (h < NAP_HOUR_START || h >= NAP_HOUR_END) return false;
+      const k = `${p.downTs.getTime()}-${p.upTs ? p.upTs.getTime() : "x"}`;
+      if (dayMainPairKeys.has(k)) return false;
+      return true;
+    });
+    const napDurationsAsc = naps.map(n => n.mins).sort((a, b) => a - b);
+    const napMedian = napDurationsAsc.length > 0
+      ? napDurationsAsc[Math.floor(napDurationsAsc.length / 2)] : null;
+    const napP25 = napDurationsAsc.length >= 4
+      ? napDurationsAsc[Math.floor(napDurationsAsc.length * 0.25)] : null;
+    const napP75 = napDurationsAsc.length >= 4
+      ? napDurationsAsc[Math.floor(napDurationsAsc.length * 0.75)] : null;
+    const napTotalMin = napDurationsAsc.reduce((s, m) => s + m, 0);
+    // Naps/day uses windowDays in the denominator — days with zero naps still
+    // count, otherwise we'd over-state frequency for days she didn't nap at all.
+    const napsPerDay = naps.length / Math.max(1, windowDays);
+    const napTotalMinPerDay = napTotalMin / Math.max(1, windowDays);
+    // Distribution buckets — gives "short spurts vs longer naps" at a glance.
+    const napBuckets = { short: 0, medium: 0, long: 0, veryLong: 0 };
+    for (const m of napDurationsAsc) {
+      if (m < 25) napBuckets.short++;
+      else if (m < 50) napBuckets.medium++;
+      else if (m < 90) napBuckets.long++;
+      else napBuckets.veryLong++;
+    }
+    // Recent half vs older half trend — direction + magnitude in minutes.
+    const napHalfMs = now.getTime() - (windowDays / 2) * 86400000;
+    const recentNaps = naps.filter(n => n.downTs.getTime() >= napHalfMs);
+    const olderNaps = naps.filter(n => n.downTs.getTime() < napHalfMs);
+    const _med = (arr) => {
+      if (arr.length === 0) return null;
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+    const recentNapMedian = _med(recentNaps.map(n => n.mins));
+    const olderNapMedian = _med(olderNaps.map(n => n.mins));
+    const napTrendMin = (recentNapMedian != null && olderNapMedian != null)
+      ? recentNapMedian - olderNapMedian : null;
+    const napStats = {
+      count: naps.length,
+      medianMin: napMedian,
+      p25Min: napP25,
+      p75Min: napP75,
+      perDay: napsPerDay,
+      totalMinPerDay: napTotalMinPerDay,
+      buckets: napBuckets,
+      recentMedianMin: recentNapMedian,
+      olderMedianMin: olderNapMedian,
+      trendMin: napTrendMin,
+      recentCount: recentNaps.length,
+      olderCount: olderNaps.length,
+    };
+
     // Convert to minutes-of-day (0-1439). Bedtimes around midnight need
     // wraparound: treat times after noon as same day, before noon as +24h.
     // This way 10pm and 1am both cluster as "evening bedtime."
@@ -17813,6 +18519,91 @@ function AnalyticsSection({ C, events, now, currentUser }) {
     const olderPumpAvg = olderPumps.length > 0 ? olderPumps.reduce((s, e) => s + (e.oz || 0), 0) / olderPumps.length : 0;
     const pumpTrend = olderPumpAvg > 0 ? ((newerPumpAvg - olderPumpAvg) / olderPumpAvg) * 100 : 0;
 
+    // === Feed → sleep-down latency (v05.05bt35) ===
+    // For each sleep_down event, find the most recent preceding feed (bottle
+    // or breastfeed) within 6h and compute the gap in minutes. Bucket the
+    // result by the sleep_down's hour-of-day:
+    //   morning   05:00–11:59
+    //   afternoon 12:00–16:59
+    //   evening   17:00–21:59
+    // Overnight (22:00–04:59) intentionally dropped per user feedback —
+    // the gap distribution is too noisy (missed feeds, dream feeds, etc.).
+    //
+    // Output per bucket: median, p25, p75, count of paired sleep_downs.
+    // The card uses these to surface a simple actionable insight like
+    // "Down fastest after evening feeds" or "Plan deep work after morning feeds".
+    const feedToSleepBuckets = { morning: [], afternoon: [], evening: [] };
+    const allFeedsAsc = [...allFeeds].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const sleepDowns = recent
+      .filter(e => e.type === "sleep_down")
+      .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    for (const sd of sleepDowns) {
+      const sdTs = new Date(sd.ts);
+      // Find latest feed before this sleep_down, within 6h.
+      let lastFeed = null;
+      for (let i = allFeedsAsc.length - 1; i >= 0; i--) {
+        const ft = new Date(allFeedsAsc[i].ts);
+        if (ft >= sdTs) continue;
+        const gapMin = (sdTs - ft) / 60000;
+        if (gapMin > 360) break; // > 6h, no good pairing
+        lastFeed = { ts: ft, gapMin };
+        break;
+      }
+      if (!lastFeed) continue;
+      if (lastFeed.gapMin < 0 || lastFeed.gapMin > 360) continue;
+      const h = sdTs.getHours();
+      let bucket = null;
+      if (h >= 5 && h < 12) bucket = "morning";
+      else if (h >= 12 && h < 17) bucket = "afternoon";
+      else if (h >= 17 && h < 22) bucket = "evening";
+      if (!bucket) continue; // overnight — drop
+      feedToSleepBuckets[bucket].push(lastFeed.gapMin);
+    }
+    // Compute per-bucket stats (sorted arrays for percentile lookups).
+    const f2sStat = (arr) => {
+      if (!arr || arr.length === 0) return null;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const med = median(sorted);
+      const p25v = sorted[Math.floor(sorted.length * 0.25)];
+      const p75v = sorted[Math.floor(sorted.length * 0.75)];
+      return { median: med, p25: p25v, p75: p75v, count: sorted.length };
+    };
+    const feedToSleep = {
+      morning:   f2sStat(feedToSleepBuckets.morning),
+      afternoon: f2sStat(feedToSleepBuckets.afternoon),
+      evening:   f2sStat(feedToSleepBuckets.evening),
+    };
+
+    // === Prediction accuracy aggregation (v05.05bt36) ===
+    // For events in the window that captured a prediction snapshot at log
+    // time, compute hit rate (% with |delta| ≤ 15m) and median absolute
+    // error. Surfaced as a small badge on the corresponding prediction
+    // card in the Wellness panel so the user can see at a glance how well
+    // the model is tracking. Hit window of 15m matches the IQR width
+    // typical for feed intervals; tighter than that overstates miss rate.
+    const HIT_WINDOW_MIN = 15;
+    const accuracyFor = (filterFn) => {
+      const tracked = recent.filter(e =>
+        filterFn(e) && e._predictionDeltaMin != null
+      );
+      if (tracked.length === 0) {
+        return { count: 0, hitRate: null, medianAbsErrMin: null, hitCount: 0 };
+      }
+      const absErrs = tracked.map(e => Math.abs(e._predictionDeltaMin)).sort((a, b) => a - b);
+      const med = absErrs.length % 2 === 1
+        ? absErrs[Math.floor(absErrs.length / 2)]
+        : (absErrs[absErrs.length / 2 - 1] + absErrs[absErrs.length / 2]) / 2;
+      const hitCount = absErrs.filter(x => x <= HIT_WINDOW_MIN).length;
+      return {
+        count: tracked.length,
+        hitCount,
+        hitRate: hitCount / tracked.length,
+        medianAbsErrMin: med,
+      };
+    };
+    const feedAccuracy = accuracyFor(e => e.type === "feed" || e.type === "breastfeed");
+    const sleepAccuracy = accuracyFor(e => e.type === "sleep_down");
+
     return {
       windowDays,
       totalFeeds: sessionCount,           // session-based count
@@ -17857,7 +18648,10 @@ function AnalyticsSection({ C, events, now, currentUser }) {
       bedtimeDriftMin,   // signed minutes; null if not enough data
       stretchTrendMin,   // signed minutes; null if not enough data
       mainSleepDays: mainSleeps.length,
+      napStats, // v05.05bt37: nap consolidation analytics
       diaperKinds, dirtyRatio,
+      feedToSleep, // v05.05bt35: per-bucket median/p25/p75/count
+      feedAccuracy, sleepAccuracy, // v05.05bt36: prediction-vs-actual aggregates
     };
   }, [events, now, windowDays]);
 
@@ -18205,6 +18999,30 @@ function AnalyticsSection({ C, events, now, currentUser }) {
             <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.accent, fontWeight: 600 }}>
               Predicted feed pattern
             </span>
+            {/* v05.05bt36: aggregate accuracy pill. Renders next to topic
+                eyebrow when there are tracked predictions in the window.
+                Hit rate based on |delta|≤15m. Color tones: ≥70% sage,
+                40–70% gold, <40% terracotta. Kept very small so it
+                doesn't compete with the headline value below. */}
+            {stats.feedAccuracy && stats.feedAccuracy.count >= 3 && (() => {
+              const a = stats.feedAccuracy;
+              const pct = Math.round(a.hitRate * 100);
+              const tone = pct >= 70 ? "#5C8E5C" : pct >= 40 ? C.gold : C.accent;
+              return (
+                <span style={{
+                  marginLeft: "auto",
+                  fontSize: 9, fontWeight: 700,
+                  color: tone, background: `${tone}15`,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  padding: "3px 7px", borderRadius: 8,
+                  letterSpacing: "0.04em",
+                  whiteSpace: "nowrap",
+                }}
+                title={`${a.hitCount}/${a.count} predictions within 15m · median |error|: ${Math.round(a.medianAbsErrMin)}m`}>
+                  {pct}% within 15m · n={a.count}
+                </span>
+              );
+            })()}
           </div>
           {stats.medianInterval > 0 && (
             <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.55 }}>
@@ -18235,6 +19053,178 @@ function AnalyticsSection({ C, events, now, currentUser }) {
           )}
         </div>
       )}
+
+      {/* Feed → sleep-down latency by time of day — v05.05bt35.
+          For each sleep_down event, we found the most recent preceding feed
+          (≤6h prior) and bucketed the gap by time-of-day:
+            morning   05:00–11:59
+            afternoon 12:00–16:59
+            evening   17:00–21:59
+          Overnight is intentionally dropped (too noisy with dream-feeds and
+          missed logs). The card renders one row per bucket showing the
+          median latency, IQR range, and sample count, plus a single insight
+          line surfacing the fastest bucket. Useful for planning chores or
+          deep work — knowing she goes down ~25m after evening feeds vs ~1h
+          after morning feeds means the working parent can structure focus
+          time around the predictable transition. */}
+      {(() => {
+        const f2s = stats.feedToSleep;
+        if (!f2s) return null;
+        const buckets = [
+          { key: "morning",   label: "Morning",   sub: "5–12pm",  glyph: "🌅", data: f2s.morning },
+          { key: "afternoon", label: "Afternoon", sub: "12–5pm",  glyph: "☀️", data: f2s.afternoon },
+          { key: "evening",   label: "Evening",   sub: "5–10pm",  glyph: "🌙", data: f2s.evening },
+        ];
+        const populated = buckets.filter(b => b.data && b.data.count >= 1);
+        if (populated.length === 0) return null;
+        // Find fastest bucket (lowest median) for the insight line.
+        const fastestBucket = populated.reduce(
+          (best, cur) => (best == null || cur.data.median < best.data.median) ? cur : best,
+          null
+        );
+        // Find slowest bucket too — only useful as a contrast if it differs
+        // meaningfully from the fastest.
+        const slowestBucket = populated.reduce(
+          (worst, cur) => (worst == null || cur.data.median > worst.data.median) ? cur : worst,
+          null
+        );
+        const fmtMin = (m) => {
+          if (m == null) return "—";
+          const r = Math.round(m);
+          if (r < 60) return `${r}m`;
+          const h = Math.floor(r / 60);
+          const mm = r % 60;
+          return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
+        };
+        // Bar width normalization: scale by max median across populated
+        // buckets so visual comparison is intuitive.
+        const maxMedian = Math.max(...populated.map(b => b.data.median));
+        // Min sample threshold for drawing meaningful insight — under 3
+        // samples we just show the row data without a comparative claim.
+        const enoughForInsight = populated.length >= 2 &&
+          populated.every(b => b.data.count >= 3) &&
+          fastestBucket && slowestBucket &&
+          (slowestBucket.data.median - fastestBucket.data.median) >= 10;
+        return (
+          <div style={{
+            background: `linear-gradient(135deg, ${C.gold}10, ${C.paper})`,
+            borderRadius: 12, padding: 14, marginBottom: 10,
+            border: `1px solid ${C.gold}33`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Moon size={13} color={C.gold} />
+              <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.gold, fontWeight: 600 }}>
+                Feed → sleep-down latency
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 10 }}>
+              How long after a feed she typically goes down — by time of day
+            </div>
+            {/* Per-bucket rows */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {buckets.map(b => {
+                const d = b.data;
+                const has = d && d.count >= 1;
+                const widthPct = has ? Math.max(8, (d.median / maxMedian) * 100) : 0;
+                return (
+                  <div key={b.key} style={{
+                    display: "grid",
+                    gridTemplateColumns: "84px 1fr auto",
+                    alignItems: "center",
+                    gap: 10,
+                    fontSize: 12,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.ink }}>
+                      <span style={{ fontSize: 14 }}>{b.glyph}</span>
+                      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+                        <span style={{ fontWeight: 600 }}>{b.label}</span>
+                        <span style={{ fontSize: 9, color: C.muted, letterSpacing: "0.04em" }}>{b.sub}</span>
+                      </div>
+                    </div>
+                    {has ? (
+                      <div style={{
+                        position: "relative",
+                        height: 14,
+                        background: `${C.line}15`,
+                        borderRadius: 7,
+                        overflow: "hidden",
+                      }}>
+                        <div style={{
+                          position: "absolute", left: 0, top: 0, bottom: 0,
+                          width: `${widthPct}%`,
+                          background: b === fastestBucket && enoughForInsight
+                            ? `linear-gradient(90deg, ${C.gold}, ${C.gold}aa)`
+                            : `${C.gold}55`,
+                          borderRadius: 7,
+                        }} />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>
+                        no paired data yet
+                      </div>
+                    )}
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11, color: C.ink, fontWeight: 600,
+                      textAlign: "right",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {has ? (
+                        <>
+                          {fmtMin(d.median)}
+                          <span style={{ fontWeight: 400, color: C.muted, fontSize: 10 }}>
+                            {" "}({d.count})
+                          </span>
+                        </>
+                      ) : "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* IQR range row — small monospace under bars for the data-curious */}
+            {populated.some(b => b.data.p25 != null && b.data.p75 != null && b.data.p75 > b.data.p25) && (
+              <div style={{
+                marginTop: 9, fontSize: 9, color: C.muted,
+                fontFamily: "'JetBrains Mono', monospace",
+                letterSpacing: "0.02em",
+              }}>
+                IQR (P25–P75): {populated.map(b =>
+                  `${b.label.slice(0,3).toLowerCase()} ${fmtMin(b.data.p25)}–${fmtMin(b.data.p75)}`
+                ).join("  ·  ")}
+              </div>
+            )}
+            {/* Insight line — only when sample is healthy and difference is real */}
+            {enoughForInsight && (
+              <div style={{
+                marginTop: 10, padding: "8px 10px",
+                background: `${C.gold}12`,
+                borderLeft: `2px solid ${C.gold}`,
+                borderRadius: "0 6px 6px 0",
+                fontSize: 12, color: C.ink, lineHeight: 1.45,
+              }}>
+                Solène goes down fastest after <strong style={{ color: C.gold }}>{fastestBucket.label.toLowerCase()}</strong> feeds (~{fmtMin(fastestBucket.data.median)})
+                {slowestBucket && slowestBucket !== fastestBucket && (
+                  <>, slowest after <strong>{slowestBucket.label.toLowerCase()}</strong> ({fmtMin(slowestBucket.data.median)})</>
+                )}.
+                <span style={{ color: C.muted, fontStyle: "italic" }}>
+                  {" "}Plan deep work right after {fastestBucket.label.toLowerCase()} feeds.
+                </span>
+              </div>
+            )}
+            {!enoughForInsight && populated.length >= 1 && (
+              <div style={{
+                marginTop: 9, fontSize: 10, color: C.muted, fontStyle: "italic",
+                lineHeight: 1.4,
+              }}>
+                {populated.every(b => b.data.count >= 3)
+                  ? "Patterns across times of day are similar — no clear best window yet."
+                  : "Need at least 3 samples per bucket to surface a pattern."}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Predicted sleep pattern — parallel to feed prediction. Uses the
           median wake window (time between waking and next sleep) plus the
@@ -18271,6 +19261,26 @@ function AnalyticsSection({ C, events, now, currentUser }) {
               <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: viewerColor, fontWeight: 600 }}>
                 Predicted sleep pattern
               </span>
+              {/* v05.05bt36: aggregate accuracy pill (sleep_down predictions). */}
+              {stats.sleepAccuracy && stats.sleepAccuracy.count >= 3 && (() => {
+                const a = stats.sleepAccuracy;
+                const pct = Math.round(a.hitRate * 100);
+                const tone = pct >= 70 ? "#5C8E5C" : pct >= 40 ? C.gold : C.accent;
+                return (
+                  <span style={{
+                    marginLeft: "auto",
+                    fontSize: 9, fontWeight: 700,
+                    color: tone, background: `${tone}15`,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    padding: "3px 7px", borderRadius: 8,
+                    letterSpacing: "0.04em",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`${a.hitCount}/${a.count} predictions within 15m · median |error|: ${Math.round(a.medianAbsErrMin)}m`}>
+                    {pct}% within 15m · n={a.count}
+                  </span>
+                );
+              })()}
             </div>
             <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.55 }}>
               Solène typically stays awake for <strong>{fmtDuration(stats.medianWakeWindow)}</strong>
@@ -18873,6 +19883,253 @@ function AnalyticsSection({ C, events, now, currentUser }) {
             <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.5 }}>
               {stats.mainSleepDays} {stats.mainSleepDays === 1 ? "day" : "days"} of data — accuracy depends on logging both 'down' and 'awake'.
             </div>
+          </div>
+        );
+      })()}
+
+      {/* v05.05bt37 — Nap quality card.
+          Surfaces nap consolidation: are naps short spurts or longer stretches?
+          A nap is any sleep pair that started 6am–7pm AND isn't the day's
+          main (longest) sleep — that excludes night sleep that started in
+          the evening or unusual long daytime sleep that's effectively a
+          relocated night.
+          Three zones:
+            (a) Headline numbers — median nap, naps/day, total daytime sleep
+            (b) Distribution histogram — short / med / long / very long bars
+                so the user can see "is she taking 4 short spurts or 2 longer
+                naps" at a glance
+            (c) Trend line — recent half vs older half of the analytics
+                window with directional language ("consolidating" /
+                "fragmenting" / "stable") */}
+      {stats.napStats && stats.napStats.count >= 3 && (() => {
+        const ns = stats.napStats;
+        const fmtMins = (m) => {
+          if (m == null) return "—";
+          const r = Math.round(m);
+          if (r < 60) return `${r}m`;
+          const h = Math.floor(r / 60);
+          const mm = r % 60;
+          return mm === 0 ? `${h}h` : `${h}h ${mm}m`;
+        };
+        const totalBuckets = ns.buckets.short + ns.buckets.medium + ns.buckets.long + ns.buckets.veryLong;
+        const bucketRows = [
+          { key: "short",     label: "Short",     range: "<25m",   count: ns.buckets.short,    color: C.muted, sub: "spurts / catnaps" },
+          { key: "medium",    label: "Medium",    range: "25–50m", count: ns.buckets.medium,   color: C.gold,  sub: "typical nap" },
+          { key: "long",      label: "Long",      range: "50–90m", color: "#5C8E5C",           count: ns.buckets.long, sub: "consolidated" },
+          { key: "veryLong",  label: "Very long", range: "90m+",   count: ns.buckets.veryLong, color: "#5C8E5C", sub: "deep restorative" },
+        ];
+        const trendDirection = ns.trendMin == null ? null
+          : ns.trendMin >= 8 ? "longer"
+          : ns.trendMin <= -8 ? "shorter"
+          : "stable";
+        const trendColor = trendDirection === "longer" ? "#5C8E5C"
+          : trendDirection === "shorter" ? C.accent : C.muted;
+        const trendArrow = trendDirection === "longer" ? "↑"
+          : trendDirection === "shorter" ? "↓" : "→";
+        return (
+          <div style={{
+            background: C.paper, borderRadius: 12, padding: 14,
+            border: `1px solid ${C.line}15`, marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <span>Nap quality</span>
+              {/* v05.05bt40: age-band tag in eyebrow so user knows what
+                  reference window is being used for the norms below. */}
+              {(() => {
+                const ageDays = Math.floor((now - BIRTHDAY) / 86400000);
+                const norm = napNormForAgeDays(ageDays);
+                return (
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, letterSpacing: "0.12em",
+                    color: C.gold, background: `${C.gold}18`,
+                    padding: "2px 7px", borderRadius: 8,
+                  }}>
+                    norms · {norm.label}
+                  </span>
+                );
+              })()}
+            </div>
+            {/* Headline grid — three numbers side-by-side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+              {(() => {
+                const ageDays = Math.floor((now - BIRTHDAY) / 86400000);
+                const norm = napNormForAgeDays(ageDays);
+                const napsStatus = ns.perDay == null ? "ok" : statusVsRange(ns.perDay, norm.napsLow - 0.4, norm.napsHi + 0.4);
+                const totalStatus = ns.totalMinPerDay == null ? "ok" : statusVsRange(ns.totalMinPerDay, norm.totalLow, norm.totalHi);
+                const medStatus = ns.medianMin == null ? "ok" : statusVsRange(ns.medianMin, norm.indivLow, norm.indivHi);
+                const statusToken = (s) => {
+                  if (s === "low") return { color: C.accent, glyph: "↓ below" };
+                  if (s === "high") return { color: C.gold, glyph: "↑ above" };
+                  return { color: "#5C8E5C", glyph: "✓ in range" };
+                };
+                const tMed = statusToken(medStatus);
+                const tNaps = statusToken(napsStatus);
+                const tTotal = statusToken(totalStatus);
+                return (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
+                        median nap
+                      </div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                        {fmtMins(ns.medianMin)}
+                      </div>
+                      <div style={{ fontSize: 9, color: tMed.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
+                        {tMed.glyph}
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'JetBrains Mono', monospace", fontStyle: "italic" }}>
+                        norm {norm.indivLow}–{norm.indivHi}m
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
+                        naps / day
+                      </div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                        {ns.perDay.toFixed(1)}
+                      </div>
+                      <div style={{ fontSize: 9, color: tNaps.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
+                        {tNaps.glyph}
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'JetBrains Mono', monospace", fontStyle: "italic" }}>
+                        norm {norm.napsLow}{norm.napsLow === norm.napsHi ? "" : `–${norm.napsHi}`}/day
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
+                        daytime sleep
+                      </div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                        {fmtMins(ns.totalMinPerDay)}
+                      </div>
+                      <div style={{ fontSize: 9, color: tTotal.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
+                        {tTotal.glyph}
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontFamily: "'JetBrains Mono', monospace", fontStyle: "italic" }}>
+                        norm {fmtMins(norm.totalLow)}–{fmtMins(norm.totalHi)}/day
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            {/* Sample size & data caveat for stat literacy. v05.05bt40 added so
+                user knows what cohort the right-side counts are drawn from. */}
+            <div style={{
+              fontSize: 10, color: C.muted, fontStyle: "italic",
+              marginBottom: 12, lineHeight: 1.45,
+              padding: "6px 10px",
+              background: `${C.line}10`, borderRadius: 6,
+              borderLeft: `2px solid ${C.line}40`,
+            }}>
+              Window: last <strong style={{ fontStyle: "normal", color: C.ink }}>{stats.windowDays}d</strong>
+              {" · "}<strong style={{ fontStyle: "normal", color: C.ink }}>{ns.count}</strong> naps logged
+              {" · norms are typical ranges, not targets — every baby varies."}
+            </div>
+
+            {/* Distribution histogram — count per bucket as a horizontal bar.
+                Width normalized to the largest bucket so the visual ratio
+                is intuitive. v05.05bt40: column headers added so the
+                right-column number is no longer mysterious — it's labeled
+                'naps in this range' explicitly. */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "92px 1fr 70px",
+              alignItems: "end", gap: 8, marginBottom: 6,
+              fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
+              color: C.muted, fontWeight: 600,
+            }}>
+              <div>nap length</div>
+              <div style={{ textAlign: "left" }}>← shorter   ·   longer →</div>
+              <div style={{ textAlign: "right" }}>count</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {bucketRows.map(b => {
+                const widthPct = totalBuckets > 0
+                  ? (b.count / Math.max(...bucketRows.map(x => x.count))) * 100
+                  : 0;
+                const pctOfTotal = totalBuckets > 0 ? Math.round((b.count / totalBuckets) * 100) : 0;
+                return (
+                  <div key={b.key} style={{
+                    display: "grid",
+                    gridTemplateColumns: "92px 1fr 70px",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 11,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+                      <span style={{ color: C.ink, fontWeight: 600 }}>{b.label}</span>
+                      <span style={{ fontSize: 9, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
+                        {b.range}
+                      </span>
+                    </div>
+                    <div style={{
+                      position: "relative", height: 12,
+                      background: `${C.line}12`, borderRadius: 6, overflow: "hidden",
+                    }}>
+                      {b.count > 0 ? (
+                        <div style={{
+                          position: "absolute", left: 0, top: 0, bottom: 0,
+                          width: `${Math.max(4, widthPct)}%`,
+                          background: b.color,
+                          opacity: 0.7,
+                          borderRadius: 6,
+                        }} />
+                      ) : null}
+                    </div>
+                    <div style={{
+                      textAlign: "right",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11, color: C.ink, fontWeight: 600,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {b.count}
+                      <span style={{ color: C.muted, fontWeight: 400, fontSize: 9 }}>
+                        {" "}{b.count === 1 ? "nap" : "naps"}
+                      </span>
+                      <div style={{ color: C.muted, fontWeight: 400, fontSize: 9, lineHeight: 1 }}>
+                        {pctOfTotal}%
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Trend line — explicit comparison to older half of window */}
+            {ns.recentMedianMin != null && ns.olderMedianMin != null && ns.recentCount >= 3 && ns.olderCount >= 3 && (
+              <div style={{
+                padding: "8px 10px",
+                background: `${trendColor}10`,
+                borderLeft: `2px solid ${trendColor}`,
+                borderRadius: "0 6px 6px 0",
+                fontSize: 11, color: C.ink, lineHeight: 1.45,
+              }}>
+                <span style={{ color: trendColor, fontWeight: 700, marginRight: 4 }}>
+                  {trendArrow}
+                </span>
+                Recent median <strong>{fmtMins(ns.recentMedianMin)}</strong>
+                {" vs prior "}
+                <strong>{fmtMins(ns.olderMedianMin)}</strong>
+                {ns.trendMin != null && Math.abs(ns.trendMin) >= 1 && (
+                  <span style={{ color: trendColor, fontWeight: 600 }}>
+                    {" "}({ns.trendMin > 0 ? "+" : "−"}{Math.round(Math.abs(ns.trendMin))}m)
+                  </span>
+                )}
+                {trendDirection && (
+                  <span style={{ color: C.muted, fontStyle: "italic", marginLeft: 6 }}>
+                    — {trendDirection === "longer" ? "naps consolidating"
+                       : trendDirection === "shorter" ? "naps fragmenting"
+                       : "stable"}
+                  </span>
+                )}
+              </div>
+            )}
+            {(!ns.recentMedianMin || !ns.olderMedianMin || ns.recentCount < 3 || ns.olderCount < 3) && (
+              <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", lineHeight: 1.4 }}>
+                Need ≥3 naps in each half of the window to compare.
+                {windowDays < 14 ? " Try the 14d or 30d window." : ""}
+              </div>
+            )}
           </div>
         );
       })()}
