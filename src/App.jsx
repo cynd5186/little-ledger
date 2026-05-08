@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt7";
+const APP_VERSION = "2026.05.05bt22";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,6 +30,21 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt22", summary: "Pump edit form gains bottle-label field (syncs to inventory bottle by ts ↔ pumpedAt match) · journal + today's rhythm pump labels show 'Bottle X' suffix · inventory tile bottle label upgraded from subtle italic to bold 'Bottle X' monospace + added to fridge tile (was missing) · fridge tile clickable when 0 oz to allow manual add" },
+  { version: "2026.05.05bt21", summary: "Freezer milk: new strip below RT/Fridge tiles · picker shows 'frozen Xd ago' captions · feeds from freezer auto-tag source as BM-thawed · NEW 'Bottle not in list — log anyway' escape hatch · edit modal on flagged feeds shows reconciliation banner · BM-thawed added to feed source picker" },
+  { version: "2026.05.05bt20", summary: "Removed bt19 diagnostic · added 'Reset today's bath/skip events' button in DEV section · ⚡ Power pump indicator added to journal + today's rhythm pump labels" },
+  { version: "2026.05.05bt19", summary: "TEMP: diagnostic banner inside OnDutyCard reports why bedtime banner is/isn't showing — surfaces current now value, window check, and any blocking conditions. Will remove after root cause found." },
+  { version: "2026.05.05bt18", summary: "Bug fix: bedtime banner 'Yes, log it' routed to 'Log sleep' placeholder instead of bath form. Extracted BathForm so it's used by both BathLoggerModal AND the LogPickerSheet's bath branch." },
+  { version: "2026.05.05bt17", summary: "Bedtime banner: dropped over-engineered feed-time gate · prompt window extended to 8:30pm · NEW: swipe-left on commitments reveals Edit + Delete actions" },
+  { version: "2026.05.05bt16", summary: "DEV: time-travel for previewing time-dependent UI · Profile Switcher → DEV section with preset jumps · gold banner at top of page when active" },
+  { version: "2026.05.05bt15", summary: "Bedtime check-in: banner during 9-11:30pm window asks 'bath tonight?' if last feed was in window and no bath logged · bath types restructured to toe_dip / full_sudsy / full_with_hair / quick_dunk · 'was a book read?' toggle on bath log · groundwork for good-night insight feature" },
+  { version: "2026.05.05bt14", summary: "Sleep/wake chart markers now show a hover/tap tooltip with event time, duration of resulting stretch, ongoing flag, and inferred-from source · clicking outside the chart dismisses on mobile" },
+  { version: "2026.05.05bt13", summary: "Sleep/wake chart redrawn as a literal SVG step plot — Y-axis 0 (asleep) and 1 (awake) labeled per row, sharp viewer-colored trace line with filled area under, vertical step transitions, time gridlines, circle markers at each transition" },
+  { version: "2026.05.05bt12", summary: "Sleep / wake EKG-style trace at top of Wellness tab — asleep band + awake region with ↓↑ tick markers · 24h vs 7d toggle · viewer-themed (mauve for Mommy, blue for Daddy)" },
+  { version: "2026.05.05bt11", summary: "SMART IMPORT — Backup→Import now merges instead of overwriting. Dedupes events, meetings, bottles, notes, time-bank, archive against current state. Recent logging is preserved when importing an older backup. Singletons (handoffNote, activePump) only adopted if current is null. Shifts/diaperBag never overwritten." },
+  { version: "2026.05.05bt10", summary: "Day Plan card now shows a visual hour-block strip (mauve/blue per parent, ↻ markers on adjusted slots, ! on conflicts, commitment bars on top, now line on today)" },
+  { version: "2026.05.05bt9", summary: "Asleep/awake tile shows duration ('2h 15m') instead of 'X min ago' — labels read 'asleep for' / 'awake for' so the value should be a duration, not a relative time" },
+  { version: "2026.05.05bt8", summary: "Fix: + (covering) and ! (conflict) indicators now show on Today's day-plan chart, matching Tomorrow — annotations were being stripped by activeShifts" },
   { version: "2026.05.05bt7", summary: "Wake-check banner: belt-and-suspenders dismiss — any wake_confirmed or sleep_down within last hour hides the banner regardless of feed-relative timing" },
   { version: "2026.05.05bt6", summary: "Cyndell font softened (lighter weight, warmer color) · Day vs Dusk theme toggle removed" },
   { version: "2026.05.05bt5", summary: "Maker's name corrected: Cyndi → Cyndell" },
@@ -676,10 +691,43 @@ const SKINCARE = {
   ],
 };
 
+// Bath taxonomy — restructured in v05.05bt15 to match the bedtime-routine
+// study Cyndell wants to track. Each type captures a different sleep-hygiene
+// hypothesis: full hair wash is most stimulating + cleansing; quick dunk is
+// soothing without disrupting sleep oils; toe dip is sensory play; full
+// sudsy is the standard "clean baby" routine. We track which type was used
+// alongside whether a book was read so good-night insight (later feature)
+// can correlate routine with stretches.
 const BATH_TYPES = {
-  full: { label: "Full bath", desc: "Head-to-toe scrub + hair wash", icon: "🛁", duration: "20–25 min" },
-  partial: { label: "Partial bath", desc: "Diaper area + face wash, free play in water", icon: "💦", duration: "15 min" },
-  quickie: { label: "Quickie", desc: "Feet in water + face wash", icon: "🦶", duration: "5 min" },
+  toe_dip: {
+    label: "Toe dip",
+    desc: "Plays with her toes in warm water",
+    icon: "🦶",
+    duration: "5 min",
+  },
+  full_sudsy: {
+    label: "Full sudsy",
+    desc: "Full body scrub with baby wash, no hair",
+    icon: "💦",
+    duration: "10–15 min",
+  },
+  full_with_hair: {
+    label: "Full + hair",
+    desc: "Head-to-toe scrub including hair wash",
+    icon: "🛁",
+    duration: "15–20 min",
+  },
+  quick_dunk: {
+    label: "Quick dunk",
+    desc: "Sudsy on privates + bottom, sits and relaxes",
+    icon: "🧼",
+    duration: "8 min",
+  },
+  // Legacy keys preserved for backward compatibility — existing logged baths
+  // will still display correctly. New bath logs use the new keys.
+  full: { label: "Full + hair", desc: "Head-to-toe scrub + hair wash", icon: "🛁", duration: "15–20 min" },
+  partial: { label: "Full sudsy", desc: "Body wash, no hair", icon: "💦", duration: "10–15 min" },
+  quickie: { label: "Toe dip", desc: "Feet in water + face wash", icon: "🦶", duration: "5 min" },
   wipe: { label: "Wipe-down", desc: "No tub, just a warm cloth", icon: "🧻", duration: "3 min" },
 };
 
@@ -1613,10 +1661,21 @@ function SoleneHandoffInner() {
   };
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
 
+  // v05.05bt16: time-travel for demoing time-dependent UI (bedtime banner,
+  // wake-check, day-plan now-line, etc.). Stored as an offset in ms applied
+  // to every `now` read. Session-only (not persisted) so a page reload
+  // returns to real time. Configured in Profile Switcher → DEV section.
+  const [timeTravelOffset, setTimeTravelOffset] = useState(0);
+
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 15000);
+    const t = setInterval(() => setNow(new Date(Date.now() + timeTravelOffset)), 15000);
     return () => clearInterval(t);
-  }, []);
+  }, [timeTravelOffset]);
+  // When the offset changes, snap `now` immediately so the UI reflects the
+  // change without waiting for the next 15s tick.
+  useEffect(() => {
+    setNow(new Date(Date.now() + timeTravelOffset));
+  }, [timeTravelOffset]);
 
   // Load state — one-time seed on very first launch.
   // We use a dedicated seed key (solene:seeded:real:v2) so users with prior
@@ -2236,7 +2295,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       return next;
     });
 
-    if (ev.type === "feed" && ev.source && ev.source.includes("BM") && ev.oz) {
+    if (ev.type === "feed" && ev.source && ev.source.includes("BM") && ev.oz && !ev.inventoryReconcileNeeded) {
       drainInventory(ev.oz);
     }
     // Only add to inventory when the pump session has ENDED (mode==="end" OR no mode set).
@@ -2374,6 +2433,25 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   const updateEvent = (id, updated) => {
     const oldEvent = events.find(e => e.id === id);
     setEvents(prev => prev.map(e => e.id === id ? { ...e, ...updated } : e));
+
+    // v05.05bt22: when editing a pump, sync the matching inventory bottle.
+    // The pump event's ts is the same value used as the bottle's pumpedAt
+    // when addEvent originally created it. Match on the OLD ts (since the
+    // user may have edited the time, in which case we update pumpedAt too).
+    if (oldEvent && oldEvent.type === "pump" && updated.type !== "deleted") {
+      const oldTsISO = typeof oldEvent.ts === "string" ? oldEvent.ts : new Date(oldEvent.ts).toISOString();
+      setInventory(prev => prev.map(b => {
+        const bPumpedAtISO = typeof b.pumpedAt === "string" ? b.pumpedAt : new Date(b.pumpedAt).toISOString();
+        if (bPumpedAtISO !== oldTsISO) return b;
+        return {
+          ...b,
+          oz: updated.oz != null ? Number(updated.oz) : b.oz,
+          location: updated.location != null ? updated.location : b.location,
+          bottleLabel: updated.bottleLabel !== undefined ? updated.bottleLabel : b.bottleLabel,
+          pumpedAt: updated.ts || b.pumpedAt,
+        };
+      }));
+    }
 
     // If a takeover's duration changed, update the matching ledger entry's
     // mins field, then re-derive balance from the full ledger.
@@ -3437,8 +3515,26 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // don't need them; the Shifts tab uses projectedShifts.swaps directly for the diff.
   const activeShifts = useMemo(() => {
     const stripAnnotations = (obj) => ({
-      Mommy: obj.Mommy.map(s => ({ start: s.start, end: s.end, _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice, _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin })),
-      Daddy: obj.Daddy.map(s => ({ start: s.start, end: s.end, _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice, _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin })),
+      Mommy: obj.Mommy.map(s => ({
+        start: s.start, end: s.end,
+        _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice,
+        _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin,
+        // v05.05bt8: preserve carve/cover annotations so Today's DayPlanCard
+        // chart can render the + (covering) and ! (conflict) indicators
+        // matching what Tomorrow's chart shows. The original "strip" was
+        // for downstream helpers that didn't care about these flags;
+        // keeping them in activeShifts is harmless to those helpers and
+        // restores the visual cue Today's chart needs.
+        _coveringFor: s._coveringFor, _conflict: s._conflict, _reason: s._reason,
+        _isCarvedSlice: s._isCarvedSlice, _isCarvedFree: s._isCarvedFree,
+      })),
+      Daddy: obj.Daddy.map(s => ({
+        start: s.start, end: s.end,
+        _isRepayment: s._isRepayment, _isTakeoverSlice: s._isTakeoverSlice,
+        _takeoverEventId: s._takeoverEventId, _takeoverDurationMin: s._takeoverDurationMin,
+        _coveringFor: s._coveringFor, _conflict: s._conflict, _reason: s._reason,
+        _isCarvedSlice: s._isCarvedSlice, _isCarvedFree: s._isCarvedFree,
+      })),
     });
     const baseLive = stripAnnotations(projectedShifts.projected);
 
@@ -3640,6 +3736,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       }} />
       <FontImports />
       <PaperGrain mode={mode} />
+
+      {/* Time-travel indicator — only renders when an offset is active.
+          Quick-exit by clicking anywhere on the banner. v05.05bt16. */}
+      {timeTravelOffset !== 0 && (
+        <div onClick={() => setTimeTravelOffset(0)} style={{
+          background: C.gold,
+          color: "#1F1B16",
+          padding: "6px 14px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, fontWeight: 600,
+          textAlign: "center",
+          cursor: "pointer",
+          letterSpacing: "0.05em",
+          position: "relative", zIndex: 5,
+        }}>
+          ⏱ TIME TRAVEL · app sees {now.toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })} · tap to exit
+        </div>
+      )}
 
       <header style={{ padding: "20px 18px 8px", maxWidth: 720, margin: "0 auto", position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -3933,6 +4047,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           feedsRunway={feedsRunway}
           rtItems={liveInventory.filter(i => !i.expired && i.location === "rt")}
           fridgeItems={liveInventory.filter(i => !i.expired && i.location === "fridge")}
+          freezerItems={liveInventory.filter(i => !i.expired && i.location === "freezer")}
           nextPumpAt={nextPumpAt}
           lastPumpedItem={(() => {
             const valid = liveInventory.filter(i => !i.expired);
@@ -3979,6 +4094,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setShowSleepDownPicker(true);
           }}
           onConfirmAwake={() => addEvent({ type: "wake_confirmed", silent: true })}
+          onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }}
+          onSkipBath={() => addEvent({ type: "bath_skipped", silent: true })}
           activePump={activePump}
           onStartPump={(type = "standard") => setActivePump({
             startedAt: new Date().toISOString(),
@@ -4529,6 +4646,25 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           cloudSyncAvailable={cloudSyncAvailable}
           themeOverride={themeOverride}
           setThemeOverride={setThemeOverride}
+          timeTravelOffset={timeTravelOffset}
+          setTimeTravelOffset={setTimeTravelOffset}
+          onResetBedtimeCheck={() => {
+            // Nuke today's bath and bath_skipped events so the bedtime
+            // banner can re-trigger. Returns count for the alert.
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0);
+            let cleared = 0;
+            setEvents(prev => {
+              const next = prev.filter(e => {
+                const isTodaysBath = (e.type === "bath" || e.type === "bath_skipped") &&
+                                     new Date(e.ts) >= startOfDay;
+                if (isTodaysBath) cleared++;
+                return !isTodaysBath;
+              });
+              return next;
+            });
+            return { cleared };
+          }}
           onOpenFamilyCodeSetup={() => {
             setShowProfileSwitcher(false);
             // Clear the dismiss flag so the modal can show even if previously
@@ -4582,14 +4718,33 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             return JSON.stringify(snapshot, null, 2);
           }}
           onImportData={(jsonText) => {
-            // Parse + validate. We trust the schema only as far as the field
-            // names; missing fields fall back to current state to avoid
-            // wiping things the user might not have meant to wipe.
-            // First: detect whether the user pasted a free-form log (e.g. for
-            // bulk import) into the wrong box. The tell: text doesn't start
-            // with '{' (a JSON object) or '['  (a JSON array). If so, give a
-            // friendly redirect to Bulk Import instead of a confusing JSON
-            // parser error like 'Unexpected token "S", "SUN May 3"...'.
+            // v05.05bt11: SMART MERGE rather than wholesale replace.
+            //
+            // The old wholesale-replace import was destructive — anything
+            // logged on the device after the source export was created
+            // would be lost on import. The new merge dedupes incoming
+            // entries against current state and only adds what's actually
+            // new, so importing a stale recovery file no longer wipes
+            // recent entries.
+            //
+            // Dedup keys per field:
+            //   events    → (type, ts within 1 min, oz, source, notes,
+            //                mode, durationMin)
+            //   meetings  → (parent, start, end, label)
+            //   inventory → (oz, pumpedAt within 1 min, location)
+            //   notes     → (ts within 1 min, text)
+            //   timeBank  → id (stable UUIDs)
+            //   noteArch  → (from, to, text, ts within 1 min)
+            //
+            // Singletons (handoffNote, activePump, takeover, onsite,
+            // activeActivity) are only adopted from the import if the
+            // current value is null — never overwrite live state.
+            //
+            // Configuration (shifts, diaperBag) is left alone — user
+            // has these tuned to their household; we don't replace.
+            //
+            // Bulk-import-into-wrong-box detection: the same friendly
+            // redirect as before fires for non-JSON pastes.
             const trimmed = (jsonText || "").trim();
             if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
               return {
@@ -4609,25 +4764,176 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 throw new Error(`Unknown schema version ${parsed.schemaVersion} (expected 1)`);
               }
               const d = parsed.data;
-              // Apply each field if present. For events/inventory we re-hydrate
-              // the Date objects since JSON serialization loses those.
-              if (Array.isArray(d.events)) setEvents(d.events.map(x => ({ ...x, ts: new Date(x.ts) })));
-              if (Array.isArray(d.inventory)) setInventory(d.inventory.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) })));
-              if (Array.isArray(d.meetings)) setMeetings(d.meetings);
-              if (d.shifts && typeof d.shifts === "object") setShifts(d.shifts);
-              if (d.diaperBag) setDiaperBag(d.diaperBag);
-              if ("onsite" in d) setOnsite(d.onsite);
-              if (Array.isArray(d.notes)) setNotes(d.notes);
-              if (Array.isArray(d.appointments)) setAppointments(d.appointments);
-              if ("activeActivity" in d) setActiveActivity(d.activeActivity);
-              if ("activePump" in d) setActivePump(d.activePump);
-              if ("takeover" in d) setTakeover(d.takeover);
-              if ("handoffNote" in d) setHandoffNote(d.handoffNote);
-              if (Array.isArray(d.noteArchive)) setNoteArchive(d.noteArchive);
-              if (d.timeBank) setTimeBank(d.timeBank);
-              if (d.dailyContent) setDailyContent(d.dailyContent);
-              if (d.currentUser) setCurrentUser(d.currentUser);
-              return { ok: true, count: (d.events?.length || 0) + (d.notes?.length || 0) };
+
+              // --- Helpers ---
+              const minBucket = (ts) => Math.floor(new Date(ts).getTime() / 60000);
+              const eventKey = (e) => [
+                e.type, minBucket(e.ts), e.oz ?? "", e.source ?? "",
+                e.notes ?? "", e.mode ?? "", e.durationMin ?? "",
+              ].join("|");
+              const meetingKey = (m) => [m.parent, m.start, m.end, m.label || ""].join("|");
+              const invKey = (b) => [b.oz, minBucket(b.pumpedAt), b.location || "rt"].join("|");
+              const noteKey = (n) => [minBucket(n.ts), (n.text || "").trim()].join("|");
+              const archiveKey = (a) => [a.from, a.to, (a.text || "").trim(), minBucket(a.ts)].join("|");
+
+              // Counters for summary
+              let added = { events: 0, meetings: 0, inventory: 0, notes: 0, timeBank: 0, noteArchive: 0 };
+              let skipped = { events: 0, meetings: 0, inventory: 0, notes: 0, timeBank: 0, noteArchive: 0 };
+
+              // --- Events: merge by dedup key ---
+              if (Array.isArray(d.events)) {
+                setEvents(prev => {
+                  const seen = new Set(prev.map(eventKey));
+                  const next = [...prev];
+                  for (const e of d.events) {
+                    const k = eventKey(e);
+                    if (seen.has(k)) { skipped.events++; continue; }
+                    seen.add(k);
+                    next.push({ ...e, ts: new Date(e.ts) });
+                    added.events++;
+                  }
+                  // Sort chronologically for cleanliness
+                  next.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+                  return next;
+                });
+              }
+
+              // --- Meetings: merge by dedup key ---
+              if (Array.isArray(d.meetings)) {
+                setMeetings(prev => {
+                  const seen = new Set(prev.map(meetingKey));
+                  const next = [...prev];
+                  for (const m of d.meetings) {
+                    const k = meetingKey(m);
+                    if (seen.has(k)) { skipped.meetings++; continue; }
+                    seen.add(k);
+                    next.push(m);
+                    added.meetings++;
+                  }
+                  return next;
+                });
+              }
+
+              // --- Inventory: merge by dedup key ---
+              if (Array.isArray(d.inventory)) {
+                setInventory(prev => {
+                  const seen = new Set(prev.map(invKey));
+                  const next = [...prev];
+                  for (const b of d.inventory) {
+                    const k = invKey(b);
+                    if (seen.has(k)) { skipped.inventory++; continue; }
+                    seen.add(k);
+                    next.push({ ...b, pumpedAt: new Date(b.pumpedAt) });
+                    added.inventory++;
+                  }
+                  return next;
+                });
+              }
+
+              // --- Notes: merge by dedup key ---
+              if (Array.isArray(d.notes)) {
+                setNotes(prev => {
+                  const seen = new Set(prev.map(noteKey));
+                  const next = [...prev];
+                  for (const n of d.notes) {
+                    const k = noteKey(n);
+                    if (seen.has(k)) { skipped.notes++; continue; }
+                    seen.add(k);
+                    next.push(n);
+                    added.notes++;
+                  }
+                  return next;
+                });
+              }
+
+              // --- Time bank: merge by id (UUID) ---
+              if (d.timeBank && Array.isArray(d.timeBank.transactions)) {
+                setTimeBank(prev => {
+                  const seenIds = new Set((prev.transactions || []).map(t => t.id));
+                  const newTxns = [...(prev.transactions || [])];
+                  for (const t of d.timeBank.transactions) {
+                    if (seenIds.has(t.id)) { skipped.timeBank++; continue; }
+                    seenIds.add(t.id);
+                    newTxns.push(t);
+                    added.timeBank++;
+                  }
+                  // Recompute balance from merged transactions to keep
+                  // it consistent. balance = sum of owed - sum of paid.
+                  const balance = newTxns.reduce((s, t) => {
+                    if (t.kind === "owed") return s + t.mins;
+                    if (t.kind === "paid") return s - t.mins;
+                    return s;
+                  }, 0);
+                  return { ...prev, balance, transactions: newTxns };
+                });
+              }
+
+              // --- Note archive: merge by dedup key ---
+              if (Array.isArray(d.noteArchive)) {
+                setNoteArchive(prev => {
+                  const seen = new Set(prev.map(archiveKey));
+                  const next = [...prev];
+                  for (const a of d.noteArchive) {
+                    const k = archiveKey(a);
+                    if (seen.has(k)) { skipped.noteArchive++; continue; }
+                    seen.add(k);
+                    next.push(a);
+                    added.noteArchive++;
+                  }
+                  return next;
+                });
+              }
+
+              // --- Singletons: only adopt if current is null (don't clobber live state) ---
+              if ("handoffNote" in d && d.handoffNote) {
+                setHandoffNote(prev => prev || d.handoffNote);
+              }
+              if ("activePump" in d && d.activePump) {
+                setActivePump(prev => prev || d.activePump);
+              }
+              if ("takeover" in d && d.takeover) {
+                setTakeover(prev => prev || d.takeover);
+              }
+              if ("onsite" in d && d.onsite) {
+                setOnsite(prev => prev || d.onsite);
+              }
+              if ("activeActivity" in d && d.activeActivity) {
+                setActiveActivity(prev => prev || d.activeActivity);
+              }
+
+              // --- Appointments: merge by id ---
+              if (Array.isArray(d.appointments)) {
+                setAppointments(prev => {
+                  const seenIds = new Set(prev.map(a => a.id));
+                  const next = [...prev];
+                  for (const a of d.appointments) {
+                    if (a.id && seenIds.has(a.id)) continue;
+                    if (a.id) seenIds.add(a.id);
+                    next.push(a);
+                  }
+                  return next;
+                });
+              }
+
+              // --- Daily content: merge by date key, prefer existing ---
+              if (d.dailyContent && typeof d.dailyContent === "object") {
+                setDailyContent(prev => ({ ...d.dailyContent, ...prev }));
+              }
+
+              // Configuration (shifts, diaperBag) and currentUser are NOT
+              // merged or replaced — user's local config wins. If the
+              // current user wants to adopt those from the import, they
+              // can edit shifts directly and reset the bag manually.
+
+              const totalAdded = Object.values(added).reduce((s, n) => s + n, 0);
+              const totalSkipped = Object.values(skipped).reduce((s, n) => s + n, 0);
+              return {
+                ok: true,
+                count: totalAdded,
+                added,
+                skipped,
+                summary: `Added ${totalAdded} new entries · skipped ${totalSkipped} duplicates`,
+              };
             } catch (err) {
               return { ok: false, error: err.message || String(err) };
             }
@@ -4792,8 +5098,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           now={now}
           onClose={() => setBottlePickerLoc(null)}
           onUse={({ bottleId, oz, isFullBottle }) => {
-            // Log a feed event: source BM (bottle picker is for BM only)
-            addEvent({ type: "feed", oz: Number(oz), source: "BM", ts: new Date() });
+            // Determine BM source variant: if the bottle came from freezer,
+            // it's BM-thawed; otherwise BM (fresh from RT or fridge).
+            // v05.05bt21 split — gives the future analytics signal to study
+            // whether thawed milk affects feeding patterns differently.
+            const usedBottle = liveInventory.find(b => b.id === bottleId);
+            const source = usedBottle && usedBottle.location === "freezer"
+              ? "BM-thawed" : "BM";
+            addEvent({ type: "feed", oz: Number(oz), source, ts: new Date() });
             // Deduct from chosen bottle
             setInventory(prev => prev.map(b => {
               if (b.id !== bottleId) return b;
@@ -4820,6 +5132,20 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             // Use a special flag the modal will read.
             setBottlePickerLoc(null);
             setEditingBottleId("__new__");
+          }}
+          onLogAnyway={({ oz, source }) => {
+            // v05.05bt21: log a feed event WITHOUT inventory deduction and
+            // mark with inventoryReconcileNeeded: true so it shows ⚠ in
+            // journal for later reconciliation. The user explicitly chose
+            // this path because the bottle they're using isn't tracked.
+            addEvent({
+              type: "feed",
+              oz: Number(oz),
+              source,
+              ts: new Date(),
+              inventoryReconcileNeeded: true,
+            });
+            setBottlePickerLoc(null);
           }}
         />
       )}
@@ -4858,7 +5184,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   );
 }
 
-function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onDiscardBottle, onEditBottle, onAddBottle }) {
+function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onDiscardBottle, onEditBottle, onAddBottle, onLogAnyway }) {
   // Sort: oldest first within location (use-up order)
   const sorted = [...inventory].sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
   // Single-bottle mode (default) is for feeding — pick one bottle, log a feed.
@@ -4870,6 +5196,17 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
   const [oz, setOz] = useState(sorted[0]?.oz || 4);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [bulkConfirm, setBulkConfirm] = useState(null); // "discard" | "move" | null
+  // v05.05bt21: "Bottle not in list — log anyway" inline form state.
+  // When the user opens this affordance, they pick oz and BM source variant
+  // (BM fresh / BM thawed), and we log a feed event with
+  // inventoryReconcileNeeded: true so it surfaces a ⚠ in journal for later
+  // cleanup. No inventory deduction (since there's nothing matching to
+  // deduct from).
+  const [showLogAnyway, setShowLogAnyway] = useState(false);
+  const [anywayOz, setAnywayOz] = useState(4);
+  const [anywaySource, setAnywaySource] = useState(
+    location === "freezer" ? "BM-thawed" : "BM"
+  );
   // Auto-cancel bulk confirm after 4s like other 2-step actions
   useEffect(() => {
     if (!bulkConfirm) return;
@@ -4877,8 +5214,9 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
     return () => clearTimeout(t);
   }, [bulkConfirm]);
   const selected = sorted.find(b => b.id === selectedId);
-  const locColor = location === "rt" ? C.gold : C.muted;
-  const locLabel = location === "rt" ? "Room temp" : "Fridge";
+  const locColor = location === "rt" ? C.gold : location === "freezer" ? "#5A7E9C" : C.muted;
+  const locLabel = location === "rt" ? "Room temp" : location === "freezer" ? "Freezer" : "Fridge";
+  const locIcon = location === "rt" ? "" : location === "freezer" ? "🧊 " : "";
 
   const switchMode = (newMode) => {
     setMode(newMode);
@@ -4918,9 +5256,69 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
               border: `1.5px dashed ${C.mommy}66`, borderRadius: 8,
               padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
+              marginBottom: onLogAnyway ? 10 : 0,
             }}>
               + Add a bottle to {locLabel.toLowerCase()}
             </button>
+          )}
+          {/* Log-anyway escape hatch in empty state — same as in use mode. */}
+          {onLogAnyway && (
+            !showLogAnyway ? (
+              <div>
+                <button
+                  onClick={() => setShowLogAnyway(true)}
+                  style={{
+                    background: "transparent", color: C.muted,
+                    border: `1px dashed ${C.line}55`, borderRadius: 8,
+                    padding: "10px 14px", fontSize: 12, cursor: "pointer",
+                    fontFamily: "inherit", fontStyle: "italic",
+                  }}>
+                  Bottle not in list — log anyway
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                background: `${C.gold}15`,
+                border: `1px solid ${C.gold}55`,
+                borderRadius: 10, padding: 14,
+                textAlign: "left", marginTop: 10,
+              }}>
+                <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
+                  Log without picking
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
+                  Logs the feed without deducting inventory. Flagged with ⚠ in journal for later cleanup.
+                </div>
+                <Field C={C} label="How much oz?">
+                  <BigOzPicker C={C} value={anywayOz} onChange={setAnywayOz} />
+                </Field>
+                <Field C={C} label="Source">
+                  <SegControl C={C} value={anywaySource} onChange={setAnywaySource} options={[
+                    { v: "BM", l: "BM (fresh)" },
+                    { v: "BM-thawed", l: "BM (thawed)" },
+                    { v: "Formula", l: "Formula" },
+                  ]} />
+                </Field>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <button onClick={() => setShowLogAnyway(false)} style={{
+                    background: "transparent", color: C.ink,
+                    border: `1px solid ${C.line}33`, borderRadius: 8,
+                    padding: "10px", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}>Cancel</button>
+                  <button onClick={() => {
+                    onLogAnyway({ oz: Number(anywayOz), source: anywaySource });
+                  }} style={{
+                    background: C.gold, color: "#1F1B16",
+                    border: "none", borderRadius: 8,
+                    padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}>
+                    Log {Number(anywayOz).toFixed(1)} oz · ⚠
+                  </button>
+                </div>
+              </div>
+            )
           )}
         </div>
       ) : (
@@ -4944,6 +5342,25 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                     const pumpedAt = new Date(b.pumpedAt);
                     const isSelected = selectedId === b.id;
                     const isRisky = b.risky;
+                    // For freezer bottles, show "frozen X days/months ago"
+                    // since the precise pump time matters less than the age.
+                    // For RT/fridge, keep the pumped-time caption.
+                    let captionText;
+                    if (location === "freezer") {
+                      const ageHrs = (now - pumpedAt) / 3600000;
+                      const ageDays = ageHrs / 24;
+                      if (ageDays < 1) {
+                        captionText = `frozen ${Math.round(ageHrs)}h ago`;
+                      } else if (ageDays < 14) {
+                        captionText = `frozen ${Math.round(ageDays)}d ago`;
+                      } else if (ageDays < 60) {
+                        captionText = `frozen ${Math.round(ageDays / 7)}wk ago`;
+                      } else {
+                        captionText = `frozen ${Math.round(ageDays / 30)}mo ago`;
+                      }
+                    } else {
+                      captionText = `pumped ${pumpedAt.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+                    }
                     return (
                       <button key={b.id}
                         onClick={() => { setSelectedId(b.id); setOz(b.oz); }}
@@ -4960,14 +5377,21 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: 11, fontWeight: 700,
                           flexShrink: 0,
-                        }}>{location === "rt" ? "RT" : "Fr"}</span>
+                        }}>{location === "rt" ? "RT" : location === "freezer" ? "Fz" : "Fr"}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
                             {b.oz.toFixed(1)} oz
+                            {b.bottleLabel && (
+                              <span style={{
+                                fontSize: 11, color: locColor, marginLeft: 6,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontStyle: "italic", fontWeight: 600,
+                              }}>· {b.bottleLabel}</span>
+                            )}
                             {isRisky && <span style={{ fontSize: 10, color: C.accent, marginLeft: 6, fontWeight: 600 }}>RISKY</span>}
                           </div>
                           <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                            pumped {pumpedAt.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                            {captionText}
                           </div>
                         </div>
                       </button>
@@ -5033,6 +5457,75 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                     }}>
                     <Trash2 size={11} /> {confirmDiscard ? "Sure? Tap again" : "Discard"}
                   </button>
+                </div>
+              )}
+
+              {/* "Bottle not in list — log anyway" escape hatch.
+                  When inventory tracking misses a bottle (forgot to log a
+                  pump, milk came from a different batch, etc.), the parent
+                  shouldn't be blocked from logging the actual feed. This
+                  inline affordance logs a feed without inventory deduction
+                  and flags the event for later reconciliation. v05.05bt21. */}
+              {onLogAnyway && (
+                <div style={{
+                  marginTop: 14, paddingTop: 14,
+                  borderTop: `1px dashed ${C.line}33`,
+                }}>
+                  {!showLogAnyway ? (
+                    <button
+                      onClick={() => setShowLogAnyway(true)}
+                      style={{
+                        width: "100%",
+                        background: "transparent", color: C.muted,
+                        border: `1px dashed ${C.line}55`, borderRadius: 8,
+                        padding: "10px 12px",
+                        fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                        fontStyle: "italic",
+                      }}>
+                      Bottle not in list — log anyway
+                    </button>
+                  ) : (
+                    <div style={{
+                      background: `${C.gold}15`,
+                      border: `1px solid ${C.gold}55`,
+                      borderRadius: 10, padding: 14,
+                    }}>
+                      <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
+                        Log without picking
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
+                        We'll log this feed without deducting from inventory and flag it with ⚠ in the journal. Tap the flag later to reconcile.
+                      </div>
+                      <Field C={C} label="How much oz did Solène drink?">
+                        <BigOzPicker C={C} value={anywayOz} onChange={setAnywayOz} />
+                      </Field>
+                      <Field C={C} label="Source">
+                        <SegControl C={C} value={anywaySource} onChange={setAnywaySource} options={[
+                          { v: "BM", l: "BM (fresh)" },
+                          { v: "BM-thawed", l: "BM (thawed)" },
+                          { v: "Formula", l: "Formula" },
+                        ]} />
+                      </Field>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <button onClick={() => setShowLogAnyway(false)} style={{
+                          background: "transparent", color: C.ink,
+                          border: `1px solid ${C.line}33`, borderRadius: 8,
+                          padding: "10px", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}>Cancel</button>
+                        <button onClick={() => {
+                          onLogAnyway({ oz: Number(anywayOz), source: anywaySource });
+                        }} style={{
+                          background: C.gold, color: "#1F1B16",
+                          border: "none", borderRadius: 8,
+                          padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}>
+                          Log {Number(anywayOz).toFixed(1)} oz · ⚠
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -5719,7 +6212,7 @@ function FamilyCodeSetupModal({ C, onSet, onSkip, currentCode, currentUser }) {
 }
 
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Viewer color for chrome — cloud sync section, etc.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
@@ -6136,14 +6629,33 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
                 <div style={{
                   marginTop: 8,
                   padding: "8px 10px", borderRadius: 6,
-                  fontSize: 11, lineHeight: 1.4,
+                  fontSize: 11, lineHeight: 1.5,
                   background: importResult.ok ? "#5C8E5C15" : `${C.accent}15`,
                   color: importResult.ok ? "#3D6B3D" : C.accent,
                   border: `1px solid ${importResult.ok ? "#5C8E5C" : C.accent}33`,
                 }}>
-                  {importResult.ok
-                    ? `✓ Imported ${importResult.count} entries. Modal will close to apply.`
-                    : `✗ ${importResult.error}`}
+                  {importResult.ok ? (
+                    <>
+                      <div style={{ fontWeight: 600 }}>✓ {importResult.summary || `Imported ${importResult.count} entries`}</div>
+                      {importResult.added && (
+                        <div style={{ fontSize: 10, marginTop: 4, opacity: 0.85 }}>
+                          {[
+                            importResult.added.events && `${importResult.added.events} events`,
+                            importResult.added.meetings && `${importResult.added.meetings} meetings`,
+                            importResult.added.inventory && `${importResult.added.inventory} bottles`,
+                            importResult.added.notes && `${importResult.added.notes} notes`,
+                            importResult.added.timeBank && `${importResult.added.timeBank} time-bank`,
+                            importResult.added.noteArchive && `${importResult.added.noteArchive} archived notes`,
+                          ].filter(Boolean).join(" · ") || "no new entries — already in sync"}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7, fontStyle: "italic" }}>
+                        Modal will close shortly.
+                      </div>
+                    </>
+                  ) : (
+                    `✗ ${importResult.error}`
+                  )}
                 </div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
@@ -6153,8 +6665,10 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
                     const result = onImportData(importText);
                     setImportResult(result);
                     if (result.ok) {
-                      // Auto-close after a moment so the user sees the success message
-                      setTimeout(() => onClose(), 800);
+                      // Auto-close after a moment so the user sees the success
+                      // summary (added per-type + skipped count). Slightly
+                      // longer than before now that there's more to read.
+                      setTimeout(() => onClose(), 2500);
                     }
                   }}
                   disabled={!importText.trim()}
@@ -6181,6 +6695,96 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           )}
         </div>
       )}
+
+      {/* DEV section — time-travel for previewing time-dependent UI.
+          v05.05bt16. Hidden behind a quiet eyebrow so it doesn't clutter
+          the normal user experience. Session-only — clears on reload. */}
+      {setTimeTravelOffset !== undefined && (() => {
+        const real = new Date();
+        const effective = new Date(real.getTime() + (timeTravelOffset || 0));
+        const hasOffset = (timeTravelOffset || 0) !== 0;
+        // Compute jump targets — mostly relative to real now so demos are
+        // intuitive ("jump to 9pm tonight" rather than "jump to 21:00 of
+        // some absolute date"). All offsets in ms.
+        const jumpTo = (hours, minutes = 0, dayDelta = 0) => {
+          const target = new Date(real);
+          target.setDate(target.getDate() + dayDelta);
+          target.setHours(hours, minutes, 0, 0);
+          return target.getTime() - real.getTime();
+        };
+        const presets = [
+          { label: "9pm tonight", offset: jumpTo(21, 0) },
+          { label: "10pm tonight", offset: jumpTo(22, 0) },
+          { label: "11pm tonight", offset: jumpTo(23, 0) },
+          { label: "+1h", offset: 3600000 },
+          { label: "+6h", offset: 6 * 3600000 },
+          { label: "+1 day", offset: 86400000 },
+          { label: "8am tmrw", offset: jumpTo(8, 0, 1) },
+        ];
+        return (
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}15` }}>
+            <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 6 }}>
+              DEV · Time travel
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 8, lineHeight: 1.4 }}>
+              Demo time-dependent UI (bedtime check-in, day-plan now-line, wake-check). Session-only — page reload returns to real time.
+            </div>
+            <div style={{
+              padding: "8px 10px", borderRadius: 8,
+              background: hasOffset ? `${C.gold}18` : `${C.line}06`,
+              border: `1px solid ${hasOffset ? C.gold + "55" : C.line + "22"}`,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, marginBottom: 8, lineHeight: 1.4,
+            }}>
+              <div style={{ color: C.muted }}>real now: <span style={{ color: C.ink }}>{real.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>
+              <div style={{ color: hasOffset ? C.gold : C.muted, marginTop: 2 }}>
+                app sees: <span style={{ color: C.ink, fontWeight: hasOffset ? 600 : 400 }}>
+                  {effective.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+                {hasOffset && <span style={{ marginLeft: 6, fontStyle: "italic", opacity: 0.8 }}>(simulated)</span>}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 6 }}>
+              {presets.map(p => (
+                <button key={p.label} onClick={() => setTimeTravelOffset(p.offset)} style={{
+                  background: C.bg, color: C.ink,
+                  border: `1px solid ${C.line}33`,
+                  borderRadius: 6, padding: "6px 10px",
+                  fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                  textAlign: "left",
+                }}>{p.label}</button>
+              ))}
+            </div>
+            <button onClick={() => setTimeTravelOffset(0)} disabled={!hasOffset} style={{
+              width: "100%",
+              background: hasOffset ? C.ink : "transparent",
+              color: hasOffset ? C.paper : C.muted,
+              border: `1px solid ${hasOffset ? C.ink : C.line + "33"}`,
+              borderRadius: 6, padding: "8px",
+              fontSize: 12, fontWeight: 600,
+              cursor: hasOffset ? "pointer" : "default",
+              fontFamily: "inherit",
+            }}>
+              {hasOffset ? "↺ Return to real time" : "Already at real time"}
+            </button>
+            {onResetBedtimeCheck && (
+              <button onClick={() => {
+                const result = onResetBedtimeCheck();
+                if (result && result.cleared !== undefined) {
+                  alert(`Cleared ${result.cleared} bath/bath_skipped event(s) from today. Bedtime banner can re-trigger.`);
+                }
+              }} style={{
+                width: "100%", marginTop: 6,
+                background: "transparent", color: C.muted,
+                border: `1px dashed ${C.line}33`, borderRadius: 6, padding: "8px",
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              }}>
+                Reset today's bath/skip events (re-test bedtime banner)
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Danger zone — full reset */}
       <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.line}15` }}>
@@ -6528,7 +7132,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
   );
 }
 
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, currentUser, rtItems, fridgeItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -6603,6 +7207,49 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
       minsSinceFeed: Math.round(minsSinceFeed),
       urgent: minsSinceFeed >= 120,
     };
+  })();
+
+  // Bedtime check-in: prompts the user during the late-evening window to
+  // confirm whether a bath happened tonight. v05.05bt15+. Logs the answer
+  // so the good-night insight feature can later correlate routine with
+  // sleep stretches. Triggers when:
+  //   - Current time is between 8:30pm and 11:30pm local
+  //   - No bath has been logged today
+  //   - No bath_skipped silent event for today (user already said "no bath")
+  // The latest-feed-in-window check was removed in v05.05bt17 because it
+  // was over-engineered: the feed timestamp is irrelevant to whether bath
+  // happened. The eyebrow context line still mentions last feed time when
+  // available so the parent has temporal grounding.
+  const bedtimeInfo = (() => {
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const promptStart = new Date(now);
+    promptStart.setHours(20, 30, 0, 0);
+    const promptEnd = new Date(now);
+    promptEnd.setHours(23, 30, 0, 0);
+    if (now < promptStart || now > promptEnd) return null;
+    // Check whether a bath was already logged today
+    const todayBath = events.find(e =>
+      e.type === "bath" && new Date(e.ts) >= startOfDay
+    );
+    if (todayBath) return null;
+    // Check whether user already dismissed with "no bath" today
+    const todaySkip = events.find(e =>
+      e.type === "bath_skipped" && new Date(e.ts) >= startOfDay
+    );
+    if (todaySkip) return null;
+    // Find the latest feed today, if any, for eyebrow context
+    const todayFeeds = events
+      .filter(e => (e.type === "feed" || e.type === "breastfeed") &&
+                   new Date(e.ts) >= startOfDay)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    const latestFeed = todayFeeds[0];
+    const latestFeedTimeStr = latestFeed
+      ? new Date(latestFeed.ts).toLocaleTimeString(undefined, {
+          hour: "numeric", minute: "2-digit", hour12: true,
+        })
+      : null;
+    return { latestFeedTimeStr };
   })();
 
   return (
@@ -6749,6 +7396,51 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
               <Sun size={12} /> Still awake
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bedtime check-in — prompts during the 9-11:30pm window to confirm
+          whether bath happened tonight. Logs the answer (or a bath_skipped
+          silent event) so the good-night insight feature can later
+          correlate routine with sleep stretches. v05.05bt15. */}
+      {bedtimeInfo && (
+        <div style={{
+          marginTop: 14, padding: 12,
+          background: `${C.gold}15`,
+          border: `1.5px solid ${C.gold}55`,
+          borderRadius: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Bath size={12} color={C.gold} />
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.gold,
+            }}>
+              bedtime check
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
+            {bedtimeInfo.latestFeedTimeStr
+              ? <>Last feed was at {bedtimeInfo.latestFeedTimeStr}. Did Solène have a bath tonight?</>
+              : <>It's bedtime time. Did Solène have a bath tonight?</>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button onClick={onOpenBathLog} style={{
+              background: C.ink, color: C.paper, border: "none",
+              padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}>
+              <Bath size={12} /> Yes, log it
+            </button>
+            <button onClick={onSkipBath} style={{
+              background: "transparent", color: C.ink,
+              border: `1px solid ${C.line}33`, borderRadius: 8,
+              padding: "8px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            }}>
+              No bath tonight
             </button>
           </div>
         </div>
@@ -6927,7 +7619,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           label={isAsleep ? "asleep for" : "awake for"}
           icon={isAsleep ? <Moon size={12} /> : <Sun size={12} />}
           iconColor={isAsleep ? "#5A6E8A" : C.gold}
-          value={isAsleep ? fmtElapsed(minutesAgo(lastSleep.ts)) : (lastWake ? fmtElapsed(minutesAgo(lastWake.ts)) : "—")}
+          value={isAsleep ? fmtDuration(minutesAgo(lastSleep.ts)) : (lastWake ? fmtDuration(minutesAgo(lastWake.ts)) : "—")}
           sub={(() => {
             if (isAsleep) {
               const sleepHrs = (now - new Date(lastSleep.ts)) / 3600000;
@@ -6970,6 +7662,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         feedsRunway={feedsRunway}
         rtItems={rtItems}
         fridgeItems={fridgeItems}
+        freezerItems={freezerItems}
         nextPumpAt={nextPumpAt}
         lastPumpedItem={lastPumpedItem}
         todayCalories={todayCalories}
@@ -6997,7 +7690,7 @@ function fmtPredictedNextFeed(lastFeed, now) {
 }
 
 // Milk panel: shown on both parents' on-duty card
-function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle }) {
+function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle }) {
   const isMom = currentUser === "Mommy";
   // Chrome that's not specifically about Mommy (lactation) but still inside
   // MilkPanel — bottle markers, "last bottle" tile, etc. — should follow
@@ -7379,11 +8072,11 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                         <div style={{ fontSize: 18, lineHeight: 1, color: bColor, filter: bRem < 1 || b.risky ? "none" : "saturate(0.7)" }}>🍼</div>
                         {b.bottleLabel && (
                           <div style={{
-                            fontSize: 10, fontFamily: "'Cormorant Garamond', serif",
-                            fontStyle: "italic", color: bColor,
-                            marginTop: 1, fontWeight: 600,
+                            fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            color: bColor, marginTop: 3, fontWeight: 700,
+                            letterSpacing: "0.04em",
                           }}>
-                            {b.bottleLabel}
+                            Bottle {b.bottleLabel}
                           </div>
                         )}
                         <div style={{
@@ -7421,17 +8114,18 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
 
         <button
           onClick={() => onPickBottle && onPickBottle("fridge")}
-          disabled={fridgeOz <= 0}
           style={{
             background: C.paper, borderRadius: 8, padding: "10px 12px",
             border: `1px solid ${C.line}22`,
-            cursor: fridgeOz > 0 ? "pointer" : "not-allowed",
+            cursor: "pointer",
             textAlign: "left", fontFamily: "inherit",
-            opacity: fridgeOz > 0 ? 1 : 0.5,
+            opacity: fridgeOz > 0 ? 1 : 0.7,
           }}>
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
             Fridge
-            {fridgeOz > 0 && <span style={{ opacity: 0.6 }}> · tap to use</span>}
+            {fridgeOz > 0
+              ? <span style={{ opacity: 0.6 }}> · tap to use</span>
+              : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
@@ -7454,6 +8148,15 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     return (
                       <div key={b.id} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                         <div style={{ fontSize: 18, lineHeight: 1, color: bColor }}>🍼</div>
+                        {b.bottleLabel && (
+                          <div style={{
+                            fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                            color: bColor, marginTop: 3, fontWeight: 700,
+                            letterSpacing: "0.04em",
+                          }}>
+                            Bottle {b.bottleLabel}
+                          </div>
+                        )}
                         <div style={{
                           fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
                           color: bColor, marginTop: 3, fontWeight: 500,
@@ -7493,6 +8196,62 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           )}
         </button>
       </div>
+
+      {/* Freezer strip — appears below the RT/Fridge tiles. Slim full-width
+          strip showing freezer total + bottle count. Tap to open picker
+          filtered to freezer. Always rendered (even when empty) so users
+          remember they can pick frozen milk OR add a frozen bottle
+          retroactively. v05.05bt21. */}
+      {(() => {
+        const freezerBottles = freezerItems || [];
+        const freezerOz = freezerBottles.reduce((s, b) => s + b.oz, 0);
+        const hasFreezer = freezerBottles.length > 0;
+        return (
+          <button
+            onClick={() => onPickBottle && onPickBottle("freezer")}
+            style={{
+              width: "100%",
+              background: hasFreezer ? C.paper : "transparent",
+              borderRadius: 8, padding: "8px 12px",
+              border: hasFreezer
+                ? `1px solid ${C.line}22`
+                : `1px dashed ${C.line}33`,
+              cursor: "pointer",
+              textAlign: "left", fontFamily: "inherit",
+              marginBottom: 10,
+              display: "flex", alignItems: "center", gap: 12,
+            }}>
+            <span style={{ fontSize: 16 }}>🧊</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+                color: C.muted, fontWeight: 600,
+              }}>
+                Freezer
+                <span style={{ opacity: 0.6 }}>
+                  {hasFreezer ? " · tap to use" : " · tap to add a frozen bottle"}
+                </span>
+              </div>
+              {hasFreezer ? (
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: 16,
+                  fontWeight: 500, color: C.ink, marginTop: 1, lineHeight: 1.2,
+                }}>
+                  {freezerOz.toFixed(1)} oz
+                  <span style={{ color: C.muted, fontSize: 11, fontStyle: "italic", marginLeft: 6 }}>
+                    · {freezerBottles.length} bottle{freezerBottles.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2, fontStyle: "italic" }}>
+                  empty
+                </div>
+              )}
+            </div>
+            <ChevronRight size={14} color={C.muted} />
+          </button>
+        );
+      })()}
 
       {/* Last bottle pumped — info display, more readable */}
       {lastPumpedItem && (
@@ -8826,9 +9585,9 @@ function TimelineEvent({ ev, C, now }) {
   }[ev.type] || C.ink;
 
   const label = {
-    feed: `Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}`,
+    feed: `${ev.inventoryReconcileNeeded ? "⚠ " : ""}Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}`,
     breastfeed: `Breastfed${ev.totalDurationMin ? ` · ${ev.totalDurationMin}m` : ""}${(ev.leftMin || ev.rightMin) ? ` (L${ev.leftMin || 0}/R${ev.rightMin || 0})` : ""}`,
-    pump: `Pump${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}`,
+    pump: `${ev.pumpType === "power" ? "⚡ Power pump" : "Pump"}${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}${ev.bottleLabel ? ` · Bottle ${ev.bottleLabel}` : ""}`,
     diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}`,
     sleep_down: "Down for sleep",
     sleep_up: "Awake",
@@ -9059,10 +9818,13 @@ function LogView({ C, events, removeEvent, updateEvent, now }) {
                       {fmtTimeShort(new Date(e.ts))}
                     </span>
                     <span style={{ flex: 1, fontSize: 13, color: C.ink }}>
-                      {e.type === "feed" && `Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`}
+                      {e.type === "feed" && `${e.inventoryReconcileNeeded ? "⚠ " : ""}Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`}
                       {e.type === "breastfeed" && `Breastfed${e.totalDurationMin ? ` · ${e.totalDurationMin}m` : ""}${(e.leftMin || e.rightMin) ? ` (L${e.leftMin || 0}/R${e.rightMin || 0})` : ""}`}
                       {e.type === "pump" && (() => {
-                        const base = `Pump${e.oz ? ` · ${e.oz}oz` : ""}${e.durationMin ? ` · ${e.durationMin}m` : ""}`;
+                        const isPower = e.pumpType === "power";
+                        const prefix = isPower ? "⚡ Power pump" : "Pump";
+                        const labelStr = e.bottleLabel ? ` · Bottle ${e.bottleLabel}` : "";
+                        const base = `${prefix}${e.oz ? ` · ${e.oz}oz` : ""}${e.durationMin ? ` · ${e.durationMin}m` : ""}${labelStr}`;
                         // Append start–end range if we have duration. mode
                         // tells us whether ts is the start or end of the
                         // session; we compute the missing edge from durationMin.
@@ -9157,6 +9919,12 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
     const end = new Date(start.getTime() + Number(event.durationMin) * 60000);
     return safeDatetimeLocal(end);
   });
+  // v05.05bt22: bottle label editable on pump events. The label originally
+  // gets set during the FinishPumpModal flow, but if it was missed (e.g.
+  // backfilled pump, retroactive entry), users want to add/correct it here.
+  // We persist BOTH on the pump event AND on the matching inventory bottle
+  // (linked by ts ↔ pumpedAt) so the label propagates everywhere.
+  const [bottleLabel, setBottleLabel] = useState(event.bottleLabel || "");
 
   const submit = () => {
     const ts = new Date(tsLocal).toISOString();
@@ -9181,6 +9949,8 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
       } else {
         updated.durationMin = Number(durationMin);
       }
+      // v05.05bt22: persist bottle label
+      updated.bottleLabel = bottleLabel.trim() || null;
     } else if (event.type === "diaper") {
       updated.notes = diaperKind;
     } else if (event.type === "breastfeed") {
@@ -9225,12 +9995,39 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
 
       {event.type === "feed" && (
         <>
+          {event.inventoryReconcileNeeded && (
+            <div style={{
+              marginBottom: 14, padding: 12,
+              background: `${C.gold}15`,
+              border: `1px solid ${C.gold}55`,
+              borderRadius: 10,
+            }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+                color: C.gold, fontWeight: 700, marginBottom: 4,
+              }}>
+                ⚠ Inventory mismatch
+              </div>
+              <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5, marginBottom: 8 }}>
+                This feed was logged without picking a bottle from inventory. If you've since added the missing bottle, mark this resolved.
+              </div>
+              <button onClick={() => onSave({ ...event, inventoryReconcileNeeded: false })} style={{
+                background: C.gold, color: "#1F1B16", border: "none",
+                borderRadius: 6, padding: "6px 12px",
+                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit",
+              }}>
+                Mark resolved (clear ⚠)
+              </button>
+            </div>
+          )}
           <Field C={C} label="Volume (oz)">
             <BigOzPicker C={C} value={oz} onChange={setOz} />
           </Field>
           <Field C={C} label="Source">
             <SegControl C={C} value={source} onChange={setSource} options={[
               { v: "BM", l: "Breast milk" },
+              { v: "BM-thawed", l: "BM (thawed)" },
               { v: "Formula", l: "Formula" },
               { v: "BM+Formula", l: "Mix" },
             ]} />
@@ -9332,6 +10129,30 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
                 })()}
               </Field>
             )}
+
+            {/* v05.05bt22: bottle label editor. Useful when the label was
+                missed during the original FinishPumpModal flow, or when
+                backfilling pumps. Persisted on both the pump event and
+                the matching inventory bottle. */}
+            <Field C={C} label="Bottle label (optional)">
+              <input
+                type="text"
+                value={bottleLabel}
+                onChange={e => setBottleLabel(e.target.value.toUpperCase().slice(0, 3))}
+                placeholder="e.g. A"
+                maxLength={3}
+                style={{
+                  width: "100%", padding: 10, fontSize: 16,
+                  background: C.bg, border: `1px solid ${C.line}33`,
+                  borderRadius: 8, color: C.ink, outline: "none",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  letterSpacing: "0.1em", textTransform: "uppercase",
+                }}
+              />
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4, fontStyle: "italic" }}>
+                Sharpie label on the bottle, if any. Helps identify which bottle is which.
+              </div>
+            </Field>
           </>
         );
       })()}
@@ -9455,6 +10276,199 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
 // Visual hierarchy:
 //   1. Day header with chevron (clickable to collapse/expand)
 //   2. (When open) Shifts grid · auto-swap summary · commitments list · add button
+// ---- DayPlanShiftStrip --------------------------------------------------
+// Renders the day's shift plan as a horizontal hour-block bar mirroring the
+// landing-page ShiftStrip treatment. Unlike the landing-page strip (rolling
+// next-24h), this strip shows midnight→midnight of a specific calendar day
+// (today or tomorrow). Carve/cover/conflict annotations on the slices get
+// layered on as visual indicators so changes pop without needing to read
+// the auto-adjustments log.
+function DayPlanShiftStrip({ C, shiftBlocks, commitments, isToday, now }) {
+  // Build 24 hourly cells from 00:00 → 24:00 of the target calendar day.
+  // Each cell asks: who's on duty for that hour, and is the slice they're
+  // in carved or conflicting?
+  const cells = [];
+  for (let h = 0; h < 24; h++) {
+    const cellMins = h * 60 + 30; // mid-hour for slot lookup
+    let parent = null;
+    let coveringFor = null;
+    let isConflict = false;
+    let isCarved = false;
+    for (const p of ["Mommy", "Daddy"]) {
+      for (const s of (shiftBlocks?.[p] || [])) {
+        const a = toMin(s.start);
+        const b = toMin(s.end);
+        const inShift = a < b ? cellMins >= a && cellMins < b : cellMins >= a || cellMins < b;
+        if (inShift) {
+          parent = p;
+          coveringFor = s._coveringFor || null;
+          isConflict = !!s._conflict;
+          isCarved = !!s._isCarvedSlice || !!s._isCarvedFree;
+          break;
+        }
+      }
+      if (parent) break;
+    }
+    cells.push({ hour: h, parent, coveringFor, isConflict, isCarved });
+  }
+
+  // Compute commitment marks — small ticks on top of the strip at the
+  // start time of each commitment for the visible day. Time is in minutes
+  // since midnight (0–1440).
+  const commitmentMarks = (commitments || []).map(m => {
+    const start = new Date(m.start);
+    const end = new Date(m.end);
+    // Use local time for the day — these meetings are stored as ISO UTC
+    // but we display at the day's local-time scale.
+    const startMins = start.getHours() * 60 + start.getMinutes();
+    const endMins = end.getHours() * 60 + end.getMinutes();
+    return {
+      startPct: (startMins / 1440) * 100,
+      widthPct: Math.max(0.5, ((endMins - startMins) / 1440) * 100),
+      parent: m.parent,
+      level: m.level,
+      label: m.label,
+    };
+  });
+
+  const nowPct = isToday ? ((now.getHours() * 60 + now.getMinutes()) / 1440) * 100 : null;
+
+  return (
+    <div style={{
+      background: C.bg, borderRadius: 10, padding: 12,
+      border: `1px solid ${C.line}12`, marginBottom: 10,
+    }}>
+      {/* Legend row — Mommy / Daddy / covering / now */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginBottom: 8, flexWrap: "wrap", gap: 6,
+      }}>
+        <div style={{
+          display: "flex", gap: 10, fontSize: 10, color: C.muted,
+          letterSpacing: "0.04em",
+        }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, background: C.mommy, borderRadius: 2 }} /> Mommy
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 10, background: C.daddy, borderRadius: 2 }} /> Daddy
+          </span>
+        </div>
+        <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>
+          ↻ = covered · ! = conflict
+        </div>
+      </div>
+
+      {/* Commitment ticks above the strip — small lines at each meeting time */}
+      {commitmentMarks.length > 0 && (
+        <div style={{ position: "relative", height: 8, marginBottom: 2 }}>
+          {commitmentMarks.map((m, i) => {
+            const cColor = m.parent === "Mommy" ? C.mommy : C.daddy;
+            const lvlBorder = m.level === "red" ? "#C44545" : m.level === "yellow" ? C.gold : "#5C8E5C";
+            return (
+              <div
+                key={i}
+                title={`${m.parent} · ${m.label}`}
+                style={{
+                  position: "absolute",
+                  left: `${m.startPct}%`,
+                  width: `${m.widthPct}%`,
+                  bottom: 0,
+                  height: 6,
+                  background: cColor,
+                  border: `1px solid ${lvlBorder}`,
+                  borderRadius: 2,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Hour blocks */}
+      <div style={{
+        position: "relative",
+        display: "flex", height: 32, borderRadius: 6, overflow: "hidden",
+        border: `1px solid ${C.line}11`, marginBottom: 4,
+      }}>
+        {cells.map((c, i) => {
+          // Determine block color and emphasis. Carved/covered slots get a
+          // darker tint + outline so they pop against the regular slice color.
+          const baseColor = c.parent === "Mommy" ? C.mommy : c.parent === "Daddy" ? C.daddy : C.muted;
+          const isHighlighted = c.isCarved || c.coveringFor || c.isConflict;
+          return (
+            <div key={i} style={{
+              flex: 1,
+              background: baseColor,
+              opacity: isHighlighted ? 1 : 0.8,
+              position: "relative",
+              borderRight: i < 23 ? `1px solid ${C.bg}55` : "none",
+              outline: c.isConflict
+                ? `2px solid ${C.accent}`
+                : isHighlighted
+                ? `1.5px solid ${C.ink}`
+                : "none",
+              outlineOffset: -2,
+              zIndex: isHighlighted ? 2 : 1,
+            }}>
+              {/* Indicator letter on top of the block when carved/conflict */}
+              {c.isConflict ? (
+                <div style={{
+                  position: "absolute", top: 2, left: 0, right: 0,
+                  textAlign: "center", fontSize: 11, fontWeight: 700,
+                  color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+                  pointerEvents: "none",
+                }}>!</div>
+              ) : isHighlighted ? (
+                <div style={{
+                  position: "absolute", top: 2, left: 0, right: 0,
+                  textAlign: "center", fontSize: 10, fontWeight: 700,
+                  color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.4)",
+                  pointerEvents: "none",
+                }}>↻</div>
+              ) : null}
+            </div>
+          );
+        })}
+        {/* Now line — only on Today's strip */}
+        {nowPct !== null && (
+          <div style={{
+            position: "absolute", top: -3, bottom: -3,
+            left: `${nowPct}%`,
+            width: 2,
+            background: C.accent,
+            boxShadow: `0 0 8px ${C.accent}`,
+            zIndex: 3,
+          }} />
+        )}
+      </div>
+
+      {/* Hour labels every 3h */}
+      <div style={{
+        display: "flex", fontSize: 9, color: C.muted,
+        fontFamily: "'JetBrains Mono', monospace",
+      }}>
+        {cells.map((c, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center" }}>
+            {i % 3 === 0 ? (
+              c.hour === 0 ? "12a" :
+              c.hour === 12 ? "12p" :
+              c.hour < 12 ? `${c.hour}a` : `${c.hour - 12}p`
+            ) : ""}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 10, color: C.muted, fontStyle: "italic" }}>
+        ↑ each block = 1 hour · highlighted blocks = adjusted shifts
+        {isToday && <> · orange line marks <strong style={{ color: C.accent }}>now</strong></>}
+        {commitmentMarks.length > 0 && <> · bars above show commitments</>}
+      </div>
+    </div>
+  );
+}
+
+// ---- DayPlanCard -------------------------------------------------------
 function DayPlanCard({
   C, label, subLabel, defaultOpen,
   shiftBlocks, daySwaps, commitments,
@@ -9546,45 +10560,19 @@ function DayPlanCard({
       {/* Body — only when open */}
       {open && (
         <div style={{ padding: "0 14px 14px" }}>
-          {/* Per-parent shift grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            {["Mommy", "Daddy"].map(parent => {
-              const color = parent === "Mommy" ? C.mommy : C.daddy;
-              const otherColor = parent === "Mommy" ? C.daddy : C.mommy;
-              const blocks = shiftBlocks?.[parent] || [];
-              return (
-                <div key={parent} style={{
-                  background: C.bg, borderRadius: 10, padding: 12,
-                  border: `1px solid ${C.line}12`, borderTop: `2.5px solid ${color}`,
-                }}>
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontSize: 16, fontWeight: 500,
-                    marginBottom: 6, color,
-                  }}>
-                    {parent}
-                  </div>
-                  {blocks.length === 0 ? (
-                    <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>no shifts</div>
-                  ) : blocks.map((s, i) => {
-                    const isCovered = s._coveringFor;
-                    const isConflict = s._conflict;
-                    return (
-                      <div key={i} style={{
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-                        padding: "2px 0", color: C.ink,
-                        display: "flex", alignItems: "center", gap: 5,
-                      }}>
-                        {isCovered && <span style={{ color: otherColor, fontWeight: 600 }}>+</span>}
-                        {isConflict && <span style={{ color: C.accent, fontWeight: 600 }}>!</span>}
-                        <span>{fmtShiftRange(s)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          {/* Visual hour-block strip — replaces the old per-parent text-list.
+              v05.05bt10: shows each hour of the day colored by who's on duty
+              (mauve = Mommy, blue = Daddy), with carve/conflict indicators
+              layered on top. Mirrors the landing-page treatment but for a
+              specific calendar day (today or tomorrow), not a rolling
+              next-24h window. */}
+          <DayPlanShiftStrip
+            C={C}
+            shiftBlocks={shiftBlocks}
+            commitments={commitments}
+            isToday={isToday}
+            now={now}
+          />
 
           {/* Auto-swap summary — collapsed by default. Header shows just
               the count chip; tap to expand and see why each adjustment
@@ -11753,6 +12741,187 @@ function EtaUpdateModal({ C, onsite, onClose, onSubmit }) {
   );
 }
 
+// ---- SwipeableRow ------------------------------------------------------
+// Reusable wrapper that lets users swipe-left on a list item to reveal
+// action buttons (typically Edit + Delete). Distinguishes horizontal swipe
+// from vertical scroll by requiring dx > dy * 1.5 before locking to swipe
+// gesture. Snaps back if released before 60px threshold. Tap-anywhere-else
+// (on the page) closes any open swipe.
+//
+// Usage:
+//   <SwipeableRow C={C} actions={[
+//     { label: "Edit", icon: <Edit3 size={14} />, color: "#888", onClick: () => ... },
+//     { label: "Delete", icon: <Trash2 size={14} />, color: "#C44545", onClick: () => ... },
+//   ]}>
+//     <YourRowContent />
+//   </SwipeableRow>
+//
+// Props:
+//   actions: array of { label, icon, color, onClick }
+//   children: the row content
+//   C: theme palette
+//
+// v05.05bt17.
+function SwipeableRow({ C, actions, children, rowKey }) {
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [snapped, setSnapped] = useState(false); // is the row currently held open?
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const didLockToSwipe = useRef(false);
+  const containerRef = useRef(null);
+
+  const ACTION_WIDTH = 64; // px per action button
+  const totalActionWidth = actions.length * ACTION_WIDTH;
+  const SNAP_THRESHOLD = ACTION_WIDTH; // half-way through one action width
+
+  // Close on outside click
+  useEffect(() => {
+    if (!snapped) return;
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setSnapped(false);
+        setDragX(0);
+      }
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [snapped]);
+
+  const onPointerDown = (clientX, clientY) => {
+    startX.current = clientX;
+    startY.current = clientY;
+    didLockToSwipe.current = false;
+    setIsDragging(true);
+  };
+
+  const onPointerMove = (clientX, clientY, e) => {
+    if (!isDragging) return;
+    const dx = clientX - startX.current;
+    const dy = clientY - startY.current;
+    // First few pixels — decide whether this is a horizontal swipe or
+    // vertical scroll. Once locked, we ignore vertical movement.
+    if (!didLockToSwipe.current) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        if (Math.abs(dx) > Math.abs(dy) * 1.5) {
+          didLockToSwipe.current = true;
+        } else {
+          // Vertical scroll wins — release and don't drag
+          setIsDragging(false);
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+    // Only swipes to the left reveal actions. Right swipes either close a
+    // snapped row or do nothing.
+    let nextDragX;
+    if (snapped) {
+      // Starting from open position: dx is delta from open
+      nextDragX = Math.min(0, -totalActionWidth + dx);
+    } else {
+      nextDragX = Math.min(0, dx);
+    }
+    // Resist over-drag past full open
+    if (nextDragX < -totalActionWidth - 20) {
+      nextDragX = -totalActionWidth - 20 + (nextDragX + totalActionWidth + 20) * 0.2;
+    }
+    setDragX(nextDragX);
+    if (e && e.preventDefault && didLockToSwipe.current) e.preventDefault();
+  };
+
+  const onPointerUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    // Snap to nearest stable state
+    if (dragX < -SNAP_THRESHOLD) {
+      setDragX(-totalActionWidth);
+      setSnapped(true);
+    } else {
+      setDragX(0);
+      setSnapped(false);
+    }
+  };
+
+  // Touch handlers
+  const onTouchStart = (e) => {
+    onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const onTouchMove = (e) => {
+    if (didLockToSwipe.current && e.cancelable) e.preventDefault();
+    onPointerMove(e.touches[0].clientX, e.touches[0].clientY, e);
+  };
+  const onTouchEnd = () => onPointerUp();
+
+  // Mouse handlers — useful for desktop demoing
+  const onMouseDown = (e) => onPointerDown(e.clientX, e.clientY);
+  const onMouseMove = (e) => isDragging && onPointerMove(e.clientX, e.clientY, e);
+  const onMouseUp = () => onPointerUp();
+  // Mouse needs document-level listeners since the cursor can leave the row
+  useEffect(() => {
+    if (!isDragging) return;
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  });
+
+  return (
+    <div ref={containerRef} style={{
+      position: "relative", overflow: "hidden", borderRadius: 10,
+    }}>
+      {/* Action buttons — sit BEHIND the content, revealed when content slides left */}
+      <div style={{
+        position: "absolute", top: 0, right: 0, bottom: 0,
+        display: "flex",
+      }}>
+        {actions.map((action, i) => (
+          <button
+            key={i}
+            onClick={(e) => {
+              e.stopPropagation();
+              action.onClick();
+              setDragX(0);
+              setSnapped(false);
+            }}
+            style={{
+              width: ACTION_WIDTH,
+              background: action.color || C.muted,
+              color: "#fff",
+              border: "none",
+              cursor: "pointer",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              gap: 3,
+              fontFamily: "inherit", fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.04em",
+            }}>
+            {action.icon}
+            <span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+      {/* Content — slides left to reveal actions */}
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        style={{
+          transform: `translateX(${dragX}px)`,
+          transition: isDragging ? "none" : "transform 0.2s ease-out",
+          background: C.paper,
+          touchAction: "pan-y",
+        }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function MeetingRow({ m, C, onRemove, onEdit }) {
   const colors = {
     red: { bg: "#C44545", fg: "#fff", label: "RED" },
@@ -11762,75 +12931,60 @@ function MeetingRow({ m, C, onRemove, onEdit }) {
   const start = new Date(m.start);
   const end = new Date(m.end);
   const parentColor = m.parent === "Mommy" ? C.mommy : C.daddy;
-  // 2-step delete: first tap arms the button, second tap confirms.
-  // Auto-disarms after 4 seconds so accidental arming doesn't linger.
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => {
-    if (!confirming) return;
-    const t = setTimeout(() => setConfirming(false), 4000);
-    return () => clearTimeout(t);
-  }, [confirming]);
-  const handleClick = () => {
-    if (confirming) {
-      onRemove();
-      setConfirming(false);
-    } else {
-      setConfirming(true);
-    }
-  };
+
+  // v05.05bt17: swipe-left to reveal Edit + Delete buttons. Tap on body
+  // still opens edit modal. The old 2-step confirm trash button is gone
+  // since the swipe gesture itself is intentional.
+  const actions = [];
+  if (onEdit) {
+    actions.push({
+      label: "Edit",
+      icon: <Edit3 size={14} />,
+      color: C.muted,
+      onClick: onEdit,
+    });
+  }
+  actions.push({
+    label: "Delete",
+    icon: <Trash2 size={14} />,
+    color: "#C44545",
+    onClick: onRemove,
+  });
 
   return (
-    <div style={{
-      background: C.paper, borderRadius: 10,
-      border: `1px solid ${confirming ? C.accent : C.line + "15"}`,
-      display: "flex", alignItems: "center", gap: 10,
-      transition: "border-color 0.15s",
-      overflow: "hidden",
-    }}>
-      <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: colors.bg, marginLeft: 12 }} />
-      {/* Tappable body — clicks open edit modal */}
-      <button
-        onClick={onEdit}
-        disabled={!onEdit}
-        style={{
-          flex: 1, minWidth: 0, textAlign: "left",
-          background: "transparent", border: "none",
-          padding: "10px 0", cursor: onEdit ? "pointer" : "default",
-          fontFamily: "inherit", color: "inherit",
-        }}>
-        <div style={{ fontSize: 14, fontWeight: 500 }}>{m.label || "(untitled)"}</div>
-        <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
-          <span style={{ color: parentColor, fontWeight: 600 }}>{m.parent}</span>
-          {" · "}{fmtTimeShort(start)}–{fmtTimeShort(end)}
-        </div>
-      </button>
-      <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
-        background: colors.bg, color: colors.fg,
-        padding: "3px 6px", borderRadius: 4,
+    <SwipeableRow C={C} actions={actions} rowKey={m.id}>
+      <div style={{
+        background: C.paper,
+        border: `1px solid ${C.line}15`,
+        borderRadius: 10,
+        display: "flex", alignItems: "center", gap: 10,
       }}>
-        {colors.label}
-      </span>
-      <button
-        onClick={handleClick}
-        title={confirming ? "Tap again to confirm — this will remove the commitment" : "Remove this commitment"}
-        style={{
-          background: confirming ? C.accent : "transparent",
-          border: confirming ? "none" : `1px solid ${C.line}22`,
-          color: confirming ? "#fff" : C.muted,
-          cursor: "pointer",
-          padding: confirming ? "4px 10px" : 4,
-          borderRadius: confirming ? 14 : 4,
-          fontSize: confirming ? 11 : "inherit",
-          fontWeight: confirming ? 600 : "inherit",
-          letterSpacing: confirming ? "0.04em" : 0,
-          display: "flex", alignItems: "center", gap: 4,
-          transition: "all 0.15s",
-          marginRight: 12,
+        <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: colors.bg, marginLeft: 12 }} />
+        {/* Tappable body — clicks open edit modal */}
+        <button
+          onClick={onEdit}
+          disabled={!onEdit}
+          style={{
+            flex: 1, minWidth: 0, textAlign: "left",
+            background: "transparent", border: "none",
+            padding: "10px 0", cursor: onEdit ? "pointer" : "default",
+            fontFamily: "inherit", color: "inherit",
+          }}>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{m.label || "(untitled)"}</div>
+          <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+            <span style={{ color: parentColor, fontWeight: 600 }}>{m.parent}</span>
+            {" · "}{fmtTimeShort(start)}–{fmtTimeShort(end)}
+          </div>
+        </button>
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
+          background: colors.bg, color: colors.fg,
+          padding: "3px 6px", borderRadius: 4, marginRight: 12,
         }}>
-        {confirming ? <>Sure?</> : <Trash2 size={14} />}
-      </button>
-    </div>
+          {colors.label}
+        </span>
+      </div>
+    </SwipeableRow>
   );
 }
 
@@ -12352,19 +13506,31 @@ function RoutineSection({ C, now, events, addEvent, lastBath, lastSkincare }) {
   );
 }
 
-function BathLoggerModal({ C, onClose, onSubmit }) {
-  const [bathType, setBathType] = useState("partial");
+// Extracted in v05.05bt18 so the same form body is used by both:
+//   - BathLoggerModal (Care tab → "Log bath" button)
+//   - LogPickerSheet (Now tab → bedtime check-in banner → "Yes, log it")
+// Single source of truth for bath logging UX.
+function BathForm({ C, onSubmit }) {
+  const [bathType, setBathType] = useState("full_sudsy");
+  const [withBook, setWithBook] = useState(false);
+  // Only the 4 canonical bath types are selectable. Legacy keys (full,
+  // partial, quickie, wipe) still resolve via BATH_TYPES lookup for
+  // displaying historical entries, but they're not in the picker.
+  const ACTIVE_BATH_KEYS = ["toe_dip", "full_sudsy", "full_with_hair", "quick_dunk"];
   return (
-    <ModalShell C={C} onClose={onClose} title="Log bath">
+    <>
       <Field C={C} label="Which routine just happened?">
         <div style={{ display: "grid", gap: 8 }}>
-          {Object.entries(BATH_TYPES).map(([key, info]) => (
+          {ACTIVE_BATH_KEYS.map(key => {
+            const info = BATH_TYPES[key];
+            return (
             <button key={key} onClick={() => setBathType(key)} style={{
               background: bathType === key ? C.accent : C.bg,
               color: bathType === key ? "#fff" : C.ink,
               border: `1.5px solid ${bathType === key ? C.accent : C.line + "22"}`,
               borderRadius: 10, padding: "12px 14px", cursor: "pointer",
               display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+              fontFamily: "inherit",
             }}>
               <span style={{ fontSize: 24 }}>{info.icon}</span>
               <div style={{ flex: 1 }}>
@@ -12373,12 +13539,40 @@ function BathLoggerModal({ C, onClose, onSubmit }) {
               </div>
               <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", opacity: 0.7 }}>{info.duration}</div>
             </button>
+            );
+          })}
+        </div>
+      </Field>
+      <Field C={C} label="Did we read her a book?">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {[
+            { v: true, l: "Yes 📖", desc: "stories or board book" },
+            { v: false, l: "No", desc: "no book tonight" },
+          ].map(opt => (
+            <button key={String(opt.v)} onClick={() => setWithBook(opt.v)} style={{
+              background: withBook === opt.v ? `${C.gold}30` : C.bg,
+              color: C.ink,
+              border: `1.5px solid ${withBook === opt.v ? C.gold : C.line + "22"}`,
+              borderRadius: 10, padding: "10px 12px", cursor: "pointer",
+              fontFamily: "inherit", textAlign: "left",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.l}</div>
+              <div style={{ fontSize: 10, opacity: 0.7, marginTop: 1 }}>{opt.desc}</div>
+            </button>
           ))}
         </div>
       </Field>
-      <SubmitButton C={C} onClick={() => onSubmit({ type: "bath", bathType })}>
+      <SubmitButton C={C} onClick={() => onSubmit({ type: "bath", bathType, withBook })}>
         Log bath
       </SubmitButton>
+    </>
+  );
+}
+
+function BathLoggerModal({ C, onClose, onSubmit }) {
+  return (
+    <ModalShell C={C} onClose={onClose} title="Log bath">
+      <BathForm C={C} onSubmit={onSubmit} />
     </ModalShell>
   );
 }
@@ -12841,6 +14035,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         : loggerType === "activity" ? "Log activity"
         : loggerType === "note" ? "Add note / observation"
         : loggerType === "commitment" ? "Add commitment"
+        : loggerType === "bath" ? "Log bath"
         : "Log sleep"
       }>
         {loggerType === "feed" && <FeedForm C={C} lastFeed={lastFeed} onSubmit={onSubmit} liveInventory={liveInventory} />}
@@ -12851,6 +14046,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         {loggerType === "activity" && <ActivityForm C={C} onSubmit={onSubmit} activeActivity={activeActivity} setActiveActivity={setActiveActivity} />}
         {loggerType === "note" && <NoteForm C={C} onSubmit={(note) => { addNote(note); onClose(); }} flaggedNotes={flaggedNotes} updateNote={updateNote} />}
         {loggerType === "commitment" && <InlineCommitmentForm C={C} onSubmit={(m) => { addMeeting(m); onClose(); }} currentUser={currentUser} />}
+        {loggerType === "bath" && <BathForm C={C} onSubmit={onSubmit} />}
       </ModalShell>
     );
   }
@@ -15170,6 +16366,529 @@ ${noteSection}
 }
 
 // ---- Analytics --------------------------------------------------------
+// ---- SleepWakeChart -----------------------------------------------------
+// Renders sleep state as a binary signal over time:
+//   y = 0 → asleep
+//   y = 1 → awake
+// Visualizes interruptions in sleep so the user can SEE how fragmented
+// nights are. Default window is last 24h (single row); expandable to last
+// 7 days (one row per day, stacked) for night-over-night comparison.
+//
+// Color follows the viewer (mauve for Mommy, blue for Daddy) so it harmonizes
+// with the rest of the page chrome on each device.
+//
+// Inferred wakes (sleep_up with inferredFrom set) get a dotted edge marker
+// so they're distinguishable from explicitly-logged wakes.
+function SleepWakeChart({ C, events, now, currentUser }) {
+  const [mode, setMode] = useState("24h"); // "24h" | "7d"
+  // v05.05bt14: hover-to-inspect tooltip state. When the user hovers over
+  // (or taps) a transition marker, we surface metadata: type, exact time,
+  // duration of the resulting stretch, whether it was inferred. Stored as
+  // { rowIdx, transitionIdx, x, y, content } so the popover knows where
+  // to render.
+  const [hovered, setHovered] = useState(null);
+  // Global click-outside dismiss for taps on mobile. The marker's onClick
+  // calls stopPropagation so this only fires when clicking elsewhere.
+  useEffect(() => {
+    if (!hovered) return;
+    const handler = () => setHovered(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [hovered]);
+  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
+
+  // Build a chronological list of sleep transitions in the look-back window.
+  // We'll pull a bit beyond the window so the trace at the left edge isn't
+  // ambiguous about its starting state.
+  const lookbackMs = mode === "24h" ? 24 * 3600000 : 7 * 86400000;
+  const padMs = 6 * 3600000; // 6 hours of padding to find priorState
+  const windowStart = new Date(now.getTime() - lookbackMs);
+  const padStart = new Date(now.getTime() - lookbackMs - padMs);
+
+  // All sleep events in [padStart, now], chronological.
+  const sleepEvents = events
+    .filter(e => (e.type === "sleep_down" || e.type === "sleep_up") &&
+                 new Date(e.ts) >= padStart && new Date(e.ts) <= now)
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+  // Determine state at windowStart by looking at the latest event before it.
+  const eventsBeforeWindow = sleepEvents.filter(e => new Date(e.ts) < windowStart);
+  const startState = eventsBeforeWindow.length > 0
+    ? (eventsBeforeWindow[eventsBeforeWindow.length - 1].type === "sleep_down" ? "asleep" : "awake")
+    : "awake"; // assume awake if no recent prior state
+
+  // Trace segments: list of { start, end, state, inferred }
+  // We turn each sleep_down → sleep_up pair into an "asleep" segment, and
+  // the gaps into "awake" segments. Pre-window state extends from windowStart.
+  const segments = [];
+  let cursorTime = windowStart;
+  let cursorState = startState;
+  let cursorInferred = false;
+
+  const eventsInWindow = sleepEvents.filter(e => new Date(e.ts) >= windowStart);
+  for (const e of eventsInWindow) {
+    const t = new Date(e.ts);
+    if (t > cursorTime) {
+      segments.push({
+        start: cursorTime,
+        end: t,
+        state: cursorState,
+        inferred: cursorInferred,
+      });
+    }
+    cursorTime = t;
+    cursorState = e.type === "sleep_down" ? "asleep" : "awake";
+    cursorInferred = !!e.inferredFrom;
+  }
+  // Final segment from last transition (or windowStart) to now
+  if (cursorTime < now) {
+    segments.push({
+      start: cursorTime,
+      end: now,
+      state: cursorState,
+      inferred: cursorInferred,
+    });
+  }
+
+  // Mark transitions for ticks
+  const transitions = eventsInWindow.map(e => ({
+    ts: new Date(e.ts),
+    type: e.type,
+    inferred: !!e.inferredFrom,
+    inferredFrom: e.inferredFrom || null,
+  }));
+
+  // Helper: given a date in [windowStart, now], return the X% along the strip.
+  const xPct = (d) => {
+    const ms = d.getTime() - windowStart.getTime();
+    return Math.max(0, Math.min(100, (ms / lookbackMs) * 100));
+  };
+
+  // Stats for the eyebrow
+  const totalAsleepMs = segments
+    .filter(s => s.state === "asleep")
+    .reduce((sum, s) => sum + (s.end.getTime() - s.start.getTime()), 0);
+  const wakeInterruptions = segments
+    .filter(s => s.state === "awake")
+    .filter(s => {
+      // Only count "real" interruptions inside what's clearly nighttime —
+      // an awake gap surrounded by asleep on both sides. The first/last
+      // awake gaps could be normal day-time waking.
+      const idx = segments.indexOf(s);
+      const before = segments[idx - 1];
+      const after = segments[idx + 1];
+      return before && before.state === "asleep" && after && after.state === "asleep";
+    }).length;
+
+  const fmtHours = (ms) => {
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  };
+
+  // For 7d mode, split segments into per-day rows (each row = midnight→midnight
+  // local). Easier to compare nights side by side.
+  const renderRows = () => {
+    if (mode === "24h") {
+      return [{ label: "last 24h", segments, transitions, dayStart: windowStart }];
+    }
+    // 7d: 7 rows, one per day, each midnight→midnight local
+    const rows = [];
+    for (let dayOffset = 6; dayOffset >= 0; dayOffset--) {
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      dayStart.setDate(dayStart.getDate() - dayOffset);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      // Clip to events within this day
+      const daySegments = segments
+        .filter(s => s.end > dayStart && s.start < dayEnd)
+        .map(s => ({
+          start: s.start < dayStart ? dayStart : s.start,
+          end: s.end > dayEnd ? dayEnd : s.end,
+          state: s.state,
+          inferred: s.inferred,
+        }));
+      const dayTransitions = transitions.filter(t => t.ts >= dayStart && t.ts < dayEnd);
+      const isToday = dayOffset === 0;
+      const label = isToday ? "today"
+        : dayOffset === 1 ? "yesterday"
+        : dayStart.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      rows.push({ label, segments: daySegments, transitions: dayTransitions, dayStart, dayEnd, isToday });
+    }
+    return rows;
+  };
+
+  // Per-row x% calculation depends on mode (whole 24h vs day-anchored)
+  const xPctForRow = (d, row) => {
+    if (mode === "24h") return xPct(d);
+    const rowStart = row.dayStart.getTime();
+    const rowEnd = row.dayEnd.getTime();
+    const ms = d.getTime() - rowStart;
+    return Math.max(0, Math.min(100, (ms / (rowEnd - rowStart)) * 100));
+  };
+
+  const rows = renderRows();
+  const nowPctIn24h = mode === "24h" ? 100 : null; // now is right edge in 24h mode
+  // For 7d "today" row, place a now line at the actual position
+  const nowPctTodayRow = mode === "7d" ? xPctForRow(now, rows[rows.length - 1]) : null;
+
+  return (
+    <div style={{
+      background: C.paper, borderRadius: 12, padding: 14,
+      border: `1px solid ${C.line}15`, marginBottom: 14,
+    }}>
+      {/* Header — title + window toggle */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "baseline",
+        marginBottom: 8, flexWrap: "wrap", gap: 8,
+      }}>
+        <div>
+          <div style={{
+            fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
+            color: C.muted, fontWeight: 600,
+          }}>
+            Sleep / wake trace
+          </div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 13, fontStyle: "italic", color: C.muted,
+            marginTop: 2,
+          }}>
+            {mode === "24h" ? (
+              <>
+                {fmtHours(totalAsleepMs)} asleep · {wakeInterruptions} interruption{wakeInterruptions === 1 ? "" : "s"}
+              </>
+            ) : (
+              <>night-over-night · 7 days</>
+            )}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[
+            { v: "24h", l: "24h" },
+            { v: "7d", l: "7d" },
+          ].map(opt => (
+            <button key={opt.v} onClick={() => setMode(opt.v)} style={{
+              background: mode === opt.v ? C.ink : "transparent",
+              color: mode === opt.v ? C.paper : C.ink,
+              border: `1px solid ${C.line}33`,
+              borderRadius: 16, padding: "4px 10px",
+              fontSize: 10, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit",
+            }}>{opt.l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Rows */}
+      {rows.map((row, rowIdx) => {
+        // Build the step-plot points for THIS row's segments. Each segment
+        // contributes two points: (start, y) and (end, y) — the gap between
+        // segments is the vertical transition. We'll render as an SVG path.
+        const SVG_W = 1000; // viewBox width — actual rendered width is responsive
+        const SVG_H = 80;
+        const PAD_X = 4;
+        const PAD_TOP = 10;
+        const PAD_BOTTOM = 14;
+        const yAt = (state) => state === "asleep"
+          ? SVG_H - PAD_BOTTOM
+          : PAD_TOP;
+        const yAxisTop = PAD_TOP;
+        const yAxisBottom = SVG_H - PAD_BOTTOM;
+        const xAt = (d) => {
+          const pct = xPctForRow(d, row);
+          return PAD_X + (pct / 100) * (SVG_W - 2 * PAD_X);
+        };
+
+        // Build the path data
+        let pathD = "";
+        let areaD = "";
+        if (row.segments.length > 0) {
+          for (let i = 0; i < row.segments.length; i++) {
+            const seg = row.segments[i];
+            const x1 = xAt(seg.start);
+            const x2 = xAt(seg.end);
+            const y = yAt(seg.state);
+            if (i === 0) {
+              pathD += `M ${x1} ${y} `;
+              areaD += `M ${x1} ${yAxisBottom} L ${x1} ${y} `;
+            } else {
+              const prevSeg = row.segments[i - 1];
+              const prevY = yAt(prevSeg.state);
+              // Vertical transition at this x
+              pathD += `L ${x1} ${prevY} L ${x1} ${y} `;
+              areaD += `L ${x1} ${prevY} L ${x1} ${y} `;
+            }
+            // Horizontal segment to the end of this segment
+            pathD += `L ${x2} ${y} `;
+            areaD += `L ${x2} ${y} `;
+          }
+          // Close the area shape
+          areaD += `L ${xAt(row.segments[row.segments.length - 1].end)} ${yAxisBottom} Z`;
+        }
+
+        // Time gridlines — every 6h for 24h, every 6h within day for 7d
+        const gridTimes = [];
+        if (mode === "24h") {
+          // Use rounded hours within the look-back window
+          const tickStep = 6; // hours
+          const startMs = windowStart.getTime();
+          const startHour = new Date(startMs);
+          startHour.setMinutes(0, 0, 0);
+          // Round up to next 6h tick
+          let curr = new Date(startHour);
+          while (curr.getHours() % tickStep !== 0) curr.setHours(curr.getHours() + 1);
+          while (curr <= now) {
+            if (curr >= windowStart) gridTimes.push(new Date(curr));
+            curr = new Date(curr.getTime() + tickStep * 3600000);
+          }
+        } else {
+          // 7d: per-row, ticks at 6h, 12h, 18h
+          const dayStart = row.dayStart;
+          for (const h of [6, 12, 18]) {
+            const t = new Date(dayStart);
+            t.setHours(h, 0, 0, 0);
+            gridTimes.push(t);
+          }
+        }
+
+        return (
+          <div key={rowIdx} style={{
+            display: "flex", alignItems: "stretch", gap: 8,
+            marginBottom: rowIdx === rows.length - 1 ? 0 : 6,
+          }}>
+            {/* Left label */}
+            <div style={{
+              width: mode === "7d" ? 76 : 60, flexShrink: 0,
+              fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+              alignItems: "flex-end", paddingRight: 4,
+            }}>
+              {/* Y-axis ticks for this row */}
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "flex-end",
+                fontSize: 9, color: C.muted, lineHeight: 1.2,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <span style={{ opacity: 0.7 }}>1 — awake</span>
+                <span style={{ marginTop: 22, opacity: 0.7 }}>0 — asleep</span>
+              </div>
+              <div style={{
+                fontSize: 10, color: C.ink, marginTop: 4, fontWeight: 500,
+              }}>
+                {row.label}
+              </div>
+            </div>
+            {/* SVG step plot */}
+            <div style={{
+              flex: 1, position: "relative",
+              background: `${C.line}05`,
+              borderRadius: 4,
+              border: `1px solid ${C.line}15`,
+            }}>
+              <svg
+                viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+                preserveAspectRatio="none"
+                style={{ width: "100%", height: 80, display: "block" }}>
+                {/* Time gridlines */}
+                {gridTimes.map((t, i) => {
+                  const x = xAt(t);
+                  return (
+                    <line key={`grid-${i}`}
+                      x1={x} y1={PAD_TOP - 2}
+                      x2={x} y2={SVG_H - PAD_BOTTOM + 2}
+                      stroke={C.line} strokeWidth={1} strokeOpacity={0.25}
+                      strokeDasharray="2,2" />
+                  );
+                })}
+                {/* Y-axis reference lines */}
+                <line x1={PAD_X} y1={yAxisTop} x2={SVG_W - PAD_X} y2={yAxisTop}
+                  stroke={C.line} strokeWidth={1} strokeOpacity={0.3} strokeDasharray="2,3" />
+                <line x1={PAD_X} y1={yAxisBottom} x2={SVG_W - PAD_X} y2={yAxisBottom}
+                  stroke={C.line} strokeWidth={1} strokeOpacity={0.3} strokeDasharray="2,3" />
+                {/* Filled area under the trace */}
+                {areaD && (
+                  <path d={areaD} fill={viewerColor} fillOpacity={0.18} />
+                )}
+                {/* Trace line itself — sharp, viewer-colored */}
+                {pathD && (
+                  <path d={pathD} fill="none" stroke={viewerColor} strokeWidth={2.5}
+                    strokeLinejoin="miter" strokeLinecap="square" />
+                )}
+                {/* Transition markers — small filled circles at each transition point.
+                    v05.05bt14: each marker has a transparent larger hit-circle
+                    on top for hover/tap tooltip support. Tooltip surfaces the
+                    event time, type, duration of resulting stretch, and whether
+                    the wake was inferred. */}
+                {row.transitions.map((t, i) => {
+                  const x = xAt(t.ts);
+                  const isDown = t.type === "sleep_down";
+                  const y = isDown ? yAxisBottom : yAxisTop;
+                  const hoverKey = `${rowIdx}-${i}`;
+                  const isHovered = hovered && hovered.key === hoverKey;
+                  // Compute duration of the resulting stretch — find the
+                  // next transition in the FULL events list (not just this
+                  // row's slice) so the duration is correct even when the
+                  // stretch crosses row boundaries (7d mode).
+                  const tIdxFull = sleepEvents.findIndex(se =>
+                    new Date(se.ts).getTime() === t.ts.getTime() && se.type === t.type
+                  );
+                  const nextEvent = tIdxFull >= 0 && tIdxFull < sleepEvents.length - 1
+                    ? sleepEvents[tIdxFull + 1] : null;
+                  const stretchEnd = nextEvent ? new Date(nextEvent.ts) : now;
+                  const stretchMs = stretchEnd.getTime() - t.ts.getTime();
+                  const stretchLabel = (() => {
+                    const totalMin = Math.round(stretchMs / 60000);
+                    const h = Math.floor(totalMin / 60);
+                    const m = totalMin % 60;
+                    if (h === 0) return `${m}m`;
+                    if (m === 0) return `${h}h`;
+                    return `${h}h ${m}m`;
+                  })();
+                  const ongoing = !nextEvent;
+                  const tooltipContent = {
+                    type: t.type,
+                    inferred: t.inferred,
+                    inferredFrom: t.inferredFrom,
+                    timeStr: t.ts.toLocaleString(undefined, {
+                      weekday: "short", hour: "numeric", minute: "2-digit",
+                      hour12: true,
+                    }),
+                    stretchLabel,
+                    ongoing,
+                    isDown,
+                  };
+                  return (
+                    <g key={`tick-${i}`}>
+                      <circle cx={x} cy={y} r={isHovered ? 5 : 3.5}
+                        fill={isDown ? viewerColor : C.gold}
+                        stroke={C.paper} strokeWidth={1.5}
+                        opacity={t.inferred ? 0.55 : 1}
+                        style={{ transition: "r 0.15s" }} />
+                      {t.inferred && (
+                        <circle cx={x} cy={y} r={5}
+                          fill="none" stroke={isDown ? viewerColor : C.gold}
+                          strokeWidth={1} strokeDasharray="1.5,1.5" opacity={0.7} />
+                      )}
+                      {/* Invisible larger hit area for hover/tap */}
+                      <circle cx={x} cy={y} r={12}
+                        fill="transparent"
+                        style={{ cursor: "pointer" }}
+                        onMouseEnter={() => setHovered({
+                          key: hoverKey,
+                          xPct: (x / SVG_W) * 100,
+                          y: y,
+                          isDown,
+                          ...tooltipContent,
+                        })}
+                        onMouseLeave={() => setHovered(null)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // On tap (mobile), toggle: if already showing this
+                          // marker's tooltip, dismiss; else show it.
+                          if (isHovered) setHovered(null);
+                          else setHovered({
+                            key: hoverKey,
+                            xPct: (x / SVG_W) * 100,
+                            y: y,
+                            isDown,
+                            ...tooltipContent,
+                          });
+                        }}
+                      />
+                    </g>
+                  );
+                })}
+                {/* Now line — orange vertical with glow */}
+                {mode === "24h" && rowIdx === 0 && (
+                  <line x1={SVG_W - PAD_X} y1={2}
+                    x2={SVG_W - PAD_X} y2={SVG_H - 2}
+                    stroke={C.accent} strokeWidth={2.5} />
+                )}
+                {mode === "7d" && row.isToday && nowPctTodayRow !== null && (() => {
+                  const x = PAD_X + (nowPctTodayRow / 100) * (SVG_W - 2 * PAD_X);
+                  return (
+                    <line x1={x} y1={2} x2={x} y2={SVG_H - 2}
+                      stroke={C.accent} strokeWidth={2.5} />
+                  );
+                })()}
+              </svg>
+              {/* Hover/tap tooltip — renders only for this row when hovered.
+                  Positioned at the marker's xPct, with a small offset and
+                  arrow indicator. */}
+              {hovered && hovered.key.startsWith(`${rowIdx}-`) && (() => {
+                const placeAbove = !hovered.isDown; // wake markers at top → tooltip below; sleep markers at bottom → above
+                const xPctClamped = Math.max(8, Math.min(92, hovered.xPct));
+                return (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${xPctClamped}%`,
+                      ...(placeAbove
+                        ? { top: 8, transform: "translate(-50%, 100%)" }
+                        : { bottom: 8, transform: "translate(-50%, -100%)" }),
+                      background: C.ink,
+                      color: C.paper,
+                      padding: "6px 9px",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      lineHeight: 1.4,
+                      whiteSpace: "nowrap",
+                      pointerEvents: "none",
+                      boxShadow: `0 2px 8px rgba(0,0,0,0.25)`,
+                      zIndex: 10,
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}>
+                    <div style={{
+                      fontWeight: 700, color: hovered.isDown ? viewerColor : C.gold,
+                      letterSpacing: "0.04em", marginBottom: 2,
+                    }}>
+                      {hovered.isDown ? "↓ SLEEP DOWN" : "↑ WAKE UP"}
+                      {hovered.inferred && (
+                        <span style={{ marginLeft: 6, opacity: 0.7, fontStyle: "italic", fontWeight: 400 }}>
+                          inferred
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ opacity: 0.9 }}>
+                      {hovered.timeStr}
+                    </div>
+                    <div style={{ opacity: 0.75, marginTop: 2 }}>
+                      {hovered.isDown ? "asleep for " : "awake for "}
+                      <span style={{ fontWeight: 600 }}>{hovered.stretchLabel}</span>
+                      {hovered.ongoing && <span style={{ opacity: 0.7 }}> · ongoing</span>}
+                    </div>
+                    {hovered.inferred && hovered.inferredFrom && (
+                      <div style={{ opacity: 0.6, marginTop: 2, fontStyle: "italic" }}>
+                        from {hovered.inferredFrom}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Legend / explainer */}
+      <div style={{
+        marginTop: 10, fontSize: 10, color: C.muted, fontStyle: "italic",
+        lineHeight: 1.5,
+      }}>
+        <span style={{ color: viewerColor, fontWeight: 600 }}>●</span> sleep down (drop to 0) ·
+        <span style={{ color: C.gold, fontWeight: 600, marginLeft: 4 }}>●</span> wake up (rise to 1) ·
+        dashed ring = inferred wake (not explicitly logged) ·
+        <span style={{ color: C.accent, fontWeight: 600, marginLeft: 4 }}>|</span> now
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsSection({ C, events, now, currentUser }) {
   const [windowDays, setWindowDays] = useState(7);
   // Viewer color — used for chrome accents on cards that aren't tied to a
@@ -15537,6 +17256,13 @@ function AnalyticsSection({ C, events, now, currentUser }) {
           </button>
         ))}
       </div>
+
+      {/* Sleep / wake EKG-style trace — visualizes how fragmented sleep is.
+          Asleep = bottom band (filled), awake = top region (subtle). Step
+          transitions on each sleep_down/sleep_up. Toggle 24h / 7d.
+          v05.05bt12: added per request — "kinda like an EKG so I can
+          visually see how much interruptions in her sleep there are". */}
+      <SleepWakeChart C={C} events={events} now={now} currentUser={currentUser} />
 
       {/* At-a-glance snapshot — card grid designed for low mental load while
           talking to the pediatrician. Each card has THREE clearly separated
