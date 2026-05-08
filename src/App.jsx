@@ -14,7 +14,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt25";
+const APP_VERSION = "2026.05.05bt26";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
@@ -30,9 +30,10 @@ const APP_BUILD_NOTES = [
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt26", summary: "Bug fix: 'now is not defined' render crash when expanding Today/Tomorrow cards on Schedule tab. DayPlanCard wasn't accepting `now` as a prop but was forwarding it to inner DayPlanShiftStrip. Now properly threaded through." },
   { version: "2026.05.05bt25", summary: "Bath after dismissing 'no bath tonight' — (1) logging a bath auto-supersedes any same-day bath_skipped events so the journal stays clean, (2) bath_skipped events now show in journal as muted italic '🛁 No bath tonight' with an inline '↻ undo · log bath' affordance that opens the bath logger directly. No new buttons added to the LOG sheet." },
   { version: "2026.05.05bt24", summary: "VISIBLE GUARD BANNER — peak-count safety net now surfaces a terracotta banner at the top of the app when it blocks a cloud push, with diagnostic info (X → Y entries) and two actions: 'Dismiss' (keeps local data, no push) or 'It's intentional · Push anyway' (calls acknowledgeShrink and force-pushes). Hydration + write-pause guards remain silent (they're routine)." },
-  { version: "2026.05.05bt23", summary: "CLOUD SYNC RACE FIXES — three-layer protection against the data loss seen tonight: (1) hydration guard prevents cloud writes until first successful poll completes (stops boot race), (2) write-pause flag disables cloud pushes during multi-step imports, force-pushes consolidated state after merge, (3) peak-event-count safety net aborts pushes that would shrink the events array by 5+ from peak. New acknowledgeShrink() method for legitimate bulk deletes. wipeAll calls it. Console.log warnings on guard fires for diagnostic visibility." },
+  { version: "2026.05.05bt23", summary: "UPDATE CHECK — app polls /index.html every 10 min (and on tab focus) comparing the deployed bundle hash to the running one. Coral 'Update available — tap to refresh' banner appears when stale code is detected. About panel shows ✓ up to date / ↻ update available status. Solves the 'phone stuck on stale code' problem. PLUS cloud sync race fixes: hydration guard prevents cloud writes until first poll completes, write-pause flag disables pushes during imports, peak-event-count safety net aborts pushes that would shrink events array by 5+ from peak. New acknowledgeShrink() method for legitimate bulk deletes." },
   { version: "2026.05.05bt22", summary: "Pump edit form gains bottle-label field · journal + today's rhythm pump labels show 'Bottle X' suffix · inventory tile bottle label upgraded · fridge tile clickable when 0 oz" },
   { version: "2026.05.05bt21", summary: "Freezer milk: new strip below RT/Fridge tiles · picker shows 'frozen Xd ago' captions · feeds from freezer auto-tag source as BM-thawed · NEW 'Bottle not in list — log anyway' escape hatch · edit modal on flagged feeds shows reconciliation banner · BM-thawed added to feed source picker" },
   { version: "2026.05.05bt20", summary: "Removed bt19 diagnostic · added 'Reset today's bath/skip events' button in DEV section · ⚡ Power pump indicator added to journal + today's rhythm pump labels" },
@@ -10909,6 +10910,7 @@ function DayPlanCard({
   shiftBlocks, daySwaps, commitments,
   onRemoveCommitment, onEditCommitment, onAddCommitment, showAddButton,
   isToday,
+  now,
   // Controlled-open mode: when controlledOpen + setControlledOpen are
   // provided, this component delegates open state to the parent. This
   // lets the peek strip toggle a specific day's card from outside.
@@ -11388,6 +11390,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 onAddCommitment={() => setShowAdd(true)}
                 showAddButton={true}
                 isToday={true}
+                now={now}
                 controlledOpen={todayOpen}
                 setControlledOpen={setTodayOpen}
               />
@@ -11404,6 +11407,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 onAddCommitment={() => setShowAdd(true)}
                 showAddButton={true}
                 isToday={false}
+                now={now}
                 controlledOpen={tomorrowOpen}
                 setControlledOpen={setTomorrowOpen}
               />
