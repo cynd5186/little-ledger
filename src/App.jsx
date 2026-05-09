@@ -15,15 +15,22 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt61";
+const APP_VERSION = "2026.05.05bt68";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "CASHED-IN BANNER auto-clears the moment time ends. Previously the InMeetingBanner ('You're in Time bank: cashed in owed time') could linger up to 15 seconds past the actual end time, since it only refreshed on the regular setNow tick. Now there's a precise one-shot timeout scheduled at the exact end time (+200ms grace), so when your redeemed time is up, the banner drops immediately.",
+  "RECONCILE NOTIFICATION on feed rows now distinguishes the two cases. If you logged a feed without picking any bottle: '⚠ no bottle picked.' If you tried to take more oz than inventory had (e.g., 5 oz feed, 4 oz available): '⚠ 1 oz unallocated' — the bottle attribution still shows alongside, so you can see exactly what was used and what's missing. Same on the journal tab and Today's rhythm.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt68", summary: "Reconcile reason differentiated. Feed events submitted via FeedForm now carry two new fields beside inventoryReconcileNeeded: reconcileReason ('no-bottle' | 'shortfall' | null) and unallocatedOz (number). Submit handler computes both: 'no-bottle' when noBottlePicked && usesBM (entire BM target unaccounted for), 'shortfall' when allocated < targetBmOz - 0.05 (some allocated, gap in oz). unallocatedOz = the gap size in either case. feedBottleSuffix helper rewritten to return the bottle-attribution string PLUS a reason-specific tail: '· ⚠ no bottle picked' for full-reconcile case, '· ⚠ N oz unallocated' for shortfall (preserves existing bottle attribution like '· Bottle A · ⚠ 1 oz unallocated'). Leading ⚠ prefix removed from the feed label in both TimelineEvent (rhythm) and LogView (journal) — the warning now appears at the end where the reconcile detail belongs, not as a generic prefix. Backward-compatible with old events: any event with inventoryReconcileNeeded but no reconcileReason field is treated as 'no-bottle' (the only case bt67 and earlier could produce on the no-bottle path; older shortfalls were blocked by canSubmit before bt65)." },
+  { version: "2026.05.05bt67", summary: "FeedForm gains explicit BM/Formula split for mix feeds. New bmPortionOz state (defaults to oz/2 on entry to mix mode) is the user-controlled split point. targetBmOz now reads bmPortionOz when source === 'BM+Formula' instead of hard-coding oz/2 — so '5 oz feed, 3 oz BM + 2 oz formula' is one input change away. UI: when source is Mix, a new Field renders below Source with two side-by-side inputs (mauve BM card, gold Formula card), each typeable with inputMode=decimal. Editing either auto-derives the other (BM = oz - formula). Auto-clamp via useEffect keyed on [source, oz] resets bmPortionOz to oz/2 if it falls out of [0, oz] when total or source flips. The bottle picker label rewrites to 'Where did the {N} oz BM come from?' so the question is concrete. skipInventory toggle copy retitled 'BM from a fresh bottle (not in inventory)' / '✓ Fresh bottle — will log with ⚠' so the path is clear in both pure-BM and mix contexts. The fresh-bottle path was already supported via skipInventory; bt67 just clarifies the language and pairs it cleanly with the mix split." },
+  { version: "2026.05.05bt66", summary: "Two related polish changes on the unified bottle picker. (1) Per-bottle allocation input is now typeable. Replaced the static span (used.toFixed(1) display) with an uncontrolled <input type='text' inputMode='decimal'> using key={`alloc-${b.id}-${used}`} to force remount when the external value changes via stepper or auto-allocate, and onBlur/Enter to commit. inputMode='decimal' triggers the iOS numeric keypad without auto-zoom (already at 16px from bt56). Width 56px, no native spinners. setBottleOz rounding bumped from 0.5 to 0.05 precision (Math.round(v * 20) / 20) so values like 1.25 oz are preserved exactly. Tap card body shortcut still works for 'use full bottle' single-tap. (2) Dropped the running-total bar entirely. Previously the bar showed 'Using X / Y oz' with a ✓ on match. Per user feedback ('handle it in the background'), shortfall is silently auto-flagged with inventoryReconcileNeeded at submit time (existing bt65 logic), so there's no need to surface it before. Card layout starts directly with the bottle list now — less to read, faster to scan." },
+  { version: "2026.05.05bt65", summary: "Shortfall is now silent + non-blocking. canSubmit relaxed from `Math.abs(allocated - targetBmOz) < 0.05` to `allocated <= targetBmOz + 0.05` — so any allocated amount up to and including target passes the gate. Submit handler computes isShortfall = usesBM && !noBottlePicked && allocated < targetBmOz - 0.05; when true, the event carries inventoryReconcileNeeded: true so the journal shows ⚠ and the user can resolve later. Running-total bar dropped its status word entirely except for the ✓ when matched: no more 'tap a bottle', no 'X short' chip, no 'X over' chip in the bar. Submit button label simplified from a three-way ternary (over / unallocated / log) to a binary (over / log). Overshoot remains blocked because that's a genuine input error (allocated more than target — user should step a card down). The auto-allocate effect already takes inventory oldest-first capped at target, so for the canonical scenario (target 5 oz, inventory 4 oz) the picker silently auto-fills 4 oz and the user can submit immediately." },
+  { version: "2026.05.05bt64", summary: "FeedForm bottle picker collapsed from two modes (simple/mix) into one unified picker. mixMode state and the SegControl-style toggle dashed at the bottom are gone. selectSingleBottle helper retired. Every bottle card renders identically: 30px round RT/Fr/Fz badge, Cormorant 17px oz headline + bottle label, mono caption with pumped time, and a three-segment inline stepper [−][N.N][+] on the right (36×36 buttons, big tap targets). The leftmost portion of the card is itself a button: tapping the card body when used==0 calls a smart-fill that takes min(b.oz, targetBmOz - allocated) from that bottle — i.e., the simple-mode shortcut for 'use this bottle to top up to target.' Once a bottle has any allocation, the body tap is a no-op (avoids accidental fills); user adjusts via stepper. Running total bar above the bottle list always shows allocated/target with a status word ('tap a bottle' / 'X short' / '✓ matched' / 'X over'). Skip-inventory option preserved at bottom. Net effect: '1oz from bottle A and 2oz from bottle B' is two tap-twice gestures instead of mode-toggle + stepper hunting." },
+  { version: "2026.05.05bt63", summary: "Shared bottle attribution between Today's rhythm and Journal. New module-scope feedBottleSuffix(ev) helper sitting next to fmtTimeShort: returns '' if no fromBottles, ' · Bottle X' if single bottle has bottleLabel, ' · bottle from H:MMa/p' if single bottle has pumpedAt only, ' · bottle' fallback, ' · N bottles' for multi. TimelineEvent's feed label now appends feedBottleSuffix(ev) so the rhythm table on the Now page shows the same bottle reference the journal does. LogView's inline bottle-attribution function (added in bt58) replaced with a single call to the same helper — both surfaces now share one source of truth for how feed → bottle is attributed in text. Side benefit: 18 lines of duplicated attribution logic in LogView collapsed to 2 lines." },
+  { version: "2026.05.05bt62", summary: "Three coordinated changes. (1) Sunday routine — joint bath time. SUNDAY_ROUTINE.babyComponents.bath gets a `joint: ['Mommy', 'Daddy']` field. allBlocks build now propagates this through to a `joint`/`actors`/`isJoint` on the timeline block. TimeRow renders an inline JOINT chip (mauve→slate gradient, white text) and a 'Mommy + Daddy together' detail line. (2) Routine filter — new actorFilter state on SundayRoutineCard with chips All/Solène/Mommy/Daddy at top. allBlocks.filter uses (b.actors || [b.actor]).includes(actorFilter), so joint blocks show in BOTH parents' filtered views. Replaces the old static color-legend strip. (3) Bottle picker UX unification. UseBottleModal's use mode rewritten to match FeedForm's bt58 simple-mode card pattern verbatim: Cormorant 17px oz headline + Mono caption + 30px round badge + isSelected check icon. Dropped the standalone 'How much oz' field — replaced with inline 'partial? [60px input] oz' centered below the primary log button (only appears when a card is selected). Dropped the SegControl mode toggle at the top — manage mode + 'not in list' moved to small italic underlined text links at the bottom, only one row tall. Modal title shortened from 'Use a bottle from fridge' to 'Fridge bottles'. (4) LOG button glow keyframe boosted: at peak the box-shadow is 0 10px 36px + 0 0 36px 6px + 0 0 0 8px (was 0 8px 28px + 0 0 22px 2px), scale at peak is 1.05 (was 1.025), cycle is 2.2s (was 2.6s)." },
   { version: "2026.05.05bt61", summary: "Active-commitment banner (InMeetingBanner) clears at the precise end time of the meeting, instead of waiting up to 15s for the next setNow tick. New useEffect after myActiveCommitment useMemo schedules a one-shot setTimeout at endMs - now.getTime() + 200ms; on fire it calls setNow(new Date(Date.now() + timeTravelOffset)), forcing the useMemo to recompute and find no active commitment, which causes the banner to unmount. Effect deps are [id, end, timeTravelOffset] — re-runs only when the active commitment changes or time-travel offset shifts. Cleanup clears the timeout on unmount/dep-change so we don't accumulate stale fires. Most visible when redeeming time-bank credit (label starts with 'Time bank:'); also benefits any red/yellow commitment where the user wants the 'You're back' transition to feel snappy." },
   { version: "2026.05.05bt59", summary: "PumpGoalsCard rewritten for quick-and-fun visual hierarchy after user feedback that bt57 was 'a lot of words instead of something quick and easy and fun.' SVG milk bottle (110×240) with clipPath-bounded liquid rect that animates y/height on oz changes via cubic-bezier transition. Three reference lines inside the bottle: low (typical-low, dotted muted), high (typical-high, dotted muted), and TARGET (dashed gold when not hit, solid green with floating ✓ and animated sparkle dots when hit). Liquid surface ripple line at the fill level. Cap rendered as black rect on top of bottle outline. Big italic 56px Cormorant oz number adjacent to bottle, color-coded by status zone (muted → gold → green → gold-above), with status emoji (🍼 < low, 💪 in-progress, 🎉 at-target, 🚀 above-target) and short status text. Flame icon line below for cal-burned. 7-day section reduced to single-row colored dots (green if at low-range, muted otherwise) with today highlighted via mauve outline ring. Eat-to-lose section is two rows with 18px JetBrains Mono numbers in green/accent depending on whether they cross the 1500 cal floor. Maintenance editable as a small bottom-row inline field. Removed: the 'honest note' paragraph, the per-line breakdown table, the mid-card analytics dashboard. Net effect: card is significantly shorter, all the decision-relevant info still present, but the time-to-glance is a fraction." },
   { version: "2026.05.05bt58", summary: "Two related improvements to feed logging. (1) FeedForm bottle-picker simplified. New `mixMode` state (default false) gates between SIMPLE and MIX modes. Simple mode renders bottles as tappable cards (Cormorant 17px headline showing oz + label, JetBrains Mono detail showing pump time + expiry, sized for thumb taps). Tap a bottle → calls new selectSingleBottle helper which sets that bottle as primary and auto-overflows to remaining bottles in default oldest-first order to meet target. Selected bottles get a check icon and a 'using X oz · Y oz remains' line. The original per-bottle stepper UI is preserved verbatim under mix mode, accessed via a subtle dashed-border toggle at the bottom. Status banners (need more / overshoot) appear inline in simple mode rather than as a constant header bar. (2) Feed events now carry a fromBottles array — denormalized snapshot of which bottle(s) were consumed at log-time, with each entry recording oz/pumpedAt/location/bottleLabel. Snapshot is captured at all three deduct sites: multi-bottle Logger allocation, single-bottle Logger, and Now-page picker (UseBottleModal onUse). The journal LogView feed-row renderer now appends the bottle reference: 'Bottle [label]' if the bottle had a label, 'bottle from [time]' if not, '[N] bottles' if multi. Snapshot survives bottle deletion so the journal reference stays accurate forever." },
@@ -899,6 +906,48 @@ const fmtShiftRange = (s) => {
   };
   return `${fmt(a, b)}–${fmt(c, d)}`;
 };
+
+// v05.05bt63 — shared helper for bottle attribution suffix on feed events.
+// Used by BOTH TimelineEvent (Today's rhythm) and LogView (Journal tab) so
+// they show the same "· Bottle A" / "· bottle from 2:00p" / "· 2 bottles"
+// suffix consistently. Returns empty string if no fromBottles snapshot
+// exists (older events pre-bt58 won't have one).
+//
+// v05.05bt68 — also surfaces reconcileReason as a distinct suffix:
+//   reconcileReason: "no-bottle" → " · ⚠ no bottle picked"
+//   reconcileReason: "shortfall" → " · ⚠ N oz unallocated" (still shows
+//                                    bottle attribution before the warn)
+// This lets the journal differentiate "took none from inventory" (full
+// reconcile) from "took some, came up short" (partial reconcile).
+function feedBottleSuffix(ev) {
+  const reconcile = ev.reconcileReason || (ev.inventoryReconcileNeeded ? "no-bottle" : null);
+  // Build the bottle-attribution part first (might be empty for no-bottle case)
+  let bottleSuffix = "";
+  if (Array.isArray(ev.fromBottles) && ev.fromBottles.length > 0) {
+    if (ev.fromBottles.length === 1) {
+      const b = ev.fromBottles[0];
+      if (!b.unknown) {
+        if (b.bottleLabel) bottleSuffix = ` · Bottle ${b.bottleLabel}`;
+        else if (b.pumpedAt) {
+          const pumpedTime = fmtTimeShort(new Date(b.pumpedAt));
+          if (pumpedTime !== "—") bottleSuffix = ` · bottle from ${pumpedTime}`;
+          else bottleSuffix = " · bottle";
+        } else bottleSuffix = " · bottle";
+      }
+    } else {
+      bottleSuffix = ` · ${ev.fromBottles.length} bottles`;
+    }
+  }
+  // Append the reconcile note when present
+  if (reconcile === "shortfall") {
+    const oz = Number(ev.unallocatedOz) || 0;
+    return `${bottleSuffix} · ⚠ ${oz > 0 ? `${oz.toFixed(oz < 1 ? 2 : 1).replace(/\.?0+$/, "")} oz unallocated` : "shortfall"}`;
+  }
+  if (reconcile === "no-bottle") {
+    return `${bottleSuffix} · ⚠ no bottle picked`;
+  }
+  return bottleSuffix;
+}
 
 const minutesAgo = (date) => Math.max(0, Math.round((Date.now() - new Date(date).getTime()) / 60000));
 const fmtElapsed = (mins) => {
@@ -6268,7 +6317,7 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
   const multiCount = multiSelected.size;
 
   return (
-    <ModalShell C={C} onClose={onClose} title={`${mode === "use" ? "Use a bottle from" : "Manage bottles in"} ${locLabel.toLowerCase()}`}>
+    <ModalShell C={C} onClose={onClose} title={mode === "use" ? `${locLabel} bottles` : `Manage ${locLabel.toLowerCase()}`}>
       {sorted.length === 0 ? (
         <div style={{ background: C.paper, borderRadius: 12, padding: 24, border: `1px solid ${C.line}15`, textAlign: "center" }}>
           <div style={{ fontSize: 14, color: C.muted, fontStyle: "italic", marginBottom: 14 }}>
@@ -6347,111 +6396,112 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
         </div>
       ) : (
         <>
-          {/* Mode toggle — Use vs Manage. Use is single-select for feeding;
-              Manage is multi-select for cleanup actions. */}
-          <SegControl C={C} value={mode} onChange={switchMode} options={[
-            { v: "use", l: "Use a bottle" },
-            { v: "manage", l: `Manage (${sorted.length})` },
-          ]} />
-          <div style={{ height: 14 }} />
-
           {mode === "use" ? (
             <>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-                Pick which bottle Solène is using. Logs a feed event and deducts from inventory.
-              </div>
-              <Field C={C} label="Which bottle?">
-                <div style={{ display: "grid", gap: 6 }}>
-                  {sorted.map(b => {
-                    const pumpedAt = new Date(b.pumpedAt);
-                    const isSelected = selectedId === b.id;
-                    const isRisky = b.risky;
-                    // For freezer bottles, show "frozen X days/months ago"
-                    // since the precise pump time matters less than the age.
-                    // For RT/fridge, keep the pumped-time caption.
-                    let captionText;
-                    if (location === "freezer") {
-                      const ageHrs = (now - pumpedAt) / 3600000;
-                      const ageDays = ageHrs / 24;
-                      if (ageDays < 1) {
-                        captionText = `frozen ${Math.round(ageHrs)}h ago`;
-                      } else if (ageDays < 14) {
-                        captionText = `frozen ${Math.round(ageDays)}d ago`;
-                      } else if (ageDays < 60) {
-                        captionText = `frozen ${Math.round(ageDays / 7)}wk ago`;
-                      } else {
-                        captionText = `frozen ${Math.round(ageDays / 30)}mo ago`;
-                      }
-                    } else {
-                      captionText = `pumped ${pumpedAt.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
-                    }
-                    return (
-                      <button key={b.id}
-                        onClick={() => { setSelectedId(b.id); setOz(b.oz); }}
-                        style={{
-                          background: isSelected ? `${locColor}22` : C.bg,
-                          border: `1.5px solid ${isSelected ? locColor : C.line + "22"}`,
-                          borderRadius: 10, padding: "10px 12px",
-                          cursor: "pointer", textAlign: "left", fontFamily: "inherit",
-                          display: "flex", alignItems: "center", gap: 10,
+              <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+                {sorted.map(b => {
+                  const pumpedAt = new Date(b.pumpedAt);
+                  const isSelected = selectedId === b.id;
+                  const isRisky = b.risky;
+                  const locBadge = location === "rt" ? "RT" : location === "freezer" ? "Fz" : "Fr";
+                  // Build a concise caption matching FeedForm's pattern.
+                  let caption;
+                  if (location === "freezer") {
+                    const ageDays = (now - pumpedAt) / 86400000;
+                    if (ageDays < 1) caption = `${Math.round(ageDays * 24)}h frozen`;
+                    else if (ageDays < 14) caption = `${Math.round(ageDays)}d frozen`;
+                    else if (ageDays < 60) caption = `${Math.round(ageDays / 7)}wk frozen`;
+                    else caption = `${Math.round(ageDays / 30)}mo frozen`;
+                  } else if (location === "rt") {
+                    caption = `pumped ${fmtTimeShort(pumpedAt)} · expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`;
+                  } else {
+                    caption = `pumped ${fmtTimeShort(pumpedAt)}`;
+                  }
+                  return (
+                    <button key={b.id}
+                      onClick={() => { setSelectedId(b.id); setOz(b.oz); }}
+                      style={{
+                        background: isSelected ? `${(isRisky ? C.accent : locColor)}15` : C.bg,
+                        border: `1.5px solid ${isSelected ? (isRisky ? C.accent : locColor) : C.line + "22"}`,
+                        borderRadius: 10, padding: "12px 14px",
+                        cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                        display: "flex", alignItems: "center", gap: 10,
+                        transition: "background 0.15s ease, border 0.15s ease",
+                      }}>
+                      <span style={{
+                        width: 30, height: 30, borderRadius: "50%",
+                        background: isRisky ? C.accent : locColor, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      }}>{locBadge}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
                         }}>
-                        <span style={{
-                          width: 36, height: 36, borderRadius: "50%",
-                          background: isRisky ? C.accent : locColor, color: "#fff",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 11, fontWeight: 700,
-                          flexShrink: 0,
-                        }}>{location === "rt" ? "RT" : location === "freezer" ? "Fz" : "Fr"}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
-                            {b.oz.toFixed(1)} oz
-                            {b.bottleLabel && (
-                              <span style={{
-                                fontSize: 11, color: locColor, marginLeft: 6,
-                                fontFamily: "'Cormorant Garamond', serif",
-                                fontStyle: "italic", fontWeight: 600,
-                              }}>· {b.bottleLabel}</span>
-                            )}
-                            {isRisky && <span style={{ fontSize: 10, color: C.accent, marginLeft: 6, fontWeight: 600 }}>RISKY</span>}
-                          </div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                            {captionText}
-                          </div>
+                          {b.oz.toFixed(1)} oz
+                          {b.bottleLabel && (
+                            <span style={{
+                              fontSize: 12, color: locColor, marginLeft: 8,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontWeight: 700, letterSpacing: "0.04em",
+                            }}>· Bottle {b.bottleLabel}</span>
+                          )}
+                          {isRisky && <span style={{ fontSize: 9, color: C.accent, marginLeft: 6, fontWeight: 700 }}>RISKY</span>}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
+                        <div style={{
+                          fontSize: 11, color: C.muted, marginTop: 2,
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>
+                          {caption}
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <Check size={20} color={isRisky ? C.accent : locColor} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected bottle: primary log button + tiny inline oz adjust */}
               {selected && (
-                <Field C={C} label="How much oz did Solène drink?">
-                  <input type="number" value={oz} step="0.5" min="0.5" max={selected.oz} onChange={e => setOz(e.target.value)}
-                    style={{ width: "100%", padding: 10, fontSize: 16, background: C.bg, border: `1px solid ${C.line}33`, borderRadius: 8, color: C.ink, outline: "none" }} />
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                    bottle has {selected.oz.toFixed(1)} oz · entering more uses the whole thing
+                <>
+                  <SubmitButton C={C} onClick={() => onUse({
+                    bottleId: selectedId,
+                    oz: Math.min(Number(oz), selected.oz),
+                    isFullBottle: Number(oz) >= selected.oz,
+                  })}>
+                    Log feed · {Math.min(Number(oz), selected.oz).toFixed(1)} oz
+                  </SubmitButton>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    marginTop: 8, fontSize: 11, color: C.muted,
+                  }}>
+                    <span>partial?</span>
+                    <input type="number" value={oz} step="0.5" min="0.5" max={selected.oz}
+                      onChange={e => setOz(e.target.value)}
+                      style={{
+                        width: 60, padding: "3px 6px", fontSize: 13,
+                        background: C.bg, border: `1px solid ${C.line}33`, borderRadius: 6,
+                        color: C.ink, outline: "none", textAlign: "right",
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }} />
+                    <span>oz</span>
                   </div>
-                </Field>
+                </>
               )}
 
+              {/* Per-bottle micro-actions (edit/move/discard) — only when selected */}
               {selected && (
-                <SubmitButton C={C} onClick={() => onUse({
-                  bottleId: selectedId,
-                  oz: Math.min(Number(oz), selected.oz),
-                  isFullBottle: Number(oz) >= selected.oz,
-                })}>
-                  Log feed · {Math.min(Number(oz), selected.oz).toFixed(1)} oz
-                </SubmitButton>
-              )}
-
-              {selected && (
-                <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8, marginTop: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8, marginTop: 12 }}>
                   <button onClick={() => onEditBottle(selectedId)} style={{
                     background: "transparent", color: C.muted,
                     border: `1px dashed ${C.line}33`, borderRadius: 8,
                     padding: "8px 12px", fontSize: 11, cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                   }}>
-                    <Edit3 size={11} /> Edit (no log)
+                    <Edit3 size={11} /> Edit
                   </button>
                   {location === "rt" && (
                     <button onClick={() => { onMoveToFridge(selectedId); onClose(); }} style={{
@@ -6459,7 +6509,7 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       border: `1px dashed ${C.line}33`, borderRadius: 8,
                       padding: "8px 12px", fontSize: 11, cursor: "pointer",
                     }}>
-                      Move to fridge
+                      To fridge
                     </button>
                   )}
                   <button
@@ -6479,17 +6529,12 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       padding: "8px 12px", fontSize: 11, cursor: "pointer", fontWeight: confirmDiscard ? 600 : 400,
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                     }}>
-                    <Trash2 size={11} /> {confirmDiscard ? "Sure? Tap again" : "Discard"}
+                    <Trash2 size={11} /> {confirmDiscard ? "Sure?" : "Discard"}
                   </button>
                 </div>
               )}
 
-              {/* v05.05bt30: "+ Add another bottle" affordance in Use mode
-                  too, not just empty-state. Sometimes the user has a real
-                  pumped bottle that wasn't auto-tracked (e.g. partner
-                  pumped, manual bottle from older batch, etc.) — they want
-                  it tracked as inventory, not just logged as a one-off
-                  feed. Different intent from "log anyway" below. */}
+              {/* Low-emphasis affordances at bottom: add bottle, log anyway, manage mode */}
               {onAddBottle && (
                 <button
                   onClick={() => { onAddBottle(location); onClose(); }}
@@ -6503,76 +6548,79 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                     cursor: "pointer", fontFamily: "inherit",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                   }}>
-                  + Add another bottle to {locLabel.toLowerCase()}
+                  + Add bottle
                 </button>
               )}
 
-              {/* "Bottle not in list — log anyway" escape hatch.
-                  When inventory tracking misses a bottle (forgot to log a
-                  pump, milk came from a different batch, etc.), the parent
-                  shouldn't be blocked from logging the actual feed. This
-                  inline affordance logs a feed without inventory deduction
-                  and flags the event for later reconciliation. v05.05bt21. */}
-              {onLogAnyway && (
-                <div style={{
-                  marginTop: 14, paddingTop: 14,
-                  borderTop: `1px dashed ${C.line}33`,
+              {/* Manage mode + log-anyway as tiny links, not a top toggle */}
+              <div style={{
+                display: "flex", justifyContent: "center", gap: 14,
+                marginTop: 14, paddingTop: 12,
+                borderTop: `1px dashed ${C.line}22`,
+                fontSize: 11, color: C.muted, fontStyle: "italic",
+              }}>
+                <button onClick={() => switchMode("manage")} style={{
+                  background: "transparent", border: "none", color: C.muted,
+                  fontSize: 11, cursor: "pointer", padding: 0, fontFamily: "inherit",
+                  fontStyle: "italic", textDecoration: "underline",
                 }}>
-                  {!showLogAnyway ? (
-                    <button
-                      onClick={() => setShowLogAnyway(true)}
-                      style={{
-                        width: "100%",
-                        background: "transparent", color: C.muted,
-                        border: `1px dashed ${C.line}55`, borderRadius: 8,
-                        padding: "10px 12px",
-                        fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                        fontStyle: "italic",
-                      }}>
-                      Bottle not in list — log anyway
-                    </button>
-                  ) : (
-                    <div style={{
-                      background: `${C.gold}15`,
-                      border: `1px solid ${C.gold}55`,
-                      borderRadius: 10, padding: 14,
+                  manage ({sorted.length})
+                </button>
+                {onLogAnyway && (
+                  <>
+                    <span>·</span>
+                    <button onClick={() => setShowLogAnyway(true)} style={{
+                      background: "transparent", border: "none", color: C.muted,
+                      fontSize: 11, cursor: "pointer", padding: 0, fontFamily: "inherit",
+                      fontStyle: "italic", textDecoration: "underline",
                     }}>
-                      <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
-                        Log without picking
-                      </div>
-                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
-                        We'll log this feed without deducting from inventory and flag it with ⚠ in the journal. Tap the flag later to reconcile.
-                      </div>
-                      <Field C={C} label="How much oz did Solène drink?">
-                        <BigOzPicker C={C} value={anywayOz} onChange={setAnywayOz} />
-                      </Field>
-                      <Field C={C} label="Source">
-                        <SegControl C={C} value={anywaySource} onChange={setAnywaySource} options={[
-                          { v: "BM", l: "BM (fresh)" },
-                          { v: "BM-thawed", l: "BM (thawed)" },
-                          { v: "Formula", l: "Formula" },
-                        ]} />
-                      </Field>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                        <button onClick={() => setShowLogAnyway(false)} style={{
-                          background: "transparent", color: C.ink,
-                          border: `1px solid ${C.line}33`, borderRadius: 8,
-                          padding: "10px", fontSize: 13, fontWeight: 500, cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}>Cancel</button>
-                        <button onClick={() => {
-                          onLogAnyway({ oz: Number(anywayOz), source: anywaySource });
-                        }} style={{
-                          background: C.gold, color: "#1F1B16",
-                          border: "none", borderRadius: 8,
-                          padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}>
-                          Log {Number(anywayOz).toFixed(1)} oz · ⚠
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                      not in list
+                    </button>
+                  </>
+                )}
+              </div>
+              {/* Log-anyway inline form, when expanded */}
+              {showLogAnyway && onLogAnyway && (
+                <div style={{
+                  marginTop: 12,
+                  background: `${C.gold}15`,
+                  border: `1px solid ${C.gold}55`,
+                  borderRadius: 10, padding: 14,
+                }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
+                    Log without picking
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, lineHeight: 1.4 }}>
+                    Logs a feed without inventory deduction. Flagged ⚠ for later reconcile.
+                  </div>
+                  <Field C={C} label="Oz">
+                    <BigOzPicker C={C} value={anywayOz} onChange={setAnywayOz} />
+                  </Field>
+                  <Field C={C} label="Source">
+                    <SegControl C={C} value={anywaySource} onChange={setAnywaySource} options={[
+                      { v: "BM", l: "BM (fresh)" },
+                      { v: "BM-thawed", l: "BM (thawed)" },
+                      { v: "Formula", l: "Formula" },
+                    ]} />
+                  </Field>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <button onClick={() => setShowLogAnyway(false)} style={{
+                      background: "transparent", color: C.ink,
+                      border: `1px solid ${C.line}33`, borderRadius: 8,
+                      padding: "10px", fontSize: 13, fontWeight: 500, cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}>Cancel</button>
+                    <button onClick={() => {
+                      onLogAnyway({ oz: Number(anywayOz), source: anywaySource });
+                    }} style={{
+                      background: C.gold, color: "#1F1B16",
+                      border: "none", borderRadius: 8,
+                      padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}>
+                      Log {Number(anywayOz).toFixed(1)} oz · ⚠
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -8051,21 +8099,22 @@ function FontImports() {
       @keyframes log-glow {
         0%, 100% {
           box-shadow:
-            0 6px 20px var(--glow-color, rgba(0,0,0,0.4)),
+            0 6px 22px var(--glow-color, rgba(0,0,0,0.4)),
             0 0 0 0 var(--glow-color, rgba(0,0,0,0));
           transform: translate(-50%, 0) translateZ(0) scale(1);
         }
         50% {
           box-shadow:
-            0 8px 28px var(--glow-color-strong, rgba(0,0,0,0.6)),
-            0 0 22px 2px var(--glow-color, rgba(0,0,0,0.4));
-          transform: translate(-50%, 0) translateZ(0) scale(1.025);
+            0 10px 36px var(--glow-color-strong, rgba(0,0,0,0.6)),
+            0 0 36px 6px var(--glow-color, rgba(0,0,0,0.5)),
+            0 0 0 8px var(--glow-color, rgba(0,0,0,0.18));
+          transform: translate(-50%, 0) translateZ(0) scale(1.05);
         }
       }
       .fade-up { animation: fadeUp 0.5s ease-out both; }
       .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
       .slide-up { animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-      .log-glow { animation: log-glow 2.6s ease-in-out infinite; }
+      .log-glow { animation: log-glow 2.2s ease-in-out infinite; }
     `}</style>
   );
 }
@@ -10886,7 +10935,7 @@ function TimelineEvent({ ev, C, now }) {
   }[ev.type] || C.ink;
 
   const label = {
-    feed: `${ev.inventoryReconcileNeeded ? "⚠ " : ""}Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}`,
+    feed: `Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}${feedBottleSuffix(ev)}`,
     breastfeed: `Breastfed${ev.totalDurationMin ? ` · ${ev.totalDurationMin}m` : ""}${(ev.leftMin || ev.rightMin) ? ` (L${ev.leftMin || 0}/R${ev.rightMin || 0})` : ""}`,
     pump: `${ev.pumpType === "power" ? "⚡ Power pump" : "Pump"}${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}${ev.bottleLabel ? ` · Bottle ${ev.bottleLabel}` : ""}`,
     diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}`,
@@ -11135,25 +11184,11 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                     </span>
                     <span style={{ flex: 1, fontSize: 13, color: C.ink }}>
                       {e.type === "feed" && (() => {
-                        const base = `${e.inventoryReconcileNeeded ? "⚠ " : ""}Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`;
-                        // v05.05bt57: append bottle attribution if the event
-                        // captured a fromBottles snapshot. Single bottle:
-                        // shows bottle label or pump time. Multiple bottles:
-                        // shows count.
-                        if (Array.isArray(e.fromBottles) && e.fromBottles.length > 0) {
-                          if (e.fromBottles.length === 1) {
-                            const b = e.fromBottles[0];
-                            if (b.unknown) return base;
-                            const pumpedTime = b.pumpedAt ? fmtTimeShort(new Date(b.pumpedAt)) : null;
-                            const bottleRef = b.bottleLabel
-                              ? `Bottle ${b.bottleLabel}`
-                              : pumpedTime ? `bottle from ${pumpedTime}` : "bottle";
-                            return `${base} · ${bottleRef}`;
-                          }
-                          // Multiple bottles — count + total
-                          return `${base} · ${e.fromBottles.length} bottles`;
-                        }
-                        return base;
+                        // v05.05bt68: leading ⚠ removed — feedBottleSuffix
+                        // now appends a more specific reconcile message at
+                        // the end ("⚠ no bottle picked" / "⚠ X oz unallocated").
+                        const base = `Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`;
+                        return `${base}${feedBottleSuffix(e)}`;
                       })()}
                       {e.type === "breastfeed" && `Breastfed${e.totalDurationMin ? ` · ${e.totalDurationMin}m` : ""}${(e.leftMin || e.rightMin) ? ` (L${e.leftMin || 0}/R${e.rightMin || 0})` : ""}`}
                       {e.type === "pump" && (() => {
@@ -12493,7 +12528,7 @@ const SUNDAY_ROUTINE = {
   driveBufferMin: 30,                   // drive to church (was 15 in bt51)
   babyComponents: [
     { id: "feed",         label: "Feed",                                      dur: 25 },
-    { id: "bath",         label: "Bath",                                      dur: 10 },
+    { id: "bath",         label: "Bath",                                      dur: 10, joint: ["Mommy", "Daddy"] },
     { id: "diaper_lotion",label: "Diaper change + lotion / oil",              dur: 10 },
     { id: "hair",         label: "Hair combed / styled",                      dur: 10 },
     { id: "dress",        label: "Get dressed",                               dur: 5  },
@@ -12538,6 +12573,11 @@ const SUNDAY_ROUTINE = {
 
 function SundayRoutineCard({ C, events, now }) {
   const [expanded, setExpanded] = useState(false);
+  // v05.05bt62: filter chip — "all" / "Solène" / "Mommy" / "Daddy".
+  // Joint activities (e.g. bath: ["Mommy","Daddy"]) appear in EVERY
+  // matching parent's filter, so when Mommy filters to "Mommy" she
+  // still sees bath because she's listed in actors. Same for Daddy.
+  const [actorFilter, setActorFilter] = useState("all");
   const r = SUNDAY_ROUTINE;
 
   // ===== Compute Solène's median morning wake from her actual data =====
@@ -12703,16 +12743,26 @@ function SundayRoutineCard({ C, events, now }) {
         label: "Solène wakes",
         accentColor: C.gold,
         actor: "Solène",
+        actors: ["Solène"],
         actorPriority: 0,
       });
       continue;
     }
+    // v05.05bt62: joint activities (e.g. bath) carry parent assists into
+    // the actors[] array. Bath gets a "Mommy + Daddy" detail line and is
+    // visible in all three filter modes (Solène, Mommy, Daddy).
+    const joint = b.joint || null;
+    const actors = ["Solène", ...(joint || [])];
+    const detail = joint && joint.length === 2 ? "Mommy + Daddy together" : (joint && joint.length === 1 ? `${joint[0]} bathes Solène` : null);
     allBlocks.push({
       from: b.from, to: b.to,
       label: SOLENE_LABELS[b.id] || b.label,
+      detail,
       accentColor: C.gold,
       actor: "Solène",
+      actors,
       actorPriority: 0,
+      isJoint: !!joint,
     });
   }
   // Mommy's alone-time blocks
@@ -12722,6 +12772,7 @@ function SundayRoutineCard({ C, events, now }) {
       label: MOMMY_LABELS[b.id] || b.label,
       accentColor: C.mommy,
       actor: "Mommy",
+      actors: ["Mommy"],
       actorPriority: 1,
     });
   }
@@ -12733,6 +12784,7 @@ function SundayRoutineCard({ C, events, now }) {
       detail: "parallel with Solène's feed (Daddy on baby)",
       accentColor: C.mommy,
       actor: "Mommy",
+      actors: ["Mommy"],
       actorPriority: 1,
     });
   }
@@ -12741,9 +12793,10 @@ function SundayRoutineCard({ C, events, now }) {
     allBlocks.push({
       from: b.from, to: b.to,
       label: MOMMY_LABELS[b.id] || b.label,
-      detail: b.id === "ancillary" ? "Daddy on Solène (bath / lotion)" : null,
+      detail: b.id === "ancillary" ? "Daddy on Solène (hair / dress)" : null,
       accentColor: C.mommy,
       actor: "Mommy",
+      actors: ["Mommy"],
       actorPriority: 1,
     });
   }
@@ -12754,6 +12807,7 @@ function SundayRoutineCard({ C, events, now }) {
       label: DADDY_LABELS[b.id] || b.label,
       accentColor: C.daddy,
       actor: "Daddy",
+      actors: ["Daddy"],
       actorPriority: 2,
     });
   }
@@ -12772,6 +12826,7 @@ function SundayRoutineCard({ C, events, now }) {
       label: DADDY_LABELS[daddyDressComp.id] || daddyDressComp.label,
       accentColor: C.daddy,
       actor: "Daddy",
+      actors: ["Daddy"],
       actorPriority: 2,
     });
   }
@@ -12785,7 +12840,7 @@ function SundayRoutineCard({ C, events, now }) {
 
   // ===== Render =====
   const teaser = `Mommy ${fmtT(parentTimelines.Mommy.wakeMin)} · Daddy ${fmtT(parentTimelines.Daddy.wakeMin)} · leave ${fmtT(r.anchorTimeMin)}`;
-  const TimeRow = ({ from, to, label, detail, accentColor }) => (
+  const TimeRow = ({ from, to, label, detail, accentColor, isJoint }) => (
     <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10, padding: "6px 0", alignItems: "baseline", borderBottom: `1px solid ${C.line}10` }}>
       <div style={{
         fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
@@ -12794,8 +12849,16 @@ function SundayRoutineCard({ C, events, now }) {
         {fmtRange(from, to)}
       </div>
       <div>
-        <div style={{ fontSize: 13, color: C.ink, fontWeight: 500, lineHeight: 1.3 }}>
+        <div style={{ fontSize: 13, color: C.ink, fontWeight: 500, lineHeight: 1.3, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {label}
+          {isJoint && (
+            <span style={{
+              fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+              padding: "1px 6px", borderRadius: 6,
+              background: `linear-gradient(90deg, ${C.mommy}, ${C.daddy})`,
+              color: "#fff", textTransform: "uppercase",
+            }}>joint</span>
+          )}
         </div>
         {detail && <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontStyle: "italic" }}>{detail}</div>}
       </div>
@@ -12860,30 +12923,46 @@ function SundayRoutineCard({ C, events, now }) {
               — Solène's morning needs {totalFixedBabyMin}min, but only {availableForBaby}min available between her {fmtT(babyWakeMin)} wake and {fmtT(r.anchorTimeMin)} leave. {isOverbooked ? "Wake her earlier or trim the routine." : "Almost no buffer for fussiness or blowouts."}
             </div>
           )}
-          {/* Color legend */}
+          {/* Filter chips — All / Solène / Mommy / Daddy. Joint
+              activities (e.g. bath) appear in any matching parent's
+              filter via b.actors[]. */}
           <div style={{
-            display: "flex", gap: 12, marginBottom: 10, fontSize: 10,
-            color: C.muted, flexWrap: "wrap", letterSpacing: "0.04em",
+            display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap",
           }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.gold }} /> Solène
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.mommy }} /> Mommy
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.daddy }} /> Daddy
-            </span>
+            {[
+              { id: "all", label: "All", color: C.muted },
+              { id: "Solène", label: "Solène", color: C.gold },
+              { id: "Mommy", label: "Mommy", color: C.mommy },
+              { id: "Daddy", label: "Daddy", color: C.daddy },
+            ].map(chip => {
+              const active = actorFilter === chip.id;
+              return (
+                <button key={chip.id} onClick={() => setActorFilter(chip.id)} style={{
+                  background: active ? chip.color : "transparent",
+                  color: active ? "#fff" : chip.color,
+                  border: `1px solid ${chip.color}${active ? "" : "55"}`,
+                  borderRadius: 14, padding: "4px 12px",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "inherit", letterSpacing: "0.04em",
+                  transition: "all 0.15s",
+                }}>
+                  {chip.label}
+                </button>
+              );
+            })}
           </div>
           {/* Time-ordered timeline */}
           <div>
-            {allBlocks.map((b, i) => (
-              <TimeRow key={i}
-                from={b.from} to={b.to}
-                label={b.label}
-                detail={b.detail}
-                accentColor={b.accentColor} />
-            ))}
+            {allBlocks
+              .filter(b => actorFilter === "all" || (b.actors || [b.actor]).includes(actorFilter))
+              .map((b, i) => (
+                <TimeRow key={i}
+                  from={b.from} to={b.to}
+                  label={b.label}
+                  detail={b.detail}
+                  accentColor={b.accentColor}
+                  isJoint={b.isJoint} />
+              ))}
           </div>
           {/* Mommy's flex tasks footer */}
           {parentTimelines.Mommy.flexComps.length > 0 && (
@@ -17151,43 +17230,14 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
   const [source, setSource] = useState(lastFeed?.source || "BM");
   const [time, setTime] = useState("now");
   const [customTime, setCustomTime] = useState(localDateTimeNow);
-  // Multi-bottle allocations: Map<bottleId, ozUsed>. Replaces the old
-  // single selectedBottleId. v05.05bb: BM feeds force a bottle-source
-  // prompt unless the user explicitly chooses skip-inventory (e.g. a
-  // bottle from outside our tracked inventory).
   const [allocations, setAllocations] = useState({}); // { bottleId: oz }
   const [skipInventory, setSkipInventory] = useState(false);
   const [dreamFeed, setDreamFeed] = useState(false);
-  // v05.05bt57 — single-bottle (default) vs mix mode (advanced). Most feeds
-  // come from one bottle; the per-bottle stepper UI is overkill for the
-  // common case. Default to simple mode; user toggles into mix mode for
-  // splits across multiple bottles.
-  const [mixMode, setMixMode] = useState(false);
-
-  // Helper: pick a single bottle as primary, auto-overflow to others as
-  // needed. Replaces all existing allocations. Used by the simple-mode
-  // tap-to-select cards.
-  const selectSingleBottle = (bottleId) => {
-    const newAllocs = {};
-    let need = targetBmOz;
-    const chosen = availableBottles.find(b => b.id === bottleId);
-    if (chosen) {
-      const take = Math.min(chosen.oz, need);
-      if (take > 0) newAllocs[chosen.id] = Math.round(take * 10) / 10;
-      need -= take;
-    }
-    // Overflow to remaining bottles in default order (oldest first per
-    // availableBottles sort) until target is met
-    for (const b of availableBottles) {
-      if (b.id === bottleId) continue;
-      if (need <= 0.01) break;
-      const take = Math.min(b.oz, need);
-      if (take > 0) newAllocs[b.id] = Math.round(take * 10) / 10;
-      need -= take;
-    }
-    setAllocations(newAllocs);
-    setSkipInventory(false);
-  };
+  // v05.05bt67: explicit BM oz vs Formula oz when source is "BM+Formula".
+  // Defaults to oz/2 when entering mix mode but user can override (e.g.,
+  // "of 5 oz, 3 is BM and 2 is formula"). For pure BM/Formula sources,
+  // this state is ignored. Formula oz = oz - bmPortionOz (auto-derived).
+  const [bmPortionOz, setBmPortionOz] = useState(lastFeed?.oz ? lastFeed.oz / 2 : 2.5);
 
   // Available BM bottles (RT first, then fridge, both ordered oldest first)
   const usesBM = source === "BM" || source === "BM+Formula";
@@ -17208,12 +17258,33 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
     () => Object.values(allocations).reduce((s, n) => s + (Number(n) || 0), 0),
     [allocations]
   );
-  // Mix mode: only BM portion needs allocation. For "BM+Formula" we
-  // assume half-and-half for the BM half (user can override per-bottle).
-  // For pure BM, allocated should equal oz exactly.
-  const targetBmOz = source === "BM" ? oz : source === "BM+Formula" ? oz / 2 : 0;
+  // v05.05bt67: targetBmOz now reads from bmPortionOz in mix mode, so
+  // the user can split arbitrarily (e.g., 3 oz BM + 2 oz formula in a
+  // 5 oz feed). For pure BM, target = full oz. For pure Formula, no
+  // BM portion.
+  const targetBmOz = source === "BM" ? oz
+    : source === "BM+Formula" ? Math.max(0, Math.min(oz, bmPortionOz))
+    : 0;
+  const formulaOz = source === "Formula" ? oz
+    : source === "BM+Formula" ? Math.max(0, oz - targetBmOz)
+    : 0;
   const remaining = Math.max(0, targetBmOz - allocated);
   const overshoot = allocated > targetBmOz + 0.01;
+
+  // When source flips into mix mode or when total oz changes, keep
+  // bmPortionOz in a sensible range (default 50/50, capped at total).
+  useEffect(() => {
+    if (source !== "BM+Formula") return;
+    const numOz = Number(oz) || 0;
+    setBmPortionOz(prev => {
+      const p = Number(prev) || 0;
+      // If existing portion is invalid (NaN or out of [0, oz]), reset to half
+      if (!Number.isFinite(p) || p < 0 || p > numOz) {
+        return Math.round((numOz / 2) * 20) / 20;
+      }
+      return p;
+    });
+  }, [source, oz]);
 
   // Auto-allocate from oldest-first when feed oz changes and nothing is
   // allocated yet. This makes the common case (single bottle, feed it
@@ -17251,26 +17322,28 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
     setAllocations(prev => {
       const next = { ...prev };
       if (clamped <= 0) delete next[bottleId];
-      else next[bottleId] = Math.round(clamped * 10) / 10;
+      // v05.05bt66: round to 0.05 oz precision so values like 1.25 oz
+      // are preserved exactly (was 0.5 oz precision which rounded to 1.3).
+      else next[bottleId] = Math.round(clamped * 20) / 20;
       return next;
     });
     setSkipInventory(false);
   };
 
-  // canSubmit: BM feeds normally require allocation to match the BM oz total.
-  // Three exceptions where we let it through:
+  // canSubmit: BM feeds normally need allocation == BM oz target. We allow
+  // submit through in three explicit cases plus one quiet case:
   //   - source isn't BM (Formula / Mix-without-BM-portion)
   //   - user explicitly toggled skipInventory
-  //   - there's literally no BM in inventory to allocate from (the empty-state
-  //     message tells them this is fine; the submit handler already sends
-  //     empty bottleAllocations and skips the drain)
-  // v05.05bt32: previously the empty-inventory case wasn't in this list, so
-  // the button was disabled despite the empty-state message saying "the feed
-  // will be logged but nothing will be deducted." Classic UI lie. Fixed.
+  //   - inventory has nothing to allocate from (empty-state)
+  //   - (v05.05bt65) shortfall: user wants more oz than inventory has. We
+  //     just submit, take whatever is available, and flag for reconcile.
+  //     No nag, no "1 oz short" status, no disabled button.
+  // We DO still block on overshoot (allocated > target) — that's a real
+  // user error to resolve (they can step a card down).
   const canSubmit = !usesBM
     || skipInventory
     || availableBottles.length === 0
-    || (Math.abs(allocated - targetBmOz) < 0.05);
+    || allocated <= targetBmOz + 0.05;
 
   return (
     <>
@@ -17285,11 +17358,83 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         ]} />
       </Field>
 
+      {/* Mix-only: explicit BM oz / Formula oz split. Two typeable
+          fields side-by-side. Editing one auto-updates the other to
+          keep the sum equal to total oz. */}
+      {source === "BM+Formula" && (
+        <Field C={C} label="BM and formula split">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div style={{
+              background: `${C.mommy}10`, border: `1px solid ${C.mommy}40`,
+              borderRadius: 8, padding: "8px 10px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 11, color: C.mommy, fontWeight: 600, letterSpacing: "0.04em" }}>BM</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                key={`bmportion-${oz}-${bmPortionOz}`}
+                defaultValue={String(Math.round(targetBmOz * 100) / 100)}
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value);
+                  const numOz = Number(oz) || 0;
+                  if (!Number.isFinite(v) || v < 0) {
+                    setBmPortionOz(numOz / 2);
+                    return;
+                  }
+                  setBmPortionOz(Math.round(Math.min(numOz, v) * 20) / 20);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                style={{
+                  flex: 1, height: 30, padding: "0 6px",
+                  border: `1px solid ${C.mommy}66`, borderRadius: 6,
+                  background: C.bg, color: C.ink,
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700,
+                  textAlign: "center", outline: "none",
+                }} />
+              <span style={{ fontSize: 11, color: C.muted }}>oz</span>
+            </div>
+            <div style={{
+              background: `${C.gold}10`, border: `1px solid ${C.gold}40`,
+              borderRadius: 8, padding: "8px 10px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 11, color: C.gold, fontWeight: 600, letterSpacing: "0.04em" }}>Formula</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                key={`formula-${oz}-${formulaOz}`}
+                defaultValue={String(Math.round(formulaOz * 100) / 100)}
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value);
+                  const numOz = Number(oz) || 0;
+                  if (!Number.isFinite(v) || v < 0) {
+                    setBmPortionOz(numOz / 2);
+                    return;
+                  }
+                  // Setting formula oz means BM = total - formula
+                  const newBm = Math.max(0, numOz - v);
+                  setBmPortionOz(Math.round(newBm * 20) / 20);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                style={{
+                  flex: 1, height: 30, padding: "0 6px",
+                  border: `1px solid ${C.gold}66`, borderRadius: 6,
+                  background: C.bg, color: C.ink,
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700,
+                  textAlign: "center", outline: "none",
+                }} />
+              <span style={{ fontSize: 11, color: C.muted }}>oz</span>
+            </div>
+          </div>
+        </Field>
+      )}
+
       {usesBM && (
         <Field C={C} label={
           source === "BM+Formula"
-            ? `Which bottle for the BM portion (${targetBmOz.toFixed(1)} oz)?`
-            : "Which bottle did you use?"
+            ? `Where did the ${targetBmOz.toFixed(1)} oz BM come from?`
+            : "Where did the BM come from?"
         }>
           {availableBottles.length === 0 ? (
             <div style={{
@@ -17299,118 +17444,155 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
             }}>
               No BM bottles in inventory. The feed will be logged with a ⚠ flag — tap it later in the journal to reconcile (add the missing bottle and mark resolved).
             </div>
-          ) : !mixMode ? (
-            // ============== SIMPLE MODE (single-bottle, tap-to-select) ==============
-            // v05.05bt57: replaces the per-bottle stepper UI for the common
-            // case. Tap a bottle card → that bottle becomes the primary and
-            // we auto-overflow to others if the feed exceeds its capacity.
-            // Default selection is oldest bottle (per availableBottles sort).
+          ) : (
+            // ============== UNIFIED MODE (v05.05bt64) ==============
+            // No simple/mix toggle. Every bottle card has an inline big
+            // stepper for partial allocations, AND the card body itself is
+            // tappable for the common single-bottle case (auto-overflow to
+            // others if target exceeds bottle oz). Means "1oz from A and
+            // 2oz from B" is just: tap + on A twice, tap + on B four
+            // times. No mode hunting. v05.05bt66: no running-total bar
+            // either — shortfall is auto-flagged in the background, so
+            // there's nothing to nag about up front.
             <>
+              {/* Bottle cards with inline stepper */}
               <div style={{ display: "grid", gap: 6 }}>
                 {availableBottles.map(b => {
-                  const usedOz = allocations[b.id] || 0;
-                  const isSelected = usedOz > 0;
+                  const used = allocations[b.id] || 0;
+                  const isUsed = used > 0;
                   const pumpedAt = new Date(b.pumpedAt);
                   const locColor = b.location === "rt" ? C.gold
                     : b.location === "freezer" ? "#5A7E9C" : C.daddy;
                   const locBadge = b.location === "rt" ? "RT"
                     : b.location === "freezer" ? "Fz" : "Fr";
+                  const stepDown = () => setBottleOz(b.id, Math.max(0, used - 0.5));
+                  const stepUp = () => setBottleOz(b.id, Math.min(b.oz, used + 0.5));
                   return (
-                    <button key={b.id}
-                      onClick={() => selectSingleBottle(b.id)}
-                      style={{
-                        background: isSelected ? `${locColor}15` : C.bg,
-                        border: `1.5px solid ${isSelected ? locColor : C.line + "22"}`,
-                        borderRadius: 10, padding: "12px 14px",
-                        cursor: "pointer", textAlign: "left",
-                        display: "flex", alignItems: "center", gap: 10,
-                        fontFamily: "inherit", color: C.ink,
-                        transition: "background 0.15s ease, border 0.15s ease",
-                      }}>
-                      <span style={{
-                        width: 30, height: 30, borderRadius: "50%",
-                        background: locColor, color: "#fff",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 11, fontWeight: 700, flexShrink: 0,
-                      }}>{locBadge}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
-                          fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
+                    <div key={b.id} style={{
+                      background: isUsed ? `${locColor}15` : C.bg,
+                      border: `1.5px solid ${isUsed ? locColor : C.line + "22"}`,
+                      borderRadius: 10, padding: "8px 10px",
+                      display: "flex", alignItems: "center", gap: 10,
+                      transition: "background 0.15s ease, border 0.15s ease",
+                    }}>
+                      {/* Tappable bottle info — single tap = use full bottle if 0, else no-op */}
+                      <button
+                        onClick={() => {
+                          // Single tap: shortcut for "use this bottle, full oz capped at remaining target"
+                          if (used === 0) {
+                            const take = Math.min(b.oz, targetBmOz - allocated);
+                            if (take > 0) setBottleOz(b.id, Math.round(take * 10) / 10);
+                          }
+                        }}
+                        style={{
+                          flex: 1, background: "transparent", border: "none",
+                          padding: 0, cursor: used === 0 ? "pointer" : "default",
+                          textAlign: "left", display: "flex", alignItems: "center", gap: 10,
+                          fontFamily: "inherit", color: C.ink, minWidth: 0,
                         }}>
-                          {b.oz.toFixed(1)} oz
-                          {b.bottleLabel && (
-                            <span style={{
-                              fontSize: 12, color: locColor, marginLeft: 8,
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontWeight: 700, letterSpacing: "0.04em",
-                            }}>· Bottle {b.bottleLabel}</span>
-                          )}
-                        </div>
-                        <div style={{
-                          fontSize: 11, color: C.muted, marginTop: 2,
-                          fontFamily: "'JetBrains Mono', monospace",
-                        }}>
-                          pumped {fmtTimeShort(pumpedAt)}
-                          {" · "}
-                          {b.location === "rt"
-                            ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`
-                            : b.location === "freezer"
-                              ? `freezer · ${Math.round((Date.now() - pumpedAt.getTime()) / 86400000)}d`
-                              : `fridge · ${b.remaining.toFixed(0)}h left`}
-                        </div>
-                        {isSelected && (
+                        <span style={{
+                          width: 30, height: 30, borderRadius: "50%",
+                          background: locColor, color: "#fff",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        }}>{locBadge}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
-                            fontSize: 11, fontWeight: 600, marginTop: 4,
-                            color: locColor,
+                            fontFamily: "'Cormorant Garamond', serif",
+                            fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
+                          }}>
+                            {b.oz.toFixed(1)} oz
+                            {b.bottleLabel && (
+                              <span style={{
+                                fontSize: 12, color: locColor, marginLeft: 6,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontWeight: 700, letterSpacing: "0.04em",
+                              }}>· {b.bottleLabel}</span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: 10, color: C.muted, marginTop: 1,
                             fontFamily: "'JetBrains Mono', monospace",
                           }}>
-                            using {usedOz.toFixed(1)} oz
-                            {usedOz < b.oz && ` · ${(b.oz - usedOz).toFixed(1)} oz remains`}
+                            pumped {fmtTimeShort(pumpedAt)}
                           </div>
-                        )}
+                        </div>
+                      </button>
+                      {/* Inline stepper on the right */}
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 0,
+                        flexShrink: 0,
+                      }}>
+                        <button
+                          onClick={stepDown}
+                          disabled={used <= 0}
+                          style={{
+                            width: 36, height: 36, borderRadius: "8px 0 0 8px",
+                            border: `1px solid ${C.line}33`,
+                            borderRight: "none",
+                            background: used > 0 ? C.bg : "transparent",
+                            color: used > 0 ? C.ink : C.muted,
+                            fontSize: 18, fontWeight: 600,
+                            cursor: used > 0 ? "pointer" : "not-allowed",
+                            opacity: used > 0 ? 1 : 0.4,
+                            fontFamily: "inherit", lineHeight: 1,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                          aria-label="less"
+                        >−</button>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          // key forces remount when external value changes
+                          // (e.g., via stepper or auto-allocate), so the
+                          // uncontrolled defaultValue stays in sync.
+                          key={`alloc-${b.id}-${used}`}
+                          defaultValue={used > 0 ? String(Math.round(used * 100) / 100) : ""}
+                          placeholder="—"
+                          onBlur={(e) => {
+                            const v = parseFloat(e.target.value);
+                            setBottleOz(b.id, Number.isFinite(v) && v > 0 ? v : 0);
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                          style={{
+                            width: 56, height: 36,
+                            border: `1px solid ${C.line}33`,
+                            background: isUsed ? `${locColor}25` : C.bg,
+                            color: isUsed ? locColor : C.ink,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 13, fontWeight: 700,
+                            textAlign: "center",
+                            padding: "0 4px",
+                            outline: "none",
+                            // Hide the native spinner buttons — we have
+                            // dedicated +/- on either side of the input.
+                            // Reset to 0 borderRadius — the parent container
+                            // is what gives the rounded corners visually.
+                            borderRadius: 0,
+                          }}
+                        />
+                        <button
+                          onClick={stepUp}
+                          disabled={used >= b.oz}
+                          style={{
+                            width: 36, height: 36, borderRadius: "0 8px 8px 0",
+                            border: `1px solid ${C.line}33`,
+                            borderLeft: "none",
+                            background: used < b.oz ? C.bg : "transparent",
+                            color: used < b.oz ? C.ink : C.muted,
+                            fontSize: 18, fontWeight: 600,
+                            cursor: used < b.oz ? "pointer" : "not-allowed",
+                            opacity: used < b.oz ? 1 : 0.4,
+                            fontFamily: "inherit", lineHeight: 1,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                          aria-label="more"
+                        >+</button>
                       </div>
-                      {isSelected && (
-                        <Check size={20} color={locColor} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                      )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
-              {/* Status banner — only when something needs attention */}
-              {allocated > 0 && remaining > 0.05 && (
-                <div style={{
-                  marginTop: 8, padding: "8px 10px",
-                  background: `${C.gold}15`, border: `1px solid ${C.gold}55`,
-                  borderRadius: 8, fontSize: 11, color: C.ink, lineHeight: 1.4,
-                }}>
-                  <strong style={{ color: C.gold }}>Need {remaining.toFixed(1)} more oz.</strong>{" "}
-                  Already used the highlighted bottle(s) — split across more by toggling mix mode below, or pick a larger bottle above.
-                </div>
-              )}
-              {overshoot && (
-                <div style={{
-                  marginTop: 8, padding: "8px 10px",
-                  background: `${C.accent}15`, border: `1px solid ${C.accent}55`,
-                  borderRadius: 8, fontSize: 11, color: C.ink, lineHeight: 1.4,
-                }}>
-                  <strong style={{ color: C.accent }}>Over by {(allocated - targetBmOz).toFixed(1)} oz.</strong>{" "}
-                  Pick a smaller bottle or switch to mix mode for fine control.
-                </div>
-              )}
-              {/* Toggle: switch to mix mode for fine control */}
-              <button
-                onClick={() => setMixMode(true)}
-                style={{
-                  width: "100%", marginTop: 10,
-                  background: "transparent",
-                  border: `1px dashed ${C.line}33`,
-                  borderRadius: 8, padding: "8px 10px",
-                  fontSize: 11, color: C.muted, cursor: "pointer",
-                  fontFamily: "inherit",
-                }}>
-                ⇆ Mix from multiple bottles · advanced
-              </button>
               {/* Skip-inventory option */}
               <button
                 onClick={() => {
@@ -17418,155 +17600,14 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
                   setSkipInventory(s => !s);
                 }}
                 style={{
-                  width: "100%", marginTop: 6,
+                  width: "100%", marginTop: 10,
                   background: skipInventory ? `${C.muted}20` : "transparent",
                   border: `1px ${skipInventory ? "solid" : "dashed"} ${C.muted}55`,
                   borderRadius: 8, padding: "8px 10px",
                   fontSize: 11, color: skipInventory ? C.ink : C.muted, cursor: "pointer",
-                  fontFamily: "inherit",
+                  fontFamily: "inherit", fontStyle: "italic",
                 }}>
-                {skipInventory ? "✓ Bottle not in inventory — will log with ⚠ flag" : "Bottle not in inventory? Skip allocation"}
-              </button>
-            </>
-          ) : (
-            // ============== MIX MODE (per-bottle stepper, advanced) ==============
-            <>
-              {/* Running total bar */}
-              <div style={{
-                background: overshoot ? `${C.accent}18` : remaining < 0.05 ? `${"#5C8E5C"}18` : C.bg,
-                border: `1px solid ${overshoot ? C.accent : remaining < 0.05 ? "#5C8E5C" : C.line + "22"}`,
-                borderRadius: 8, padding: "8px 12px", marginBottom: 8,
-                fontSize: 12, color: C.ink, fontFamily: "'JetBrains Mono', monospace",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-              }}>
-                <span>
-                  Allocated: <strong>{allocated.toFixed(1)}</strong> / {targetBmOz.toFixed(1)} oz
-                </span>
-                <span style={{ color: overshoot ? C.accent : remaining > 0.05 ? C.gold : "#5C8E5C", fontWeight: 600 }}>
-                  {overshoot ? `${(allocated - targetBmOz).toFixed(1)} over` :
-                   remaining > 0.05 ? `${remaining.toFixed(1)} short` :
-                   "✓ matched"}
-                </span>
-              </div>
-              {/* Per-bottle stepper rows */}
-              <div style={{ display: "grid", gap: 6 }}>
-                {availableBottles.map(b => {
-                  const used = allocations[b.id] || 0;
-                  const isUsed = used > 0;
-                  const pumpedAt = new Date(b.pumpedAt);
-                  const locColor = b.location === "rt" ? C.gold
-                    : b.location === "freezer" ? "#5A7E9C"
-                    : C.daddy;
-                  const locBadge = b.location === "rt" ? "RT"
-                    : b.location === "freezer" ? "Fz"
-                    : "Fr";
-                  return (
-                    <div key={b.id} style={{
-                      background: isUsed ? `${locColor}15` : C.bg,
-                      border: `1.5px solid ${isUsed ? locColor : C.line + "22"}`,
-                      borderRadius: 10, padding: "10px 12px",
-                      display: "flex", alignItems: "center", gap: 10,
-                    }}>
-                      <span style={{
-                        width: 32, height: 32, borderRadius: "50%",
-                        background: locColor, color: "#fff",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 11, fontWeight: 700, flexShrink: 0,
-                      }}>{locBadge}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.1 }}>
-                          {b.oz} oz
-                          {b.bottleLabel && (
-                            <span style={{
-                              fontSize: 12, color: locColor, marginLeft: 6,
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontWeight: 700, letterSpacing: "0.04em",
-                            }}>· Bottle {b.bottleLabel}</span>
-                          )}
-                          <span style={{ color: C.muted, fontStyle: "italic", fontSize: 13, marginLeft: 6 }}>
-                            · pumped {fmtTimeShort(pumpedAt)}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
-                          {b.location === "rt"
-                            ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`
-                            : b.location === "freezer"
-                              ? `freezer · ${Math.round((Date.now() - pumpedAt.getTime()) / 86400000)}d frozen`
-                              : `fridge · ${b.remaining.toFixed(0)}h left`}
-                        </div>
-                      </div>
-                      {/* Stepper: − [oz] + */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                        <button
-                          onClick={() => setBottleOz(b.id, used - 0.5)}
-                          disabled={used <= 0}
-                          style={{
-                            width: 28, height: 28, borderRadius: 6,
-                            border: `1px solid ${C.line}33`,
-                            background: "transparent", color: C.ink,
-                            fontSize: 16, fontWeight: 600,
-                            cursor: used > 0 ? "pointer" : "not-allowed",
-                            opacity: used > 0 ? 1 : 0.4,
-                            fontFamily: "inherit", lineHeight: 1,
-                          }}>−</button>
-                        <input
-                          type="number"
-                          min={0}
-                          max={b.oz}
-                          step={0.5}
-                          value={used || ""}
-                          onChange={e => setBottleOz(b.id, e.target.value)}
-                          placeholder="0"
-                          style={{
-                            width: 50, padding: "5px 6px",
-                            border: `1px solid ${C.line}33`, borderRadius: 6,
-                            fontSize: 13, textAlign: "center",
-                            background: C.bg, color: C.ink,
-                            fontFamily: "'JetBrains Mono', monospace",
-                          }}
-                        />
-                        <button
-                          onClick={() => setBottleOz(b.id, b.oz)}
-                          style={{
-                            width: 28, height: 28, borderRadius: 6,
-                            border: `1px solid ${C.line}33`,
-                            background: "transparent", color: C.ink,
-                            fontSize: 16, fontWeight: 600,
-                            cursor: "pointer",
-                            fontFamily: "inherit", lineHeight: 1,
-                          }} title="Use all of this bottle">⤓</button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* Skip-inventory option */}
-                <button
-                  onClick={() => {
-                    setAllocations({});
-                    setSkipInventory(s => !s);
-                  }}
-                  style={{
-                    background: skipInventory ? `${C.muted}20` : "transparent",
-                    border: `1px ${skipInventory ? "solid" : "dashed"} ${C.muted}55`,
-                    borderRadius: 8, padding: "8px 10px",
-                    fontSize: 11, color: skipInventory ? C.ink : C.muted, cursor: "pointer",
-                    fontFamily: "inherit", marginTop: 4,
-                  }}>
-                  {skipInventory ? "✓ Bottle not in inventory — will log with ⚠ flag" : "Bottle not in inventory? Skip allocation"}
-                </button>
-              </div>
-              {/* Toggle back to simple */}
-              <button
-                onClick={() => setMixMode(false)}
-                style={{
-                  width: "100%", marginTop: 10,
-                  background: "transparent",
-                  border: `1px dashed ${C.line}33`,
-                  borderRadius: 8, padding: "8px 10px",
-                  fontSize: 11, color: C.muted, cursor: "pointer",
-                  fontFamily: "inherit",
-                }}>
-                ← Back to simple mode
+                {skipInventory ? "✓ Fresh bottle (not in inventory) — will log with ⚠" : "BM from a fresh bottle (not in inventory)"}
               </button>
             </>
           )}
@@ -17606,28 +17647,40 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
       </button>
 
       <SubmitButton C={C} disabled={!canSubmit} onClick={() => {
-        // Build bottleAllocations array from the map. Skip-inventory and
-        // empty-inventory paths leave it empty (consumer just adds the feed
-        // event without deducting).
         const noBottlePicked = skipInventory || availableBottles.length === 0;
         const bottleAllocations = noBottlePicked
           ? []
           : Object.entries(allocations)
               .filter(([_, n]) => Number(n) > 0)
               .map(([bottleId, n]) => ({ bottleId, oz: Number(n) }));
+        // v05.05bt65/68: reconcile reason — three cases (or none).
+        //   "no-bottle"  → user logged without picking any inventory
+        //   "shortfall"  → user picked some, but allocated < targetBmOz
+        //   null/undef   → fully allocated, no flag
+        // unallocatedOz quantifies the gap: how many oz of the feed
+        // weren't accounted for in inventory. Used by the journal to
+        // render the more specific reason ('no bottle' vs 'X oz short').
+        const isShortfall = usesBM && !noBottlePicked && allocated < targetBmOz - 0.05;
+        const reconcileReason = (noBottlePicked && usesBM) ? "no-bottle"
+          : isShortfall ? "shortfall"
+          : null;
+        const unallocatedOz = reconcileReason === "no-bottle"
+          ? Math.round(targetBmOz * 100) / 100
+          : reconcileReason === "shortfall"
+            ? Math.round((targetBmOz - allocated) * 100) / 100
+            : 0;
         onSubmit({
           type: "feed", oz: Number(oz), source,
           ts: time === "now" ? new Date() : new Date(customTime),
           bottleAllocations,
           dreamFeed,
-          // v05.05bt32: flag for reconciliation when logged without bottle
-          // tracking. Surfaces ⚠ in journal so the user can later add the
-          // missing bottle and mark the feed resolved.
-          inventoryReconcileNeeded: noBottlePicked && usesBM,
+          inventoryReconcileNeeded: !!reconcileReason,
+          reconcileReason,
+          unallocatedOz,
         });
       }}>
-        {!canSubmit
-          ? (overshoot ? `Over by ${(allocated - targetBmOz).toFixed(1)} oz` : `${remaining.toFixed(1)} oz unallocated`)
+        {!canSubmit && overshoot
+          ? `Over by ${(allocated - targetBmOz).toFixed(1)} oz`
           : "Log feed"}
       </SubmitButton>
     </>
