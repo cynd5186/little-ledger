@@ -15,15 +15,17 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt68";
+const APP_VERSION = "2026.05.05bt70";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "RECONCILE NOTIFICATION on feed rows now distinguishes the two cases. If you logged a feed without picking any bottle: '⚠ no bottle picked.' If you tried to take more oz than inventory had (e.g., 5 oz feed, 4 oz available): '⚠ 1 oz unallocated' — the bottle attribution still shows alongside, so you can see exactly what was used and what's missing. Same on the journal tab and Today's rhythm.",
+  "POO LOTS toggle on the diaper form. Pick Poo or Both, a 'How much?' picker appears with two big buttons: 💩 Regular and 💩💩💩 Lots! One tap to flag a blowout. The journal and Today's rhythm both append 💩💩💩 to that diaper row so blowouts are visually obvious in scan.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt70", summary: "DiaperForm gains pooSize quick toggle. New state pooSize ('regular' | 'lots') defaulting to 'regular'. Conditional Field 'How much?' renders only when kind is 'dirty' or 'both', with two big side-by-side buttons: '💩 Regular' (daddy slate-blue when active) and '💩💩💩 Lots!' (warm rust #8A4A35 when active, bold weight). Submitted event carries pooSize: 'regular'/'lots' (or undefined for pee-only). Two label sites updated to surface the lots case: TimelineEvent (Today's rhythm) appends ' 💩💩💩' when ev.pooSize === 'lots'; LogView (journal tab) does the same on its diaper row. Fully backward-compatible with old diaper events that lack pooSize — those just don't show the appendix." },
+  { version: "2026.05.05bt69", summary: "Critical inventory double-deduction fix on feed-from-bottle paths. Root cause: addEvent at line ~2968 had a legacy guard `if (ev.type === 'feed' && ... && !ev.inventoryReconcileNeeded) drainInventory(ev.oz)` that ran AFTER the LogPickerSheet onSubmit handler had ALREADY explicitly deducted from user-picked bottles via setInventory. So a 4 oz feed using a 4 oz RT bottle drained the RT bottle to 0 (correct via explicit alloc) AND THEN drained 4 more oz oldest-first from the fridge (incorrect — legacy code path). Fix: addEvent now also checks `Array.isArray(ev.fromBottles) && ev.fromBottles.length > 0` and skips drainInventory when present — fromBottles being attached is the marker that explicit allocation already ran. Affected paths: (1) FeedForm multi-bottle allocation via Log button (most common), (2) FeedForm single-bottle path (legacy), (3) Now-page UseBottleModal onUse handler. Backward compatible: any direct addEvent call without a fromBottles snapshot (bulk import, external sync, manual JSON imports) still triggers drain so legacy data flows aren't broken." },
   { version: "2026.05.05bt68", summary: "Reconcile reason differentiated. Feed events submitted via FeedForm now carry two new fields beside inventoryReconcileNeeded: reconcileReason ('no-bottle' | 'shortfall' | null) and unallocatedOz (number). Submit handler computes both: 'no-bottle' when noBottlePicked && usesBM (entire BM target unaccounted for), 'shortfall' when allocated < targetBmOz - 0.05 (some allocated, gap in oz). unallocatedOz = the gap size in either case. feedBottleSuffix helper rewritten to return the bottle-attribution string PLUS a reason-specific tail: '· ⚠ no bottle picked' for full-reconcile case, '· ⚠ N oz unallocated' for shortfall (preserves existing bottle attribution like '· Bottle A · ⚠ 1 oz unallocated'). Leading ⚠ prefix removed from the feed label in both TimelineEvent (rhythm) and LogView (journal) — the warning now appears at the end where the reconcile detail belongs, not as a generic prefix. Backward-compatible with old events: any event with inventoryReconcileNeeded but no reconcileReason field is treated as 'no-bottle' (the only case bt67 and earlier could produce on the no-bottle path; older shortfalls were blocked by canSubmit before bt65)." },
   { version: "2026.05.05bt67", summary: "FeedForm gains explicit BM/Formula split for mix feeds. New bmPortionOz state (defaults to oz/2 on entry to mix mode) is the user-controlled split point. targetBmOz now reads bmPortionOz when source === 'BM+Formula' instead of hard-coding oz/2 — so '5 oz feed, 3 oz BM + 2 oz formula' is one input change away. UI: when source is Mix, a new Field renders below Source with two side-by-side inputs (mauve BM card, gold Formula card), each typeable with inputMode=decimal. Editing either auto-derives the other (BM = oz - formula). Auto-clamp via useEffect keyed on [source, oz] resets bmPortionOz to oz/2 if it falls out of [0, oz] when total or source flips. The bottle picker label rewrites to 'Where did the {N} oz BM come from?' so the question is concrete. skipInventory toggle copy retitled 'BM from a fresh bottle (not in inventory)' / '✓ Fresh bottle — will log with ⚠' so the path is clear in both pure-BM and mix contexts. The fresh-bottle path was already supported via skipInventory; bt67 just clarifies the language and pairs it cleanly with the mix split." },
   { version: "2026.05.05bt66", summary: "Two related polish changes on the unified bottle picker. (1) Per-bottle allocation input is now typeable. Replaced the static span (used.toFixed(1) display) with an uncontrolled <input type='text' inputMode='decimal'> using key={`alloc-${b.id}-${used}`} to force remount when the external value changes via stepper or auto-allocate, and onBlur/Enter to commit. inputMode='decimal' triggers the iOS numeric keypad without auto-zoom (already at 16px from bt56). Width 56px, no native spinners. setBottleOz rounding bumped from 0.5 to 0.05 precision (Math.round(v * 20) / 20) so values like 1.25 oz are preserved exactly. Tap card body shortcut still works for 'use full bottle' single-tap. (2) Dropped the running-total bar entirely. Previously the bar showed 'Using X / Y oz' with a ✓ on match. Per user feedback ('handle it in the background'), shortfall is silently auto-flagged with inventoryReconcileNeeded at submit time (existing bt65 logic), so there's no need to surface it before. Card layout starts directly with the bottle list now — less to read, faster to scan." },
@@ -2965,7 +2967,17 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       return result;
     });
 
-    if (ev.type === "feed" && ev.source && ev.source.includes("BM") && ev.oz && !ev.inventoryReconcileNeeded) {
+    // v05.05bt69 — DOUBLE-DEDUCTION FIX. Previously this ran an oldest-first
+    // FIFO drain whenever a BM feed was logged, but the LogPickerSheet
+    // onSubmit handler ALREADY deducted explicitly from the user-picked
+    // bottles via setInventory before calling addEvent. Result: RT bottle
+    // dropped to 0 from explicit alloc, then drainInventory(oz) drained AGAIN
+    // from the fridge, clearing it. Now we skip the drain when fromBottles[]
+    // is present — that's the marker that explicit allocation already ran.
+    // Legacy direct-addEvent callers (bulk import, external sync, anything
+    // without fromBottles) still trigger drain so we don't break them.
+    const alreadyAllocated = Array.isArray(ev.fromBottles) && ev.fromBottles.length > 0;
+    if (ev.type === "feed" && ev.source && ev.source.includes("BM") && ev.oz && !ev.inventoryReconcileNeeded && !alreadyAllocated) {
       drainInventory(ev.oz);
     }
     // Only add to inventory when the pump session has ENDED (mode==="end" OR no mode set).
@@ -10938,7 +10950,7 @@ function TimelineEvent({ ev, C, now }) {
     feed: `Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}${feedBottleSuffix(ev)}`,
     breastfeed: `Breastfed${ev.totalDurationMin ? ` · ${ev.totalDurationMin}m` : ""}${(ev.leftMin || ev.rightMin) ? ` (L${ev.leftMin || 0}/R${ev.rightMin || 0})` : ""}`,
     pump: `${ev.pumpType === "power" ? "⚡ Power pump" : "Pump"}${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}${ev.bottleLabel ? ` · Bottle ${ev.bottleLabel}` : ""}`,
-    diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}`,
+    diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}${ev.pooSize === "lots" ? " 💩💩💩" : ""}`,
     sleep_down: "Down for sleep",
     sleep_up: "Awake",
     bath: `${BATH_TYPES[ev.bathType]?.icon || "🛁"} ${BATH_TYPES[ev.bathType]?.label || "Bath"}`,
@@ -11207,7 +11219,7 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                         const end = isEnd ? ts : new Date(ts.getTime() + e.durationMin * 60000);
                         return `${base} (${fmtTimeShort(start)}–${fmtTimeShort(end)})`;
                       })()}
-                      {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}`}
+                      {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}${e.pooSize === "lots" ? " 💩💩💩" : ""}`}
                       {e.type === "sleep_down" && `Down for sleep${e.estimated ? " (est.)" : ""}`}
                       {e.type === "sleep_up" && "Awake"}
                       {e.type === "bath" && `${BATH_TYPES[e.bathType]?.icon} ${BATH_TYPES[e.bathType]?.label}`}
@@ -17907,6 +17919,11 @@ function DiaperForm({ C, onSubmit }) {
   const [kind, setKind] = useState("wet");
   const [time, setTime] = useState("now");
   const [customTime, setCustomTime] = useState(localDateTimeNow);
+  // v05.05bt70: pooSize quick toggle. Only relevant when kind is dirty
+  // or both. Tracked separately on the event so the journal/rhythm can
+  // surface "💩💩💩 lots" — useful for spotting blowout patterns.
+  const [pooSize, setPooSize] = useState("regular"); // "regular" | "lots"
+  const isPoo = kind === "dirty" || kind === "both";
   return (
     <>
       <Field C={C} label="Kind">
@@ -17916,9 +17933,42 @@ function DiaperForm({ C, onSubmit }) {
           { v: "both", l: "Both" },
         ]} />
       </Field>
+      {isPoo && (
+        <Field C={C} label="How much?">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button
+              onClick={() => setPooSize("regular")}
+              style={{
+                background: pooSize === "regular" ? C.daddy : "transparent",
+                color: pooSize === "regular" ? "#fff" : C.ink,
+                border: `1.5px solid ${pooSize === "regular" ? C.daddy : C.line + "33"}`,
+                borderRadius: 10, padding: "12px 14px",
+                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}>
+              💩 Regular
+            </button>
+            <button
+              onClick={() => setPooSize("lots")}
+              style={{
+                background: pooSize === "lots" ? "#8A4A35" : "transparent",
+                color: pooSize === "lots" ? "#fff" : "#8A4A35",
+                border: `1.5px solid ${pooSize === "lots" ? "#8A4A35" : "#8A4A3555"}`,
+                borderRadius: 10, padding: "12px 14px",
+                fontSize: 14, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}>
+              💩💩💩 Lots!
+            </button>
+          </div>
+        </Field>
+      )}
       <WhenField C={C} mode={time} setMode={setTime} customLocal={customTime} setCustomLocal={setCustomTime} />
       <SubmitButton C={C} onClick={() => onSubmit({
         type: "diaper", notes: kind,
+        pooSize: isPoo ? pooSize : undefined,
         ts: time === "now" ? new Date() : new Date(customTime),
       })}>Log diaper</SubmitButton>
     </>
