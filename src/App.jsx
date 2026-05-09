@@ -15,15 +15,17 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt70";
+const APP_VERSION = "2026.05.05bt72";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "POO LOTS toggle on the diaper form. Pick Poo or Both, a 'How much?' picker appears with two big buttons: 💩 Regular and 💩💩💩 Lots! One tap to flag a blowout. The journal and Today's rhythm both append 💩💩💩 to that diaper row so blowouts are visually obvious in scan.",
+  "BOTTLE LOGGING surfaces are visually congruent now. The LOG button → Feed form picks up the same Cancel | Log row, oz-card layout, and friendlier copy as the Now-page bottle modal. The Log button shows the current oz on it (e.g., 'Log 4.0 oz') so you can confirm the amount before tapping. All the FeedForm features (Mix split, multi-bottle allocation, Dream feed, Earlier time) are preserved — just the visual rhythm is unified.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt72", summary: "Hybrid bottle-logging style — keep FeedForm's full feature set, adopt UseBottleModal's visual language. (1) FeedForm gets a Cancel | Log row at bottom (1fr 1.6fr grid) replacing the lone Submit button. Cancel is a secondary outlined button calling onCancel (passed as onClose from LogPickerSheet); Log is the primary gold submit and now displays the current oz on its label ('Log 4.0 oz'). When canSubmit is false (overshoot), Log still shows 'Over by X oz' but Cancel stays live so the user can bail without overshoot interaction. (2) Volume label friendlier — 'Volume (oz)' → 'How much oz?' to match the Now-page modal's tone. (3) UseBottleModal use-mode also gets a Cancel | Log row alongside the inline 'partial? __ oz' adjuster, so the two surfaces share the same action-row pattern. The action rows, oz cards, source pills, and section eyebrows all read the same now regardless of how feed logging is reached." },
+  { version: "2026.05.05bt71", summary: "Two changes. (1) Diaper poo-size picker becomes three-way: 'tiny' (gold), 'regular' (daddy slate), 'lots' (#8A4A35 warm rust). 3-column grid, 13px label, 12px vertical padding. Submit handler unchanged — pooSize is just one of three string values now ('tiny' | 'regular' | 'lots'). Both label sites (TimelineEvent rhythm + LogView journal) updated: 'lots' → ' 💩💩💩', 'tiny' → ' · tiny', regular has no annotation. Old events without pooSize stay neutral. (2) ModalShell swipe-down behavior: threshold lowered from 80 to 50 px (more responsive), and swipe-down is now two-stage. When expanded: swipe-down → setExpanded(false) (collapse to default height). When collapsed: swipe-down → onClose() (dismiss). Same dragHandled ref still dedupes the synthetic click. Up-drag threshold preserved at 40 px. The handle is the only touchable area, but with the lower threshold and two-stage flow the handle interaction is closer to native bottom-sheet ergonomics." },
   { version: "2026.05.05bt70", summary: "DiaperForm gains pooSize quick toggle. New state pooSize ('regular' | 'lots') defaulting to 'regular'. Conditional Field 'How much?' renders only when kind is 'dirty' or 'both', with two big side-by-side buttons: '💩 Regular' (daddy slate-blue when active) and '💩💩💩 Lots!' (warm rust #8A4A35 when active, bold weight). Submitted event carries pooSize: 'regular'/'lots' (or undefined for pee-only). Two label sites updated to surface the lots case: TimelineEvent (Today's rhythm) appends ' 💩💩💩' when ev.pooSize === 'lots'; LogView (journal tab) does the same on its diaper row. Fully backward-compatible with old diaper events that lack pooSize — those just don't show the appendix." },
   { version: "2026.05.05bt69", summary: "Critical inventory double-deduction fix on feed-from-bottle paths. Root cause: addEvent at line ~2968 had a legacy guard `if (ev.type === 'feed' && ... && !ev.inventoryReconcileNeeded) drainInventory(ev.oz)` that ran AFTER the LogPickerSheet onSubmit handler had ALREADY explicitly deducted from user-picked bottles via setInventory. So a 4 oz feed using a 4 oz RT bottle drained the RT bottle to 0 (correct via explicit alloc) AND THEN drained 4 more oz oldest-first from the fridge (incorrect — legacy code path). Fix: addEvent now also checks `Array.isArray(ev.fromBottles) && ev.fromBottles.length > 0` and skips drainInventory when present — fromBottles being attached is the marker that explicit allocation already ran. Affected paths: (1) FeedForm multi-bottle allocation via Log button (most common), (2) FeedForm single-bottle path (legacy), (3) Now-page UseBottleModal onUse handler. Backward compatible: any direct addEvent call without a fromBottles snapshot (bulk import, external sync, manual JSON imports) still triggers drain so legacy data flows aren't broken." },
   { version: "2026.05.05bt68", summary: "Reconcile reason differentiated. Feed events submitted via FeedForm now carry two new fields beside inventoryReconcileNeeded: reconcileReason ('no-bottle' | 'shortfall' | null) and unallocatedOz (number). Submit handler computes both: 'no-bottle' when noBottlePicked && usesBM (entire BM target unaccounted for), 'shortfall' when allocated < targetBmOz - 0.05 (some allocated, gap in oz). unallocatedOz = the gap size in either case. feedBottleSuffix helper rewritten to return the bottle-attribution string PLUS a reason-specific tail: '· ⚠ no bottle picked' for full-reconcile case, '· ⚠ N oz unallocated' for shortfall (preserves existing bottle attribution like '· Bottle A · ⚠ 1 oz unallocated'). Leading ⚠ prefix removed from the feed label in both TimelineEvent (rhythm) and LogView (journal) — the warning now appears at the end where the reconcile detail belongs, not as a generic prefix. Backward-compatible with old events: any event with inventoryReconcileNeeded but no reconcileReason field is treated as 'no-bottle' (the only case bt67 and earlier could produce on the no-bottle path; older shortfalls were blocked by canSubmit before bt65)." },
@@ -6479,13 +6481,26 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
               {/* Selected bottle: primary log button + tiny inline oz adjust */}
               {selected && (
                 <>
-                  <SubmitButton C={C} onClick={() => onUse({
-                    bottleId: selectedId,
-                    oz: Math.min(Number(oz), selected.oz),
-                    isFullBottle: Number(oz) >= selected.oz,
-                  })}>
-                    Log feed · {Math.min(Number(oz), selected.oz).toFixed(1)} oz
-                  </SubmitButton>
+                  {/* v05.05bt72: Cancel | Log row — matches FeedForm style. */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 8 }}>
+                    <button
+                      onClick={onClose}
+                      style={{
+                        background: "transparent", color: C.ink,
+                        border: `1px solid ${C.line}33`, borderRadius: 10,
+                        padding: "14px", fontSize: 14, fontWeight: 500, cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}>
+                      Cancel
+                    </button>
+                    <SubmitButton C={C} onClick={() => onUse({
+                      bottleId: selectedId,
+                      oz: Math.min(Number(oz), selected.oz),
+                      isFullBottle: Number(oz) >= selected.oz,
+                    })}>
+                      Log {Math.min(Number(oz), selected.oz).toFixed(1)} oz
+                    </SubmitButton>
+                  </div>
                   <div style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                     marginTop: 8, fontSize: 11, color: C.muted,
@@ -10950,7 +10965,7 @@ function TimelineEvent({ ev, C, now }) {
     feed: `Feed${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.source ? ` ${ev.source}` : ""}${feedBottleSuffix(ev)}`,
     breastfeed: `Breastfed${ev.totalDurationMin ? ` · ${ev.totalDurationMin}m` : ""}${(ev.leftMin || ev.rightMin) ? ` (L${ev.leftMin || 0}/R${ev.rightMin || 0})` : ""}`,
     pump: `${ev.pumpType === "power" ? "⚡ Power pump" : "Pump"}${ev.oz ? ` · ${ev.oz}oz` : ""}${ev.durationMin ? ` · ${ev.durationMin}m` : ""}${ev.bottleLabel ? ` · Bottle ${ev.bottleLabel}` : ""}`,
-    diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}${ev.pooSize === "lots" ? " 💩💩💩" : ""}`,
+    diaper: `Diaper${ev.notes ? ` · ${ev.notes}` : ""}${ev.pooSize === "lots" ? " 💩💩💩" : ev.pooSize === "tiny" ? " · tiny" : ""}`,
     sleep_down: "Down for sleep",
     sleep_up: "Awake",
     bath: `${BATH_TYPES[ev.bathType]?.icon || "🛁"} ${BATH_TYPES[ev.bathType]?.label || "Bath"}`,
@@ -11219,7 +11234,7 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                         const end = isEnd ? ts : new Date(ts.getTime() + e.durationMin * 60000);
                         return `${base} (${fmtTimeShort(start)}–${fmtTimeShort(end)})`;
                       })()}
-                      {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}${e.pooSize === "lots" ? " 💩💩💩" : ""}`}
+                      {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}${e.pooSize === "lots" ? " 💩💩💩" : e.pooSize === "tiny" ? " · tiny" : ""}`}
                       {e.type === "sleep_down" && `Down for sleep${e.estimated ? " (est.)" : ""}`}
                       {e.type === "sleep_up" && "Awake"}
                       {e.type === "bath" && `${BATH_TYPES[e.bathType]?.icon} ${BATH_TYPES[e.bathType]?.label}`}
@@ -16577,7 +16592,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         : loggerType === "bath" ? "Log bath"
         : "Log sleep"
       }>
-        {loggerType === "feed" && <FeedForm C={C} lastFeed={lastFeed} onSubmit={onSubmit} liveInventory={liveInventory} />}
+        {loggerType === "feed" && <FeedForm C={C} lastFeed={lastFeed} onSubmit={onSubmit} onCancel={onClose} liveInventory={liveInventory} />}
         {loggerType === "breastfeed" && <BreastfeedForm C={C} onSubmit={onSubmit} activeTimer={activeBfTimer} setActiveTimer={setActiveBfTimer} />}
         {loggerType === "pump" && <PumpForm C={C} lastPump={lastPump} onSubmit={onSubmit} />}
         {loggerType === "diaper" && <DiaperForm C={C} onSubmit={onSubmit} />}
@@ -17036,19 +17051,20 @@ function ModalShell({ C, onClose, title, children }) {
   //
   // Interactions on the drag handle:
   //   • Tap → toggle expanded ↔ collapsed
-  //   • Drag up >40px → expand
-  //   • Drag down >80px → dismiss (preserved from earlier behavior)
+  //   • Drag up >40px → expand (when collapsed)
+  //   • Drag down >50px → COLLAPSE (when expanded), DISMISS (when collapsed)
+  //
+  // v05.05bt71: swipe-down is now two-stage. Previously a single >80px
+  // downward drag killed the modal regardless of state, which felt too
+  // destructive after expanding to read content. Now: expanded + drag
+  // down → collapse first (read-then-bail flow), collapsed + drag down
+  // → dismiss. Threshold also lowered from 80 → 50 px for more
+  // responsive feel. Up-drag threshold preserved at 40 px.
   //
   // The tap-vs-drag dedupe relies on a `dragHandled` ref: any touchmove
   // gesture that crosses a threshold marks dragHandled=true, and the
   // subsequent synthetic click (always fires after touchend on iOS) is
-  // suppressed when that flag is set. Pure taps never set the flag, so
-  // the click goes through to the toggle handler. Desktop mouse clicks
-  // fire onClick directly — same toggle path, no touch involvement.
-  //
-  // Sizing: collapsed = 92vh (existing); expanded = calc(100dvh - 8px)
-  // with explicit env(safe-area-inset-bottom) padding so the iOS home
-  // indicator doesn't eat the submit button.
+  // suppressed when that flag is set.
   const [expanded, setExpanded] = useState(false);
   const touchStartY = useRef(null);
   const dragHandled = useRef(false);
@@ -17059,10 +17075,15 @@ function ModalShell({ C, onClose, title, children }) {
   const onTouchMove = (e) => {
     if (touchStartY.current == null) return;
     const dy = e.touches[0].clientY - touchStartY.current;
-    if (dy > 80) {
+    if (dy > 50) {
       touchStartY.current = null;
       dragHandled.current = true;
-      onClose();
+      // Two-stage: expanded → collapse first, collapsed → dismiss
+      if (expanded) {
+        setExpanded(false);
+      } else {
+        onClose();
+      }
     } else if (dy < -40 && !expanded) {
       touchStartY.current = null;
       dragHandled.current = true;
@@ -17237,7 +17258,7 @@ function HandoffNoteEditor({ C, fromParent, toParent, existingText, onClose, onS
   );
 }
 
-function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
+function FeedForm({ C, lastFeed, onSubmit, onCancel, liveInventory }) {
   const [oz, setOz] = useState(lastFeed?.oz || 5);
   const [source, setSource] = useState(lastFeed?.source || "BM");
   const [time, setTime] = useState("now");
@@ -17359,7 +17380,7 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
 
   return (
     <>
-      <Field C={C} label="Volume (oz)">
+      <Field C={C} label="How much oz?">
         <BigOzPicker C={C} value={oz} onChange={setOz} />
       </Field>
       <Field C={C} label="Source">
@@ -17658,43 +17679,52 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
         </span>
       </button>
 
-      <SubmitButton C={C} disabled={!canSubmit} onClick={() => {
-        const noBottlePicked = skipInventory || availableBottles.length === 0;
-        const bottleAllocations = noBottlePicked
-          ? []
-          : Object.entries(allocations)
-              .filter(([_, n]) => Number(n) > 0)
-              .map(([bottleId, n]) => ({ bottleId, oz: Number(n) }));
-        // v05.05bt65/68: reconcile reason — three cases (or none).
-        //   "no-bottle"  → user logged without picking any inventory
-        //   "shortfall"  → user picked some, but allocated < targetBmOz
-        //   null/undef   → fully allocated, no flag
-        // unallocatedOz quantifies the gap: how many oz of the feed
-        // weren't accounted for in inventory. Used by the journal to
-        // render the more specific reason ('no bottle' vs 'X oz short').
-        const isShortfall = usesBM && !noBottlePicked && allocated < targetBmOz - 0.05;
-        const reconcileReason = (noBottlePicked && usesBM) ? "no-bottle"
-          : isShortfall ? "shortfall"
-          : null;
-        const unallocatedOz = reconcileReason === "no-bottle"
-          ? Math.round(targetBmOz * 100) / 100
-          : reconcileReason === "shortfall"
-            ? Math.round((targetBmOz - allocated) * 100) / 100
-            : 0;
-        onSubmit({
-          type: "feed", oz: Number(oz), source,
-          ts: time === "now" ? new Date() : new Date(customTime),
-          bottleAllocations,
-          dreamFeed,
-          inventoryReconcileNeeded: !!reconcileReason,
-          reconcileReason,
-          unallocatedOz,
-        });
-      }}>
-        {!canSubmit && overshoot
-          ? `Over by ${(allocated - targetBmOz).toFixed(1)} oz`
-          : "Log feed"}
-      </SubmitButton>
+      {/* v05.05bt72: Cancel | Log row matching the Now-page modal style.
+          Cancel is secondary-styled, Log is primary (gold). When canSubmit
+          is false (overshoot), Log shows the "Over by X oz" copy and is
+          disabled but Cancel is always live. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 8 }}>
+        <button
+          onClick={() => onCancel && onCancel()}
+          style={{
+            background: "transparent", color: C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 10,
+            padding: "14px", fontSize: 14, fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>
+          Cancel
+        </button>
+        <SubmitButton C={C} disabled={!canSubmit} onClick={() => {
+          const noBottlePicked = skipInventory || availableBottles.length === 0;
+          const bottleAllocations = noBottlePicked
+            ? []
+            : Object.entries(allocations)
+                .filter(([_, n]) => Number(n) > 0)
+                .map(([bottleId, n]) => ({ bottleId, oz: Number(n) }));
+          const isShortfall = usesBM && !noBottlePicked && allocated < targetBmOz - 0.05;
+          const reconcileReason = (noBottlePicked && usesBM) ? "no-bottle"
+            : isShortfall ? "shortfall"
+            : null;
+          const unallocatedOz = reconcileReason === "no-bottle"
+            ? Math.round(targetBmOz * 100) / 100
+            : reconcileReason === "shortfall"
+              ? Math.round((targetBmOz - allocated) * 100) / 100
+              : 0;
+          onSubmit({
+            type: "feed", oz: Number(oz), source,
+            ts: time === "now" ? new Date() : new Date(customTime),
+            bottleAllocations,
+            dreamFeed,
+            inventoryReconcileNeeded: !!reconcileReason,
+            reconcileReason,
+            unallocatedOz,
+          });
+        }}>
+          {!canSubmit && overshoot
+            ? `Over by ${(allocated - targetBmOz).toFixed(1)} oz`
+            : `Log ${Number(oz).toFixed(1)} oz`}
+        </SubmitButton>
+      </div>
     </>
   );
 }
@@ -17935,19 +17965,32 @@ function DiaperForm({ C, onSubmit }) {
       </Field>
       {isPoo && (
         <Field C={C} label="How much?">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            <button
+              onClick={() => setPooSize("tiny")}
+              style={{
+                background: pooSize === "tiny" ? C.gold : "transparent",
+                color: pooSize === "tiny" ? "#fff" : C.ink,
+                border: `1.5px solid ${pooSize === "tiny" ? C.gold : C.line + "33"}`,
+                borderRadius: 10, padding: "12px 8px",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}>
+              💩 <span style={{ fontSize: 9, opacity: 0.7 }}>·</span> Tiny
+            </button>
             <button
               onClick={() => setPooSize("regular")}
               style={{
                 background: pooSize === "regular" ? C.daddy : "transparent",
                 color: pooSize === "regular" ? "#fff" : C.ink,
                 border: `1.5px solid ${pooSize === "regular" ? C.daddy : C.line + "33"}`,
-                borderRadius: 10, padding: "12px 14px",
-                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                borderRadius: 10, padding: "12px 8px",
+                fontSize: 13, fontWeight: 600, cursor: "pointer",
                 fontFamily: "inherit",
                 transition: "all 0.15s",
               }}>
-              💩 Regular
+              💩💩 Regular
             </button>
             <button
               onClick={() => setPooSize("lots")}
@@ -17955,8 +17998,8 @@ function DiaperForm({ C, onSubmit }) {
                 background: pooSize === "lots" ? "#8A4A35" : "transparent",
                 color: pooSize === "lots" ? "#fff" : "#8A4A35",
                 border: `1.5px solid ${pooSize === "lots" ? "#8A4A35" : "#8A4A3555"}`,
-                borderRadius: 10, padding: "12px 14px",
-                fontSize: 14, fontWeight: 700, cursor: "pointer",
+                borderRadius: 10, padding: "12px 8px",
+                fontSize: 13, fontWeight: 700, cursor: "pointer",
                 fontFamily: "inherit",
                 transition: "all 0.15s",
               }}>
