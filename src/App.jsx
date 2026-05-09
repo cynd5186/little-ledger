@@ -15,17 +15,28 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt47";
+const APP_VERSION = "2026.05.05bt61";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "TAB ICONS: each tab in the bottom panel now shows an icon above its label. Now → Home, Journal → BookOpen, Wellness → Stethoscope, Milk → Milk, Schedule → Calendar, Bank → PiggyBank. Icons are 18px lucide-react glyphs that change stroke weight on the active tab (1.75 → 2.25) for a subtle 'this is selected' affordance beyond the color/indicator. Label sized down to 10px so the icon+label stack fits inside the 52px tap target without growing the panel height.",
-  "Carryover from bt46: warm-sand bottom panel + LOG button ring matched to panel color.",
-  "Carryover from bt45: frozen top brand strip.",
+  "CASHED-IN BANNER auto-clears the moment time ends. Previously the InMeetingBanner ('You're in Time bank: cashed in owed time') could linger up to 15 seconds past the actual end time, since it only refreshed on the regular setNow tick. Now there's a precise one-shot timeout scheduled at the exact end time (+200ms grace), so when your redeemed time is up, the banner drops immediately.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt61", summary: "Active-commitment banner (InMeetingBanner) clears at the precise end time of the meeting, instead of waiting up to 15s for the next setNow tick. New useEffect after myActiveCommitment useMemo schedules a one-shot setTimeout at endMs - now.getTime() + 200ms; on fire it calls setNow(new Date(Date.now() + timeTravelOffset)), forcing the useMemo to recompute and find no active commitment, which causes the banner to unmount. Effect deps are [id, end, timeTravelOffset] — re-runs only when the active commitment changes or time-travel offset shifts. Cleanup clears the timeout on unmount/dep-change so we don't accumulate stale fires. Most visible when redeeming time-bank credit (label starts with 'Time bank:'); also benefits any red/yellow commitment where the user wants the 'You're back' transition to feel snappy." },
+  { version: "2026.05.05bt59", summary: "PumpGoalsCard rewritten for quick-and-fun visual hierarchy after user feedback that bt57 was 'a lot of words instead of something quick and easy and fun.' SVG milk bottle (110×240) with clipPath-bounded liquid rect that animates y/height on oz changes via cubic-bezier transition. Three reference lines inside the bottle: low (typical-low, dotted muted), high (typical-high, dotted muted), and TARGET (dashed gold when not hit, solid green with floating ✓ and animated sparkle dots when hit). Liquid surface ripple line at the fill level. Cap rendered as black rect on top of bottle outline. Big italic 56px Cormorant oz number adjacent to bottle, color-coded by status zone (muted → gold → green → gold-above), with status emoji (🍼 < low, 💪 in-progress, 🎉 at-target, 🚀 above-target) and short status text. Flame icon line below for cal-burned. 7-day section reduced to single-row colored dots (green if at low-range, muted otherwise) with today highlighted via mauve outline ring. Eat-to-lose section is two rows with 18px JetBrains Mono numbers in green/accent depending on whether they cross the 1500 cal floor. Maintenance editable as a small bottom-row inline field. Removed: the 'honest note' paragraph, the per-line breakdown table, the mid-card analytics dashboard. Net effect: card is significantly shorter, all the decision-relevant info still present, but the time-to-glance is a fraction." },
+  { version: "2026.05.05bt58", summary: "Two related improvements to feed logging. (1) FeedForm bottle-picker simplified. New `mixMode` state (default false) gates between SIMPLE and MIX modes. Simple mode renders bottles as tappable cards (Cormorant 17px headline showing oz + label, JetBrains Mono detail showing pump time + expiry, sized for thumb taps). Tap a bottle → calls new selectSingleBottle helper which sets that bottle as primary and auto-overflows to remaining bottles in default oldest-first order to meet target. Selected bottles get a check icon and a 'using X oz · Y oz remains' line. The original per-bottle stepper UI is preserved verbatim under mix mode, accessed via a subtle dashed-border toggle at the bottom. Status banners (need more / overshoot) appear inline in simple mode rather than as a constant header bar. (2) Feed events now carry a fromBottles array — denormalized snapshot of which bottle(s) were consumed at log-time, with each entry recording oz/pumpedAt/location/bottleLabel. Snapshot is captured at all three deduct sites: multi-bottle Logger allocation, single-bottle Logger, and Now-page picker (UseBottleModal onUse). The journal LogView feed-row renderer now appends the bottle reference: 'Bottle [label]' if the bottle had a label, 'bottle from [time]' if not, '[N] bottles' if multi. Snapshot survives bottle deletion so the journal reference stays accurate forever." },
+  { version: "2026.05.05bt57", summary: "PumpGoalsCard ('Pump & snatch back'). Module-scope DAILY_MILK_TARGETS lookup table by months postpartum (0-12+) with target/low/high oz per day, synthesized from KellyMom (research-cited 25 oz avg 1-6 mo, 19-30 oz range), Medela, NICHD/AAP guidance, and exclusive-pumper sources (NestedBean, BabySleepSite recommending 25-35 oz/day for pumpers). New top-level useState for `mommyMaintenanceCal` (default 2000, range-validated 1200-4000, persisted to localStorage outside solene:* keyspace at ll:mommyMaintenanceCal so a Reset doesn't clear the body-personal number). Card replaces previous 'Mommy's burn today' tile on the Milk/InventoryView. Three sections: TODAY (big oz number + horizontal progress bar with thresholds 60/90/110% gating accent/gold/green/gold colors, range markers, status chip showing oz-to-go or oz-above-target), WEEKLY (7 thin bars per day with peak-relative heights, days-at-target count, weekly avg burn cal), DEFICIT PLANNER (maintenance row inline-editable with dashed button → number input + Enter/blur commit, lactation burn shown as +N cal/day, lactating maintenance computed = maintenance + today's burn, target intake for 1 lb/wk and 2 lb/wk losses each compared against 1500 cal/day supply floor with ✓/⚠ chips). Honest-note footer flags NICHD/AAP conservative 1-2 lb per MONTH guidance with sources cited. Wires through InventoryView from App level." },
+  { version: "2026.05.05bt56", summary: "Two mobile-quality fixes. (1) iOS zoom-on-focus suppressed via global CSS: input/textarea/select now have font-size: 16px !important plus -webkit-text-size-adjust: 100% on html, which is the threshold below which iOS auto-zooms a focused field. Applied at the rule level rather than chasing individual inline styles since some inputs were already 16px and others smaller — the rule normalizes everything. (2) ModalShell rewritten with expand/collapse interaction. Three gestures on the drag handle: tap → toggle expanded/collapsed, drag up >40px → expand, drag down >80px → dismiss (preserved). Tap-vs-drag dedupe via dragHandled ref: any threshold-crossing touchmove sets the flag, the synthetic click that fires after touchend is suppressed when the flag is set. Sizing: collapsed = 92vh (existing); expanded = calc(100dvh - 8px) using dynamic viewport height so it follows the URL bar showing/hiding correctly. Body now uses flex column with overflow on the children div (not the outer card) so the handle and title stay anchored at top while content scrolls. Bottom padding includes env(safe-area-inset-bottom) so iOS home indicator doesn't overlap the submit button. WebkitOverflowScrolling: touch on the body for inertial scroll. The handle pill widens (40 → 56px) and darkens (33% → 66% alpha) when expanded as a visual affordance for the state change." },
+  { version: "2026.05.05bt55", summary: "Fixed inventory-deletion bug. When picking a bottle to feed from on the Now page, ALL bottles in inventory were disappearing if any of them lacked a stable `id` field — which legacy bottles from earlier app versions or external sync sources can lack. Three layers of defense: (1) new useEffect watching inventory backfills crypto.randomUUID() onto any item missing an id, runs once on hydration and any time inventory changes, terminates after one cycle since needsBackfill becomes false. (2) All three setInventory.map matchers (Now-page picker, multi-bottle Logger allocator, single-bottle Logger) now guard with `if (!b.id || b.id !== bottleId) return b` — an id-less bottle is NEVER treated as the matched one even if bottleId is also undefined. (3) onUse handler bails early with a console warning if bottleId is falsy at entry, so a malformed payload no-ops rather than triggering the broken matcher. The console.warn on backfill is intentional — it surfaces if any user has legacy data, and the warning being absent on subsequent boots is the proof it ran." },
+  { version: "2026.05.05bt54", summary: "Mommy's ancillary + diaper bag components moved from flex footer into the unified timeline. Added new `afterPump: true` flag in SUNDAY_ROUTINE config for components that should be scheduled sequentially right after the parallel-pump block ends (or after Solène's feed if no parallel block exists). Implementation: parentTimelines now computes `afterPumpBlocks` in addition to the existing alone/parallel arrays — each afterPump component gets a from/to scheduled forward from pump end. flexComps filter expanded to also exclude afterPump components, so the flex footer auto-hides when all of Mommy's components are explicitly placed (which is now the default). The unified `allBlocks` array picks up afterPumpBlocks alongside the others, all sorted by from-time. Detail line on the ancillary block notes 'Daddy on Solène (bath / lotion)' so the handoff is explicit." },
+  { version: "2026.05.05bt53", summary: "SundayRoutineCard rendering rewrite per user request. Out: three actor-grouped ActorBlock sections (each its own header + colored borderLeft + per-actor TimeRow stack). In: a single chronological timeline. New unified `allBlocks` array combines babyBlocks + Mommy's alone-time blocks + Mommy's parallel pump block + Daddy's alone-time blocks + a sequentially-scheduled Daddy 'get dressed' block (placed immediately after shower end). Sort: primary by from-time, secondary by actorPriority (Solène=0, Mommy=1, Daddy=2) so the most-impacted actor reads first when multiple things start at the same minute. Each row inherits its accentColor from the actor (gold/mauve/slate). Labels rewritten via three lookup tables (SOLENE_LABELS, MOMMY_LABELS, DADDY_LABELS) so each row is unambiguous when scanned in isolation: 'Bath' → 'Bath Solène,' 'Hair' resolves to either 'Style Solène's hair' or 'Mommy: hair — flat iron + extensions' depending on actor, 'Get dressed' becomes 'Mommy gets dressed' / 'Dress Solène' / 'Daddy gets dressed,' etc. Added a small 3-chip color legend above the timeline. Mommy's flex tasks (ancillary, bag) remain in a footer note since they're truly distributed during the morning rather than time-anchored." },
+  { version: "2026.05.05bt52", summary: "Sunday routine refinements. (1) driveBufferMin 15→30, arrival time displayed (anchor + drive). (2) babyWakeMin replaced with computedWakeMin: median of morning sleep_up events (5am–noon) over the last 14 days, deduplicated by day so each day's earliest sleep_up counts once. Falls back to 8:00 if <3 mornings of data. Display says '(from data)' or '(fallback)' so the source is visible. (3) Solène's babyComponents expanded from {feed, diaper_dress, play, carseat} to {feed, bath, diaper_lotion, hair, dress, play, carseat} per user input on her actual Sunday morning sequence — total fixed-time grew from 45m to 70m. (4) Mommy's components add `pump` (20m) with `parallelWithBabyFeed: true` flag — handled specially in scheduling: rendered alongside Solène's feed window with detail 'parallel with Solène's feed (Daddy on baby)' rather than extending Mommy's required pre-wake alone-time block. (5) New capacity check: isTight when buffer <10m, isOverbooked when totalFixedBabyMin > available — both render a warning banner with explicit numbers ('Solène's morning needs 70min, but only Xmin available'). (6) Daddy's flex-comp footer copy updated to call out feed/bath/lotion support roles." },
+  { version: "2026.05.05bt51", summary: "First family-scenario routine card: Sunday morning. New SundayRoutineCard component below DayInLifeCard on Schedule tab, same collapsed-by-default UX. Star icon (vs Sun for Day-in-Life) so the two cards are visually distinguishable. Hardcoded SUNDAY_ROUTINE config block at module scope captures the user's actual inputs: anchor 9:20a, Mommy components (face 15m, hair 20m, makeup 18m, dress 15m, ancillary 15m, diaper bag 5m), Daddy components (shower 20m, dress 20m), Solène components (feed 25m, diaper+dress 10m, play (flexible), carseat 10m), sleep targets (Mommy 8h, Daddy 7h with hard 10:30p fade). Computation: alone-time components stacked in reverse from Solène's median 8:00a wake so each parent finishes their focused-attention block exactly when she wakes; flexible (non-alone) components listed afterward as 'fits during baby care.' Bedtime math: parent wake minus sleep-target gives recommended Saturday-night bedtime, with chronotype warnings (Mommy night-owl conflict) and reassurance (Daddy's calculated bedtime matches his fade pattern). Three actor-sections per actor with their own colored accent strip: gold for Solène, mauve for Mommy, slate-blue for Daddy. Anchor bar at top, notes at bottom, sample explicit assumptions called out (15min drive, no pump, Solène's natural 8:00a wake)." },
+  { version: "2026.05.05bt50", summary: "Day-in-Life card relocated from AnalyticsSection (Wellness tab) to ShiftsView (Schedule tab) where it sits as the headline card above the base shift schedule. Refactored from inline IIFE to a top-level DayInLifeCard component for reusability and cleaner separation. Added expand/collapse interaction with useState — collapsed by default to keep the Schedule tab from feeling crowded; tap the gold-tinted Sun-iconified header to toggle. Collapsed state shows a single teaser line in JetBrains Mono ('8:00a wake → 9:30p bedtime · 3 naps') so the headline information is visible without expanding. Chevron rotates 0°→90° on expand with a 0.18s ease transition. Sun icon was selected from the lucide library because it conveys the dawn-to-dusk arc this card represents — felt cuter than Calendar (which is the tab icon) and more thematic than Baby (which is more clinical). Plumbed `events` as a new prop on ShiftsView." },
+  { version: "2026.05.05bt49", summary: "Day-in-Life card rewritten as a time-block schedule per user request. Out: P25–P75 IQR ranges and prose detail. In: an ordered list of {from, to, label} blocks rendered as 'HH:MM–HH:MM activity' rows. The schedule is simulated from the user's medians: morning wake from sleep_up events 5am–noon, wake window from sleep_up→sleep_down gaps, nap duration from daytime sleep pairs, naps/day from sleep_down counts in the 6am–7pm window, bath time from bath events, bedtime from last-evening sleep_down. Mid-nap labeled 'often longest' for 3+ nap days. The simulator collapses any gap before the bath time into an 'Awake / wind down' block so the schedule honors both her wake-window cadence and the family's actual bath time, rather than drifting based on simulation arithmetic. Footer discloses inputs (wake window Xm · nap Xm · N naps/day · feed every ~Xm) so the assumptions are visible." },
+  { version: "2026.05.05bt48", summary: "Two changes. (a) Bath prompt: extended window to 2:30am next-day with session-anchored event lookups so the prompt stays visible during late-night routines, plus a Snooze 30m option that logs a `bath_snoozed` event with a snoozeUntil timestamp — the prompt reappears once that timestamp passes. The session-anchor logic detects times between midnight and 6am and treats them as belonging to the previous evening's session, so bath/skip/snooze checks scan from yesterday's 8:30pm forward rather than from today's midnight. (b) New 'A day in Solène's life' card at the top of Wellness/Analytics tab. For each per-day event class (morning wake, first feed, bath, bedtime), the card derives a P25–P75 IQR time-of-day range across the last 14 days and renders a caregiver-readable timeline. Naps/day reported as a count median; feeds reported as median interval. Stable 14-day window independent of the analytics window selector — the goal is a stable 'this is what her day looks like' narrative, not a selector-responsive view. Designed to be screenshot-and-shared with a caregiver." },
   { version: "2026.05.05bt47", summary: "TAB ICONS added to bottom panel. Each tab now stacks a lucide-react icon (18px) above its label (10px, was 12px) with 3px gap: Now/Home, Journal/BookOpen, Wellness/Stethoscope, Milk/Milk, Schedule/Calendar, Bank/PiggyBank. Active tab uses bolder stroke weight (2.25 vs 1.75) in addition to the existing viewer-color tint and top-edge indicator bar — three visual cues for active state. Padding reduced from 18/2/18 to 10/2/8 so the icon + label stack fits inside the existing 52px minHeight tap target without making the panel taller. Layout switched from baseline-aligned label-only to flex column with center alignment." },
   { version: "2026.05.05bt46", summary: "BOTTOM PANEL warm-sand color treatment per user pick from 6-option mockup. (a) Added new `panel` field to all four PALETTES (day/dawn: #F0E8D2 warm sand; dusk/night: #322A2F slightly-warmer-than-paper dark). (b) TabBar background changed from C.paper to C.panel — the bar visually disappeared before because C.paper was within ~1pt of C.bg. (c) Hairline moved from stacked boxShadow (`0 -1px 0 ${C.line}15`) to an explicit `borderTop: 1px solid ${C.line}30` so the top edge reads as a deliberate boundary, not a shadow artifact. (d) Elevation shadow strengthened from 0.06 to 0.08 alpha so the panel feels 'set down on' the page rather than floating against it. (e) CentralLogButton ring switched from C.bg to C.panel — the floating LOG button straddles the panel-page boundary, so the ring now blends with the panel backdrop where most of the button sits, and reads as a soft sand halo where the button extends above the panel onto the page. Reads as 'emerging from the panel.'" },
   { version: "2026.05.05bt45", summary: "TOP BAR FROZEN. New sticky brand strip pinned at top via position:sticky/top:0/zIndex:5 — contains a 32px LittleLedgerLogo, 'Little Ledger' wordmark in Cormorant italic, and the viewer/profile-switcher chip. The strip carries env(safe-area-inset-top) padding for iPhone notches. The previous in-header brand row + right-column profile switcher button were both REMOVED from the editorial header below — they no longer render twice. The big Solène serif + tagline + colophon + age/date/sync row remain in the editorial header and scroll away normally." },
@@ -654,6 +665,37 @@ const NAP_NORMS = [
   { from:  365, to:  540, napsLow: 1, napsHi: 2, totalLow:  90, totalHi: 180, indivLow: 60, indivHi: 150, label: "12–18 mo" },
   { from:  540, to: 1095, napsLow: 1, napsHi: 1, totalLow:  60, totalHi: 120, indivLow: 60, indivHi: 150, label: "18 mo–3 yr" },
 ];
+
+// ---- Daily milk-intake targets by months postpartum (v05.05bt57) --------
+// Synthesized from KellyMom (research-cited 25 oz/day average, 19-30 oz
+// range for 1-6 mo exclusively breastfed), Medela (16-46 oz "wide range,"
+// 25-28 oz typical), NICHD/AAP guidance, plus exclusive-pumping references
+// (NestedBean, BabySleepSite) recommending 25-35 oz/day for pumpers to
+// account for handling loss. Targets ramp up through month 1, plateau
+// 1-6 mo, then taper as solids start at 6 mo. Fields:
+//   target — typical/optimum oz per day
+//   low    — bottom of normal range
+//   high   — top of normal range (above this is "above range")
+const DAILY_MILK_TARGETS = [
+  // mPP: 0,  newborn — supply is establishing; intake ramps 1-3 oz to 22ish
+  { mPP: 0,  target: 22, low: 16, high: 28 },
+  { mPP: 1,  target: 25, low: 19, high: 30 },
+  { mPP: 2,  target: 27, low: 22, high: 32 },
+  { mPP: 3,  target: 28, low: 23, high: 34 },
+  { mPP: 4,  target: 28, low: 23, high: 34 },
+  { mPP: 5,  target: 27, low: 22, high: 33 },
+  { mPP: 6,  target: 26, low: 20, high: 32 }, // solids may start
+  { mPP: 7,  target: 24, low: 18, high: 30 },
+  { mPP: 8,  target: 22, low: 16, high: 28 },
+  { mPP: 9,  target: 20, low: 14, high: 26 },
+  { mPP: 10, target: 18, low: 12, high: 24 },
+  { mPP: 11, target: 16, low: 10, high: 22 },
+  { mPP: 12, target: 14, low:  8, high: 20 },
+];
+function targetOzForMonthsPP(months) {
+  const m = Math.max(0, Math.min(12, Math.floor(months)));
+  return DAILY_MILK_TARGETS[m] || DAILY_MILK_TARGETS[12];
+}
 function napNormForAgeDays(ageDays) {
   for (const band of NAP_NORMS) {
     if (ageDays >= band.from && ageDays < band.to) return band;
@@ -1940,6 +1982,25 @@ function SoleneHandoffInner() {
   useEffect(() => {
     try { localStorage.setItem("ll:theme", themeOverride); } catch {}
   }, [themeOverride]);
+
+  // === Mommy maintenance calories ===
+  // v05.05bt57: per-user setting for non-lactating maintenance calories.
+  // Used by the PumpGoalsCard to compute calorie deficit for weight loss
+  // alongside the lactation burn from pumping. Default 2000 (USDA DGA
+  // reference for moderately active women 31-50 yo). Persisted outside
+  // the solene:* keyspace so a Reset doesn't clear it. Per-device because
+  // it's a personal-body number, not a parenting-coordination number.
+  const [mommyMaintenanceCal, setMommyMaintenanceCal] = useState(() => {
+    if (typeof window === "undefined") return 2000;
+    try {
+      const v = localStorage.getItem("ll:mommyMaintenanceCal");
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n >= 1200 && n <= 4000 ? n : 2000;
+    } catch { return 2000; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:mommyMaintenanceCal", String(mommyMaintenanceCal)); } catch {}
+  }, [mommyMaintenanceCal]);
   // Cloud sync state. familyCode is the 6-char shared secret that namespaces
   // data on the backend. cloudSyncAvailable is set after a /api/ping check
   // succeeds. cloudSyncSetupNeeded is true when we have backend access but
@@ -2483,6 +2544,26 @@ function SoleneHandoffInner() {
   const isWiping = () => typeof window !== "undefined" && window.__soleneWiping === true;
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:events", events); }, [events, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:inventory", inventory); }, [inventory, hydrated]);
+
+  // v05.05bt55 — Defensive backfill: ensure every inventory item has an `id`.
+  // Bug being fixed: when a bottle is used from the Now-page picker, the
+  // deduct/remove logic uses `b.id !== bottleId` to keep non-matched bottles.
+  // If bottleId is undefined (legacy items had no id) AND multiple bottles
+  // also have id === undefined, every undefined-id bottle matches the
+  // "this is the chosen one" branch and ALL of them get deleted. Legacy
+  // inventory entries can show up via localStorage from earlier app
+  // versions or via sync from another device that didn't backfill. The
+  // effect runs whenever inventory changes; if any items are missing ids
+  // it backfills with crypto.randomUUID() and stops. After backfill all
+  // items have ids → the effect exits without doing anything → no loop.
+  useEffect(() => {
+    if (!hydrated) return;
+    const needsBackfill = inventory.some(b => !b.id);
+    if (needsBackfill) {
+      console.warn("[bt55] backfilling missing inventory ids on", inventory.filter(b => !b.id).length, "items");
+      setInventory(prev => prev.map(b => b.id ? b : { ...b, id: crypto.randomUUID() }));
+    }
+  }, [inventory, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:meetings", meetings); }, [meetings, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:shifts:v3", shifts); }, [shifts, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:diaperbag", diaperBag); }, [diaperBag, hydrated]);
@@ -4256,6 +4337,26 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     }) || null;
   }, [meetings, currentUser, now]);
 
+  // v05.05bt61 — precise end-time tick. The 15s setNow interval means the
+  // InMeetingBanner ("You're in Time bank: cashed in…") could linger up to
+  // 15s past the actual end time before the next tick re-evaluates the
+  // useMemo and clears it. For redeemed/cashed-in time especially, that
+  // lag feels wrong — when the time is up, the banner should drop. This
+  // effect schedules a one-shot setNow exactly at the active commitment's
+  // end time (+200ms grace), so the banner disposes the moment the time
+  // expires. Re-runs whenever the active commitment's id or end changes.
+  useEffect(() => {
+    if (!myActiveCommitment) return;
+    const endMs = new Date(myActiveCommitment.end).getTime();
+    const remainingMs = endMs - now.getTime();
+    if (remainingMs <= 0) return;
+    const t = setTimeout(() => {
+      setNow(new Date(Date.now() + timeTravelOffset));
+    }, remainingMs + 200);
+    return () => clearTimeout(t);
+  }, [myActiveCommitment?.id, myActiveCommitment?.end, timeTravelOffset]);
+  // eslint-disable-line react-hooks/exhaustive-deps
+
   // Truncate a commitment to end at `now`. Both surfaces (on-duty card
   // "Mommy is back" and in-meeting banner "I'm back") call this. After the
   // truncate, the projection automatically recomputes — carved coverage
@@ -4907,6 +5008,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onConfirmAwake={() => addEvent({ type: "wake_confirmed", silent: true })}
           onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }}
           onSkipBath={() => addEvent({ type: "bath_skipped", silent: true })}
+          onSnoozeBath={() => addEvent({
+            type: "bath_snoozed",
+            snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
+            silent: true,
+          })}
           activePump={activePump}
           onStartPump={(type = "standard") => setActivePump({
             startedAt: new Date().toISOString(),
@@ -5031,6 +5137,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             currentUser={currentUser}
             pendingTimeBankAction={pendingTimeBankAction}
             clearPendingTimeBankAction={() => setPendingTimeBankAction(null)}
+            events={events}
           />
         )}
         {tab === "bank" && (
@@ -5058,6 +5165,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             feedsRunway={feedsRunway} hoursRunway={hoursRunway}
             lastPump={lastPump} nextPumpAt={nextPumpAt} now={now}
             todayCalories={todayCalories}
+            mommyMaintenanceCal={mommyMaintenanceCal}
+            setMommyMaintenanceCal={setMommyMaintenanceCal}
           />
         )}
         {tab === "doctor" && (
@@ -5087,7 +5196,20 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             // amount and bottles that hit zero are removed from inventory.
             if (payload.type === "feed" && Array.isArray(payload.bottleAllocations) && payload.bottleAllocations.length > 0) {
               const allocs = payload.bottleAllocations;
+              // v05.05bt57: capture a denormalized snapshot of which bottle(s)
+              // were used so the journal can show 'from bottle pumped Tue 2p'
+              // even after the bottle is consumed and removed from inventory.
+              const fromBottles = allocs.map(a => {
+                const b = inventory.find(b => b.id === a.bottleId);
+                return b ? {
+                  oz: a.oz,
+                  pumpedAt: b.pumpedAt instanceof Date ? b.pumpedAt.toISOString() : b.pumpedAt,
+                  location: b.location,
+                  bottleLabel: b.bottleLabel || null,
+                } : { oz: a.oz, unknown: true };
+              });
               setInventory(prev => prev.map(b => {
+                if (!b.id) return b; // v05.05bt55 — never match an id-less bottle
                 const a = allocs.find(x => x.bottleId === b.id);
                 if (!a) return b;
                 const newOz = b.oz - a.oz;
@@ -5095,21 +5217,28 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 return { ...b, oz: newOz };
               }).filter(Boolean));
               const { bottleAllocations, usedBottleId, ...event } = payload;
-              addEvent(event);
+              addEvent({ ...event, fromBottles });
               return;
             }
             // Single-bottle path (backward compat)
             if (payload.type === "feed" && payload.usedBottleId) {
               const bottleId = payload.usedBottleId;
               const oz = payload.oz;
+              const usedBottle = inventory.find(b => b.id === bottleId);
+              const fromBottles = usedBottle ? [{
+                oz: oz,
+                pumpedAt: usedBottle.pumpedAt instanceof Date ? usedBottle.pumpedAt.toISOString() : usedBottle.pumpedAt,
+                location: usedBottle.location,
+                bottleLabel: usedBottle.bottleLabel || null,
+              }] : [{ oz, unknown: true }];
               setInventory(prev => prev.map(b => {
-                if (b.id !== bottleId) return b;
+                if (!b.id || b.id !== bottleId) return b; // v05.05bt55 — guard
                 const newOz = b.oz - oz;
                 if (newOz <= 0.01) return null;
                 return { ...b, oz: newOz };
               }).filter(Boolean));
               const { usedBottleId, ...event } = payload;
-              addEvent(event);
+              addEvent({ ...event, fromBottles });
               return;
             }
             addEvent(payload);
@@ -5974,6 +6103,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           now={now}
           onClose={() => setBottlePickerLoc(null)}
           onUse={({ bottleId, oz, isFullBottle }) => {
+            // v05.05bt55 — guard against missing bottleId. If somehow the
+            // picker fired without a selection, refuse to deduct — better
+            // a no-op than silently deleting inventory.
+            if (!bottleId) {
+              console.warn("[onUse] no bottleId — refusing to deduct from inventory");
+              setBottlePickerLoc(null);
+              return;
+            }
             // Determine BM source variant: if the bottle came from freezer,
             // it's BM-thawed; otherwise BM (fresh from RT or fridge).
             // v05.05bt21 split — gives the future analytics signal to study
@@ -5981,10 +6118,21 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             const usedBottle = liveInventory.find(b => b.id === bottleId);
             const source = usedBottle && usedBottle.location === "freezer"
               ? "BM-thawed" : "BM";
-            addEvent({ type: "feed", oz: Number(oz), source, ts: new Date() });
-            // Deduct from chosen bottle
+            // v05.05bt57 — capture fromBottles snapshot for journal display.
+            const fromBottles = usedBottle ? [{
+              oz: Number(oz),
+              pumpedAt: usedBottle.pumpedAt instanceof Date ? usedBottle.pumpedAt.toISOString() : usedBottle.pumpedAt,
+              location: usedBottle.location,
+              bottleLabel: usedBottle.bottleLabel || null,
+            }] : [];
+            addEvent({ type: "feed", oz: Number(oz), source, ts: new Date(), fromBottles });
+            // Deduct from chosen bottle.
+            // v05.05bt55: defensive guard `b.id && b.id === bottleId` — if a
+            // bottle has no id at all, NEVER treat it as a match (preserve
+            // it). Backfill effect upstream ensures all bottles get ids,
+            // but this is belt-and-suspenders.
             setInventory(prev => prev.map(b => {
-              if (b.id !== bottleId) return b;
+              if (!b.id || b.id !== bottleId) return b;
               if (isFullBottle) return null;
               const newOz = b.oz - Number(oz);
               if (newOz <= 0) return null;
@@ -7877,6 +8025,17 @@ function FontImports() {
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
       input { font-family: inherit; }
+      /* v05.05bt56 — iOS Safari zoom-on-focus fix. iOS auto-zooms when a
+         focused input has computed font-size < 16px. Forcing 16px on all
+         form controls suppresses the zoom while preserving small visual
+         labels elsewhere. -webkit-text-size-adjust prevents the page-level
+         text-size-adjust behavior. Applied at the global rule level so we
+         don't have to chase every input/textarea inline style. */
+      input, textarea, select {
+        font-size: 16px !important;
+        -webkit-text-size-adjust: 100%;
+      }
+      html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes pulse-soft { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -8192,7 +8351,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
   );
 }
 
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -8281,27 +8440,49 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
   // happened. The eyebrow context line still mentions last feed time when
   // available so the parent has temporal grounding.
   const bedtimeInfo = (() => {
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-    const promptStart = new Date(now);
+    // v05.05bt48 — extended window from 20:30–23:30 to 20:30–02:30+1day so
+    // late-night logging (the user's actual pattern: getting to bed near
+    // midnight or after) doesn't lose the prompt. Session-day logic: if we
+    // are past midnight but before 6am, the bedtime session conceptually
+    // belongs to YESTERDAY's evening — so we anchor the start of the
+    // window to yesterday's 20:30 and check today's events from yesterday's
+    // 20:30 onward (not from midnight).
+    const sessionAnchor = new Date(now);
+    if (now.getHours() < 6) {
+      sessionAnchor.setDate(sessionAnchor.getDate() - 1);
+    }
+    sessionAnchor.setHours(0, 0, 0, 0);
+    const promptStart = new Date(sessionAnchor);
     promptStart.setHours(20, 30, 0, 0);
-    const promptEnd = new Date(now);
-    promptEnd.setHours(23, 30, 0, 0);
+    // setHours auto-wraps past 24, so 26:30 = next day 02:30
+    const promptEnd = new Date(sessionAnchor);
+    promptEnd.setHours(26, 30, 0, 0);
     if (now < promptStart || now > promptEnd) return null;
-    // Check whether a bath was already logged today
-    const todayBath = events.find(e =>
-      e.type === "bath" && new Date(e.ts) >= startOfDay
+    // Check whether a bath was already logged in this session
+    const sessionBath = events.find(e =>
+      e.type === "bath" && new Date(e.ts) >= promptStart
     );
-    if (todayBath) return null;
-    // Check whether user already dismissed with "no bath" today
-    const todaySkip = events.find(e =>
-      e.type === "bath_skipped" && new Date(e.ts) >= startOfDay
+    if (sessionBath) return null;
+    // Check whether user already dismissed with "no bath" in this session
+    const sessionSkip = events.find(e =>
+      e.type === "bath_skipped" && new Date(e.ts) >= promptStart
     );
-    if (todaySkip) return null;
+    if (sessionSkip) return null;
+    // Check for active snooze. If the most recent bath_snoozed event in
+    // this session has a snoozeUntil that's still in the future, hide the
+    // prompt until then.
+    const sessionSnoozes = events
+      .filter(e => e.type === "bath_snoozed" && new Date(e.ts) >= promptStart)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    const latestSnooze = sessionSnoozes[0];
+    if (latestSnooze && latestSnooze.snoozeUntil) {
+      const snoozeUntil = new Date(latestSnooze.snoozeUntil);
+      if (now < snoozeUntil) return null;
+    }
     // Find the latest feed today, if any, for eyebrow context
     const todayFeeds = events
       .filter(e => (e.type === "feed" || e.type === "breastfeed") &&
-                   new Date(e.ts) >= startOfDay)
+                   new Date(e.ts) >= promptStart)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts));
     const latestFeed = todayFeeds[0];
     const latestFeedTimeStr = latestFeed
@@ -8524,21 +8705,33 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               ? <>Last feed was at {bedtimeInfo.latestFeedTimeStr}. Did Solène have a bath tonight?</>
               : <>It's bedtime time. Did Solène have a bath tonight?</>}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             <button onClick={onOpenBathLog} style={{
               background: C.ink, color: C.paper, border: "none",
-              padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "8px 6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}>
-              <Bath size={12} /> Yes, log it
+              <Bath size={11} /> Yes
+            </button>
+            {/* v05.05bt48: snooze button. Defers the prompt for 30 min, not
+                permanently — addresses the case where the parent is doing
+                bedtime late (e.g. midnight) and wants to log the bath later
+                in the same session, not have it dismissed entirely. */}
+            <button onClick={onSnoozeBath} style={{
+              background: "transparent", color: C.gold,
+              border: `1px solid ${C.gold}66`, borderRadius: 8,
+              padding: "8px 6px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            }}>
+              <Clock size={11} /> Snooze 30m
             </button>
             <button onClick={onSkipBath} style={{
-              background: "transparent", color: C.ink,
+              background: "transparent", color: C.muted,
               border: `1px solid ${C.line}33`, borderRadius: 8,
-              padding: "8px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "8px 6px", fontSize: 11, fontWeight: 500, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}>
-              No bath tonight
+              No bath
             </button>
           </div>
         </div>
@@ -10941,7 +11134,27 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                       {fmtTimeShort(new Date(e.ts))}
                     </span>
                     <span style={{ flex: 1, fontSize: 13, color: C.ink }}>
-                      {e.type === "feed" && `${e.inventoryReconcileNeeded ? "⚠ " : ""}Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`}
+                      {e.type === "feed" && (() => {
+                        const base = `${e.inventoryReconcileNeeded ? "⚠ " : ""}Feed${e.oz ? ` · ${e.oz}oz` : ""}${e.source ? ` ${e.source}` : ""}`;
+                        // v05.05bt57: append bottle attribution if the event
+                        // captured a fromBottles snapshot. Single bottle:
+                        // shows bottle label or pump time. Multiple bottles:
+                        // shows count.
+                        if (Array.isArray(e.fromBottles) && e.fromBottles.length > 0) {
+                          if (e.fromBottles.length === 1) {
+                            const b = e.fromBottles[0];
+                            if (b.unknown) return base;
+                            const pumpedTime = b.pumpedAt ? fmtTimeShort(new Date(b.pumpedAt)) : null;
+                            const bottleRef = b.bottleLabel
+                              ? `Bottle ${b.bottleLabel}`
+                              : pumpedTime ? `bottle from ${pumpedTime}` : "bottle";
+                            return `${base} · ${bottleRef}`;
+                          }
+                          // Multiple bottles — count + total
+                          return `${base} · ${e.fromBottles.length} bottles`;
+                        }
+                        return base;
+                      })()}
                       {e.type === "breastfeed" && `Breastfed${e.totalDurationMin ? ` · ${e.totalDurationMin}m` : ""}${(e.leftMin || e.rightMin) ? ` (L${e.leftMin || 0}/R${e.rightMin || 0})` : ""}`}
                       {e.type === "pump" && (() => {
                         const isPower = e.pumpType === "power";
@@ -11998,7 +12211,764 @@ function UpcomingSection({ C, allFuture, sevenDaysOut, thirtyDaysOut, onRemoveMe
   );
 }
 
-function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction }) {
+// v05.05bt50 — DayInLifeCard. Extracted from AnalyticsSection (where it
+// lived in bt48–bt49) and moved to the Schedule tab as the headline card.
+// Why move: the Schedule tab is where time-based household info lives
+// (parents' shifts, meetings, coverage); Solène's typical day is the
+// same conceptual category, so putting baby + parents on one surface
+// makes Schedule the unified household-time view. Wellness was the
+// wrong home — that tab is full of statistical cards (sleep trace,
+// prediction accuracy, nap quality histograms); Day-in-Life is
+// descriptive, not analytical, so it was the odd card out there.
+//
+// Behavior: COLLAPSED by default. Tap the header to expand and reveal
+// the full schedule; tap again to collapse. When collapsed, shows a
+// single-line teaser ("8:00a wake → 9:30p bedtime · 3 naps") plus a
+// chevron that rotates 90° on expand. The Sun icon — chosen for the
+// dawn-to-dusk arc this card represents — sits on the left of the
+// header, gold-tinted to match the card's accent color.
+function DayInLifeCard({ C, events, now }) {
+  const [expanded, setExpanded] = useState(false);
+  const window14 = events.filter(e =>
+    new Date(e.ts) >= new Date(now.getTime() - 14 * 86400000) && !e.silent
+  );
+  const days = {};
+  for (const e of window14) {
+    const d = new Date(e.ts);
+    const dk = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (!days[dk]) days[dk] = [];
+    days[dk].push(e);
+  }
+  const wakes = [], baths = [], bedtimes = [];
+  const napsPerDay = [];
+  for (const dk in days) {
+    const dayEv = days[dk].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const wake = dayEv.find(e => e.type === "sleep_up" &&
+      new Date(e.ts).getHours() >= 5 && new Date(e.ts).getHours() < 12);
+    if (wake) wakes.push(new Date(wake.ts));
+    const bath = dayEv.find(e => e.type === "bath");
+    if (bath) baths.push(new Date(bath.ts));
+    const bedtime = dayEv.filter(e => e.type === "sleep_down" &&
+      new Date(e.ts).getHours() >= 18).slice(-1)[0];
+    if (bedtime) bedtimes.push(new Date(bedtime.ts));
+    const napCount = dayEv.filter(e => e.type === "sleep_down" &&
+      new Date(e.ts).getHours() >= 6 && new Date(e.ts).getHours() < 19).length;
+    napsPerDay.push(napCount);
+  }
+  // Insufficient data fallback
+  if (wakes.length < 3) {
+    return (
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 14, marginBottom: 12,
+        border: `1px solid ${C.line}30`,
+      }}>
+        <div style={{
+          fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
+          color: C.muted, fontWeight: 600, marginBottom: 6,
+          display: "flex", alignItems: "center", gap: 6,
+        }}>
+          <Sun size={12} color={C.gold} />
+          A day in Solène's life
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, fontStyle: "italic", lineHeight: 1.5 }}>
+          Not enough data yet to draw her typical day. Check back after a few more days of logging.
+        </div>
+      </div>
+    );
+  }
+  // Helpers
+  const medianMin = (dates) => {
+    const minutes = dates.map(d => d.getHours() * 60 + d.getMinutes()).sort((a, b) => a - b);
+    return minutes[Math.floor(minutes.length / 2)];
+  };
+  const fmtT = (m, withAP = true) => {
+    const mod = ((m % 1440) + 1440) % 1440;
+    const h12 = Math.floor(mod / 60) % 12 || 12;
+    const ap = mod >= 720 ? "p" : "a";
+    return `${h12}:${String(mod % 60).padStart(2, "0")}${withAP ? ap : ""}`;
+  };
+  const fmtRange = (from, to) => {
+    if (to == null) return fmtT(from);
+    const fromAP = ((from % 1440) + 1440) % 1440 >= 720 ? "p" : "a";
+    const toAP = ((to % 1440) + 1440) % 1440 >= 720 ? "p" : "a";
+    if (fromAP === toAP) return `${fmtT(from, false)}–${fmtT(to)}`;
+    return `${fmtT(from)}–${fmtT(to)}`;
+  };
+  const wakeStart = medianMin(wakes);
+  const bathStart = baths.length >= 2 ? medianMin(baths) : null;
+  const bedtimeStart = medianMin(bedtimes);
+  const sleepEvs = window14
+    .filter(e => e.type === "sleep_up" || e.type === "sleep_down")
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+  const wakeWindows = [];
+  for (let i = 0; i < sleepEvs.length - 1; i++) {
+    if (sleepEvs[i].type === "sleep_up" && sleepEvs[i + 1].type === "sleep_down") {
+      const w = (new Date(sleepEvs[i + 1].ts) - new Date(sleepEvs[i].ts)) / 60000;
+      if (w >= 30 && w <= 240) wakeWindows.push(w);
+    }
+  }
+  wakeWindows.sort((a, b) => a - b);
+  const medWakeWindow = wakeWindows.length
+    ? Math.round(wakeWindows[Math.floor(wakeWindows.length / 2)])
+    : 90;
+  const sleepPairs = [];
+  let openSleep = null;
+  for (const e of sleepEvs) {
+    if (e.type === "sleep_down") openSleep = e;
+    else if (e.type === "sleep_up" && openSleep) {
+      const d = (new Date(e.ts) - new Date(openSleep.ts)) / 60000;
+      const h = new Date(openSleep.ts).getHours();
+      if (d > 5 && d < 240 && h >= 6 && h < 19) sleepPairs.push(d);
+      openSleep = null;
+    }
+  }
+  sleepPairs.sort((a, b) => a - b);
+  const medNapDur = sleepPairs.length
+    ? Math.round(sleepPairs[Math.floor(sleepPairs.length / 2)])
+    : 60;
+  const napsAvg = napsPerDay.length
+    ? Math.round(napsPerDay.reduce((s, n) => s + n, 0) / napsPerDay.length)
+    : 3;
+  const napsCount = Math.max(1, Math.min(5, napsAvg));
+  const FEED_DUR = 25;
+  const WAKE_TO_FEED = 5;
+  const BATH_DUR = 15;
+  const blocks = [];
+  let t = wakeStart;
+  blocks.push({ from: t, to: t + WAKE_TO_FEED, label: "Wake up" });
+  t += WAKE_TO_FEED;
+  blocks.push({ from: t, to: t + FEED_DUR, label: "Feed", detail: "+ diaper change" });
+  t += FEED_DUR;
+  for (let n = 0; n < napsCount; n++) {
+    const playDur = Math.max(15, medWakeWindow - FEED_DUR);
+    blocks.push({ from: t, to: t + playDur, label: "Awake / play" });
+    t += playDur;
+    const napLabel = (napsCount >= 3 && n === Math.floor((napsCount - 1) / 2))
+      ? "Nap (often longest)" : "Nap";
+    blocks.push({ from: t, to: t + medNapDur, label: napLabel });
+    t += medNapDur;
+    const wouldOvershoot = bathStart != null && t + FEED_DUR > bathStart - 30;
+    if (!wouldOvershoot && n < napsCount - 1) {
+      blocks.push({ from: t, to: t + FEED_DUR, label: "Feed", detail: "+ diaper change" });
+      t += FEED_DUR;
+    }
+  }
+  if (bathStart != null) {
+    if (t < bathStart) {
+      blocks.push({ from: t, to: bathStart, label: "Awake / wind down" });
+      t = bathStart;
+    }
+    blocks.push({ from: bathStart, to: bathStart + BATH_DUR, label: "Bath" });
+    t = bathStart + BATH_DUR;
+  }
+  if (t + FEED_DUR <= bedtimeStart) {
+    blocks.push({ from: t, to: t + FEED_DUR, label: "Last feed" });
+    t += FEED_DUR;
+  }
+  if (t < bedtimeStart) {
+    blocks.push({ from: t, to: bedtimeStart, label: "Wind down" });
+    t = bedtimeStart;
+  }
+  blocks.push({ from: bedtimeStart, to: null, label: "Bedtime", detail: "down for the night" });
+  // Collapsed-state teaser line
+  const teaser = `${fmtT(wakeStart)} wake → ${fmtT(bedtimeStart)} bedtime · ${napsCount} nap${napsCount === 1 ? "" : "s"}`;
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${C.gold}10, ${C.paper})`,
+      borderRadius: 12, marginBottom: 12,
+      border: `1px solid ${C.gold}30`,
+      overflow: "hidden",
+    }}>
+      <button onClick={() => setExpanded(v => !v)} style={{
+        width: "100%", border: "none", background: "transparent",
+        padding: "12px 14px", textAlign: "left", cursor: "pointer",
+        fontFamily: "inherit",
+        display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <Sun size={18} color={C.gold} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <span style={{
+              fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
+              color: C.gold, fontWeight: 700,
+            }}>
+              A day in Solène's life
+            </span>
+            <span style={{
+              fontSize: 9, fontWeight: 600, color: C.muted,
+              background: `${C.line}15`, padding: "2px 7px", borderRadius: 8,
+              letterSpacing: "0.04em",
+            }}>
+              for caregivers
+            </span>
+          </div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, color: C.muted, marginTop: 3,
+            letterSpacing: "0.02em",
+          }}>
+            {teaser}
+          </div>
+        </div>
+        <ChevronRight size={18} color={C.muted} style={{
+          flexShrink: 0,
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+          transition: "transform 0.18s ease",
+        }} />
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px" }}>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 13,
+            fontStyle: "italic", color: C.muted, marginBottom: 10, lineHeight: 1.4,
+          }}>
+            Simulated from her last 14 days. Times shift naturally — use as a guide, not a clock.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {blocks.map((b, i) => (
+              <div key={i} style={{
+                display: "grid", gridTemplateColumns: "100px 1fr",
+                gap: 12, padding: "9px 0",
+                borderBottom: i === blocks.length - 1 ? "none" : `1px solid ${C.line}18`,
+                alignItems: "baseline",
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, color: C.gold, fontWeight: 600,
+                  letterSpacing: "0.02em", whiteSpace: "nowrap",
+                }}>
+                  {fmtRange(b.from, b.to)}
+                </div>
+                <div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 16, color: C.ink, fontStyle: "italic",
+                    fontWeight: 500, lineHeight: 1.2,
+                  }}>
+                    {b.label}
+                  </div>
+                  {b.detail && (
+                    <div style={{
+                      fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.4,
+                    }}>
+                      {b.detail}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{
+            fontSize: 9, color: C.muted, fontStyle: "italic",
+            marginTop: 10, lineHeight: 1.4,
+            padding: "6px 10px",
+            background: `${C.line}10`, borderRadius: 6,
+            borderLeft: `2px solid ${C.line}40`,
+          }}>
+            Built from medians: wake window {medWakeWindow}m · nap {medNapDur}m · {napsCount} naps/day · feed every ~{Math.round(medWakeWindow + FEED_DUR)}m. Sample: {wakes.length} mornings logged.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// v05.05bt51 — SundayRoutineCard. First *family scenario* routine: an
+// orchestrated Sunday-morning template anchored on "leave for church by
+// 9:20a," with parent and baby components stacked in the order they need
+// to happen. Computed live: change a duration in SUNDAY_ROUTINE and
+// every time block + the bedtime math updates. The rendering is split
+// into three actor-sections (Solène / Mommy / Daddy) with their own
+// timelines, plus a sleep-planning footer that walks the wake-up time
+// back to a recommended bedtime per parent (with a warning when the
+// recommendation conflicts with a parent's stated chronotype).
+// v05.05bt52 — SundayRoutineCard. Updated config + Solène wake from
+// data + pump component + expanded Solène morning routine. Replaces
+// bt51's hardcoded 8:00a wake with a median-morning-wake computed live
+// from the user's actual sleep_up events (last 14 days), with fallback
+// to 8:00 if there isn't enough data yet.
+const SUNDAY_ROUTINE = {
+  name: "Sunday morning",
+  anchorTimeMin: 9 * 60 + 20,           // leave by 9:20a
+  driveBufferMin: 30,                   // drive to church (was 15 in bt51)
+  babyComponents: [
+    { id: "feed",         label: "Feed",                                      dur: 25 },
+    { id: "bath",         label: "Bath",                                      dur: 10 },
+    { id: "diaper_lotion",label: "Diaper change + lotion / oil",              dur: 10 },
+    { id: "hair",         label: "Hair combed / styled",                      dur: 10 },
+    { id: "dress",        label: "Get dressed",                               dur: 5  },
+    { id: "play",         label: "Play / chill",                              dur: null },
+    { id: "carseat",      label: "Car seat + load up",                        dur: 10 },
+  ],
+  parents: {
+    Mommy: {
+      label: "Mommy",
+      components: [
+        { id: "face",      label: "Face — wash, serum, lotion",              dur: 15, alone: true },
+        { id: "hair",      label: "Hair — flat iron + extensions",            dur: 20, alone: true },
+        { id: "makeup",    label: "Makeup",                                   dur: 18, alone: true },
+        { id: "dress",     label: "Get dressed",                              dur: 15, alone: true },
+        // Pump runs IN PARALLEL with Solène's first feed (Daddy feeds the
+        // baby while Mommy pumps), so it does NOT extend Mommy's required
+        // pre-wake alone-time block. Marked specially with parallelWithBabyFeed.
+        { id: "pump",      label: "Pump",                                     dur: 20, parallelWithBabyFeed: true },
+        // afterPump: scheduled sequentially right after pump ends (typical
+        // Sunday flow: Mommy finishes pumping → cleans up → does final
+        // ancillary tasks while Daddy handles Solène's bath/lotion/hair).
+        { id: "ancillary", label: "Deodorant, teeth, perfume",                dur: 15, afterPump: true },
+        { id: "bag",       label: "Diaper bag check",                         dur: 5,  afterPump: true },
+      ],
+      sleepTargetH: 8,
+      chronotypeNote: "night owl — earlier wake is a stretch",
+    },
+    Daddy: {
+      label: "Daddy",
+      components: [
+        { id: "shower", label: "Shower (incl. face)",                         dur: 20, alone: true },
+        { id: "dress",  label: "Get dressed",                                 dur: 20 },
+      ],
+      sleepTargetH: 7,
+      hardFadeMin: 22 * 60 + 30,        // fades at 10:30p
+    },
+  },
+  notes: [
+    "Pictures: post-church works — no pre-church buffer to spare.",
+  ],
+};
+
+function SundayRoutineCard({ C, events, now }) {
+  const [expanded, setExpanded] = useState(false);
+  const r = SUNDAY_ROUTINE;
+
+  // ===== Compute Solène's median morning wake from her actual data =====
+  const computedWakeMin = (() => {
+    if (!events || events.length === 0) return null;
+    const cutoff = new Date(now.getTime() - 14 * 86400000);
+    const wakes = events
+      .filter(e => e.type === "sleep_up" && !e.silent && new Date(e.ts) >= cutoff)
+      .filter(e => {
+        const h = new Date(e.ts).getHours();
+        return h >= 5 && h < 12;
+      })
+      .map(e => new Date(e.ts));
+    // Group by day so we only count one morning wake per day
+    const byDay = {};
+    for (const d of wakes) {
+      const dk = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!byDay[dk] || d < byDay[dk]) byDay[dk] = d;
+    }
+    const dayWakes = Object.values(byDay);
+    if (dayWakes.length < 3) return null;
+    const minutes = dayWakes.map(d => d.getHours() * 60 + d.getMinutes()).sort((a, b) => a - b);
+    return minutes[Math.floor(minutes.length / 2)];
+  })();
+  const babyWakeMin = computedWakeMin != null ? computedWakeMin : 8 * 60;
+  const wakeSource = computedWakeMin != null ? "from data" : "fallback (need 3+ mornings)";
+
+  // ===== Helpers =====
+  const fmtT = (m, withAP = true) => {
+    const mod = ((m % 1440) + 1440) % 1440;
+    const h12 = Math.floor(mod / 60) % 12 || 12;
+    const ap = mod >= 720 ? "p" : "a";
+    return `${h12}:${String(mod % 60).padStart(2, "0")}${withAP ? ap : ""}`;
+  };
+  const fmtRange = (from, to) => {
+    if (to == null) return fmtT(from);
+    const fromAP = ((from % 1440) + 1440) % 1440 >= 720 ? "p" : "a";
+    const toAP = ((to % 1440) + 1440) % 1440 >= 720 ? "p" : "a";
+    if (fromAP === toAP) return `${fmtT(from, false)}–${fmtT(to)}`;
+    return `${fmtT(from)}–${fmtT(to)}`;
+  };
+
+  // ===== Solène's timeline (forward from babyWakeMin) =====
+  const babyBlocks = [];
+  let bt = babyWakeMin;
+  babyBlocks.push({ from: bt, to: bt, label: "Wake up" });
+  for (const c of r.babyComponents) {
+    if (c.dur === null) {
+      babyBlocks.push({ ...c, from: null, to: null, _flexible: true });
+      continue;
+    }
+    babyBlocks.push({ ...c, from: bt, to: bt + c.dur });
+    bt += c.dur;
+  }
+  // Resolve flexible play block — fills gap between previous block end and carseat start
+  const carseatBlock = babyBlocks[babyBlocks.length - 1];
+  carseatBlock.to = r.anchorTimeMin;
+  carseatBlock.from = r.anchorTimeMin - carseatBlock.dur;
+  const playBlock = babyBlocks.find(b => b._flexible);
+  if (playBlock) {
+    // Find the block that comes before play (last non-flexible block before carseat)
+    const playIdx = babyBlocks.indexOf(playBlock);
+    const prevBlock = babyBlocks[playIdx - 1];
+    playBlock.from = prevBlock.to;
+    playBlock.to = carseatBlock.from;
+    playBlock.dur = playBlock.to - playBlock.from;
+  }
+  // Find the feed block (for parallel-pump scheduling)
+  const feedBlock = babyBlocks.find(b => b.id === "feed");
+
+  // Capacity check: does the schedule actually fit?
+  const totalFixedBabyMin = r.babyComponents
+    .filter(c => c.dur !== null)
+    .reduce((s, c) => s + c.dur, 0);
+  const availableForBaby = r.anchorTimeMin - babyWakeMin;
+  const isTight = availableForBaby - totalFixedBabyMin < 10;
+  const isOverbooked = availableForBaby < totalFixedBabyMin;
+
+  // ===== Each parent's timeline =====
+  const parentTimelines = {};
+  for (const [name, p] of Object.entries(r.parents)) {
+    const aloneComps = p.components.filter(c => c.alone);
+    const flexComps = p.components.filter(c => !c.alone && !c.parallelWithBabyFeed && !c.afterPump);
+    const parallelComps = p.components.filter(c => c.parallelWithBabyFeed);
+    const afterPumpComps = p.components.filter(c => c.afterPump);
+    const totalAlone = aloneComps.reduce((s, c) => s + c.dur, 0);
+    const wakeMin = babyWakeMin - totalAlone;
+    const blocks = [];
+    let t = wakeMin;
+    for (const c of aloneComps) {
+      blocks.push({ ...c, from: t, to: t + c.dur });
+      t += c.dur;
+    }
+    // Schedule parallel components (e.g. pump) during Solène's feed window
+    const parallelBlocks = parallelComps.map(c => ({
+      ...c,
+      from: feedBlock.from,
+      to: feedBlock.from + c.dur,
+    }));
+    // Schedule afterPump components sequentially right after the parallel
+    // block ends (or after the feed if no parallel block exists). For Mommy
+    // that means: pump finishes at 8:20 → ancillary 8:20-8:35 → diaper bag
+    // 8:35-8:40, all happening while Daddy handles Solène's bath.
+    const pumpEnd = parallelBlocks.length
+      ? parallelBlocks[parallelBlocks.length - 1].to
+      : feedBlock.to;
+    let afterPumpT = pumpEnd;
+    const afterPumpBlocks = afterPumpComps.map(c => {
+      const block = { ...c, from: afterPumpT, to: afterPumpT + c.dur };
+      afterPumpT += c.dur;
+      return block;
+    });
+    parentTimelines[name] = {
+      wakeMin, blocks, parallelBlocks, afterPumpBlocks, flexComps, totalAlone,
+      totalFlex: flexComps.reduce((s, c) => s + c.dur, 0),
+    };
+  }
+
+  // ===== Bedtime math =====
+  const computeBedtime = (wakeMin, sleepTargetH) => {
+    const bedMin = wakeMin - sleepTargetH * 60;
+    return ((bedMin % 1440) + 1440) % 1440;
+  };
+
+  // ===== Build unified timeline (sorted by time, color-coded by actor) =====
+  // v05.05bt53: replaces the bt52 actor-grouped rendering with a single
+  // chronological timeline. Each row inherits its color from the actor
+  // performing the activity (gold = Solène, mauve = Mommy, slate = Daddy).
+  // Labels are rewritten to be unambiguous in isolation: "Bath" becomes
+  // "Bath Solène," "Hair" disambiguates between Mommy's and Solène's by
+  // explicit prefix, etc. — so when the rows interleave, every row reads
+  // self-evidently without needing actor headers.
+  const SOLENE_LABELS = {
+    feed:          "Feed Solène",
+    bath:          "Bath Solène",
+    diaper_lotion: "Diaper change + lotion for Solène",
+    hair:          "Style Solène's hair",
+    dress:         "Dress Solène",
+    play:          "Solène plays / chills",
+    carseat:       "Solène into car seat + load up",
+  };
+  const MOMMY_LABELS = {
+    face:      "Mommy: face — wash, serum, lotion",
+    hair:      "Mommy: hair — flat iron + extensions",
+    makeup:    "Mommy does makeup",
+    dress:     "Mommy gets dressed",
+    pump:      "Mommy pumps",
+    ancillary: "Mommy: deodorant, teeth, perfume",
+    bag:       "Mommy: diaper bag check",
+  };
+  const DADDY_LABELS = {
+    shower: "Daddy showers (incl. face)",
+    dress:  "Daddy gets dressed",
+  };
+  const allBlocks = [];
+  // Solène's blocks
+  for (const b of babyBlocks) {
+    if (b.from == null) continue;
+    if (b.from === b.to && b.label === "Wake up") {
+      // First wake row — synthetic, zero-duration marker
+      allBlocks.push({
+        from: b.from, to: null,
+        label: "Solène wakes",
+        accentColor: C.gold,
+        actor: "Solène",
+        actorPriority: 0,
+      });
+      continue;
+    }
+    allBlocks.push({
+      from: b.from, to: b.to,
+      label: SOLENE_LABELS[b.id] || b.label,
+      accentColor: C.gold,
+      actor: "Solène",
+      actorPriority: 0,
+    });
+  }
+  // Mommy's alone-time blocks
+  for (const b of parentTimelines.Mommy.blocks) {
+    allBlocks.push({
+      from: b.from, to: b.to,
+      label: MOMMY_LABELS[b.id] || b.label,
+      accentColor: C.mommy,
+      actor: "Mommy",
+      actorPriority: 1,
+    });
+  }
+  // Mommy's pump (parallel with Solène's feed)
+  for (const b of parentTimelines.Mommy.parallelBlocks) {
+    allBlocks.push({
+      from: b.from, to: b.to,
+      label: MOMMY_LABELS[b.id] || b.label,
+      detail: "parallel with Solène's feed (Daddy on baby)",
+      accentColor: C.mommy,
+      actor: "Mommy",
+      actorPriority: 1,
+    });
+  }
+  // Mommy's afterPump tasks (deodorant/teeth/perfume, diaper bag check)
+  for (const b of parentTimelines.Mommy.afterPumpBlocks) {
+    allBlocks.push({
+      from: b.from, to: b.to,
+      label: MOMMY_LABELS[b.id] || b.label,
+      detail: b.id === "ancillary" ? "Daddy on Solène (bath / lotion)" : null,
+      accentColor: C.mommy,
+      actor: "Mommy",
+      actorPriority: 1,
+    });
+  }
+  // Daddy's alone-time (shower) — placed at his alone-time block
+  for (const b of parentTimelines.Daddy.blocks) {
+    allBlocks.push({
+      from: b.from, to: b.to,
+      label: DADDY_LABELS[b.id] || b.label,
+      accentColor: C.daddy,
+      actor: "Daddy",
+      actorPriority: 2,
+    });
+  }
+  // Daddy's "get dressed" — schedule sequentially after his shower
+  // (treats it as effectively-sequential rather than truly flexible since
+  // shower → dress is the natural order). His other supporting tasks
+  // remain in the flex footer.
+  const daddyDressComp = r.parents.Daddy.components.find(c => c.id === "dress");
+  const daddyShowerEnd = parentTimelines.Daddy.blocks.length
+    ? parentTimelines.Daddy.blocks[parentTimelines.Daddy.blocks.length - 1].to
+    : null;
+  if (daddyDressComp && daddyShowerEnd != null) {
+    allBlocks.push({
+      from: daddyShowerEnd,
+      to: daddyShowerEnd + daddyDressComp.dur,
+      label: DADDY_LABELS[daddyDressComp.id] || daddyDressComp.label,
+      accentColor: C.daddy,
+      actor: "Daddy",
+      actorPriority: 2,
+    });
+  }
+  // Sort: primary by from time, secondary by actorPriority (Solène first
+  // when ties, then Mommy, then Daddy) so the most-important actor reads
+  // first when several activities start at the same minute.
+  allBlocks.sort((a, b) => {
+    if (a.from !== b.from) return a.from - b.from;
+    return a.actorPriority - b.actorPriority;
+  });
+
+  // ===== Render =====
+  const teaser = `Mommy ${fmtT(parentTimelines.Mommy.wakeMin)} · Daddy ${fmtT(parentTimelines.Daddy.wakeMin)} · leave ${fmtT(r.anchorTimeMin)}`;
+  const TimeRow = ({ from, to, label, detail, accentColor }) => (
+    <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 10, padding: "6px 0", alignItems: "baseline", borderBottom: `1px solid ${C.line}10` }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+        color: accentColor, fontWeight: 600, letterSpacing: "0.02em", whiteSpace: "nowrap",
+      }}>
+        {fmtRange(from, to)}
+      </div>
+      <div>
+        <div style={{ fontSize: 13, color: C.ink, fontWeight: 500, lineHeight: 1.3 }}>
+          {label}
+        </div>
+        {detail && <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontStyle: "italic" }}>{detail}</div>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${C.gold}10, ${C.paper})`,
+      borderRadius: 12, marginBottom: 12,
+      border: `1px solid ${C.gold}30`, overflow: "hidden",
+    }}>
+      <button onClick={() => setExpanded(v => !v)} style={{
+        width: "100%", border: "none", background: "transparent",
+        padding: "12px 14px", textAlign: "left", cursor: "pointer",
+        fontFamily: "inherit", display: "flex", alignItems: "center", gap: 10,
+      }}>
+        <Star size={18} color={C.gold} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase", color: C.gold, fontWeight: 700 }}>
+              {r.name}
+            </span>
+            <span style={{
+              fontSize: 9, fontWeight: 600, color: C.muted,
+              background: `${C.line}15`, padding: "2px 7px", borderRadius: 8, letterSpacing: "0.04em",
+            }}>
+              for the family
+            </span>
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: C.muted, marginTop: 3, letterSpacing: "0.02em" }}>
+            {teaser}
+          </div>
+        </div>
+        <ChevronRight size={18} color={C.muted} style={{
+          flexShrink: 0,
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+          transition: "transform 0.18s ease",
+        }} />
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px" }}>
+          {/* Anchor bar */}
+          <div style={{
+            background: `${C.gold}15`, borderRadius: 8, padding: "8px 10px",
+            marginBottom: 12, fontSize: 12, color: C.ink, lineHeight: 1.4,
+          }}>
+            <strong style={{ color: C.gold }}>⛪ Leave by {fmtT(r.anchorTimeMin)}</strong> ·
+            {" "}<span style={{ color: C.muted }}>drive ~{r.driveBufferMin}min · arrival ~{fmtT(r.anchorTimeMin + r.driveBufferMin)}</span>
+          </div>
+          {/* Capacity warning */}
+          {(isTight || isOverbooked) && (
+            <div style={{
+              background: `${isOverbooked ? C.accent : C.gold}15`,
+              border: `1px solid ${isOverbooked ? C.accent : C.gold}40`,
+              borderRadius: 8, padding: "8px 10px", marginBottom: 12,
+              fontSize: 11, color: C.ink, lineHeight: 1.5,
+            }}>
+              <strong style={{ color: isOverbooked ? C.accent : C.gold }}>
+                {isOverbooked ? "⚠ Schedule won't fit" : "⚠ Tight schedule"}
+              </strong>{" "}
+              — Solène's morning needs {totalFixedBabyMin}min, but only {availableForBaby}min available between her {fmtT(babyWakeMin)} wake and {fmtT(r.anchorTimeMin)} leave. {isOverbooked ? "Wake her earlier or trim the routine." : "Almost no buffer for fussiness or blowouts."}
+            </div>
+          )}
+          {/* Color legend */}
+          <div style={{
+            display: "flex", gap: 12, marginBottom: 10, fontSize: 10,
+            color: C.muted, flexWrap: "wrap", letterSpacing: "0.04em",
+          }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.gold }} /> Solène
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.mommy }} /> Mommy
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.daddy }} /> Daddy
+            </span>
+          </div>
+          {/* Time-ordered timeline */}
+          <div>
+            {allBlocks.map((b, i) => (
+              <TimeRow key={i}
+                from={b.from} to={b.to}
+                label={b.label}
+                detail={b.detail}
+                accentColor={b.accentColor} />
+            ))}
+          </div>
+          {/* Mommy's flex tasks footer */}
+          {parentTimelines.Mommy.flexComps.length > 0 && (
+            <div style={{
+              fontSize: 11, color: C.muted, fontStyle: "italic",
+              marginTop: 10, padding: "8px 10px",
+              background: `${C.mommy}10`, borderRadius: 6, lineHeight: 1.4,
+              borderLeft: `3px solid ${C.mommy}`,
+            }}>
+              <strong style={{ fontStyle: "normal", color: C.mommy }}>Mommy's flex tasks ({parentTimelines.Mommy.totalFlex}m):</strong>{" "}
+              {parentTimelines.Mommy.flexComps.map(c => c.label.toLowerCase()).join(" · ")}
+              {" "}— distributed during the {fmtT(feedBlock.to)}–{fmtT(r.anchorTimeMin)} window.
+            </div>
+          )}
+          {/* Sleep / bedtime planning */}
+          <div style={{
+            marginTop: 14, padding: "12px 14px",
+            background: `${C.ink}06`, borderRadius: 10, border: `1px solid ${C.line}20`,
+          }}>
+            <div style={{
+              fontSize: 10, letterSpacing: "0.22em", textTransform: "uppercase",
+              color: C.ink, fontWeight: 700, marginBottom: 8, opacity: 0.7,
+            }}>
+              ← Bedtime planning (Saturday night)
+            </div>
+            {(() => {
+              const mommyBed = computeBedtime(parentTimelines.Mommy.wakeMin, r.parents.Mommy.sleepTargetH);
+              return (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
+                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.mommy, fontStyle: "italic", fontWeight: 600 }}>
+                      Mommy
+                    </div>
+                    <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
+                      Bed by <strong>{fmtT(mommyBed)}</strong> for {r.parents.Mommy.sleepTargetH}h sleep
+                      <div style={{ fontSize: 10, color: C.accent, marginTop: 2, fontStyle: "italic" }}>
+                        ⚠ {r.parents.Mommy.chronotypeNote} — Saturday afternoon nap or earlier wind-down may help.
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
+                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.daddy, fontStyle: "italic", fontWeight: 600 }}>
+                      Daddy
+                    </div>
+                    <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
+                      Plan bed by <strong>{fmtT(r.parents.Daddy.hardFadeMin)}</strong> (his usual fade)
+                      <div style={{ fontSize: 10, color: "#5C8E5C", marginTop: 2, fontStyle: "italic" }}>
+                        ✓ matches his pattern — gives ~{Math.round((parentTimelines.Daddy.wakeMin + 1440 - r.parents.Daddy.hardFadeMin) / 60)}h before {fmtT(parentTimelines.Daddy.wakeMin)} wake.
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
+                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.gold, fontStyle: "italic", fontWeight: 600 }}>
+                      Solène
+                    </div>
+                    <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
+                      Usual <strong>9:30p</strong> bedtime — no change needed for Sunday.
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          {/* Notes */}
+          <div style={{
+            fontSize: 11, color: C.muted, fontStyle: "italic",
+            marginTop: 12, lineHeight: 1.5,
+            padding: "8px 10px",
+            background: `${C.line}10`, borderRadius: 6,
+            borderLeft: `2px solid ${C.line}40`,
+          }}>
+            {r.notes.map((n, i) => (
+              <div key={i}>{n}</div>
+            ))}
+            <div style={{ marginTop: 4, fontSize: 10, opacity: 0.8 }}>
+              Solène's wake {wakeSource} · drive 30min · pump runs parallel with feed.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events }) {
   const [showAdd, setShowAdd] = useState(false);
   // NOTE: Time Bank and on-site state used to live here. Time Bank is now
   // its own tab (BankView), and on-site lives in NowView. The
@@ -12049,6 +13019,11 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
 
   return (
     <div style={{ marginTop: 14 }}>
+      {/* v05.05bt50 — Day-in-Life card moved here from Wellness/AnalyticsSection.
+          Collapsed by default; tap header to expand. */}
+      <DayInLifeCard C={C} events={events} now={now} />
+      {/* v05.05bt51 — First family scenario routine: Sunday morning. */}
+      <SundayRoutineCard C={C} events={events} now={now} />
       <Section C={C} title="Base shift schedule">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {["Mommy", "Daddy"].map(parent => {
@@ -14270,7 +15245,178 @@ function AddMeetingModal({ C, onClose, onSubmit, currentUser }) {
 }
 
 
-function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories }) {
+// v05.05bt57 — PumpGoalsCard. Gamification on pumping with two stacked
+// targets: Solène's daily milk intake (so she's fed) AND Mommy's weight-
+// loss math (so she's snatching back). Pumping is unique among parenting
+// activities in that hitting your target serves BOTH goals — the more
+// you pump, the more lactation calories you burn, which expands your
+// daily intake budget at any weight-loss rate. The card makes that
+// double-win visible.
+//
+// Sources for the targets / math (cited in code comments where used):
+//   - DAILY_MILK_TARGETS table (module scope above): KellyMom, Medela,
+//     NICHD, NestedBean synthesis. ~25 oz/day average for 1-6 mo, range
+//     19-30 oz; pumpers aim 25-35 to account for handling loss.
+//   - Calorie burn: KCAL_PER_OZ_BM constant (22 cal/oz). NICHD says
+//     lactation adds ~450-500 cal/day. The per-oz rate maps to ~22
+//     cal/oz which lines up.
+//   - Weight-loss math: 3500 cal = 1 lb. So 500/day deficit = 1 lb/week.
+//     But medical guidance (NICHD, AAP, lactation consultants) recommends
+//     1-2 lb per MONTH while lactating, not per week. We surface the
+//     user's requested 1-2 lb/week math but flag the 1500 cal/day
+//     intake floor that protects supply, AND surface the conservative
+//     guidance in a footer note.
+// v05.05bt58 — PumpGoalsCard, redesigned for quick & fun. Bottle viz
+// is the star: a fillable SVG baby bottle that rises with today's oz,
+// with a dashed target line that turns into a solid checkmark when
+// hit. Three small things underneath: 7-dot weekly summary, a single
+// calorie burn line with flame, and two short "eat ≤ X cal" lines for
+// 1lb and 2lb/week loss with a flag if below the supply floor. No
+// tables, no walls of text. Maintenance cal is editable inline.
+// v05.05bt60 — PumpGoalsCard, stripped to bare essentials. Bottle viz on
+// left, today's oz + status emoji + cal burned + two snatch-back targets
+// on right. No collapse toggle. No 7-day strip. No floor warning footer.
+// Maintenance is a tiny tappable pill at the bottom.
+function PumpGoalsCard({ C, events, now, mommyMaintenanceCal, setMommyMaintenanceCal }) {
+  const [editingMaintenance, setEditingMaintenance] = useState(false);
+  const [maintenanceDraft, setMaintenanceDraft] = useState(String(mommyMaintenanceCal));
+  const ageMonthsExact = (now - BIRTHDAY) / (30.44 * 86400000);
+  const t = targetOzForMonthsPP(ageMonthsExact);
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const todayPumpOz = events
+    .filter(e => e.type === "pump" && new Date(e.ts) >= startOfDay && !e.silent && e.mode !== "start")
+    .reduce((s, e) => s + (e.oz || 0), 0);
+  const todayBurnCal = Math.round(todayPumpOz * KCAL_PER_OZ_BM);
+  const lactatingMaintenance = mommyMaintenanceCal + todayBurnCal;
+  const intake1 = lactatingMaintenance - 500;
+  const intake2 = lactatingMaintenance - 1000;
+  const FLOOR = 1500;
+  const maxDisplayOz = t.target * 1.5;
+  const ozToY = (oz) => 200 - Math.min(oz, maxDisplayOz) / maxDisplayOz * 180;
+  const targetY = ozToY(t.target);
+  const fillY = ozToY(todayPumpOz);
+  const atTarget = todayPumpOz >= t.target;
+  let statusEmoji, statusColor;
+  if (todayPumpOz >= t.target * 1.1) { statusEmoji = "🚀"; statusColor = C.gold; }
+  else if (todayPumpOz >= t.target) { statusEmoji = "🎉"; statusColor = "#5A8E5A"; }
+  else if (todayPumpOz >= t.low) { statusEmoji = "💪"; statusColor = C.gold; }
+  else { statusEmoji = "🍼"; statusColor = C.muted; }
+  const commitMaintenance = () => {
+    const n = parseInt(maintenanceDraft, 10);
+    if (Number.isFinite(n) && n >= 1200 && n <= 4000) setMommyMaintenanceCal(n);
+    else setMaintenanceDraft(String(mommyMaintenanceCal));
+    setEditingMaintenance(false);
+  };
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${C.mommy}15, ${C.paper})`,
+      borderRadius: 12, marginBottom: 16, padding: 14,
+      border: `1px solid ${C.mommy}40`,
+    }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 14, alignItems: "center" }}>
+        {/* Bottle */}
+        <svg viewBox="0 0 100 220" width="100" height="220">
+          <defs>
+            <clipPath id="bottle-clip">
+              <path d="M32,32 L68,32 L68,52 L78,62 L78,180 Q78,200 58,200 L42,200 Q22,200 22,180 L22,62 L32,52 Z" />
+            </clipPath>
+            <linearGradient id="milk-grad" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={C.mommy} stopOpacity="0.9" />
+              <stop offset="100%" stopColor={C.mommy} stopOpacity="0.7" />
+            </linearGradient>
+          </defs>
+          <rect x="32" y="20" width="36" height="14" rx="2" fill={C.line} opacity="0.85" />
+          <rect x="0" y="0" width="100" height="220" fill={`${C.line}08`} clipPath="url(#bottle-clip)" />
+          <rect x="0" y={fillY} width="100" height={200 - fillY} fill="url(#milk-grad)" clipPath="url(#bottle-clip)"
+            style={{ transition: "y 0.6s cubic-bezier(0.2,0.8,0.2,1), height 0.6s cubic-bezier(0.2,0.8,0.2,1)" }} />
+          <line x1="22" y1={targetY} x2="78" y2={targetY}
+            stroke={atTarget ? "#5A8E5A" : C.gold} strokeWidth="2"
+            strokeDasharray={atTarget ? "0" : "4 2"}
+            style={{ transition: "stroke 0.4s ease" }} />
+          {atTarget && <text x="83" y={targetY + 3} fontSize="10" fill="#5A8E5A" fontWeight="700">✓</text>}
+          <path d="M32,32 L68,32 L68,52 L78,62 L78,180 Q78,200 58,200 L42,200 Q22,200 22,180 L22,62 L32,52 Z"
+            fill="none" stroke={C.line} strokeWidth="1.5" opacity="0.7" />
+          {atTarget && (
+            <circle cx="76" cy={targetY - 14} r="1.5" fill={C.gold}>
+              <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" />
+            </circle>
+          )}
+        </svg>
+        {/* Right side: oz, emoji, cal burned, two cal targets */}
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{
+              fontFamily: "'Cormorant Garamond', serif", fontSize: 48,
+              fontWeight: 500, fontStyle: "italic", color: statusColor, lineHeight: 0.95,
+            }}>
+              {todayPumpOz.toFixed(1)}
+            </span>
+            <span style={{ fontSize: 16, color: C.muted }}>oz</span>
+            <span style={{ fontSize: 24, marginLeft: 6 }}>{statusEmoji}</span>
+          </div>
+          <div style={{ fontSize: 11, color: C.mommy, marginTop: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+            <Flame size={11} /> {todayBurnCal} cal
+          </div>
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              padding: "5px 9px", borderRadius: 6,
+              background: intake1 < FLOOR ? `${C.accent}18` : `${C.line}08`,
+            }}>
+              <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>1 lb/wk</span>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700,
+                color: intake1 < FLOOR ? C.accent : "#5A8E5A",
+              }}>
+                ≤{intake1}{intake1 < FLOOR ? " ⚠" : ""}
+              </span>
+            </div>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              padding: "5px 9px", borderRadius: 6,
+              background: intake2 < FLOOR ? `${C.accent}18` : `${C.line}08`,
+            }}>
+              <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>2 lb/wk</span>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700,
+                color: intake2 < FLOOR ? C.accent : "#5A8E5A",
+              }}>
+                ≤{intake2}{intake2 < FLOOR ? " ⚠" : ""}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Tiny maintenance edit at bottom */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+        {editingMaintenance ? (
+          <span style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 10, color: C.muted }}>
+            <span>maint</span>
+            <input type="number" min="1200" max="4000" step="50" value={maintenanceDraft}
+              onChange={e => setMaintenanceDraft(e.target.value)} onBlur={commitMaintenance}
+              onKeyDown={e => e.key === "Enter" && commitMaintenance()} autoFocus
+              style={{
+                width: 56, padding: "2px 4px", border: `1px solid ${C.mommy}66`, borderRadius: 4,
+                fontFamily: "'JetBrains Mono', monospace", background: C.paper, color: C.ink, textAlign: "right",
+              }} />
+            <span>cal</span>
+          </span>
+        ) : (
+          <button onClick={() => { setMaintenanceDraft(String(mommyMaintenanceCal)); setEditingMaintenance(true); }}
+            style={{
+              background: "transparent", border: "none", padding: "2px 6px", cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted,
+            }}>
+            maint {mommyMaintenanceCal} cal <Edit3 size={8} style={{ verticalAlign: "middle" }} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal }) {
   // Viewer color for chrome that's about inventory management (which both
   // parents do) rather than active pumping or lactation calories (which
   // are Mommy-specific). Daddy adds bottles, picks bottles, manages the
@@ -14284,31 +15430,15 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
 
   return (
     <div style={{ marginTop: 14 }}>
-      {/* Calorie burn — small mom flex */}
-      <Section C={C} title="Mommy's burn today">
-        <div style={{
-          background: `linear-gradient(135deg, ${C.mommy}22, ${C.paper})`,
-          borderRadius: 14, padding: 18,
-          border: `1px solid ${C.mommy}44`,
-          display: "flex", alignItems: "center", gap: 16,
-        }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: C.mommy, display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", flexShrink: 0,
-          }}>
-            <Flame size={26} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, lineHeight: 1, color: C.mommy }}>
-              {todayCalories} <span style={{ fontSize: 16, color: C.muted, fontFamily: "'Inter', sans-serif" }}>kcal</span>
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-              from pumping & breastfeeding · keep snacks close 💪
-            </div>
-          </div>
-        </div>
-      </Section>
+      {/* v05.05bt57 — PumpGoalsCard replaces the previous standalone
+          "Mommy's burn today" tile. Now stacks: today's pump vs Solène's
+          age-banded daily target + 7-day trend + calorie deficit planner
+          (with editable maintenance calories), all in one card.  */}
+      <PumpGoalsCard
+        C={C} events={events} now={now}
+        mommyMaintenanceCal={mommyMaintenanceCal}
+        setMommyMaintenanceCal={setMommyMaintenanceCal}
+      />
 
       <Section C={C} title="Pump timing">
         <div style={{ background: C.paper, borderRadius: 12, padding: 16, border: `1px solid ${C.line}15` }}>
@@ -15809,25 +16939,56 @@ function PickerOption({ C, icon, label, sub, onClick, color }) {
 
 // ---- Forms ------------------------------------------------------------
 function ModalShell({ C, onClose, title, children }) {
-  // Swipe-down-to-dismiss tracking. The drag handle area listens to touches;
-  // if the user moves their finger downward more than the threshold, we
-  // close the modal. 80px threshold keeps small accidental drags from
-  // dismissing. Only the top portion listens — we don't want vertical
-  // scrolls inside long modal content to fire the handler.
+  // v05.05bt56 — Bottom sheet now supports an EXPANDED state so tall
+  // forms (Logger, Edit-bottle, Time Bank Add, etc.) don't hide the
+  // submit button below the fold on small phones.
+  //
+  // Interactions on the drag handle:
+  //   • Tap → toggle expanded ↔ collapsed
+  //   • Drag up >40px → expand
+  //   • Drag down >80px → dismiss (preserved from earlier behavior)
+  //
+  // The tap-vs-drag dedupe relies on a `dragHandled` ref: any touchmove
+  // gesture that crosses a threshold marks dragHandled=true, and the
+  // subsequent synthetic click (always fires after touchend on iOS) is
+  // suppressed when that flag is set. Pure taps never set the flag, so
+  // the click goes through to the toggle handler. Desktop mouse clicks
+  // fire onClick directly — same toggle path, no touch involvement.
+  //
+  // Sizing: collapsed = 92vh (existing); expanded = calc(100dvh - 8px)
+  // with explicit env(safe-area-inset-bottom) padding so the iOS home
+  // indicator doesn't eat the submit button.
+  const [expanded, setExpanded] = useState(false);
   const touchStartY = useRef(null);
+  const dragHandled = useRef(false);
   const onTouchStart = (e) => {
     touchStartY.current = e.touches[0]?.clientY ?? null;
+    dragHandled.current = false;
   };
   const onTouchMove = (e) => {
     if (touchStartY.current == null) return;
     const dy = e.touches[0].clientY - touchStartY.current;
     if (dy > 80) {
       touchStartY.current = null;
+      dragHandled.current = true;
       onClose();
+    } else if (dy < -40 && !expanded) {
+      touchStartY.current = null;
+      dragHandled.current = true;
+      setExpanded(true);
     }
   };
   const onTouchEnd = () => {
     touchStartY.current = null;
+    // Don't toggle here — let the synthetic onClick fire and handle the
+    // tap. dragHandled stays set so onClick can dedupe it.
+  };
+  const onClickHandle = () => {
+    if (dragHandled.current) {
+      dragHandled.current = false;
+      return;
+    }
+    setExpanded(v => !v);
   };
 
   return (
@@ -15839,20 +17000,40 @@ function ModalShell({ C, onClose, title, children }) {
       <div className="slide-up" onClick={e => e.stopPropagation()} style={{
         background: C.paper, color: C.ink,
         width: "100%", maxWidth: 520,
-        borderRadius: "20px 20px 0 0",
-        padding: "20px 18px 28px",
-        maxHeight: "92vh", overflowY: "auto",
+        borderRadius: expanded ? "20px 20px 0 0" : "20px 20px 0 0",
+        padding: "8px 18px 0",
+        maxHeight: expanded ? "calc(100dvh - 8px)" : "92vh",
+        height: expanded ? "calc(100dvh - 8px)" : "auto",
+        transition: "max-height 0.25s ease, height 0.25s ease",
+        display: "flex", flexDirection: "column",
       }}>
-        {/* Drag handle area — listens for swipe-down to close. */}
+        {/* Drag handle — tap to expand/collapse, drag up to expand,
+            drag down to dismiss. Padding extended for a larger tap target. */}
         <div
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          style={{ display: "flex", justifyContent: "center", marginBottom: 14, paddingBottom: 6, cursor: "grab" }}
+          onClick={onClickHandle}
+          role="button"
+          aria-label={expanded ? "Collapse" : "Expand"}
+          style={{
+            display: "flex", justifyContent: "center", alignItems: "center",
+            padding: "12px 0 10px",
+            cursor: "grab", touchAction: "none",
+            flexShrink: 0,
+          }}
         >
-          <div style={{ width: 36, height: 4, background: `${C.line}33`, borderRadius: 2 }} />
+          <div style={{
+            width: 40, height: 4,
+            background: `${C.line}40`, borderRadius: 2,
+            transition: "width 0.18s ease, background 0.18s ease",
+            ...(expanded ? { width: 56, background: `${C.line}66` } : {}),
+          }} />
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          marginBottom: 18, flexShrink: 0,
+        }}>
           <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500, margin: 0, fontStyle: "italic" }}>
             {title}
           </h2>
@@ -15864,7 +17045,14 @@ function ModalShell({ C, onClose, title, children }) {
             <X size={15} />
           </button>
         </div>
-        {children}
+        <div style={{
+          flex: 1, overflowY: "auto",
+          paddingBottom: `calc(28px + env(safe-area-inset-bottom, 0px))`,
+          // Inertial scroll on iOS so the modal body feels native.
+          WebkitOverflowScrolling: "touch",
+        }}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -15970,6 +17158,36 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
   const [allocations, setAllocations] = useState({}); // { bottleId: oz }
   const [skipInventory, setSkipInventory] = useState(false);
   const [dreamFeed, setDreamFeed] = useState(false);
+  // v05.05bt57 — single-bottle (default) vs mix mode (advanced). Most feeds
+  // come from one bottle; the per-bottle stepper UI is overkill for the
+  // common case. Default to simple mode; user toggles into mix mode for
+  // splits across multiple bottles.
+  const [mixMode, setMixMode] = useState(false);
+
+  // Helper: pick a single bottle as primary, auto-overflow to others as
+  // needed. Replaces all existing allocations. Used by the simple-mode
+  // tap-to-select cards.
+  const selectSingleBottle = (bottleId) => {
+    const newAllocs = {};
+    let need = targetBmOz;
+    const chosen = availableBottles.find(b => b.id === bottleId);
+    if (chosen) {
+      const take = Math.min(chosen.oz, need);
+      if (take > 0) newAllocs[chosen.id] = Math.round(take * 10) / 10;
+      need -= take;
+    }
+    // Overflow to remaining bottles in default order (oldest first per
+    // availableBottles sort) until target is met
+    for (const b of availableBottles) {
+      if (b.id === bottleId) continue;
+      if (need <= 0.01) break;
+      const take = Math.min(b.oz, need);
+      if (take > 0) newAllocs[b.id] = Math.round(take * 10) / 10;
+      need -= take;
+    }
+    setAllocations(newAllocs);
+    setSkipInventory(false);
+  };
 
   // Available BM bottles (RT first, then fridge, both ordered oldest first)
   const usesBM = source === "BM" || source === "BM+Formula";
@@ -16070,8 +17288,8 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
       {usesBM && (
         <Field C={C} label={
           source === "BM+Formula"
-            ? `Which bottle(s) for the BM portion (${targetBmOz.toFixed(1)} oz)?`
-            : "Which bottle(s) did you use?"
+            ? `Which bottle for the BM portion (${targetBmOz.toFixed(1)} oz)?`
+            : "Which bottle did you use?"
         }>
           {availableBottles.length === 0 ? (
             <div style={{
@@ -16081,7 +17299,137 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
             }}>
               No BM bottles in inventory. The feed will be logged with a ⚠ flag — tap it later in the journal to reconcile (add the missing bottle and mark resolved).
             </div>
+          ) : !mixMode ? (
+            // ============== SIMPLE MODE (single-bottle, tap-to-select) ==============
+            // v05.05bt57: replaces the per-bottle stepper UI for the common
+            // case. Tap a bottle card → that bottle becomes the primary and
+            // we auto-overflow to others if the feed exceeds its capacity.
+            // Default selection is oldest bottle (per availableBottles sort).
+            <>
+              <div style={{ display: "grid", gap: 6 }}>
+                {availableBottles.map(b => {
+                  const usedOz = allocations[b.id] || 0;
+                  const isSelected = usedOz > 0;
+                  const pumpedAt = new Date(b.pumpedAt);
+                  const locColor = b.location === "rt" ? C.gold
+                    : b.location === "freezer" ? "#5A7E9C" : C.daddy;
+                  const locBadge = b.location === "rt" ? "RT"
+                    : b.location === "freezer" ? "Fz" : "Fr";
+                  return (
+                    <button key={b.id}
+                      onClick={() => selectSingleBottle(b.id)}
+                      style={{
+                        background: isSelected ? `${locColor}15` : C.bg,
+                        border: `1.5px solid ${isSelected ? locColor : C.line + "22"}`,
+                        borderRadius: 10, padding: "12px 14px",
+                        cursor: "pointer", textAlign: "left",
+                        display: "flex", alignItems: "center", gap: 10,
+                        fontFamily: "inherit", color: C.ink,
+                        transition: "background 0.15s ease, border 0.15s ease",
+                      }}>
+                      <span style={{
+                        width: 30, height: 30, borderRadius: "50%",
+                        background: locColor, color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      }}>{locBadge}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
+                        }}>
+                          {b.oz.toFixed(1)} oz
+                          {b.bottleLabel && (
+                            <span style={{
+                              fontSize: 12, color: locColor, marginLeft: 8,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontWeight: 700, letterSpacing: "0.04em",
+                            }}>· Bottle {b.bottleLabel}</span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: 11, color: C.muted, marginTop: 2,
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>
+                          pumped {fmtTimeShort(pumpedAt)}
+                          {" · "}
+                          {b.location === "rt"
+                            ? `expires ${fmtTimeShort(new Date(pumpedAt.getTime() + BM_RT_HOURS_HARD * 3600000))}`
+                            : b.location === "freezer"
+                              ? `freezer · ${Math.round((Date.now() - pumpedAt.getTime()) / 86400000)}d`
+                              : `fridge · ${b.remaining.toFixed(0)}h left`}
+                        </div>
+                        {isSelected && (
+                          <div style={{
+                            fontSize: 11, fontWeight: 600, marginTop: 4,
+                            color: locColor,
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}>
+                            using {usedOz.toFixed(1)} oz
+                            {usedOz < b.oz && ` · ${(b.oz - usedOz).toFixed(1)} oz remains`}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <Check size={20} color={locColor} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Status banner — only when something needs attention */}
+              {allocated > 0 && remaining > 0.05 && (
+                <div style={{
+                  marginTop: 8, padding: "8px 10px",
+                  background: `${C.gold}15`, border: `1px solid ${C.gold}55`,
+                  borderRadius: 8, fontSize: 11, color: C.ink, lineHeight: 1.4,
+                }}>
+                  <strong style={{ color: C.gold }}>Need {remaining.toFixed(1)} more oz.</strong>{" "}
+                  Already used the highlighted bottle(s) — split across more by toggling mix mode below, or pick a larger bottle above.
+                </div>
+              )}
+              {overshoot && (
+                <div style={{
+                  marginTop: 8, padding: "8px 10px",
+                  background: `${C.accent}15`, border: `1px solid ${C.accent}55`,
+                  borderRadius: 8, fontSize: 11, color: C.ink, lineHeight: 1.4,
+                }}>
+                  <strong style={{ color: C.accent }}>Over by {(allocated - targetBmOz).toFixed(1)} oz.</strong>{" "}
+                  Pick a smaller bottle or switch to mix mode for fine control.
+                </div>
+              )}
+              {/* Toggle: switch to mix mode for fine control */}
+              <button
+                onClick={() => setMixMode(true)}
+                style={{
+                  width: "100%", marginTop: 10,
+                  background: "transparent",
+                  border: `1px dashed ${C.line}33`,
+                  borderRadius: 8, padding: "8px 10px",
+                  fontSize: 11, color: C.muted, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>
+                ⇆ Mix from multiple bottles · advanced
+              </button>
+              {/* Skip-inventory option */}
+              <button
+                onClick={() => {
+                  setAllocations({});
+                  setSkipInventory(s => !s);
+                }}
+                style={{
+                  width: "100%", marginTop: 6,
+                  background: skipInventory ? `${C.muted}20` : "transparent",
+                  border: `1px ${skipInventory ? "solid" : "dashed"} ${C.muted}55`,
+                  borderRadius: 8, padding: "8px 10px",
+                  fontSize: 11, color: skipInventory ? C.ink : C.muted, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>
+                {skipInventory ? "✓ Bottle not in inventory — will log with ⚠ flag" : "Bottle not in inventory? Skip allocation"}
+              </button>
+            </>
           ) : (
+            // ============== MIX MODE (per-bottle stepper, advanced) ==============
             <>
               {/* Running total bar */}
               <div style={{
@@ -16100,8 +17448,7 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
                    "✓ matched"}
                 </span>
               </div>
-
-              {/* Per-bottle row with stepper */}
+              {/* Per-bottle stepper rows */}
               <div style={{ display: "grid", gap: 6 }}>
                 {availableBottles.map(b => {
                   const used = allocations[b.id] || 0;
@@ -16199,20 +17546,28 @@ function FeedForm({ C, lastFeed, onSubmit, liveInventory }) {
                     setSkipInventory(s => !s);
                   }}
                   style={{
-                    background: skipInventory ? `${C.accent}15` : "transparent",
-                    border: `1px ${skipInventory ? "solid" : "dashed"} ${skipInventory ? C.accent : C.line + "33"}`,
-                    borderRadius: 10,
-                    padding: "10px 12px", fontSize: 12, cursor: "pointer",
-                    color: skipInventory ? C.accent : C.muted,
-                    fontStyle: "italic",
-                    fontWeight: skipInventory ? 600 : 400,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    fontFamily: "inherit",
+                    background: skipInventory ? `${C.muted}20` : "transparent",
+                    border: `1px ${skipInventory ? "solid" : "dashed"} ${C.muted}55`,
+                    borderRadius: 8, padding: "8px 10px",
+                    fontSize: 11, color: skipInventory ? C.ink : C.muted, cursor: "pointer",
+                    fontFamily: "inherit", marginTop: 4,
                   }}>
-                  {skipInventory && <Check size={14} />}
-                  {skipInventory ? "Skipping inventory deduction" : "None of these · don't deduct from inventory"}
+                  {skipInventory ? "✓ Bottle not in inventory — will log with ⚠ flag" : "Bottle not in inventory? Skip allocation"}
                 </button>
               </div>
+              {/* Toggle back to simple */}
+              <button
+                onClick={() => setMixMode(false)}
+                style={{
+                  width: "100%", marginTop: 10,
+                  background: "transparent",
+                  border: `1px dashed ${C.line}33`,
+                  borderRadius: 8, padding: "8px 10px",
+                  fontSize: 11, color: C.muted, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>
+                ← Back to simple mode
+              </button>
             </>
           )}
         </Field>
