@@ -15,15 +15,18 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt72";
+const APP_VERSION = "2026.05.05bt75";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "BOTTLE LOGGING surfaces are visually congruent now. The LOG button → Feed form picks up the same Cancel | Log row, oz-card layout, and friendlier copy as the Now-page bottle modal. The Log button shows the current oz on it (e.g., 'Log 4.0 oz') so you can confirm the amount before tapping. All the FeedForm features (Mix split, multi-bottle allocation, Dream feed, Earlier time) are preserved — just the visual rhythm is unified.",
+  "TAKEOVER AUTO-END now fires reliably at the shift transition, including when you started covering after the natural shift handoff time. Previously the auto-end check only re-ran when the on-duty parent string changed — if you started covering when your own scheduled shift had already begun, the 30-second creation guard would block the immediate run and nothing would re-trigger it, so the 'covering' banner sat there indefinitely. Now the check polls each tick (~15s) so the banner clears and the debt logs as soon as the conditions allow.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt75", summary: "Bug fix on takeover auto-end-at-shift-boundary effect (originally bt35). Root cause: dep array was [hydrated, takeover, baseOnDuty.parent] — only re-ran when one of those three references changed. The 30-second creation-tick guard correctly blocks the very-first run (so a takeover started right at handoff doesn't instantly auto-end before the user can see it), but if a user creates a takeover AFTER baseOnDuty has already crossed onto them (e.g., Mommy taps 'I'm covering Daddy' at 8pm even though her own shift started at 7pm), no subsequent dep change exists to re-trigger the effect after the 30s expires. Result: the takeover banner persisted with no auto-end, and the debt didn't log until the user manually 'Take back'-ed. Fix: add `now` (the rolling clock state, ticking every 15s) to the dep array. Effect now polls each tick and fires within ~15s of all conditions being met. The other guards (hydrated, takeover existence, baseOnDuty.parent === coveringParent, ageMs >= 30s) still protect against double-fire / premature-fire — adding `now` just unblocks the missed-tick case. Same semantics: time bank gets the owed transaction, journal gets a takeover event with autoEnded: true, banner clears on next render. Verified with the same logic for both Mommy-covers-Daddy and Daddy-covers-Mommy directions." },
+  { version: "2026.05.05bt74", summary: "Pump-end crash fix — three-layer defense. ROOT CAUSE: BigOzPicker → BigNumberPicker had `onChange={e => onChange(e.target.value)}` for its text input, which always emits a string. If the user typed into the input rather than tapping +/−/presets, oz state became a string ('4'). FinishPumpModal submitted that string. addEvent stored bottle.oz as 'string' in inventory. MilkPanel's lastPumpedItem render then called `lastPumpedItem.oz.toFixed(1)` → TypeError: oz.toFixed is not a function → render crash → app unmount. The pump event itself WAS successfully written to events/journal, but the simultaneous bad-inventory crash made it look like nothing logged. FIX (1): BigNumberPicker now has an internal `emit(raw)` helper that coerces every onChange via Number() with isFinite check + max(0). All four call sites (− button, text input, + button, presets) route through emit, so no caller can sneak a string out. FIX (2): addEvent's pump→inventory branch coerces ev.oz to Number with finite/positive guard before writing the bottle. Skip the write entirely if the oz can't be coerced to a positive number (defensive — doesn't lose the event but prevents bad inventory). FIX (3): MilkPanel's lastPumpedItem render uses `Number(lastPumpedItem.oz || 0).toFixed(1)` so any pre-existing string-oz bottle from before this fix renders without crashing — gives the user a chance to delete or edit the bad bottle without being locked out of the home tab." },
+  { version: "2026.05.05bt73", summary: "Bug fix: '+ Add a bottle to {location}' button on UseBottleModal empty-state was losing the location context. The handler comment claimed 'with location preset' but the code just called setEditingBottleId('__new__') without passing the location anywhere. EditBottleModal in ADD mode unconditionally defaulted to loc='rt'. Result: tapping '+ Add to fridge' opened the modal pre-selected to RT — if the user tapped Add Bottle without manually changing the location, the bottle landed in RT instead of fridge, making it look like the add silently failed. Fix: new App-level state newBottleLocation captures the location passed to onAddBottle. EditBottleModal accepts a presetLocation prop and uses it as the loc state initial value when isAdd. State is cleared on save and on close. Existing flows (InventoryView '+ Add a bottle (manual entry)' button, which doesn't have a preset location) continue to default to RT as before." },
   { version: "2026.05.05bt72", summary: "Hybrid bottle-logging style — keep FeedForm's full feature set, adopt UseBottleModal's visual language. (1) FeedForm gets a Cancel | Log row at bottom (1fr 1.6fr grid) replacing the lone Submit button. Cancel is a secondary outlined button calling onCancel (passed as onClose from LogPickerSheet); Log is the primary gold submit and now displays the current oz on its label ('Log 4.0 oz'). When canSubmit is false (overshoot), Log still shows 'Over by X oz' but Cancel stays live so the user can bail without overshoot interaction. (2) Volume label friendlier — 'Volume (oz)' → 'How much oz?' to match the Now-page modal's tone. (3) UseBottleModal use-mode also gets a Cancel | Log row alongside the inline 'partial? __ oz' adjuster, so the two surfaces share the same action-row pattern. The action rows, oz cards, source pills, and section eyebrows all read the same now regardless of how feed logging is reached." },
   { version: "2026.05.05bt71", summary: "Two changes. (1) Diaper poo-size picker becomes three-way: 'tiny' (gold), 'regular' (daddy slate), 'lots' (#8A4A35 warm rust). 3-column grid, 13px label, 12px vertical padding. Submit handler unchanged — pooSize is just one of three string values now ('tiny' | 'regular' | 'lots'). Both label sites (TimelineEvent rhythm + LogView journal) updated: 'lots' → ' 💩💩💩', 'tiny' → ' · tiny', regular has no annotation. Old events without pooSize stay neutral. (2) ModalShell swipe-down behavior: threshold lowered from 80 to 50 px (more responsive), and swipe-down is now two-stage. When expanded: swipe-down → setExpanded(false) (collapse to default height). When collapsed: swipe-down → onClose() (dismiss). Same dragHandled ref still dedupes the synthetic click. Up-drag threshold preserved at 40 px. The handle is the only touchable area, but with the lower threshold and two-stage flow the handle interaction is closer to native bottom-sheet ergonomics." },
   { version: "2026.05.05bt70", summary: "DiaperForm gains pooSize quick toggle. New state pooSize ('regular' | 'lots') defaulting to 'regular'. Conditional Field 'How much?' renders only when kind is 'dirty' or 'both', with two big side-by-side buttons: '💩 Regular' (daddy slate-blue when active) and '💩💩💩 Lots!' (warm rust #8A4A35 when active, bold weight). Submitted event carries pooSize: 'regular'/'lots' (or undefined for pee-only). Two label sites updated to surface the lots case: TimelineEvent (Today's rhythm) appends ' 💩💩💩' when ev.pooSize === 'lots'; LogView (journal tab) does the same on its diaper row. Fully backward-compatible with old diaper events that lack pooSize — those just don't show the appendix." },
@@ -2131,6 +2134,12 @@ function SoleneHandoffInner() {
   const [showFinishPump, setShowFinishPump] = useState(false);
   const [bottlePickerLoc, setBottlePickerLoc] = useState(null); // 'rt' | 'fridge' | null
   const [editingBottleId, setEditingBottleId] = useState(null);
+  // v05.05bt73: preset location for ADD-mode of EditBottleModal. Set when
+  // the user taps "+ Add a bottle to fridge/freezer" in UseBottleModal —
+  // without this, the EditBottleModal defaulted to RT regardless, so a
+  // user clicking "+ Add to fridge" would add to RT and the fridge would
+  // still appear empty. Cleared on save/cancel.
+  const [newBottleLocation, setNewBottleLocation] = useState(null);
   // Track previous on-duty parent so we can prompt at handoff
   const prevOnDutyRef = useRef(null);
   const [showHandoffPrompt, setShowHandoffPrompt] = useState(false);
@@ -2984,14 +2993,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     }
     // Only add to inventory when the pump session has ENDED (mode==="end" OR no mode set).
     // The "start" mode doesn't have oz to record yet.
+    // v05.05bt74: coerce ev.oz to Number defensively. If a caller (form
+    // input, sync payload, bulk import) passed a string, we'd otherwise
+    // store oz: "4" in inventory and crash the next render that called
+    // .toFixed() on it. Number() on undefined/null/NaN gives NaN, which
+    // we coerce to 0 just to be safe — though the outer guard `ev.oz`
+    // already filters falsy values out.
     if (ev.type === "pump" && ev.oz && ev.mode !== "start") {
-      setInventory(prev => [...prev, {
-        id: crypto.randomUUID(),
-        oz: ev.oz,
-        pumpedAt: tsISO,
-        location: ev.location || "rt",
-        bottleLabel: ev.bottleLabel || null,
-      }]);
+      const ozNum = Number(ev.oz);
+      const safeOz = Number.isFinite(ozNum) && ozNum > 0 ? ozNum : 0;
+      if (safeOz > 0) {
+        setInventory(prev => [...prev, {
+          id: crypto.randomUUID(),
+          oz: safeOz,
+          pumpedAt: tsISO,
+          location: ev.location || "rt",
+          bottleLabel: ev.bottleLabel || null,
+        }]);
+      }
     }
     setShowLogger(false);
     setLoggerType(null);
@@ -4465,6 +4484,16 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // minutes to the time bank, log a journal entry, clear takeover. Same
   // semantics as the user pressing "Take back" / "I'm done covering",
   // just triggered automatically when the schedule catches up.
+  //
+  // v05.05bt75 — `now` added to deps. Previously this effect only re-ran
+  // when baseOnDuty.parent or takeover changed. If the takeover was
+  // created AFTER baseOnDuty had already crossed onto the covering parent
+  // (e.g., Mommy taps "I'm covering Daddy" at 8pm even though her shift
+  // started at 7pm), the 30s creation guard would block the immediate
+  // run, then no dep change would re-trigger the effect — so the takeover
+  // sat there indefinitely with the banner stuck on. Including `now`
+  // means the effect re-checks every 15s tick and fires as soon as the
+  // 30s guard releases. Same logic, just polls.
   useEffect(() => {
     if (!hydrated) return;
     if (!takeover) return;
@@ -4503,7 +4532,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       originalParent: takeover.originalParent,
       autoEnded: true,
     });
-  }, [hydrated, takeover, baseOnDuty.parent]);
+  }, [hydrated, takeover, baseOnDuty.parent, now]);
 
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
@@ -6215,9 +6244,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setBottlePickerLoc(null);
           }}
           onAddBottle={(location) => {
-            // Open Edit-bottle modal in ADD mode, with location preset.
-            // Use a special flag the modal will read.
+            // v05.05bt73: preserve the location so EditBottleModal opens
+            // pre-selected to where the user clicked "+ Add a bottle to ___".
+            // Otherwise the modal defaulted to RT and a "+ Add to fridge" tap
+            // silently dropped the bottle into RT.
             setBottlePickerLoc(null);
+            setNewBottleLocation(location || null);
             setEditingBottleId("__new__");
           }}
           onLogAnyway={({ oz, source }) => {
@@ -6247,11 +6279,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           <EditBottleModal
             C={C}
             bottle={bottle}
-            onClose={() => setEditingBottleId(null)}
+            presetLocation={isNew ? newBottleLocation : null}
+            onClose={() => { setEditingBottleId(null); setNewBottleLocation(null); }}
             onSave={(updates) => {
               if (isNew) {
-                // Create a new bottle from the form values. Default to RT
-                // location and now timestamp if not specified by the form.
                 setInventory(prev => [...prev, {
                   id: crypto.randomUUID(),
                   oz: updates.oz || 0,
@@ -6263,6 +6294,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 setInventory(prev => prev.map(b => b.id === editingBottleId ? { ...b, ...updates } : b));
               }
               setEditingBottleId(null);
+              setNewBottleLocation(null);
             }}
           />
         );
@@ -6811,12 +6843,15 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
   );
 }
 
-function EditBottleModal({ C, bottle, onClose, onSave }) {
+function EditBottleModal({ C, bottle, presetLocation, onClose, onSave }) {
   // bottle === null → ADD mode (manual new bottle entry)
   // bottle !== null → EDIT mode (correct existing bottle's values)
   const isAdd = !bottle;
   const [oz, setOz] = useState(isAdd ? 4 : bottle.oz);
-  const [loc, setLoc] = useState(isAdd ? "rt" : bottle.location);
+  // v05.05bt73: in ADD mode, honor presetLocation if passed (e.g., the
+  // user tapped "+ Add a bottle to fridge" — modal opens with fridge
+  // pre-selected). Falls back to "rt" only when no preset given.
+  const [loc, setLoc] = useState(isAdd ? (presetLocation || "rt") : bottle.location);
   const [pumpedAtLocal, setPumpedAtLocal] = useState(() => {
     const d = isAdd ? new Date() : new Date(bottle.pumpedAt);
     return safeDatetimeLocal(d);
@@ -9639,7 +9674,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
               Last bottle pumped
             </div>
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, color: C.ink, lineHeight: 1.1 }}>
-              {lastPumpedItem.oz.toFixed(1)} oz <span style={{ color: C.muted, fontSize: 14, fontStyle: "italic" }}>· {lastPumpedItem.location === "rt" ? "room temp" : "fridge"}</span>
+              {Number(lastPumpedItem.oz || 0).toFixed(1)} oz <span style={{ color: C.muted, fontSize: 14, fontStyle: "italic" }}>· {lastPumpedItem.location === "rt" ? "room temp" : "fridge"}</span>
             </div>
             <div style={{
               fontSize: 12, color: lastPumpedItem.expiryUrgent ? C.accent : C.muted,
@@ -22317,20 +22352,29 @@ function BigOzPicker({ C, value, onChange }) {
 }
 
 function BigNumberPicker({ C, value, onChange, step = 1, presets = [], unit = "" }) {
+  // v05.05bt74 — coerce all onChange emissions to Number. Previously the
+  // text-input path passed e.target.value (a string), which contaminated
+  // downstream consumers (e.g. inventory bottle.oz became "4" instead
+  // of 4, then any .toFixed() call on it threw and crashed the render).
+  // Floor at 0 also lives here — never emit a negative.
+  const emit = (raw) => {
+    const n = Number(raw);
+    onChange(Number.isFinite(n) ? Math.max(0, n) : 0);
+  };
   return (
     <div>
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
         background: `${C.line}08`, borderRadius: 12, padding: "12px 14px", marginBottom: 6,
       }}>
-        <button onClick={() => onChange(Math.max(0, Number(value) - step))} style={{
+        <button onClick={() => emit(Number(value) - step)} style={{
           background: C.paper, border: `1px solid ${C.line}22`, borderRadius: "50%",
           width: 38, height: 38, fontSize: 18, cursor: "pointer", color: C.ink,
         }}>−</button>
         <div style={{ flex: 1, textAlign: "center" }}>
           <input
             type="number" value={value}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => emit(e.target.value)}
             step={step} inputMode="decimal"
             style={{
               fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 500,
@@ -22340,7 +22384,7 @@ function BigNumberPicker({ C, value, onChange, step = 1, presets = [], unit = ""
           />
           <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.2em" }}>{unit}</div>
         </div>
-        <button onClick={() => onChange(Number(value) + step)} style={{
+        <button onClick={() => emit(Number(value) + step)} style={{
           background: C.paper, border: `1px solid ${C.line}22`, borderRadius: "50%",
           width: 38, height: 38, fontSize: 18, cursor: "pointer", color: C.ink,
         }}>+</button>
@@ -22348,7 +22392,7 @@ function BigNumberPicker({ C, value, onChange, step = 1, presets = [], unit = ""
       {presets.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${presets.length}, 1fr)`, gap: 4 }}>
           {presets.map(p => (
-            <button key={p} onClick={() => onChange(p)} style={{
+            <button key={p} onClick={() => emit(p)} style={{
               background: Number(value) === p ? C.ink : "transparent",
               color: Number(value) === p ? C.paper : C.muted,
               border: `1px solid ${C.line}22`,
