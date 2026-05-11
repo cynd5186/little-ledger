@@ -15,15 +15,29 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt75";
+const APP_VERSION = "2026.05.05bt89";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "TAKEOVER AUTO-END now fires reliably at the shift transition, including when you started covering after the natural shift handoff time. Previously the auto-end check only re-ran when the on-duty parent string changed — if you started covering when your own scheduled shift had already begun, the 30-second creation guard would block the immediate run and nothing would re-trigger it, so the 'covering' banner sat there indefinitely. Now the check polls each tick (~15s) so the banner clears and the debt logs as soon as the conditions allow.",
+  "EDIT FEED → ADD BOTTLE LABEL. The feed edit modal now has a 'Bottle label (optional)' field, same shape as the pump-event field. Useful for attributing a feed to a specific bottle (A/B/1/2/etc) after the fact — works whether the inventory-mismatch flag is still active or already resolved. Field is independent of the 'Mark resolved' button so you can add a label while keeping the warning if you want.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt89", summary: "EditEventModal feed section gains bottle-label field. New feedBottleLabel state, initialized from event.bottleLabel || ''. Rendered as a 4-char uppercase mono input below the Source SegControl, mirroring the pump-event bottle-label input added in bt22. Submit handler now sets updated.bottleLabel = feedBottleLabel.trim() || null on feed events (previously feed save only persisted oz + source). Helper text under the field: 'Attribute this feed to a specific bottle. Helps after-the-fact reconciliation.' Independent of the inventoryReconcileNeeded resolution flow — user can add a label without clearing the flag (useful when they want to note the attribution but haven't fully fixed the inventory mismatch), or clear the flag without adding a label (existing flow), or do both. The feedBottleSuffix helper at line ~985 already reads event.bottleLabel for display, so adding the label propagates to the timeline and journal renders automatically. No DB migration needed — feeds without bottleLabel just see the input as empty placeholder." },
+  { version: "2026.05.05bt88", summary: "Pump plan auto-seed fix. Follow-up to bt87 which wired the Now-page pump tile color to pumpPlan.manualSessions but missed that manualSessions was only populated when the user interacted with the TodaysPumpPlanCard (add/remove/edit). In the more common case where the user never tapped into the card, manualSessions stayed [] all day and the App-level nextPumpAt useMemo fell back to the interval-based estimate. The card UI itself looked correct because it derives autoSpaced for display, but that derivation wasn't persisted. FIX: new useEffect inside TodaysPumpPlanCard that watches pumpPlan.manualSessions + autoSpaced + todayKey. When manualSessions is empty AND autoSpaced has entries AND we're on today, setPumpPlan(p => ({...p, manualSessions: autoSpaced, manualSessionsDate: todayKey})). Runs after first render once doneSessions stabilizes. After this seed, all downstream consumers (Now-page tile via App's nextPumpAt useMemo, bt80 auto-shift effect, bt87 missed-pump detector) see the same plan. lastDoneCountRef guards in bt80 still prevent spurious shifts on initial mount with existing done events." },
+  { version: "2026.05.05bt87", summary: "Three coordinated changes per chat. (1) PUMP TILE color (red/yellow/green) on Now page now derives from the pump plan's next planned session, not from PUMP_INTERVAL_HRS-based estimate. New nextPumpAt useMemo: if pumpPlan.manualSessions exists and is non-empty, take the sorted first entry as the next planned fractional hour, convert to a Date (handling overnight slots where frac >= 24 means next day's clock), return as the tile's reference time. The existing minsToNextPump / pumpSoon / pumpOverdue logic in MilkPanel works unchanged on top of this — it just gets the planned time instead of the interval estimate. Fallback to lastPump.start + PUMP_INTERVAL_HRS preserved for initial state / no-plan situations. (2) MISSED-PUMP DETECTION & AUTO-ADJUST. New useEffect inside TodaysPumpPlanCard that runs each clock tick. Computes elapsedH = nowH - firstPlannedH (handling overnight wrap). If elapsedH >= 1 AND no logged pump within ±1hr of the planned time, the session is 'missed' — the entry is dropped from manualSessions and all remaining entries shift forward by elapsedH so frequency / daily target stay intact. Distinct from the bt80 auto-shift effect which only fires on new-pump-logged events (this one fires from the time-passes side). Console.log records the adjustment for diagnostics. (3) PROFILE SWITCHER hardening. New showAdvanced useState in ProfileSwitcherModal (default false). The DEV section (time-travel, clear stuck pump, reset bedtime, sound toggle) and Danger zone (reset all data) are now wrapped in a fragment that only renders when showAdvanced is true. Otherwise a single muted 'advanced settings ▸' button shows at the bottom of the modal; tapping it reveals the wrapped sections, and a 'hide' button collapses them again. Casual scrolling can no longer accidentally trigger destructive actions." },
+  { version: "2026.05.05bt86", summary: "Shift handoff confirmation system added per chat. Solves the scenario: 'My partner went on an errand during my shift but stayed gone longer than expected — I didn't realize I was covering for him.' New App-level state shiftHandoff = { scheduledAt, fromParent, toParent, status: 'pending'|'confirmed-on-duty'|'confirmed-covering'|'auto-takeover', confirmedBy: 'Mommy'|'Daddy'|'auto', confirmedAt } persisted to localStorage + cloud-synced via cloudKeySetters['solene:shiftHandoff']. TWO EFFECTS: (A) Transition detection: useEffect watches baseOnDuty.parent. On first mount, just records current value into lastOnDutyParentRef without firing. On subsequent changes, creates a pending shiftHandoff record. Skips if an active takeover already covers this direction. (B) Auto-takeover after grace: useEffect watches shiftHandoff + now. If status === 'pending' AND no current takeover AND age >= 5 min, fires setTakeover with coveringParent=fromParent (outgoing), originalParent=toParent (no-show), startedAt=scheduledAt (NOT now — credit from scheduled time so the full window is logged). Updates handoff.status to 'auto-takeover' with confirmedBy: 'auto'. BANNER: new ShiftHandoffBanner component renders above OnDutyCard for both pending and recently-confirmed handoffs (30s acknowledgment window). Pending state: two big buttons '✓ {incoming} is on duty' (mauve/slate by side) and '✗ {outgoing} is covering' (terracotta outlined). Auto-takeover countdown shown bottom in mono ('Auto-takeover in M:SS if no confirmation'). Visual urgency ramps: <2min calm gold, 2–4min elevated terracotta-tinted, >4min urgent (heavier border + box-shadow pulse animation). Confirmed state: small acknowledgment row with sage/terracotta tone showing label + 'confirmed by {currentUser or system} at {time}' on the right. Per user prefs: appears at handoff time (not before), persistent reminders via urgency ramp, either parent can confirm, attribution visible, 5-min grace. Per-day reset implicit: shiftHandoff only tracks one pending at a time; auto-cleared 30s after resolution. KNOWN LIMITATION (v1): if app is closed during a transition and reopened, the change-detection ref initializes to the current parent and no transition is recorded. Workaround would require comparing past shift schedule to current state on mount — deferred." },
+  { version: "2026.05.05bt85", summary: "Pump tile chooser gains 'Just log a pump' option. New onJustLogPump prop on MilkPanel (default undefined). When present, the PumpChooser modal renders a third button below Standard and Power options with a muted-tone styling (vs mauve/gold for the two active-timer paths). Tapping closes the chooser and invokes onJustLogPump, which is wired from OnDutyCard as `onQuickLog ? () => onQuickLog('pump') : undefined`. onQuickLog routes through the existing App-level setLoggerType('pump') + setShowLogger(true) → LogPickerSheet → PumpForm flow which lets the user pick mode (end/start), time, duration, oz, location, label. No new modal needed since PumpForm already supports backdate via customTime. Useful when the user pumped without using the active-timer flow (out and about, used a different pump, forgot to tap start)." },
+  { version: "2026.05.05bt84", summary: "Defensive fix for reported inventory wipe after pump-end. User's symptom: pumping completes, the new bottle gets added, but other bottles in inventory disappear. Root-cause hypothesis (not 100% reproducible from code review alone): a cloud poll racing with the pump-end transaction. The pump-end handler pauses cloud WRITES via cloudWritePaused but cloud READS (polls every 5s) still fire. If the poll fires within the ~500ms transaction window AND cloud's serverTs has advanced (e.g., another device pushed during this period), the poll re-fetches all keys including inventory and applies cloud's value via cloudKeySetters['solene:inventory']. If cloud's snapshot at that moment is stale or wiped (different device race condition, transient state), setInventory([...stale]) overwrites the local good state. Then addEvent's functional setInventory(prev => [...prev, newBottle]) appends to the already-wiped state, producing [newBottle] alone. TWO DEFENSES: (1) addEvent's pump-inventory append now writes localStorage synchronously inside the functional updater (matches the pattern for solene:events at line ~3098 which has had this since bt22), and also writes solene:inventory:backup with prev for forensic recovery. So the bottle is durable to disk before any subsequent state-clobbering can happen. (2) cloudKeySetters['solene:inventory'] now wraps setInventory in a functional updater that refuses two regression patterns: (a) prev.length > 0 && incoming.length === 0 (cloud wipe while local has data), and (b) prev.length >= 3 && incoming.length <= prev.length - 3 (catastrophic shrinkage of 3+ items). Both log warnings to console for diagnostics. The threshold (3 items / non-empty-to-empty) is calibrated to catch the bug pattern while permitting normal multi-bottle drains via feed events (which originate from this same device so by the time autosave fires, local IS the source of truth). Note: defense (2) is a guard, not a guarantee — if the user genuinely wipes inventory on another device, they may need to manually reset on the affected device. Console warnings make it diagnosable when it triggers." },
+  { version: "2026.05.05bt83", summary: "InventoryView surfaces expired bottles in their own section instead of silently filtering them. Root cause of the user's 'add a bottle and it doesn't appear' report: backdating an entry past the storage location's safe window (BM_RT_HOURS=4, BM_FRIDGE_HOURS=96, BM_FREEZER_HOURS=~6months) marks it expired:true in liveInventory, and the InventoryView render only mapped `valid = inventory.filter(i => !i.expired)`. So a user picking '1wk' from the bt77 backdate presets while adding to fridge would correctly land the bottle in inventory state but never see it in the list — looking like the save failed. Fix: render an additional section below `valid` titled '⚠ past safe window (N)' with the expired bottles. Each row uses the same InventoryRow component with 0.85 opacity and explanatory copy: 'These bottles are past their safe window for their storage location. Tap to edit (fix the time / move to freezer) or remove.' onMoveToFridge prop omitted in expired rows since moving an expired bottle to fridge doesn't make it safer; user is expected to edit (correct timestamp / move to freezer where the longer window may apply) or remove. Doesn't change the underlying inventory state or expiration math — just makes the existing bottles visible." },
+  { version: "2026.05.05bt82", summary: "Recovery mode auto-trigger added. Per user direction to reduce decision fatigue (and explicit 'forget the positioning app, I would rather reduce decision fatigue'), the opt-in-only model from bt81 is now auto-on by default. New pumpPlan.autoRecoveryEnabled (default true; toggle in settings drawer). Inside TodaysPumpPlanCard a new useEffect derives lastPumpEvent from events (latest non-start pump), computes nextDue = lastTs + PUMP_INTERVAL_HRS hours, and if hoursOverdue >= 5 AND recovery isn't already active AND autoRecoveryEnabled, activates recovery mode with autoTriggered: true and triggerReason: 'X.Xhr gap' attached to the recoveryMode object. The banner at the top of the card now shows an italic 'Auto-started after Xhr gap. End if not needed.' line when autoTriggered, distinguishing manual vs auto activation. Manual 'Start recovery mode' button preserved for cases where user anticipates being unable to pump (proactive activation before the gap occurs). Same 3-day duration, same protocol reminders, same end/extend controls. Auto-end after 3 days unchanged. Auto-clear takeover (bt75), auto-clear activePump (bt76), auto-shift pump plan (bt80) — all already automatic. Bottle picking already smart-picks oldest. Things that still require user judgment: meeting acceptance, takeover decisions, fresh-bottle (not-in-inventory) flag, target oz override. These are domain decisions the app can't make without losing accuracy." },
+  { version: "2026.05.05bt81", summary: "Recovery mode added to TodaysPumpPlanCard — supply protection panic flow for after long pump gaps (e.g. the 12-hour gap discussed in chat). New pumpPlan field recoveryMode = { active, startedAt, days }. Activated via dashed-accent button ('🚨 Long gap? Start recovery mode') that expands to a confirm panel describing the activation effect before flipping the flag. When active: (1) baseTargetSessions += 1 so autoSpaced generates tighter cadence; (2) autoSpaced appends an overnight slot at frac 26.0 (2am next day) on top of in-window distribution; (3) on activation, manualSessions cleared and manualSessionsDate set to todayKey so autoSpaced regenerates immediately; (4) terracotta banner at top of card with 'day X of N' counter, protocol reminders (long sessions 25-30 min, hand-express 2-3 min after, hydrate + eat, watch plugged ducts/mastitis signs), two actions: 'end' (clears active flag) and '+ Extend 1 day' (bumps days). Auto-deactivates via useEffect when elapsedMs >= days × 86400000. Default duration 3 days. Not autotrigger-based — explicit opt-in matches the positioning doc's anti-nag philosophy." },
+  { version: "2026.05.05bt80", summary: "TodaysPumpPlanCard rewritten end-to-end (~436 lines replaced) per user feedback that the bt79 horizontal-timeline + 'X oz per remaining session' framing was wrong. Biology correction: breasts don't compensate by pumping more next session; daily output is governed by drainage frequency, not per-session volume. KEY CHANGES: (1) LISTED FORMAT — vertical rows like ShiftListGrid, no more horizontal timeline. Each row: 70px mono time column, status dot (filled mauve = done, outlined mauve = upcoming), oz/status text + circadian emoji+label tag, × remove button. Tap time on upcoming row to edit (HH:MM input, blur commits). (2) FREQUENCY FRAMING — header reads 'X of N pumped' + 'target Y oz/day' + '~Zh between'. No 'oz to go' or 'oz per remaining session' anywhere. (3) TARGET DERIVATION — solèneAvgIntake from feed events (3-day average, fallback 24 oz) + bagBuffer × 4 oz (configurable 0/1/2/3, default 1). avgYieldPerPump from last 7 days of pump events (fallback 4). targetSessions = max(5, ceil(target/avgYield)). (4) AUTO-SHIFT — useEffect on doneSessions watches for new pump logs. lastDoneCountRef tracks processed count to avoid initial-mount false fires. When a new done pump matches a manualSessions entry within ±1hr, computes delta = actual - planned. If delta < 20min, just removes the matched entry (on-time completion). If delta ≥ 20min and shifted last upcoming would not exceed wakeEnd, applies shift silently. If would exceed, populates overrunPrompt state which renders four-option choice card: shift forward / compress / drop / keep. (5) DAY WINDOW — wakeStart/wakeEnd persist in pumpPlan, editable in settings panel. Manual overnight pumps full citizens — '+ Overnight 🌙' button suggests 1am next-day (frac 25). (6) SETTINGS DRAWER — collapsible at bottom shows day window editor + bag-buffer SegControl + math footnote. (7) DROPPED — power pump advisory entirely, horizontal timeline, oz-per-session math." },
+  { version: "2026.05.05bt79", summary: "SundayRoutineCard gains actual-wake override. New actualWakeMin state in the card (default null = use natural schedule where parent wake = babyWakeMin - totalAlone). When set: each parent's wakeMin becomes the actual value; if availableMin (= babyWakeMin - actualWakeMin) is less than totalAlone, alone-time blocks compress proportionally with compressionRatio = max(0, available)/totalAlone applied via Math.max(1, round(c.dur * ratio)) per block (1-min floor so blocks don't disappear). Compression warnings collected per-parent into compressionWarnings array, surfaced in a terracotta-tinted banner above the filter chips: 'Mommy's alone-time cut by 23min (68% of normal duration)' with a footnote about finishing before Solène's wake. Input is a native <input type='time'> styled with mono fontFamily and JetBrains Mono digits, gold-tinted background when set. Reset button clears actualWakeMin and reverts to natural schedule. The pump-plan card discussed in chat remains a separate ship — this build covers the routine-side wake adjustment only, addressing the user's request that 'even with routine schedule then I should be able to put in actual wake up time and schedule adjust to that and try to cut this to make it out the door in time.'" },
+  { version: "2026.05.05bt78", summary: "DailyBurnHistoryCard added to Milk tab (Mommy-only via currentUser === 'Mommy' gate). New component below PumpGoalsCard. Computes last 7 days of calories burned using same formula as the running todayCalories useMemo (pump oz × KCAL_PER_OZ_BM + breastfeed totalDurationMin × KCAL_PER_BF_MINUTE). Visual: 7-column horizontal bar chart, peak-of-window scaling so the tallest day is 100%, today differentiated by solid mauve gradient + bold mono labels, prior days at mauve55 translucent. Each column has kcal value on top and day-of-week letter (S/M/T/W/T/F/S) on bottom. Footer shows 7-day total + 6-day average (today excluded since partial). Empty days show '·' to keep grid alignment. Anti-gamification design choices: no progress bar to a target, no streak indicators, no 'up X% vs last week' framing, no badges, no 'days at target' count. Footer copy explicitly frames this as fueling data ('Use this to fuel — eat more on big-burn days') rather than achievement-tracking. Implements user request from chat with placement reasoning: not in journal (journal is for events, not aggregates), not Daddy-visible (it's her body data)." },
+  { version: "2026.05.05bt77", summary: "Two related additions to the milk-inventory experience. (1) FREEZER BACKDATING. EditBottleModal pumpedAt field gets a 5-chip preset row above the datetime-local input — Now / Yesterday / 3d / 1wk / 2wk. Each chip subtracts the labeled days from now while preserving the user's currently-picked time-of-day, so the circadian classification stays meaningful as you backdate. The native datetime picker remains for finer adjustment. Below the input a live readout shows the circadian milk type derived from the timestamp. (2) CIRCADIAN MILK INDICATORS. New module-scope `circadianMilkType(pumpedAt)` helper returns { type, emoji, label, color, note } based on the pump's hour-of-day, bucketed into night (21:00–04:59, deep mauve, high melatonin/calming), evening (17:00–20:59, dusk mauve, rising melatonin), morning (05:00–09:59, gold, high cortisol/alerting), and day (10:00–16:59, neutral, mixed). Wired into three render sites: InventoryRow (Milk tab inventory list, the always-on display), the FeedForm bottle-picker cards (when picking which bottle to feed from), and UseBottleModal bottle list (Now-page picker). Each badge appends to the existing pumped-time caption with the emoji + type and the note as a hover/title tooltip. Helps the parent bias nighttime feeds toward 🌙 bottles. Backed by Cubero et al. 2005 / Sánchez et al. 2009 / chrononutrition lit; surface-only, no therapeutic claims." },
+  { version: "2026.05.05bt76", summary: "Defensive auto-clear of stale activePump. Symptom: pump tile stays in 'Pumping now' mauve state after the user has ended and logged a pump session. Root cause: activePump only clears via setActivePump(null) inside FinishPumpModal.onSubmit. Multiple paths can leave it stuck — (1) cloud poll re-pulling old activePump from cloud within the same tick before the bt34 force-push fires, (2) modal dismissed via the bt71 swipe-down without tapping Save, (3) submit handler crash before storage.set sync, (4) bulk import where events get restored before activePump null. Fix: new useEffect at App level watching [events, activePump]. If activePump is set AND there's a logged pump event in events whose ts is within ±60s of activePump.startedAt, the pump is already recorded and activePump is auto-cleared. Runs each time events or activePump change. The pump tile in MilkPanel reads activePump directly via prop, so as soon as it goes null, stateColor falls through to pumpOverdue/pumpSoon/onSchedule and the tile renders sage green again. No effect on the active session itself — only fires after the matching event has already been written." },
   { version: "2026.05.05bt75", summary: "Bug fix on takeover auto-end-at-shift-boundary effect (originally bt35). Root cause: dep array was [hydrated, takeover, baseOnDuty.parent] — only re-ran when one of those three references changed. The 30-second creation-tick guard correctly blocks the very-first run (so a takeover started right at handoff doesn't instantly auto-end before the user can see it), but if a user creates a takeover AFTER baseOnDuty has already crossed onto them (e.g., Mommy taps 'I'm covering Daddy' at 8pm even though her own shift started at 7pm), no subsequent dep change exists to re-trigger the effect after the 30s expires. Result: the takeover banner persisted with no auto-end, and the debt didn't log until the user manually 'Take back'-ed. Fix: add `now` (the rolling clock state, ticking every 15s) to the dep array. Effect now polls each tick and fires within ~15s of all conditions being met. The other guards (hydrated, takeover existence, baseOnDuty.parent === coveringParent, ageMs >= 30s) still protect against double-fire / premature-fire — adding `now` just unblocks the missed-tick case. Same semantics: time bank gets the owed transaction, journal gets a takeover event with autoEnded: true, banner clears on next render. Verified with the same logic for both Mommy-covers-Daddy and Daddy-covers-Mommy directions." },
   { version: "2026.05.05bt74", summary: "Pump-end crash fix — three-layer defense. ROOT CAUSE: BigOzPicker → BigNumberPicker had `onChange={e => onChange(e.target.value)}` for its text input, which always emits a string. If the user typed into the input rather than tapping +/−/presets, oz state became a string ('4'). FinishPumpModal submitted that string. addEvent stored bottle.oz as 'string' in inventory. MilkPanel's lastPumpedItem render then called `lastPumpedItem.oz.toFixed(1)` → TypeError: oz.toFixed is not a function → render crash → app unmount. The pump event itself WAS successfully written to events/journal, but the simultaneous bad-inventory crash made it look like nothing logged. FIX (1): BigNumberPicker now has an internal `emit(raw)` helper that coerces every onChange via Number() with isFinite check + max(0). All four call sites (− button, text input, + button, presets) route through emit, so no caller can sneak a string out. FIX (2): addEvent's pump→inventory branch coerces ev.oz to Number with finite/positive guard before writing the bottle. Skip the write entirely if the oz can't be coerced to a positive number (defensive — doesn't lose the event but prevents bad inventory). FIX (3): MilkPanel's lastPumpedItem render uses `Number(lastPumpedItem.oz || 0).toFixed(1)` so any pre-existing string-oz bottle from before this fix renders without crashing — gives the user a chance to delete or edit the bad bottle without being locked out of the home tab." },
   { version: "2026.05.05bt73", summary: "Bug fix: '+ Add a bottle to {location}' button on UseBottleModal empty-state was losing the location context. The handler comment claimed 'with location preset' but the code just called setEditingBottleId('__new__') without passing the location anywhere. EditBottleModal in ADD mode unconditionally defaulted to loc='rt'. Result: tapping '+ Add to fridge' opened the modal pre-selected to RT — if the user tapped Add Bottle without manually changing the location, the bottle landed in RT instead of fridge, making it look like the add silently failed. Fix: new App-level state newBottleLocation captures the location passed to onAddBottle. EditBottleModal accepts a presetLocation prop and uses it as the loc state initial value when isAdd. State is cleared on save and on close. Existing flows (InventoryView '+ Add a bottle (manual entry)' button, which doesn't have a preset location) continue to default to RT as before." },
@@ -881,6 +895,48 @@ const safeDatetimeLocal = (d) => {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+// v05.05bt77 — circadian classification of breast milk by hour of pump.
+// Background: human breast milk has a real circadian profile. Cortisol
+// peaks in morning milk (alerting); melatonin and tryptophan rise through
+// the evening and peak overnight (sleep-promoting). Cubero et al. 2005
+// (tryptophan in breast milk), Sánchez et al. 2009 (melatonin variation),
+// and the broader chrononutrition literature are the basis. Whether
+// time-matched feeding measurably improves infant sleep is still being
+// studied — we don't make therapeutic claims here, just surface the
+// pumped-time as a useful signal so the parent can choose. For users
+// who want to bias night feeds toward night-pumped milk, the badge
+// makes that easy to scan in inventory. Conservative buckets:
+//   night    21:00–04:59  → high melatonin, calming
+//   evening  17:00–20:59  → rising melatonin
+//   morning  05:00–09:59  → high cortisol, alerting
+//   day      10:00–16:59  → mixed
+function circadianMilkType(pumpedAt) {
+  if (!pumpedAt) return null;
+  const d = pumpedAt instanceof Date ? pumpedAt : new Date(pumpedAt);
+  if (isNaN(d.getTime())) return null;
+  const h = d.getHours();
+  if (h >= 21 || h < 5) return {
+    type: "night", emoji: "🌙", label: "Night milk",
+    color: "#5A4E7C", // deep mauve-violet
+    note: "High melatonin · calming",
+  };
+  if (h >= 17) return {
+    type: "evening", emoji: "🌆", label: "Evening milk",
+    color: "#8E6B86", // dusk mauve
+    note: "Rising melatonin · gentle",
+  };
+  if (h >= 5 && h < 10) return {
+    type: "morning", emoji: "🌅", label: "Morning milk",
+    color: "#C49A3A", // gold (cortisol-y)
+    note: "High cortisol · alerting",
+  };
+  return {
+    type: "day", emoji: "☀️", label: "Day milk",
+    color: "#7C6F5E", // muted neutral
+    note: "Mixed cortisol/melatonin",
+  };
+}
 
 // 12-hour formatters everywhere — tolerate Date or ISO string
 const fmtTime12 = (d) => {
@@ -2057,6 +2113,21 @@ function SoleneHandoffInner() {
   useEffect(() => {
     try { localStorage.setItem("ll:mommyMaintenanceCal", String(mommyMaintenanceCal)); } catch {}
   }, [mommyMaintenanceCal]);
+
+  // v05.05bt79 — Today's pump plan settings. Persists wake window, target oz,
+  // manual session edits for today, and dismissal of the power pump advisory.
+  const [pumpPlan, setPumpPlan] = useState(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const v = localStorage.getItem("solene:pumpPlan");
+      if (!v) return {};
+      const parsed = JSON.parse(v);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch { return {}; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("solene:pumpPlan", JSON.stringify(pumpPlan)); } catch {}
+  }, [pumpPlan]);
   // Cloud sync state. familyCode is the 6-char shared secret that namespaces
   // data on the backend. cloudSyncAvailable is set after a /api/ping check
   // succeeds. cloudSyncSetupNeeded is true when we have backend access but
@@ -2125,6 +2196,16 @@ function SoleneHandoffInner() {
   const [activePump, setActivePump] = useState(null); // { startedAt }
   // Impromptu takeover: { coveringParent, originalParent, startedAt }
   const [takeover, setTakeover] = useState(null);
+  // v05.05bt86 — shift handoff confirmation state.
+  // Per chat: at every scheduled shift transition the system flags a
+  // pending confirmation banner on both devices. Either parent can tap to
+  // confirm ("toParent is on duty") or flag a takeover ("fromParent is
+  // covering"). If neither happens within 5 minutes, auto-takeover starts
+  // with fromParent covering toParent (the no-show). Shape:
+  //   { scheduledAt: ISO, fromParent, toParent, status, confirmedBy, confirmedAt }
+  // status is "pending" | "confirmed-on-duty" | "confirmed-covering"
+  // confirmedBy is "Mommy" | "Daddy" | "auto"
+  const [shiftHandoff, setShiftHandoff] = useState(null);
   const [docSummary, setDocSummary] = useState(null); // { generated, html, copyText }
   // Handoff note: { from, to, text, ts, acknowledged }
   const [handoffNote, setHandoffNote] = useState(null);
@@ -2333,6 +2414,7 @@ function SoleneHandoffInner() {
       const aa = await storage.get("solene:activeActivity");
       const ap_pump = await storage.get("solene:activePump");
       const tk = await storage.get("solene:takeover");
+      const sh = await storage.get("solene:shiftHandoff");
       const hn = await storage.get("solene:handoffNote");
       const na = await storage.get("solene:noteArchive");
       const tb = await storage.get("solene:timeBank");
@@ -2493,7 +2575,28 @@ function SoleneHandoffInner() {
   // has time to fire its effect first.
   const cloudKeySetters = useMemo(() => ({
     "solene:events":          (v) => setEvents(Array.isArray(v) ? v.map(x => ({ ...x, ts: new Date(x.ts) })) : []),
-    "solene:inventory":       (v) => setInventory(Array.isArray(v) ? v.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) })) : []),
+    "solene:inventory":       (v) => {
+      // v05.05bt83: peak-count regression guard. If the cloud poll wants
+      // to replace local inventory with an array dramatically smaller than
+      // what we have, refuse. This catches the case where a stale cloud
+      // snapshot (e.g., another device pushed [] or partial state due to
+      // its own race condition, or our own push was just paused so cloud
+      // is behind) would otherwise wipe legitimate local data. Threshold:
+      // 3+ items dropped from local OR a non-empty local being replaced
+      // by exactly []. Mirrors the events peak-count net in storage.set.
+      const incoming = Array.isArray(v) ? v : [];
+      setInventory(prev => {
+        if (prev.length > 0 && incoming.length === 0) {
+          console.warn(`[cloud-poll] refusing inventory wipe: cloud=[] but local=${prev.length}. Keeping local.`);
+          return prev;
+        }
+        if (prev.length >= 3 && incoming.length <= prev.length - 3) {
+          console.warn(`[cloud-poll] refusing inventory regression: cloud=${incoming.length}, local=${prev.length}. Keeping local.`);
+          return prev;
+        }
+        return incoming.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) }));
+      });
+    },
     "solene:meetings":        (v) => setMeetings(Array.isArray(v) ? v : []),
     "solene:shifts:v3":       (v) => v && typeof v === "object" && setShifts(v),
     "solene:diaperbag":       (v) => v && setDiaperBag(v),
@@ -2503,6 +2606,7 @@ function SoleneHandoffInner() {
     "solene:activeActivity":  (v) => setActiveActivity(v),
     "solene:activePump":      (v) => setActivePump(v),
     "solene:takeover":        (v) => setTakeover(v),
+    "solene:shiftHandoff":    (v) => setShiftHandoff(v),
     "solene:handoffNote":     (v) => setHandoffNote(v),
     "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
@@ -2635,6 +2739,7 @@ function SoleneHandoffInner() {
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activeActivity", activeActivity); }, [activeActivity, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activePump", activePump); }, [activePump, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:takeover", takeover); }, [takeover, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:shiftHandoff", shiftHandoff); }, [shiftHandoff, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:handoffNote", handoffNote); }, [handoffNote, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:noteArchive", noteArchive); }, [noteArchive, hydrated]);
 
@@ -2803,12 +2908,78 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
   // Calculate next pump time (start-to-start from last pump start)
   const nextPumpAt = useMemo(() => {
+    // v05.05bt86 — prefer the Today's Pump Plan's next planned session
+    // over the fixed-interval estimate. This is the "ink" that colors
+    // the pump tile on the Now page (red/yellow/green). Logic:
+    //   • If pumpPlan.manualSessions exists, take its earliest entry as
+    //     the next planned pump.
+    //   • Convert the fractional hour to a Date today (or tomorrow if
+    //     the entry is overnight, e.g. frac 25 = 1am next day).
+    //   • If that time is in the past (planned but missed), still return
+    //     it — the tile will go red, signaling user to act. The bt80
+    //     auto-shift effect handles the late-pump rebalance once logged.
+    //   • Fall back to lastPump.start + PUMP_INTERVAL_HRS when no plan
+    //     exists (initial state, fresh app, plan cleared).
+    if (Array.isArray(pumpPlan?.manualSessions) && pumpPlan.manualSessions.length > 0) {
+      const sorted = [...pumpPlan.manualSessions].sort((a, b) => a - b);
+      const nextH = sorted[0];
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      const date = new Date(today);
+      if (nextH >= 24) {
+        date.setDate(date.getDate() + Math.floor(nextH / 24));
+        const remH = nextH % 24;
+        date.setHours(Math.floor(remH), Math.round((remH - Math.floor(remH)) * 60), 0, 0);
+      } else {
+        date.setHours(Math.floor(nextH), Math.round((nextH - Math.floor(nextH)) * 60), 0, 0);
+      }
+      return date;
+    }
+    // Fallback: fixed-interval estimate from last pump
     if (!lastPump) return null;
     const startTime = lastPump.mode === "start"
       ? new Date(lastPump.ts)
       : new Date(new Date(lastPump.ts).getTime() - (lastPump.durationMin || 30) * 60000);
     return new Date(startTime.getTime() + PUMP_INTERVAL_HRS * 3600000);
-  }, [lastPump]);
+  }, [lastPump, pumpPlan, now]);
+
+  // v05.05bt76 — defensive: auto-clear stale activePump.
+  // The pump tile uses activePump to render the "Pumping now" mauve state.
+  // After ending a pump and tapping Save in FinishPumpModal, setActivePump(null)
+  // fires synchronously (line ~6146) so the tile should immediately revert
+  // to its schedule-based color (sage when on schedule). However in practice
+  // activePump can stay stuck mauve due to:
+  //   • Cloud-sync poll re-pulling the OLD activePump from cloud after the
+  //     local clear but before the 500ms setTimeout force-push lands. The
+  //     bt34 cloudWritePaused guard helps but the cloud value can still come
+  //     back briefly within the same tick.
+  //   • User dismissing the FinishPumpModal via swipe-down (bt71) without
+  //     tapping Save — the pump was actually logged from a separate path or
+  //     a partial save, but activePump never cleared.
+  //   • Crash partway through the submit handler that clears activePump but
+  //     doesn't get to the storage.set sync.
+  //   • Bulk import where events restored ahead of activePump null.
+  //
+  // This effect catches all of those: if activePump is set but there's a
+  // logged pump event whose start time is within a minute of activePump's
+  // startedAt, the activity is already recorded — clear activePump so the
+  // tile renders correctly. Runs whenever events or activePump changes.
+  useEffect(() => {
+    if (!activePump || !activePump.startedAt) return;
+    const apStart = new Date(activePump.startedAt).getTime();
+    if (!Number.isFinite(apStart)) return;
+    const matching = events.find(e => {
+      if (e.type !== "pump" || e.mode === "start") return false;
+      const ts = new Date(e.ts).getTime();
+      if (!Number.isFinite(ts)) return false;
+      // Logged pump's ts IS the start time (FinishPumpModal saves ts: start),
+      // so a match means |ts - apStart| should be small. ±60s tolerance.
+      return Math.abs(ts - apStart) < 60 * 1000;
+    });
+    if (matching) {
+      setActivePump(null);
+    }
+  }, [events, activePump]);
 
   // Inventory math
   const liveInventory = useMemo(() => {
@@ -3003,13 +3174,25 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       const ozNum = Number(ev.oz);
       const safeOz = Number.isFinite(ozNum) && ozNum > 0 ? ozNum : 0;
       if (safeOz > 0) {
-        setInventory(prev => [...prev, {
-          id: crypto.randomUUID(),
-          oz: safeOz,
-          pumpedAt: tsISO,
-          location: ev.location || "rt",
-          bottleLabel: ev.bottleLabel || null,
-        }]);
+        // v05.05bt83: sync localStorage write inside the functional updater
+        // so the new bottle is durable IMMEDIATELY — even if a cloud poll
+        // overwrites React state between this and the autosave useEffect
+        // (line ~2672), localStorage has the truth. Mirrors the pattern
+        // used for solene:events at line ~3076.
+        setInventory(prev => {
+          const next = [...prev, {
+            id: crypto.randomUUID(),
+            oz: safeOz,
+            pumpedAt: tsISO,
+            location: ev.location || "rt",
+            bottleLabel: ev.bottleLabel || null,
+          }];
+          try {
+            localStorage.setItem("solene:inventory", JSON.stringify(next));
+            localStorage.setItem("solene:inventory:backup", JSON.stringify(prev));
+          } catch (e) { console.warn("[addEvent] inventory sync persist failed", e); }
+          return next;
+        });
       }
     }
     setShowLogger(false);
@@ -4534,6 +4717,92 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     });
   }, [hydrated, takeover, baseOnDuty.parent, now]);
 
+  // v05.05bt86 — Shift handoff confirmation system.
+  // Two effects work together:
+  //
+  // EFFECT A: detect a transition. Watches baseOnDuty.parent. When it
+  // changes (and there isn't already a pending handoff record for this
+  // same transition), create a "pending" shiftHandoff record. The
+  // banner UI renders for any pending handoff.
+  //
+  // EFFECT B: auto-takeover after grace period. Watches shiftHandoff
+  // and now. If a pending handoff is older than 5 minutes (per user's
+  // choice), auto-fire setTakeover with fromParent (outgoing) covering
+  // toParent (incoming who didn't show). startedAt is the scheduled
+  // transition time, NOT now — so the parent who covered gets credit
+  // for the full window from the actual shift start.
+  //
+  // The standard takeover mechanism (existing) handles the rest:
+  // its banner shows once auto-takeover fires, bt75 auto-end-at-shift-
+  // boundary credits the time bank when the next transition makes the
+  // covering parent legitimately on duty, or the user can end manually.
+  const lastOnDutyParentRef = useRef(null);
+  useEffect(() => {
+    if (!hydrated) return;
+    const current = baseOnDuty?.parent;
+    if (!current) return;
+    // On first mount, just record the current value — don't fabricate a
+    // transition from nothing.
+    if (lastOnDutyParentRef.current === null) {
+      lastOnDutyParentRef.current = current;
+      return;
+    }
+    if (lastOnDutyParentRef.current === current) return;
+
+    const fromParent = lastOnDutyParentRef.current;
+    const toParent = current;
+    lastOnDutyParentRef.current = current;
+
+    // Don't overwrite an existing pending/resolved handoff for the same
+    // transition (re-renders within the same minute, etc.)
+    if (shiftHandoff && shiftHandoff.fromParent === fromParent
+        && shiftHandoff.toParent === toParent) {
+      const ageMs = now.getTime() - new Date(shiftHandoff.scheduledAt).getTime();
+      if (Math.abs(ageMs) < 60 * 1000) return; // same transition, just keep
+    }
+
+    // If a takeover is already active in the same direction (e.g., user
+    // manually flagged 'I'm covering' just before the transition), don't
+    // fire another handoff confirmation.
+    if (takeover && takeover.coveringParent === fromParent
+        && takeover.originalParent === toParent) {
+      return;
+    }
+
+    setShiftHandoff({
+      scheduledAt: now.toISOString(),
+      fromParent,
+      toParent,
+      status: "pending",
+      confirmedBy: null,
+      confirmedAt: null,
+    });
+  }, [hydrated, baseOnDuty?.parent, now]);
+
+  // EFFECT B: auto-takeover after 5 min grace
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!shiftHandoff) return;
+    if (shiftHandoff.status !== "pending") return;
+    if (takeover) return; // user already manually started one
+    const ageMs = now.getTime() - new Date(shiftHandoff.scheduledAt).getTime();
+    if (ageMs < 5 * 60 * 1000) return;
+
+    // Grace period expired → auto-takeover
+    setTakeover({
+      coveringParent: shiftHandoff.fromParent,
+      originalParent: shiftHandoff.toParent,
+      startedAt: shiftHandoff.scheduledAt, // credit from the scheduled transition
+      autoStarted: true,
+    });
+    setShiftHandoff({
+      ...shiftHandoff,
+      status: "auto-takeover",
+      confirmedBy: "auto",
+      confirmedAt: now.toISOString(),
+    });
+  }, [hydrated, shiftHandoff, takeover, now]);
+
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
   const walkRecommendation = useMemo(() => {
@@ -5032,6 +5301,43 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             </button>
           );
         })()}
+        {/* v05.05bt86 — Shift handoff confirmation banner. Appears whenever
+            shiftHandoff is pending (or just resolved within last 30s for a
+            brief acknowledgment flash). Either parent can confirm or flag
+            covering. Auto-takeover after 5 min handled by App-level effect. */}
+        {shiftHandoff && (shiftHandoff.status === "pending"
+          || (shiftHandoff.confirmedAt && (now.getTime() - new Date(shiftHandoff.confirmedAt).getTime() < 30000))) && (
+          <ShiftHandoffBanner
+            C={C}
+            handoff={shiftHandoff}
+            now={now}
+            currentUser={currentUser}
+            onConfirmOnDuty={() => {
+              setShiftHandoff({
+                ...shiftHandoff,
+                status: "confirmed-on-duty",
+                confirmedBy: currentUser,
+                confirmedAt: new Date().toISOString(),
+              });
+              setTimeout(() => setShiftHandoff(null), 30000);
+            }}
+            onMarkCovering={() => {
+              setTakeover({
+                coveringParent: shiftHandoff.fromParent,
+                originalParent: shiftHandoff.toParent,
+                startedAt: shiftHandoff.scheduledAt,
+                userStarted: true,
+              });
+              setShiftHandoff({
+                ...shiftHandoff,
+                status: "confirmed-covering",
+                confirmedBy: currentUser,
+                confirmedAt: new Date().toISOString(),
+              });
+              setTimeout(() => setShiftHandoff(null), 30000);
+            }}
+          />
+        )}
         <OnDutyCard
           C={C} mode={mode}
           onDuty={onDuty}
@@ -5259,6 +5565,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             todayCalories={todayCalories}
             mommyMaintenanceCal={mommyMaintenanceCal}
             setMommyMaintenanceCal={setMommyMaintenanceCal}
+            pumpPlan={pumpPlan}
+            setPumpPlan={setPumpPlan}
           />
         )}
         {tab === "doctor" && (
@@ -6498,8 +6806,21 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                         <div style={{
                           fontSize: 11, color: C.muted, marginTop: 2,
                           fontFamily: "'JetBrains Mono', monospace",
+                          display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
                         }}>
-                          {caption}
+                          <span>{caption}</span>
+                          {(() => {
+                            const cm = circadianMilkType(b.pumpedAt);
+                            if (!cm) return null;
+                            return (
+                              <span title={cm.note} style={{
+                                fontSize: 10, color: cm.color, fontWeight: 600,
+                                letterSpacing: "0.02em",
+                              }}>
+                                {cm.emoji} {cm.type}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                       {isSelected && (
@@ -6879,6 +7200,38 @@ function EditBottleModal({ C, bottle, presetLocation, onClose, onSave }) {
       </Field>
 
       <Field C={C} label="When was it pumped?">
+        {/* v05.05bt77 — quick-preset chips for backdating. Especially useful
+            for freezer entries (often days/weeks old). Each chip subtracts
+            the labeled offset from now, preserves current time-of-day so
+            the circadian milk type stays meaningful. The native datetime
+            picker remains the precise control for finer adjustment. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 6 }}>
+          {[
+            { l: "Now", days: 0 },
+            { l: "Yest.", days: 1 },
+            { l: "3d", days: 3 },
+            { l: "1wk", days: 7 },
+            { l: "2wk", days: 14 },
+          ].map(p => (
+            <button key={p.l}
+              onClick={() => {
+                const base = pumpedAtLocal ? new Date(pumpedAtLocal) : new Date();
+                const target = new Date();
+                target.setDate(target.getDate() - p.days);
+                // Preserve hour/minute from existing pick if user already
+                // selected a time; otherwise default to the current time
+                // (which captures the present circadian phase).
+                target.setHours(base.getHours(), base.getMinutes(), 0, 0);
+                setPumpedAtLocal(safeDatetimeLocal(target));
+              }}
+              style={{
+                background: "transparent", color: C.ink,
+                border: `1px solid ${C.line}22`, borderRadius: 6,
+                padding: "6px 4px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                fontFamily: "inherit",
+              }}>{p.l}</button>
+          ))}
+        </div>
         <input
           type="datetime-local"
           value={pumpedAtLocal}
@@ -6889,8 +7242,23 @@ function EditBottleModal({ C, bottle, presetLocation, onClose, onSave }) {
             fontFamily: "inherit",
           }}
         />
+        {/* Show circadian classification of the current selection — gives
+            visual confirmation of what kind of milk this bottle will be
+            tagged as. */}
+        {(() => {
+          const cm = circadianMilkType(pumpedAtLocal);
+          if (!cm) return null;
+          return (
+            <div style={{
+              fontSize: 11, marginTop: 6, lineHeight: 1.4,
+              color: cm.color, fontWeight: 500,
+            }}>
+              {cm.emoji} {cm.label} · <span style={{ fontStyle: "italic", color: C.muted, fontWeight: 400 }}>{cm.note}</span>
+            </div>
+          );
+        })()}
         <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.4 }}>
-          Affects how long the bottle is considered safe.
+          Affects how long the bottle is considered safe — and whether it's tagged as morning/day/evening/night milk.
         </div>
       </Field>
 
@@ -7440,6 +7808,8 @@ function SoundToggleButton({ C }) {
 
 function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // v05.05bt86 — gate destructive/dev controls behind explicit reveal
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // Viewer color for chrome — cloud sync section, etc.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
   // Backup section state
@@ -7971,6 +8341,39 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
         </div>
       )}
 
+      {/* v05.05bt86 — Advanced disclosure. Per user feedback that 'too
+          many things under the profile switcher can be accidentally
+          clicked and cause chaos.' Wraps DEV controls (time-travel,
+          clear stuck pump, etc.) and the Danger zone (full reset) behind
+          a deliberate two-tap reveal so casual scrolling doesn't expose
+          them. The Advanced button is muted-styled at the bottom of the
+          modal; tapping it shows the wrapped sections. */}
+      <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.line}15` }}>
+        {!showAdvanced ? (
+          <button onClick={() => setShowAdvanced(true)} style={{
+            width: "100%",
+            background: "transparent", color: C.muted,
+            border: `1px dashed ${C.line}22`, borderRadius: 8,
+            padding: "8px 12px", fontSize: 11, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em",
+          }}>
+            advanced settings ▸
+          </button>
+        ) : (
+          <>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              marginBottom: 8,
+            }}>
+              <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+                advanced
+              </div>
+              <button onClick={() => setShowAdvanced(false)} style={{
+                background: "transparent", color: C.muted, border: "none", padding: "2px 8px",
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+              }}>hide</button>
+            </div>
+
       {/* DEV section — time-travel for previewing time-dependent UI.
           v05.05bt16. Hidden behind a quiet eyebrow so it doesn't clutter
           the normal user experience. Session-only — clears on reload. */}
@@ -8119,6 +8522,9 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
               </button>
             </div>
           </div>
+        )}
+      </div>
+          </>
         )}
       </div>
     </ModalShell>
@@ -8458,6 +8864,125 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
         }}>
         {confirming ? "Sure?" : "I'm back"}
       </button>
+    </div>
+  );
+}
+
+// v05.05bt86 — Shift handoff confirmation banner. Renders when the system
+// has detected a scheduled shift transition that hasn't been confirmed by
+// either parent yet. Two CTAs: '✓ toParent is on duty' (normal switch) or
+// '✗ fromParent is covering' (manual takeover starts). After 5 minutes
+// without action, App-level effect auto-fires a takeover and the banner
+// transitions to the standard takeover banner inside OnDutyCard.
+//
+// Per user direction: appears at the scheduled time (no early warning),
+// gets more visually urgent as the grace period nears, either parent can
+// confirm, and attribution is shown so the partner knows who tapped.
+function ShiftHandoffBanner({ C, handoff, now, currentUser, onConfirmOnDuty, onMarkCovering }) {
+  const scheduledAt = new Date(handoff.scheduledAt);
+  const ageSec = Math.max(0, Math.floor((now.getTime() - scheduledAt.getTime()) / 1000));
+  const ageMin = ageSec / 60;
+  const graceSecLeft = Math.max(0, 5 * 60 - ageSec);
+  const graceMinLeft = Math.floor(graceSecLeft / 60);
+  const graceSecsLeft = graceSecLeft % 60;
+
+  const fmt = (d) => {
+    const h = d.getHours(), m = d.getMinutes();
+    const ap = h >= 12 ? "p" : "a";
+    const h12 = h % 12 || 12;
+    return m > 0 ? `${h12}:${String(m).padStart(2, "0")}${ap}` : `${h12}${ap}`;
+  };
+
+  // Confirmed state — show attribution for 30s before clearing
+  if (handoff.status === "confirmed-on-duty" || handoff.status === "confirmed-covering") {
+    const isOnDuty = handoff.status === "confirmed-on-duty";
+    const tone = isOnDuty ? C.sage : C.accent;
+    const label = isOnDuty
+      ? `${handoff.toParent} is on duty`
+      : `${handoff.fromParent} is covering`;
+    const confirmedAt = handoff.confirmedAt ? new Date(handoff.confirmedAt) : null;
+    return (
+      <div style={{
+        background: `${tone}10`, border: `1.5px solid ${tone}66`,
+        borderRadius: 12, padding: "10px 14px", marginBottom: 12,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+      }}>
+        <div style={{ fontSize: 13, color: C.ink }}>
+          <strong style={{ color: tone }}>✓ {label}</strong>
+        </div>
+        <div style={{
+          fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+          textAlign: "right", lineHeight: 1.4,
+        }}>
+          confirmed by {handoff.confirmedBy === "auto" ? "system" : handoff.confirmedBy}
+          {confirmedAt ? <><br/>at {fmt(confirmedAt)}</> : null}
+        </div>
+      </div>
+    );
+  }
+
+  // Pending state — visual urgency ramp
+  const urgency = ageMin < 2 ? "calm" : ageMin < 4 ? "elevated" : "urgent";
+  const borderColor = urgency === "urgent" ? C.accent
+    : urgency === "elevated" ? `${C.accent}AA`
+    : `${C.gold}88`;
+  const bgColor = urgency === "urgent" ? `${C.accent}15`
+    : urgency === "elevated" ? `${C.accent}10`
+    : `${C.gold}10`;
+
+  return (
+    <div style={{
+      background: bgColor,
+      border: `${urgency === "urgent" ? 2 : 1.5}px solid ${borderColor}`,
+      borderRadius: 12, padding: 14, marginBottom: 12,
+      animation: urgency !== "calm" ? "shiftHandoffPulse 1.8s ease-in-out infinite" : "none",
+    }}>
+      <style>{`
+        @keyframes shiftHandoffPulse {
+          0%, 100% { box-shadow: 0 0 0 0 ${C.accent}00; }
+          50% { box-shadow: 0 0 0 6px ${C.accent}22; }
+        }
+      `}</style>
+      <div style={{
+        fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
+        color: urgency === "urgent" ? C.accent : C.gold, fontWeight: 700, marginBottom: 6,
+      }}>
+        🔔 Shift handoff at {fmt(scheduledAt)}
+      </div>
+      <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
+        <strong>{handoff.toParent}'s</strong> shift just started.
+        Is {handoff.toParent.toLowerCase()} on duty, or are you still covering?
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <button
+          onClick={onConfirmOnDuty}
+          style={{
+            background: handoff.toParent === "Mommy" ? C.mommy : C.daddy,
+            color: "#fff", border: "none", borderRadius: 8,
+            padding: "10px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            fontFamily: "inherit", lineHeight: 1.3,
+          }}>
+          ✓ {handoff.toParent} is on duty
+        </button>
+        <button
+          onClick={onMarkCovering}
+          style={{
+            background: "transparent",
+            color: C.accent, border: `1.5px solid ${C.accent}`, borderRadius: 8,
+            padding: "10px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            fontFamily: "inherit", lineHeight: 1.3,
+          }}>
+          ✗ {handoff.fromParent} is covering
+        </button>
+      </div>
+      <div style={{
+        fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 8,
+        fontFamily: "'JetBrains Mono', monospace", textAlign: "center",
+      }}>
+        {graceSecLeft > 0
+          ? `Auto-takeover in ${graceMinLeft}:${String(graceSecsLeft).padStart(2, "0")} if no confirmation`
+          : "Auto-takeover triggering…"}
+      </div>
     </div>
   );
 }
@@ -9072,6 +9597,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         onStartPump={onStartPump}
         onEndActivePump={onEndActivePump}
         onPickBottle={onPickBottle}
+        onJustLogPump={onQuickLog ? () => onQuickLog("pump") : undefined}
         now={now}
       />
     </div>
@@ -9092,7 +9618,7 @@ function fmtPredictedNextFeed(lastFeed, now) {
 }
 
 // Milk panel: shown on both parents' on-duty card
-function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle }) {
+function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle, onJustLogPump }) {
   const isMom = currentUser === "Mommy";
   // Chrome that's not specifically about Mommy (lactation) but still inside
   // MilkPanel — bottle markers, "last bottle" tile, etc. — should follow
@@ -9762,6 +10288,31 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 Mimics cluster feeding to signal supply. Best done 1×/day for a few days when you want a boost.
               </div>
             </button>
+            {/* v05.05bt85 — third option: skip the timer entirely and just
+                log a completed pump session. Useful when the user pumped
+                without starting the timer (out-and-about, used a different
+                pump, forgot to tap start). Routes through the existing
+                Log → Pump form which captures oz, duration, location, etc. */}
+            {onJustLogPump && (
+              <button
+                onClick={() => { onJustLogPump(); setShowPumpChooser(false); }}
+                style={{
+                  background: C.paper,
+                  border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.muted}`,
+                  borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                  textAlign: "left", fontFamily: "inherit", color: C.ink,
+                }}>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                  fontStyle: "italic", color: C.muted, lineHeight: 1.1,
+                }}>
+                  Just log a pump
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                  Skip the timer — log a pump you already did. Pick when, duration, and oz.
+                </div>
+              </button>
+            )}
           </div>
         </ModalShell>
       )}
@@ -11405,6 +11956,15 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
   // We persist BOTH on the pump event AND on the matching inventory bottle
   // (linked by ts ↔ pumpedAt) so the label propagates everywhere.
   const [bottleLabel, setBottleLabel] = useState(event.bottleLabel || "");
+  // v05.05bt89: same affordance for FEED events. A feed logged without an
+  // explicit bottle pick (or with a shortfall) carries inventoryReconcileNeeded
+  // and reconcileReason fields; previously the only resolution path was the
+  // "Mark resolved" button which cleared the flag but lost the attribution.
+  // Now the edit form has a bottle-label input so the user can attribute the
+  // feed to a specific bottle by name (A/B/1/2/etc) at the same time — or
+  // independently, since attributing the bottle is useful even when the
+  // reconcile is already resolved.
+  const [feedBottleLabel, setFeedBottleLabel] = useState(event.bottleLabel || "");
 
   const submit = () => {
     const ts = new Date(tsLocal).toISOString();
@@ -11412,6 +11972,8 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
     if (event.type === "feed") {
       updated.oz = Number(oz);
       updated.source = source;
+      // v05.05bt89: persist bottle label on feed events
+      updated.bottleLabel = feedBottleLabel.trim() || null;
     } else if (event.type === "pump") {
       updated.oz = Number(oz);
       // If editing in start+end mode, recompute duration from the latest
@@ -11511,6 +12073,29 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
               { v: "Formula", l: "Formula" },
               { v: "BM+Formula", l: "Mix" },
             ]} />
+          </Field>
+          {/* v05.05bt89: bottle-label field on feeds. Useful for
+              attributing a feed to a specific bottle when the reconcile
+              flag is set and the original log didn't pick one, OR for
+              correcting/adding a label after the fact even on resolved
+              feeds. Same shape as the pump-event field so the
+              feedBottleSuffix helper renders it consistently. */}
+          <Field C={C} label="Bottle label (optional)">
+            <input
+              type="text"
+              value={feedBottleLabel}
+              onChange={e => setFeedBottleLabel(e.target.value.slice(0, 4).toUpperCase())}
+              placeholder="A, B, 1, 2…"
+              maxLength={4}
+              style={{
+                width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+                borderRadius: 8, fontSize: 14, background: C.bg, color: C.ink,
+                fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.05em",
+              }}
+            />
+            <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.4 }}>
+              Attribute this feed to a specific bottle. Helps after-the-fact reconciliation.
+            </div>
           </Field>
         </>
       )}
@@ -12635,11 +13220,18 @@ const SUNDAY_ROUTINE = {
 
 function SundayRoutineCard({ C, events, now }) {
   const [expanded, setExpanded] = useState(false);
-  // v05.05bt62: filter chip — "all" / "Solène" / "Mommy" / "Daddy".
-  // Joint activities (e.g. bath: ["Mommy","Daddy"]) appear in EVERY
-  // matching parent's filter, so when Mommy filters to "Mommy" she
-  // still sees bath because she's listed in actors. Same for Daddy.
   const [actorFilter, setActorFilter] = useState("all");
+  // v05.05bt79 — actual-wake override. Routines schedule backward from
+  // Solène's median wake (so each parent finishes alone-time exactly when
+  // she wakes up). But mornings don't always match the median — sometimes
+  // you wake at 7:15 instead of 6:30 and have to make up time. This state
+  // is the parent's actual wake-up minute (today), and when set, the
+  // pre-wake routine reflows from there. If totalAlone exceeds the time
+  // available before Solène wakes, alone-time blocks compress
+  // proportionally and a warning banner appears so the user can see what
+  // got cut. Default null = use natural schedule (alone time ends exactly
+  // when Solène wakes, parent wake = babyWakeMin - totalAlone).
+  const [actualWakeMin, setActualWakeMin] = useState(null);
   const r = SUNDAY_ROUTINE;
 
   // ===== Compute Solène's median morning wake from her actual data =====
@@ -12720,18 +13312,41 @@ function SundayRoutineCard({ C, events, now }) {
 
   // ===== Each parent's timeline =====
   const parentTimelines = {};
+  // v05.05bt79: track which parents had their alone-time compressed because
+  // actualWakeMin was set later than the natural wakeMin. Surfaced in a
+  // warning banner so the user knows what got cut.
+  const compressionWarnings = [];
   for (const [name, p] of Object.entries(r.parents)) {
     const aloneComps = p.components.filter(c => c.alone);
     const flexComps = p.components.filter(c => !c.alone && !c.parallelWithBabyFeed && !c.afterPump);
     const parallelComps = p.components.filter(c => c.parallelWithBabyFeed);
     const afterPumpComps = p.components.filter(c => c.afterPump);
     const totalAlone = aloneComps.reduce((s, c) => s + c.dur, 0);
-    const wakeMin = babyWakeMin - totalAlone;
+    // Natural wake = exactly enough alone-time to finish at babyWakeMin.
+    // If actualWakeMin is set AND it's later than natural, we have to
+    // compress to still finish by babyWakeMin. If it's earlier or equal,
+    // just use it as-is (parent has buffer).
+    const naturalWakeMin = babyWakeMin - totalAlone;
+    let wakeMin = naturalWakeMin;
+    let compressionRatio = 1;
+    if (actualWakeMin != null) {
+      wakeMin = actualWakeMin;
+      const availableMin = babyWakeMin - actualWakeMin;
+      if (availableMin < totalAlone && totalAlone > 0) {
+        // Compress proportionally — every alone block keeps its share but
+        // duration scales by availableMin/totalAlone. Floor at 0 so a
+        // crazy-late wake doesn't go negative.
+        compressionRatio = Math.max(0, availableMin) / totalAlone;
+        const lostMin = totalAlone - Math.max(0, availableMin);
+        compressionWarnings.push({ parent: name, lostMin, ratio: compressionRatio });
+      }
+    }
     const blocks = [];
     let t = wakeMin;
     for (const c of aloneComps) {
-      blocks.push({ ...c, from: t, to: t + c.dur });
-      t += c.dur;
+      const dur = Math.max(1, Math.round(c.dur * compressionRatio));
+      blocks.push({ ...c, from: t, to: t + dur, _origDur: c.dur, _compressed: compressionRatio < 1 });
+      t += dur;
     }
     // Schedule parallel components (e.g. pump) during Solène's feed window
     const parallelBlocks = parallelComps.map(c => ({
@@ -12739,10 +13354,6 @@ function SundayRoutineCard({ C, events, now }) {
       from: feedBlock.from,
       to: feedBlock.from + c.dur,
     }));
-    // Schedule afterPump components sequentially right after the parallel
-    // block ends (or after the feed if no parallel block exists). For Mommy
-    // that means: pump finishes at 8:20 → ancillary 8:20-8:35 → diaper bag
-    // 8:35-8:40, all happening while Daddy handles Solène's bath.
     const pumpEnd = parallelBlocks.length
       ? parallelBlocks[parallelBlocks.length - 1].to
       : feedBlock.to;
@@ -12755,6 +13366,7 @@ function SundayRoutineCard({ C, events, now }) {
     parentTimelines[name] = {
       wakeMin, blocks, parallelBlocks, afterPumpBlocks, flexComps, totalAlone,
       totalFlex: flexComps.reduce((s, c) => s + c.dur, 0),
+      compressionRatio,
     };
   }
 
@@ -12985,6 +13597,75 @@ function SundayRoutineCard({ C, events, now }) {
               — Solène's morning needs {totalFixedBabyMin}min, but only {availableForBaby}min available between her {fmtT(babyWakeMin)} wake and {fmtT(r.anchorTimeMin)} leave. {isOverbooked ? "Wake her earlier or trim the routine." : "Almost no buffer for fussiness or blowouts."}
             </div>
           )}
+          {/* v05.05bt79 — actual-wake override + compression warning.
+              When the parent's actual wake is later than the natural
+              schedule allows, the alone-time blocks compress
+              proportionally and we surface what got cut. */}
+          <div style={{
+            background: actualWakeMin != null ? `${C.gold}10` : C.bg,
+            border: `1px solid ${actualWakeMin != null ? C.gold + "55" : C.line + "22"}`,
+            borderRadius: 8, padding: "8px 12px", marginBottom: 10,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+            flexWrap: "wrap",
+          }}>
+            <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
+              actual wake
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="time"
+                value={actualWakeMin != null
+                  ? `${String(Math.floor(actualWakeMin / 60)).padStart(2, "0")}:${String(actualWakeMin % 60).padStart(2, "0")}`
+                  : ""}
+                onChange={(e) => {
+                  if (!e.target.value) { setActualWakeMin(null); return; }
+                  const [hh, mm] = e.target.value.split(":").map(Number);
+                  if (Number.isFinite(hh) && Number.isFinite(mm)) {
+                    setActualWakeMin(hh * 60 + mm);
+                  }
+                }}
+                style={{
+                  background: C.paper, color: C.ink,
+                  border: `1px solid ${C.line}33`, borderRadius: 6,
+                  padding: "5px 8px", fontSize: 13, fontWeight: 600,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  outline: "none", minWidth: 90,
+                }}
+              />
+              {actualWakeMin != null && (
+                <button
+                  onClick={() => setActualWakeMin(null)}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: C.muted, cursor: "pointer",
+                    fontSize: 11, padding: "2px 6px",
+                    fontFamily: "inherit",
+                  }}>reset</button>
+              )}
+            </div>
+          </div>
+
+          {compressionWarnings.length > 0 && (
+            <div style={{
+              background: `${C.accent}10`, border: `1px solid ${C.accent}55`,
+              borderRadius: 8, padding: "10px 12px", marginBottom: 10,
+              fontSize: 12, lineHeight: 1.5, color: C.ink,
+            }}>
+              <div style={{ fontWeight: 700, color: C.accent, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>
+                ⏱ compressed to fit
+              </div>
+              {compressionWarnings.map((w, i) => (
+                <div key={i} style={{ marginBottom: i < compressionWarnings.length - 1 ? 4 : 0 }}>
+                  <strong>{w.parent}'s</strong> alone-time cut by{" "}
+                  <strong>{w.lostMin}min</strong> ({Math.round(w.ratio * 100)}% of normal duration).
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 6 }}>
+                Each alone block scaled proportionally so you still finish before Solène wakes at {fmtT(babyWakeMin)}.
+              </div>
+            </div>
+          )}
+
           {/* Filter chips — All / Solène / Mommy / Daddy. Joint
               activities (e.g. bath) appear in any matching parent's
               filter via b.actors[]. */}
@@ -15557,7 +16238,990 @@ function PumpGoalsCard({ C, events, now, mommyMaintenanceCal, setMommyMaintenanc
   );
 }
 
-function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal }) {
+// v05.05bt78 — Daily burn history (Mommy-only). Last 7 calendar days,
+// each day a horizontal bar scaled to peak-of-window. No target line,
+// no streak indicator, no "up vs last week" — per positioning doc's
+// anti-gamification stance, present data, don't score it. Same kcal
+// formula as the running todayCalories useMemo: pump oz × KCAL_PER_OZ_BM
+// plus breastfeed min × KCAL_PER_BF_MINUTE.
+function DailyBurnHistoryCard({ C, events, now }) {
+  const days = useMemo(() => {
+    // Build [oldest..newest] array of last 7 days. Each day's window is
+    // [00:00 of that day, 00:00 next day). Today is partial — note that
+    // visually but don't filter it out, the user can still see what's
+    // accumulated so far.
+    const out = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now);
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - i);
+      const next = new Date(day);
+      next.setDate(next.getDate() + 1);
+      out.push({ start: day, end: next, kcal: 0, isToday: i === 0 });
+    }
+    for (const e of events) {
+      const ts = new Date(e.ts);
+      if (isNaN(ts.getTime())) continue;
+      for (const d of out) {
+        if (ts >= d.start && ts < d.end) {
+          if (e.type === "pump" && e.oz && e.mode !== "start") d.kcal += e.oz * KCAL_PER_OZ_BM;
+          else if (e.type === "breastfeed" && e.totalDurationMin) d.kcal += e.totalDurationMin * KCAL_PER_BF_MINUTE;
+          break;
+        }
+      }
+    }
+    return out.map(d => ({ ...d, kcal: Math.round(d.kcal) }));
+  }, [events, now]);
+
+  const peak = Math.max(1, ...days.map(d => d.kcal));
+  const dayLetter = ["S", "M", "T", "W", "T", "F", "S"];
+  const total7d = days.reduce((s, d) => s + d.kcal, 0);
+  const completedDays = days.filter(d => !d.isToday);
+  const avg6d = completedDays.length > 0
+    ? Math.round(completedDays.reduce((s, d) => s + d.kcal, 0) / completedDays.length)
+    : 0;
+
+  return (
+    <Section C={C} title="Burn history">
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 14,
+        border: `1px solid ${C.line}15`,
+      }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, alignItems: "end", height: 110 }}>
+          {days.map((d, i) => {
+            const heightPct = (d.kcal / peak) * 100;
+            const dow = d.start.getDay();
+            return (
+              <div key={i} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                height: "100%",
+              }}>
+                <div style={{
+                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                  color: d.isToday ? C.mommy : C.muted, fontWeight: d.isToday ? 700 : 500,
+                  minHeight: 14,
+                }}>
+                  {d.kcal > 0 ? d.kcal : "·"}
+                </div>
+                <div style={{
+                  flex: 1, width: "100%", display: "flex", alignItems: "flex-end",
+                }}>
+                  <div style={{
+                    width: "100%",
+                    height: `${Math.max(2, heightPct)}%`,
+                    background: d.isToday
+                      ? `linear-gradient(180deg, ${C.mommy}88, ${C.mommy})`
+                      : `${C.mommy}55`,
+                    borderRadius: "4px 4px 1px 1px",
+                    transition: "height 0.2s ease",
+                  }} />
+                </div>
+                <div style={{
+                  fontSize: 10, color: d.isToday ? C.mommy : C.muted,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: d.isToday ? 700 : 500,
+                }}>
+                  {dayLetter[dow]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
+          marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.line}15`,
+          fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          <span>7-day total · <strong style={{ color: C.ink, fontWeight: 700 }}>{total7d.toLocaleString()}</strong> kcal</span>
+          <span>avg/day (last 6) · <strong style={{ color: C.ink, fontWeight: 700 }}>{avg6d}</strong></span>
+        </div>
+        <div style={{
+          fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 8, lineHeight: 1.4,
+        }}>
+          From pump and breastfeed events. Today is partial. Use this to fuel — eat more on big-burn days.
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// v05.05bt79 — Today's Pump Plan card. Mommy-only, lives below
+// DailyBurnHistoryCard on Milk tab. Shows a horizontal timeline of
+// today's wake window (default 6am–10pm) with done sessions filled
+// mauve and upcoming sessions auto-spaced across remaining wake time.
+// User can tap any upcoming marker to shift, tap × to remove, tap
+// "+ Add session" to insert. Wake window is editable inline.
+//
+// Power pump advisory: when yesterday's output dropped vs target by
+// more than 5%, suggests a number of daily power pumps proportional
+// to the shortfall. Suggestion sits silent on stable supply.
+//
+// All settings persist in localStorage under solene:pumpPlan as one
+// object: { wakeStart, wakeEnd, target, manualSessions, dismissedAdvisoryDate }.
+// manualSessions is the array of user-edited session times for today;
+// reset at midnight. Auto-rebalance is implicit — as you log pumps,
+// the recompute redistributes any non-manual sessions across the
+// remaining wake window.
+
+function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
+  // v05.05bt80 — rewritten per user feedback:
+  //   • LISTED format (vertical rows, like ShiftListGrid) instead of the
+  //     bt79 horizontal timeline.
+  //   • FREQUENCY-based framing — header reads "X of N pumped · ~Yh between"
+  //     not "Z oz to go." Body doesn't pump-on-demand to fill a per-session
+  //     target; daily output ≈ stable when drainage frequency stays normal.
+  //   • TARGET = Solène's recent daily intake + buffer in bags (default 1
+  //     bag = 4 oz). User can adjust buffer in settings panel.
+  //   • DAY START separable from routine wake. wakeStart in pumpPlan is
+  //     the anchor for "today's" first pump. Overnight pumps are added
+  //     manually as extra rows; they're full citizens.
+  //   • AUTO-SHIFT FORWARD: when a pump lands ≥20min late vs the closest
+  //     planned slot, all REMAINING upcoming sessions shift forward by the
+  //     same delta. If the shift would push the last upcoming session
+  //     past wakeEnd, an overrun prompt appears with options:
+  //     shift / compress / drop / keep-as-is.
+  //   • Power pump advisory removed — user said elsewhere they'd rather
+  //     decide on their own judgment.
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [overrunPrompt, setOverrunPrompt] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showRecoveryConfirm, setShowRecoveryConfirm] = useState(false);
+  const lastDoneCountRef = useRef(0);
+
+  const wakeStart = Number.isFinite(pumpPlan?.wakeStart) ? pumpPlan.wakeStart : 6;
+  const wakeEnd = Number.isFinite(pumpPlan?.wakeEnd) ? pumpPlan.wakeEnd : 22;
+  const bagBuffer = Number.isFinite(pumpPlan?.bagBuffer) ? pumpPlan.bagBuffer : 1;
+
+  // v05.05bt81 — RECOVERY MODE ("911 mode"). User activates after a long
+  // pump gap to protect supply with tighter cadence + overnight slot for
+  // 2–3 days. Stored as { active, startedAt, days } on pumpPlan. Auto-ends
+  // once `days` have elapsed since startedAt. While active:
+  //   • targetSessions += 1 (tighter spacing in autoSpaced)
+  //   • An overnight slot (~2am next day) is auto-injected
+  //   • Banner at top of card with day-of-N + protocol summary + end/extend
+  const recoveryMode = pumpPlan?.recoveryMode;
+  const recoveryActive = !!(recoveryMode && recoveryMode.active && recoveryMode.startedAt);
+  const recoveryDayCount = recoveryActive
+    ? Math.floor((now.getTime() - new Date(recoveryMode.startedAt).getTime()) / 86400000) + 1
+    : 0;
+  const recoveryTotalDays = recoveryMode?.days || 3;
+  // v05.05bt82: auto-trigger toggle. Default ON. When the user is >=5
+  // hours past their next-due pump, recovery mode kicks in on its own.
+  // User can disable in settings.
+  const autoRecoveryEnabled = pumpPlan?.autoRecoveryEnabled !== false;
+
+  // Auto-end when elapsed time reaches `days * 24h`
+  useEffect(() => {
+    if (!recoveryActive) return;
+    const start = new Date(recoveryMode.startedAt).getTime();
+    if (!Number.isFinite(start)) return;
+    const elapsedMs = now.getTime() - start;
+    if (elapsedMs >= recoveryTotalDays * 86400000) {
+      setPumpPlan(p => ({
+        ...p,
+        recoveryMode: { ...p.recoveryMode, active: false },
+      }));
+    }
+  }, [now, recoveryActive, recoveryMode?.startedAt, recoveryTotalDays]);
+
+  // v05.05bt82: AUTO-TRIGGER recovery mode when the next-due pump is
+  // >=5 hours overdue. lastPump comes from events directly so this card
+  // doesn't depend on App-level prop. Same start-to-start interval logic
+  // as the home pump tile (using module-scope PUMP_INTERVAL_HRS).
+  const lastPumpEvent = useMemo(() => {
+    return events
+      .filter(e => e.type === "pump" && e.mode !== "start")
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0] || null;
+  }, [events]);
+  useEffect(() => {
+    if (!autoRecoveryEnabled) return;
+    if (recoveryActive) return;
+    if (!lastPumpEvent) return;
+    const lastTs = new Date(lastPumpEvent.ts).getTime();
+    if (!Number.isFinite(lastTs)) return;
+    // lastPump.ts is the start time (FinishPumpModal saves ts: start)
+    // so nextDue = lastTs + PUMP_INTERVAL_HRS hours
+    const nextDue = lastTs + PUMP_INTERVAL_HRS * 3600000;
+    const hoursOverdue = (now.getTime() - nextDue) / 3600000;
+    if (hoursOverdue >= 5) {
+      setPumpPlan(p => ({
+        ...p,
+        recoveryMode: {
+          active: true,
+          startedAt: new Date().toISOString(),
+          days: 3,
+          autoTriggered: true,
+          triggerReason: `${hoursOverdue.toFixed(1)}hr gap`,
+        },
+        manualSessions: [],
+        manualSessionsDate: todayKey,
+      }));
+    }
+  }, [now, lastPumpEvent, autoRecoveryEnabled, recoveryActive]);
+
+  const todayKey = useMemo(() => {
+    const d = new Date(now); d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }, [now]);
+
+  // Daily reset of the manual session list
+  useEffect(() => {
+    if (pumpPlan?.manualSessionsDate && pumpPlan.manualSessionsDate !== todayKey) {
+      setPumpPlan(p => ({ ...p, manualSessions: [], manualSessionsDate: todayKey }));
+      lastDoneCountRef.current = 0;
+    }
+  }, [todayKey, pumpPlan?.manualSessionsDate]);
+
+  // v05.05bt88 — auto-seed manualSessions from autoSpaced so the pump
+  // plan is always populated even if the user hasn't tapped into the
+  // card. Without this, manualSessions stays [] until interaction, and
+  // App-level consumers (notably the Now-page pump tile color from
+  // bt87) can't read the plan. Runs whenever the conditions become
+  // true: empty manualSessions + non-empty autoSpaced + today's date.
+
+  // Today's done pumps (sorted)
+  const doneSessions = useMemo(() => {
+    const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
+    return events
+      .filter(e => e.type === "pump" && e.mode !== "start" && new Date(e.ts) >= startOfDay)
+      .map(e => {
+        const ts = new Date(e.ts);
+        return {
+          h: ts.getHours() + ts.getMinutes() / 60,
+          oz: Number(e.oz) || 0,
+          ts,
+          eventId: e.id,
+        };
+      })
+      .sort((a, b) => a.h - b.h);
+  }, [events, now]);
+
+  // Solène's average daily intake (last 3 days, fallback 24 oz)
+  const solèneAvgIntake = useMemo(() => {
+    const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+    const totals = [1, 2, 3].map(d => {
+      const start = new Date(startToday); start.setDate(start.getDate() - d);
+      const end = new Date(start); end.setDate(end.getDate() + 1);
+      return events
+        .filter(e => (e.type === "feed" || e.type === "breastfeed")
+          && new Date(e.ts) >= start && new Date(e.ts) < end)
+        .reduce((s, e) => s + (Number(e.oz) || 0), 0);
+    }).filter(t => t > 0);
+    if (totals.length === 0) return 24;
+    return Math.round(totals.reduce((a, b) => a + b, 0) / totals.length);
+  }, [events, now]);
+
+  const targetOz = Math.round(solèneAvgIntake + bagBuffer * 4);
+
+  // Average per-pump yield (last 7 days, fallback 4 oz)
+  const avgYieldPerPump = useMemo(() => {
+    const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+    const cutoff = new Date(startToday); cutoff.setDate(cutoff.getDate() - 7);
+    const pumps = events.filter(e => e.type === "pump" && e.mode !== "start"
+      && new Date(e.ts) >= cutoff && Number(e.oz) > 0);
+    if (pumps.length < 3) return 4;
+    return pumps.reduce((s, e) => s + Number(e.oz), 0) / pumps.length;
+  }, [events, now]);
+
+  const baseTargetSessions = Math.max(5, Math.ceil(targetOz / Math.max(2, avgYieldPerPump)));
+  // v05.05bt81: bump by +1 during recovery for tighter cadence
+  const targetSessions = recoveryActive ? baseTargetSessions + 1 : baseTargetSessions;
+
+  // Helpers
+  const fmtTime = (h) => {
+    const hh = Math.floor(((h % 24) + 24) % 24);
+    const mm = Math.round((h - Math.floor(h)) * 60);
+    const ap = hh >= 12 ? "p" : "a";
+    const h12 = hh % 12 || 12;
+    return mm > 0 ? `${h12}:${String(mm).padStart(2, "0")}${ap}` : `${h12}${ap}`;
+  };
+  const parseTimeToFrac = (s) => {
+    if (!s) return null;
+    const [hh, mm] = s.split(":").map(Number);
+    if (!Number.isFinite(hh)) return null;
+    return hh + (mm || 0) / 60;
+  };
+  const fracToHHMM = (h) => {
+    const hh = Math.floor(((h % 24) + 24) % 24);
+    const mm = Math.round((h - Math.floor(h)) * 60);
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  };
+  const circadian = (h) => {
+    const hr = Math.floor(((h % 24) + 24) % 24);
+    if (hr >= 21 || hr < 5) return { emoji: "🌙", color: "#5A4E7C", label: "night" };
+    if (hr >= 17) return { emoji: "🌆", color: "#8E6B86", label: "evening" };
+    if (hr >= 5 && hr < 10) return { emoji: "🌅", color: "#C49A3A", label: "morning" };
+    return { emoji: "☀️", color: C.muted, label: "day" };
+  };
+
+  // Auto-spaced default schedule (used when manualSessions is empty).
+  // v05.05bt81: during recovery, ALWAYS append an overnight slot (2am next
+  // day = frac 26) on top of the in-window distribution so the user has
+  // a MOTN session pre-scheduled.
+  const autoSpaced = useMemo(() => {
+    const overnight = recoveryActive ? [26.0] : [];
+    const inWindowCount = Math.max(0, targetSessions - doneSessions.length - overnight.length);
+    if (inWindowCount === 0) return overnight;
+    const lastDoneH = doneSessions.length > 0
+      ? doneSessions[doneSessions.length - 1].h
+      : wakeStart - 1.5;
+    const earliestNext = Math.max(lastDoneH + 1.5, wakeStart);
+    let inWindow;
+    if (inWindowCount === 1) inWindow = [Math.min(wakeEnd, earliestNext + 2)];
+    else {
+      const span = Math.max(0, wakeEnd - earliestNext);
+      if (span <= 0) {
+        inWindow = Array.from({ length: inWindowCount }, (_, i) => earliestNext + i * 1.5);
+      } else {
+        const spacing = span / (inWindowCount - 1);
+        inWindow = Array.from({ length: inWindowCount }, (_, i) => earliestNext + spacing * i);
+      }
+    }
+    return [...inWindow, ...overnight];
+  }, [doneSessions, targetSessions, wakeStart, wakeEnd, recoveryActive]);
+
+  // v05.05bt88 — seed manualSessions from autoSpaced when missing.
+  // See note near the daily-reset effect above.
+  useEffect(() => {
+    if (!Array.isArray(pumpPlan?.manualSessions)) return;
+    if (pumpPlan.manualSessions.length > 0) return;
+    if (autoSpaced.length === 0) return;
+    if (pumpPlan.manualSessionsDate && pumpPlan.manualSessionsDate !== todayKey) return;
+    setPumpPlan(p => ({
+      ...p,
+      manualSessions: autoSpaced,
+      manualSessionsDate: todayKey,
+    }));
+  }, [pumpPlan?.manualSessions, autoSpaced, todayKey]);
+
+  // Effective upcoming list — manual takes precedence once user has touched
+  // the schedule; otherwise auto-spaced.
+  const upcomingTimes = useMemo(() => {
+    const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+    if (manual.length > 0) {
+      const lastDoneH = doneSessions.length > 0
+        ? doneSessions[doneSessions.length - 1].h
+        : -1;
+      return manual.filter(t => t > lastDoneH).sort((a, b) => a - b);
+    }
+    return autoSpaced;
+  }, [pumpPlan?.manualSessions, doneSessions, autoSpaced]);
+
+  // Auto-shift effect: when a new pump is logged off-schedule, shift remaining.
+  useEffect(() => {
+    if (doneSessions.length === 0) return;
+    const isInitialMount = lastDoneCountRef.current === 0 && doneSessions.length >= 1;
+    if (doneSessions.length === lastDoneCountRef.current) return;
+    lastDoneCountRef.current = doneSessions.length;
+    if (isInitialMount) return;
+
+    const lastDone = doneSessions[doneSessions.length - 1];
+    const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+    if (manual.length === 0) return;
+
+    // Find the closest manual entry within 1 hour of this done pump
+    let closestIdx = -1;
+    let closestDelta = Infinity;
+    manual.forEach((t, i) => {
+      const d = Math.abs(t - lastDone.h);
+      if (d < closestDelta && d < 1) {
+        closestDelta = d;
+        closestIdx = i;
+      }
+    });
+    if (closestIdx < 0) return;
+
+    const planned = manual[closestIdx];
+    const delta = lastDone.h - planned;
+
+    // On time enough: just remove the matched planned entry
+    if (delta < 20 / 60) {
+      const newManual = manual.filter((_, i) => i !== closestIdx);
+      setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+      return;
+    }
+
+    // Late: shift all sessions after the matched one forward by delta
+    const remaining = manual.filter((_, i) => i > closestIdx);
+    const shifted = remaining.map(t => t + delta);
+
+    if (shifted.length > 0 && shifted[shifted.length - 1] > wakeEnd) {
+      // Would overrun — surface prompt
+      setOverrunPrompt({
+        delta,
+        plannedTime: planned,
+        actualTime: lastDone.h,
+        remainingTimes: remaining,
+        shiftedTimes: shifted,
+      });
+    } else {
+      // Safe to shift silently
+      const newManual = manual.filter((_, i) => i < closestIdx).concat(shifted);
+      setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+    }
+  }, [doneSessions]);
+
+  // v05.05bt86 — MISSED-PUMP DETECTION. The auto-shift effect above only
+  // fires when a NEW pump is logged. If a planned session's time passes
+  // with NO pump logged within ±1hr, that session is "missed" and the
+  // plan stays static (the next-planned time stays in the past, tile
+  // shows red until the user acts). To still meet the daily target,
+  // when a session is missed by 60+ min we drop it from the plan and
+  // shift remaining forward by the elapsed time — preserving frequency
+  // and keeping the day's session count on track. Runs each clock tick.
+  useEffect(() => {
+    const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+    if (manual.length === 0) return;
+    const sorted = [...manual].sort((a, b) => a - b);
+    const firstPlanned = sorted[0];
+    const nowH = now.getHours() + now.getMinutes() / 60;
+    // Overnight sessions (frac >= 24): compare against (24 + nowH) when
+    // we're past midnight, since the planned time is for "tomorrow" in
+    // the plan's frame.
+    const elapsedH = firstPlanned >= 24
+      ? (nowH + 24) - firstPlanned
+      : nowH - firstPlanned;
+    if (elapsedH < 1) return; // not missed yet
+    // Check: any logged pump within ±1hr of this planned time?
+    const planMs = (() => {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      if (firstPlanned >= 24) {
+        d.setDate(d.getDate() + Math.floor(firstPlanned / 24));
+        const remH = firstPlanned % 24;
+        d.setHours(Math.floor(remH), Math.round((remH - Math.floor(remH)) * 60), 0, 0);
+      } else {
+        d.setHours(Math.floor(firstPlanned), Math.round((firstPlanned - Math.floor(firstPlanned)) * 60), 0, 0);
+      }
+      return d.getTime();
+    })();
+    const wasLogged = doneSessions.some(s => {
+      const dt = s.ts ? new Date(s.ts).getTime() : null;
+      return dt != null && Math.abs(dt - planMs) < 60 * 60 * 1000;
+    });
+    if (wasLogged) return; // bt80 effect will handle it
+    // Truly missed. Drop the missed entry and shift remaining forward
+    // by elapsedH so frequency / target stay intact.
+    const remaining = sorted.slice(1);
+    const shifted = remaining.map(t => t + elapsedH);
+    setPumpPlan(p => ({
+      ...p,
+      manualSessions: shifted,
+      manualSessionsDate: todayKey,
+    }));
+    console.log(`[pump-plan] missed ${firstPlanned.toFixed(2)}h, shifted ${remaining.length} remaining forward by ${elapsedH.toFixed(2)}h`);
+  }, [now, pumpPlan?.manualSessions, doneSessions, todayKey]);
+
+  // Ensure manualSessions is populated before edits (so edits/auto-shift persist)
+  const ensureManualInit = () => {
+    const cur = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+    if (cur.length === 0 && upcomingTimes.length > 0) {
+      const seeded = [...upcomingTimes];
+      setPumpPlan(p => ({ ...p, manualSessions: seeded, manualSessionsDate: todayKey }));
+      return seeded;
+    }
+    return cur;
+  };
+
+  const handleShift = (idx, newTime) => {
+    if (!Number.isFinite(newTime)) { setEditingIdx(null); return; }
+    const list = ensureManualInit();
+    const sorted = [...list];
+    sorted[idx] = newTime;
+    sorted.sort((a, b) => a - b);
+    setPumpPlan(p => ({ ...p, manualSessions: sorted, manualSessionsDate: todayKey }));
+    setEditingIdx(null);
+  };
+  const handleRemove = (idx) => {
+    const list = ensureManualInit();
+    const newList = list.filter((_, i) => i !== idx);
+    setPumpPlan(p => ({ ...p, manualSessions: newList, manualSessionsDate: todayKey }));
+  };
+  const handleAdd = () => {
+    const list = ensureManualInit();
+    const lastTime = list.length > 0
+      ? list[list.length - 1]
+      : (doneSessions.length > 0 ? doneSessions[doneSessions.length - 1].h : wakeStart);
+    const suggested = Math.min(23.5, lastTime + 1.5);
+    const newList = [...list, suggested].sort((a, b) => a - b);
+    setPumpPlan(p => ({ ...p, manualSessions: newList, manualSessionsDate: todayKey }));
+  };
+  const handleAddOvernight = () => {
+    const list = ensureManualInit();
+    // Default: 1am as a typical MOTN slot
+    const newList = [...list, 25.0].sort((a, b) => a - b); // 25 = 1am next day
+    setPumpPlan(p => ({ ...p, manualSessions: newList, manualSessionsDate: todayKey }));
+  };
+
+  // Overrun prompt actions
+  const applyShiftForward = () => {
+    if (!overrunPrompt) return;
+    const manual = pumpPlan?.manualSessions || [];
+    const idx = manual.findIndex(t => Math.abs(t - overrunPrompt.plannedTime) < 0.001);
+    if (idx < 0) { setOverrunPrompt(null); return; }
+    const newManual = manual.filter((_, i) => i < idx).concat(overrunPrompt.shiftedTimes);
+    setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+    setOverrunPrompt(null);
+  };
+  const applyCompress = () => {
+    if (!overrunPrompt) return;
+    const manual = pumpPlan?.manualSessions || [];
+    const idx = manual.findIndex(t => Math.abs(t - overrunPrompt.plannedTime) < 0.001);
+    if (idx < 0) { setOverrunPrompt(null); return; }
+    const remaining = manual.slice(idx + 1);
+    if (remaining.length === 0) { setOverrunPrompt(null); return; }
+    const earliestNext = overrunPrompt.actualTime + 1.5;
+    const lastTime = remaining[remaining.length - 1];
+    const span = Math.max(0, lastTime - earliestNext);
+    const spacing = remaining.length > 1 ? span / (remaining.length - 1) : 0;
+    const compressed = remaining.map((_, i) =>
+      remaining.length === 1 ? lastTime : earliestNext + i * spacing
+    );
+    const newManual = manual.filter((_, i) => i < idx).concat(compressed);
+    setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+    setOverrunPrompt(null);
+  };
+  const applyDrop = () => {
+    if (!overrunPrompt) return;
+    const manual = pumpPlan?.manualSessions || [];
+    const idx = manual.findIndex(t => Math.abs(t - overrunPrompt.plannedTime) < 0.001);
+    if (idx < 0) { setOverrunPrompt(null); return; }
+    // Drop the matched planned (it was completed, just unmark) AND drop one upcoming
+    const newManual = [...manual.slice(0, idx), ...manual.slice(idx + 2)];
+    setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+    setOverrunPrompt(null);
+  };
+  const applyKeep = () => {
+    if (!overrunPrompt) return;
+    const manual = pumpPlan?.manualSessions || [];
+    const idx = manual.findIndex(t => Math.abs(t - overrunPrompt.plannedTime) < 0.001);
+    if (idx < 0) { setOverrunPrompt(null); return; }
+    // Just remove the matched (done) one; leave others as-is
+    const newManual = manual.filter((_, i) => i !== idx);
+    setPumpPlan(p => ({ ...p, manualSessions: newManual, manualSessionsDate: todayKey }));
+    setOverrunPrompt(null);
+  };
+
+  // Compose row list (done first, upcoming after)
+  const rows = [
+    ...doneSessions.map(s => ({
+      kind: "done",
+      h: s.h,
+      oz: s.oz,
+    })),
+    ...upcomingTimes.map(h => ({
+      kind: "upcoming",
+      h,
+    })),
+  ];
+
+  const intervalH = (wakeEnd - wakeStart) / Math.max(1, targetSessions - 1);
+
+  return (
+    <Section C={C} title="Today's pump plan">
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 16,
+        border: `1px solid ${C.line}15`,
+      }}>
+        {/* Header — frequency framing, not oz-to-go */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
+          marginBottom: 14, gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              today
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontStyle: "italic", color: C.ink, marginTop: 2 }}>
+              {doneSessions.length} <span style={{ color: C.muted }}>of {targetSessions} pumped</span>
+            </div>
+          </div>
+          <div style={{
+            textAlign: "right", fontSize: 11, color: C.muted,
+            fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5,
+          }}>
+            <div>target {targetOz} oz/day</div>
+            <div>~{intervalH.toFixed(1)}h between</div>
+          </div>
+        </div>
+
+        {/* v05.05bt81 — Recovery mode banner (active state) */}
+        {recoveryActive && (
+          <div style={{
+            background: `${C.accent}10`, border: `1.5px solid ${C.accent}`,
+            borderRadius: 10, padding: 12, marginBottom: 12,
+          }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              marginBottom: 6,
+            }}>
+              <div style={{
+                fontSize: 11, color: C.accent, fontWeight: 800, letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}>
+                🚨 Recovery mode · day {recoveryDayCount} of {recoveryTotalDays}
+              </div>
+              <button
+                onClick={() => setPumpPlan(p => ({
+                  ...p,
+                  recoveryMode: { ...p.recoveryMode, active: false },
+                }))}
+                style={{
+                  background: "transparent", border: "none", padding: "2px 6px",
+                  fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit",
+                }}>end</button>
+            </div>
+            {recoveryMode?.autoTriggered && recoveryMode?.triggerReason && (
+              <div style={{
+                fontSize: 11, color: C.accent, fontStyle: "italic",
+                marginBottom: 6,
+              }}>
+                Auto-started after {recoveryMode.triggerReason}. End if not needed.
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.55, marginBottom: 8 }}>
+              Tighter cadence + overnight slot added. Aim for:
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 11, lineHeight: 1.6, color: C.ink }}>
+              <li><strong>Long sessions</strong> (25–30 min) past second let-down</li>
+              <li><strong>Hand-express</strong> 2–3 min after each pump</li>
+              <li><strong>Hydrate + eat</strong> deliberately today</li>
+              <li>Watch for plugged ducts / mastitis warning signs</li>
+            </ul>
+            <button
+              onClick={() => setPumpPlan(p => ({
+                ...p,
+                recoveryMode: {
+                  ...p.recoveryMode,
+                  days: (p.recoveryMode?.days || 3) + 1,
+                },
+              }))}
+              style={{
+                marginTop: 8,
+                background: "transparent", color: C.accent,
+                border: `1px solid ${C.accent}55`, borderRadius: 6,
+                padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit",
+              }}>+ Extend 1 day</button>
+          </div>
+        )}
+
+        {/* Overrun prompt (if active) */}
+        {overrunPrompt && (
+          <div style={{
+            background: `${C.gold}10`, border: `1px solid ${C.gold}55`,
+            borderRadius: 10, padding: 12, marginBottom: 12,
+          }}>
+            <div style={{
+              fontSize: 11, color: C.gold, fontWeight: 700, letterSpacing: "0.1em",
+              textTransform: "uppercase", marginBottom: 6,
+            }}>
+              ⏱ Logged {Math.round(overrunPrompt.delta * 60)}min late
+            </div>
+            <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
+              Shifting the rest of today's pumps forward would push your last pump past <strong>{fmtTime(wakeEnd)}</strong>. What should happen?
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {[
+                { id: "shift", title: "Shift the rest forward", sub: `Last pump: ${fmtTime(overrunPrompt.shiftedTimes[overrunPrompt.shiftedTimes.length - 1])}`, fn: applyShiftForward },
+                { id: "compress", title: "Compress remaining", sub: `Keep last at original ${fmtTime(overrunPrompt.remainingTimes[overrunPrompt.remainingTimes.length - 1])}, tighter gaps`, fn: applyCompress },
+                { id: "drop", title: "Drop one session", sub: `${overrunPrompt.remainingTimes.length - 1} pumps remaining instead of ${overrunPrompt.remainingTimes.length}`, fn: applyDrop },
+                { id: "keep", title: "Keep plan as-is", sub: "Don't shift. Next pump still at original time.", fn: applyKeep },
+              ].map(opt => (
+                <button key={opt.id} onClick={opt.fn} style={{
+                  background: C.paper, border: `1px solid ${C.line}22`,
+                  borderRadius: 8, padding: "10px 12px", textAlign: "left",
+                  cursor: "pointer", fontFamily: "inherit", color: C.ink,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{opt.title}</div>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{opt.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Listed sessions */}
+        {rows.length === 0 ? (
+          <div style={{
+            padding: "16px 12px", textAlign: "center", color: C.muted,
+            fontStyle: "italic", fontSize: 13,
+          }}>
+            No pumps planned today. Tap + Add to start.
+          </div>
+        ) : (
+          <div>
+            {rows.map((s, i) => {
+              const cm = circadian(s.h);
+              const isDone = s.kind === "done";
+              const isLast = i === rows.length - 1;
+              const upcomingIdx = isDone ? -1 : (i - doneSessions.length);
+              const isEditing = !isDone && editingIdx === upcomingIdx;
+              return (
+                <div key={i} style={{
+                  display: "grid",
+                  gridTemplateColumns: "70px 14px 1fr auto",
+                  alignItems: "center", gap: 10,
+                  padding: "10px 0",
+                  borderBottom: isLast ? "none" : `1px solid ${C.line}11`,
+                  opacity: isDone ? 1 : 0.92,
+                }}>
+                  {/* Time */}
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 13, fontWeight: isDone ? 700 : 500,
+                    color: isDone ? C.ink : C.muted,
+                    letterSpacing: "0.02em",
+                  }}>
+                    {isEditing ? (
+                      <input
+                        type="time"
+                        defaultValue={fracToHHMM(s.h)}
+                        autoFocus
+                        onBlur={(e) => handleShift(upcomingIdx, parseTimeToFrac(e.target.value))}
+                        onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditingIdx(null); }}
+                        style={{
+                          width: 70, background: C.bg, color: C.ink,
+                          border: `1px solid ${C.line}33`, borderRadius: 4,
+                          fontFamily: "inherit", fontSize: 12, padding: "2px 4px", outline: "none",
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => !isDone && setEditingIdx(upcomingIdx)}
+                        disabled={isDone}
+                        style={{
+                          background: "transparent", border: "none", padding: 0,
+                          fontFamily: "inherit", fontSize: 13, fontWeight: "inherit",
+                          color: "inherit", cursor: isDone ? "default" : "pointer",
+                          textAlign: "left", letterSpacing: "inherit",
+                        }}>
+                        {fmtTime(s.h)}{s.h >= 24 ? <span style={{ fontSize: 9, color: C.muted, marginLeft: 3 }}>+1d</span> : null}
+                      </button>
+                    )}
+                  </div>
+                  {/* Status dot */}
+                  <div style={{
+                    width: 10, height: 10, borderRadius: "50%",
+                    background: isDone ? C.mommy : "transparent",
+                    border: !isDone ? `1.5px solid ${C.mommy}AA` : "none",
+                    margin: "0 auto",
+                  }} />
+                  {/* Status text */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, minWidth: 0 }}>
+                    <span style={{ color: isDone ? C.ink : C.muted, fontWeight: isDone ? 500 : 400 }}>
+                      {isDone ? `${s.oz.toFixed(1)} oz pumped` : "upcoming"}
+                    </span>
+                    <span style={{
+                      fontSize: 10, color: cm.color, fontWeight: 600, letterSpacing: "0.04em",
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}>
+                      {cm.emoji} {cm.label}
+                    </span>
+                  </div>
+                  {/* Action */}
+                  {!isDone && !isEditing && (
+                    <button
+                      onClick={() => handleRemove(upcomingIdx)}
+                      style={{
+                        background: "transparent", border: "none",
+                        width: 24, height: 24, borderRadius: "50%",
+                        cursor: "pointer", color: C.muted, fontSize: 14,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "inherit",
+                      }}
+                      aria-label="remove"
+                    >×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add buttons */}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={handleAdd} style={{
+            flex: 1, background: "transparent", color: C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 8,
+            padding: "8px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>+ Add session</button>
+          <button onClick={handleAddOvernight} style={{
+            flex: 1, background: "transparent", color: "#5A4E7C",
+            border: `1px dashed #5A4E7C66`, borderRadius: 8,
+            padding: "8px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>+ Overnight 🌙</button>
+        </div>
+
+        {/* v05.05bt81 — Recovery mode entry (when not active) */}
+        {!recoveryActive && !showRecoveryConfirm && (
+          <button
+            onClick={() => setShowRecoveryConfirm(true)}
+            style={{
+              marginTop: 10, width: "100%",
+              background: "transparent", color: C.accent,
+              border: `1.5px dashed ${C.accent}66`, borderRadius: 8,
+              padding: "10px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit",
+            }}>
+            🚨 Long gap? Start recovery mode
+          </button>
+        )}
+        {!recoveryActive && showRecoveryConfirm && (
+          <div style={{
+            marginTop: 10,
+            background: `${C.accent}10`, border: `1.5px solid ${C.accent}`,
+            borderRadius: 10, padding: 12,
+          }}>
+            <div style={{
+              fontSize: 11, color: C.accent, fontWeight: 800, letterSpacing: "0.1em",
+              textTransform: "uppercase", marginBottom: 6,
+            }}>
+              🚨 Start recovery mode?
+            </div>
+            <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.55, marginBottom: 10 }}>
+              Use this after a long gap (4+ hrs overdue) to protect supply. For 3 days, the plan switches to:
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 11, lineHeight: 1.6, color: C.ink, marginBottom: 10 }}>
+              <li>+1 pump per day (tighter cadence)</li>
+              <li>Overnight slot (~2am) added to schedule</li>
+              <li>In-card reminders: long sessions, hand-express, hydrate</li>
+            </ul>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setShowRecoveryConfirm(false)}
+                style={{
+                  flex: 1, background: "transparent", color: C.ink,
+                  border: `1px solid ${C.line}33`, borderRadius: 6,
+                  padding: "8px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>Cancel</button>
+              <button
+                onClick={() => {
+                  setPumpPlan(p => ({
+                    ...p,
+                    recoveryMode: {
+                      active: true,
+                      startedAt: new Date().toISOString(),
+                      days: 3,
+                    },
+                    // Clear manualSessions so autoSpaced regenerates with overnight
+                    manualSessions: [],
+                    manualSessionsDate: todayKey,
+                  }));
+                  setShowRecoveryConfirm(false);
+                }}
+                style={{
+                  flex: 1.4, background: C.accent, color: "#fff",
+                  border: "none", borderRadius: 6,
+                  padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>Start 3-day recovery</button>
+            </div>
+          </div>
+        )}
+
+        {/* Settings toggle */}
+        <button
+          onClick={() => setShowSettings(s => !s)}
+          style={{
+            marginTop: 10, width: "100%",
+            background: "transparent", color: C.muted,
+            border: `1px dashed ${C.line}33`, borderRadius: 6,
+            padding: "6px 10px", fontSize: 11, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em",
+          }}>
+          settings: day {fmtTime(wakeStart)}–{fmtTime(wakeEnd)} · buffer {bagBuffer}× bag {showSettings ? "▾" : "▸"}
+        </button>
+        {showSettings && (
+          <div style={{
+            marginTop: 8, padding: 12,
+            background: C.bg, borderRadius: 8, border: `1px solid ${C.line}11`,
+            display: "grid", gap: 10,
+          }}>
+            <div>
+              <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+                day starts / ends
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="time"
+                  defaultValue={fracToHHMM(wakeStart)}
+                  onBlur={(e) => {
+                    const v = parseTimeToFrac(e.target.value);
+                    if (Number.isFinite(v)) setPumpPlan(p => ({ ...p, wakeStart: v }));
+                  }}
+                  style={{
+                    width: 90, padding: "6px 8px", border: `1px solid ${C.line}33`,
+                    borderRadius: 6, background: C.paper, color: C.ink,
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
+                  }}
+                />
+                <span style={{ color: C.muted, fontSize: 12 }}>to</span>
+                <input
+                  type="time"
+                  defaultValue={fracToHHMM(wakeEnd)}
+                  onBlur={(e) => {
+                    const v = parseTimeToFrac(e.target.value);
+                    if (Number.isFinite(v)) setPumpPlan(p => ({ ...p, wakeEnd: v }));
+                  }}
+                  style={{
+                    width: 90, padding: "6px 8px", border: `1px solid ${C.line}33`,
+                    borderRadius: 6, background: C.paper, color: C.ink,
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+                freezer buffer (extra bags · 4 oz each)
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[0, 1, 2, 3].map(n => (
+                  <button key={n}
+                    onClick={() => setPumpPlan(p => ({ ...p, bagBuffer: n }))}
+                    style={{
+                      flex: 1,
+                      background: bagBuffer === n ? C.ink : "transparent",
+                      color: bagBuffer === n ? C.paper : C.ink,
+                      border: `1px solid ${C.line}22`, borderRadius: 6,
+                      padding: "6px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}>{n === 0 ? "none" : `${n}× (${n * 4} oz)`}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.4 }}>
+              Target = Solène's recent intake ({solèneAvgIntake} oz/day) + buffer ({bagBuffer * 4} oz). Sessions = ⌈target ÷ avg yield ({avgYieldPerPump.toFixed(1)} oz/pump)⌉ = {targetSessions}.
+            </div>
+            {/* v05.05bt82 — auto-recovery toggle */}
+            <label style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 10px", background: C.paper,
+              border: `1px solid ${C.line}22`, borderRadius: 6,
+              cursor: "pointer", fontSize: 12, color: C.ink, lineHeight: 1.4,
+            }}>
+              <input
+                type="checkbox"
+                checked={autoRecoveryEnabled}
+                onChange={(e) => setPumpPlan(p => ({ ...p, autoRecoveryEnabled: e.target.checked }))}
+                style={{ width: 16, height: 16, flexShrink: 0 }}
+              />
+              <span>
+                <strong>Auto-start recovery mode</strong> after a 5+ hour gap past next-due. <span style={{ color: C.muted }}>One less decision to make when you're already behind.</span>
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal, pumpPlan, setPumpPlan }) {
   // Viewer color for chrome that's about inventory management (which both
   // parents do) rather than active pumping or lactation calories (which
   // are Mommy-specific). Daddy adds bottles, picks bottles, manages the
@@ -15580,6 +17244,23 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
         mommyMaintenanceCal={mommyMaintenanceCal}
         setMommyMaintenanceCal={setMommyMaintenanceCal}
       />
+
+      {/* v05.05bt78 — Daily burn history. Mommy-only. Shows the last 7
+          days as a small bar chart with kcal per day. No targets, no
+          streaks, no "trending up vs last week" framing — per the
+          positioning doc's anti-gamification stance, this is data-
+          presenting, not score-keeping. Useful for fueling decisions
+          (eat more on big-pump days), not for self-judgment. */}
+      {currentUser === "Mommy" && (
+        <DailyBurnHistoryCard C={C} events={events} now={now} />
+      )}
+
+      {currentUser === "Mommy" && (
+        <TodaysPumpPlanCard
+          C={C} events={events} now={now}
+          pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
+        />
+      )}
 
       <Section C={C} title="Pump timing">
         <div style={{ background: C.paper, borderRadius: 12, padding: 16, border: `1px solid ${C.line}15` }}>
@@ -15707,6 +17388,37 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
             ))}
           </div>
         </>)}
+        {/* v05.05bt83 — expired bottles section. Previously expired bottles
+            were silently filtered out, which meant adding a bottle with a
+            backdated time (e.g., a 1wk-old fridge bottle from the bt77
+            backdate presets) appeared to do nothing — bottle was in state
+            but invisible. Now surface them so the user can see what they
+            added and either edit the date or remove. */}
+        {expired.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{
+              fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.accent, fontWeight: 700, marginBottom: 6,
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              ⚠ past safe window ({expired.length})
+            </div>
+            <div style={{
+              fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.5, marginBottom: 8,
+            }}>
+              These bottles are past their safe window for their storage location. Tap to edit (fix the time / move to freezer) or remove.
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {expired.map(item => (
+                <div key={item.id} style={{ opacity: 0.85 }}>
+                  <InventoryRow item={item} C={C}
+                    onEdit={() => editBottle && editBottle(item.id)}
+                    onRemove={() => removeInventory(item.id)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* Supply analytics — moved here from Wellness in v05.05ax. These
@@ -15893,8 +17605,24 @@ function InventoryRow({ item, C, onMoveToFridge, onRemove, onEdit }) {
         padding: 0, fontFamily: "inherit",
       }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>{item.oz} oz</div>
-        <div style={{ fontSize: 10, color: urgent ? C.accent : C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>
-          {fmtHours(remHrs)} left · pumped {fmtElapsed(minutesAgo(item.pumpedAt))}
+        <div style={{
+          fontSize: 10, color: urgent ? C.accent : C.muted,
+          fontFamily: "'JetBrains Mono', monospace", marginTop: 1,
+          display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+        }}>
+          <span>{fmtHours(remHrs)} left · pumped {fmtElapsed(minutesAgo(item.pumpedAt))}</span>
+          {(() => {
+            const cm = circadianMilkType(item.pumpedAt);
+            if (!cm) return null;
+            return (
+              <span title={cm.note} style={{
+                fontSize: 10, color: cm.color, fontWeight: 600,
+                letterSpacing: "0.02em",
+              }}>
+                {cm.emoji} {cm.type}
+              </span>
+            );
+          })()}
         </div>
       </button>
       {isRT && (
@@ -17581,8 +19309,21 @@ function FeedForm({ C, lastFeed, onSubmit, onCancel, liveInventory }) {
                           <div style={{
                             fontSize: 10, color: C.muted, marginTop: 1,
                             fontFamily: "'JetBrains Mono', monospace",
+                            display: "flex", alignItems: "center", gap: 6,
                           }}>
-                            pumped {fmtTimeShort(pumpedAt)}
+                            <span>pumped {fmtTimeShort(pumpedAt)}</span>
+                            {(() => {
+                              const cm = circadianMilkType(b.pumpedAt);
+                              if (!cm) return null;
+                              return (
+                                <span title={cm.note} style={{
+                                  fontSize: 10, color: cm.color, fontWeight: 600,
+                                  letterSpacing: "0.02em",
+                                }}>
+                                  {cm.emoji} {cm.type}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </button>
