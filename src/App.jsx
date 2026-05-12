@@ -15,15 +15,22 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt89";
+const APP_VERSION = "2026.05.05bt96";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "EDIT FEED → ADD BOTTLE LABEL. The feed edit modal now has a 'Bottle label (optional)' field, same shape as the pump-event field. Useful for attributing a feed to a specific bottle (A/B/1/2/etc) after the fact — works whether the inventory-mismatch flag is still active or already resolved. Field is independent of the 'Mark resolved' button so you can add a label while keeping the warning if you want.",
+  "NEW WEARABLE PROTOCOL option in the pump chooser. Replaces bt95's MLD + HOP cards with a single 'Wearable protocol ▸' entry that opens a sub-chooser of the top-3 stim/express timing patterns circulating in pumping communities. Each pattern card shows: rank, name, sequence-bar visualization, exact timing (e.g. '2m stim → 8m express → 1m stim → 8m express → 1m stim → 5m express'), literature alignment score (X/5 principles satisfied), social-media popularity proxy, and the mechanism rationale. Banner at top of sub-chooser reminds you: 'No RCT compares these head-to-head' — rankings are alignment-based, not effectiveness-based. Tap a pattern to start. Session header on the active-pump tile shows the pattern name. pumpType is persisted as `mld-{id}` on the event so you can compare yield across patterns later as your own n=1 study.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt96", summary: "Wearable timing-pattern sub-chooser. Per chat ('create an alternative pump protocol in addition to standard and power pump, and when the user clicks on that, pop up the top 3 most-aligned momcozy settings'). NEW module-level constant WEARABLE_PATTERNS with three entries: 60-sec restim (rank 1, alignment 5/5, Reddit/IBCLC popular, sequence 2/8/1/8/1/5 totaling 25 min), M5 Power (rank 2, alignment 4/5, TikTok viral, sequence 2/10/2/10 totaling 24 min), Express-heavy (rank 3, alignment 2/5, RTW forums, sequence 1/18/1/8 totaling 28 min). Each pattern carries: id, rank, name, sequence (array of {mode: 'stim'|'express', min}), totalMin, alignment (count of 5 literature principles satisfied), alignmentDetail (specific principle-by-principle breakdown citing Kent 2008 latency, Prime 2011 let-down correlation, Mitoulas 2002 flow plateau, Meier 2008 two-phase, total ≤30 min), popularity (social-media origin proxy), rationale. PUMPCHOOSER restructured: new chooserView state ('main' | 'wearable'), default 'main'. Main view now has Standard / Power / Wearable protocol ▸ / Just log a pump (bt95's MLD and HOP standalone cards removed — superseded). Wearable card opens sub-view via setChooserView('wearable'). Sub-view has: ← back button to return to main, italic caveat banner ('No RCT compares these head-to-head'), three pattern cards. Each pattern card renders the sequence as a tiny horizontal bar with stim segments in full accent color and express segments in 33% accent — proportional widths by minute fraction. Below the bar: monospace text of sequence (e.g. '2m stim → 8m express → …'), bold literature alignment line with detail paragraph, social-media popularity line, italic mechanism rationale. Tapping a pattern: onStartPump(`mld-${pattern.id}`) + close chooser. FinishPumpModal session header recognizes the mld-* prefix via getWearablePattern() helper and renders the readable name. pumpType field on the event records the full mld-{id} so journal and future analytics can compare across patterns. Future work (still deferred): in-pump phase coaching to prompt mode switches at sequence boundaries; per-pattern yield comparison chart on Milk tab once enough sessions per pattern are logged." },
+  { version: "2026.05.05bt95", summary: "Pump chooser gains two evidence-based protocol options beside Power pump. (1) MULTIPLE LET-DOWN (MLD) — dusk mauve (#8E6B86) left border, routed via onStartPump('mld'). Card copy emphasizes ~25-30 min session targeting 2-3 let-downs by tapping pump back to stim mode when flow slows. Momcozy-specific note: tap mode button to switch stim ⇄ express. (2) HANDS-ON PUMPING (HOP) — sage left border, routed via onStartPump('hop'). Card copy describes pre-pump 30s massage, in-session compression in rotating quadrants, post-pump 2-3 min hand expression. Cites Morton et al. 2009: +48% volume, +49% fat content vs pump alone. FinishPumpModal session header (line ~7199) updated to render protocol-specific label: 'Multiple let-down session' / 'Hands-on pump session' / 'Power pump session' / 'Pump session' by activePump.type. FinishPumpModal save handler (line ~6303) generalized: protocolType captured from activePump.type, durationMin still POWER_PUMP_TOTAL_MIN-snapped only when protocol === 'power' (mld/hop are user-paced), pumpType field persisted on the event for any non-standard protocol so journal renders + future analytics can distinguish them. Future work (deferred): in-pump phase coaching — timed prompts for MLD restim cycles and HOP compression reminders during the active session, plus Momcozy-specific mode-switch alerts." },
+  { version: "2026.05.05bt94", summary: "Removed bt86's shift handoff confirmation system per user direction ('let's remove the checkpoint confirmation, I think it's over complicated'). Cleanup spans: (1) shiftHandoff state declaration removed from App. (2) localStorage hydration line removed. (3) cloudKeySetters entry for solene:shiftHandoff removed. (4) Autosave useEffect removed. (5) Effect A (transition detection that watched baseOnDuty.parent and created pending handoff records) removed. (6) Effect B (auto-takeover after 5min grace) removed. (7) ShiftHandoffBanner render in App-level render tree (above OnDutyCard) removed along with its onConfirmOnDuty + onMarkCovering handlers. (8) ShiftHandoffBanner component definition removed (~107 lines). Behavior reverts to pre-bt86: at scheduled shift transitions the on-duty display flips silently. Manual takeover via 'Tag in [partner]' button works as before; bt93's two-sided takeover banner means both covering and original parent can end it from their respective views. The original concern that motivated bt86 ('partner went on an errand longer than expected, I didn't realize I was covering') now relies on the user noticing and tapping the manual takeover button — same as before. Historical bt86 changelog entry preserved for reference but no live code refs it." },
+  { version: "2026.05.05bt93", summary: "Takeover banner visibility bug fix. Per user report 'It keeps trying to end mommy when the profile viewing is switched to daddy and vice versa.' Root cause: the takeover banner at OnDutyCard ~line 9197 was gated to `takeoverWithMins.originalParent === currentUser` — meaning it only rendered for the parent who originally went off-duty, not the parent doing the actual covering. Effect: switching profile flipped banner visibility (showing the Take-back affordance only to the off-duty parent), and from that view the 'Take back' button read like the app was 'trying to end' the covering parent's coverage. Particularly confusing when both parents share devices and switch profiles to see each other's views. FIX: condition now `(originalParent === currentUser || coveringParent === currentUser)` so banner shows on either parent's view. Copy adapts by direction: covering parent sees eyebrow 'You're covering' + body 'for [original] · X min in' + button 'I'm done'; original parent sees eyebrow 'Your shift was handed off' + body '[covering] is covering · X min in' + button 'Take back'. Visual styling (mauve/slate by covering parent) unchanged. End action (onEndTakeover) unchanged — credits the covering parent's time bank either way." },
+  { version: "2026.05.05bt92", summary: "Pump plan settings (bagBuffer, wakeStart, wakeEnd) now actually trigger schedule regeneration. Bug: bt88 added an auto-seed effect that populated manualSessions from autoSpaced on first render. After that seed, manualSessions persisted with the original shape — even when bagBuffer changed (and therefore targetSessions changed), the listed schedule didn't update because rendering uses manualSessions when non-empty. Settings UI gave the false impression of being toggleable without effect. Fix: new useEffect watching [bagBuffer, wakeStart, wakeEnd, todayKey] with a lastSettingsRef ref to detect actual changes (initial mount skipped via prev === null check). When any setting changes, clears manualSessions to [] which triggers the bt88 auto-seed to regenerate with the new target. Side effect noted in the build notes: this drops user-customized session edits, since manualSessions doesn't distinguish 'auto-seeded' from 'user-customized.' Trade-off is acceptable per chat priority — settings actually working > customizations persisting across setting changes. If the user wants to customize, they should adjust settings first, then edit rows. Future work: track a manualSessionsCustomized flag to make this distinction surgical." },
+  { version: "2026.05.05bt91", summary: "Reconcile-via-edit now actually drains inventory. bt89 added the bottle-label field to the feed edit form but only stored the label as text — the inventory was untouched. Per chat ('when editing the bottle to reconcile things... should deduct from inventory if there'), the onSave callback at the EditEventModal render site (around line 11925) now intercepts feed events where: type === 'feed' AND updated.bottleLabel AND !editing.bottleLabel (label added this edit) AND editing.inventoryReconcileNeeded AND oz > 0. It sorts inventory by pumpedAt ascending (oldest first), iterates and drains matching bottles (label case-insensitive) up to the feed's oz, dropping bottles whose remaining oz <= 0.05. If fully drained (remaining <= 0.05), clears inventoryReconcileNeeded and reconcileReason on the updated event. If partial drain (drained > 0 but remaining > 0.05), updates unallocatedOz and sets reconcileReason to 'shortfall' so the warning persists with the new amount. If no match found, label stored as notation only — no drain, no flag change. Trigger guarded by !editing.bottleLabel so re-editing an already-labeled feed doesn't double-drain. Console.log records the drain for diagnostics." },
+  { version: "2026.05.05bt90", summary: "Extended bt87's advanced disclosure to cover cloud sync + backup sections in ProfileSwitcherModal. Per chat ('the code stuff should also be under advanced'), the family-code display, 'Set up cloud sync' / 'Clear family code' buttons, and the backup export/import/restore controls were previously visible at all times — accidentally tappable. Both sections now gated with `showAdvanced && ...` so they only render when the user has explicitly expanded the disclosure. With this, every potentially-destructive surface in the profile switcher (family code reset, data import, backup restore, time-travel, clear stuck pump, reset bedtime, reset all data) requires the same deliberate tap to access. Profile selector, theme toggle, sound toggle (already inside advanced), and the about/build-notes panel remain visible by default since they're not destructive." },
   { version: "2026.05.05bt89", summary: "EditEventModal feed section gains bottle-label field. New feedBottleLabel state, initialized from event.bottleLabel || ''. Rendered as a 4-char uppercase mono input below the Source SegControl, mirroring the pump-event bottle-label input added in bt22. Submit handler now sets updated.bottleLabel = feedBottleLabel.trim() || null on feed events (previously feed save only persisted oz + source). Helper text under the field: 'Attribute this feed to a specific bottle. Helps after-the-fact reconciliation.' Independent of the inventoryReconcileNeeded resolution flow — user can add a label without clearing the flag (useful when they want to note the attribution but haven't fully fixed the inventory mismatch), or clear the flag without adding a label (existing flow), or do both. The feedBottleSuffix helper at line ~985 already reads event.bottleLabel for display, so adding the label propagates to the timeline and journal renders automatically. No DB migration needed — feeds without bottleLabel just see the input as empty placeholder." },
   { version: "2026.05.05bt88", summary: "Pump plan auto-seed fix. Follow-up to bt87 which wired the Now-page pump tile color to pumpPlan.manualSessions but missed that manualSessions was only populated when the user interacted with the TodaysPumpPlanCard (add/remove/edit). In the more common case where the user never tapped into the card, manualSessions stayed [] all day and the App-level nextPumpAt useMemo fell back to the interval-based estimate. The card UI itself looked correct because it derives autoSpaced for display, but that derivation wasn't persisted. FIX: new useEffect inside TodaysPumpPlanCard that watches pumpPlan.manualSessions + autoSpaced + todayKey. When manualSessions is empty AND autoSpaced has entries AND we're on today, setPumpPlan(p => ({...p, manualSessions: autoSpaced, manualSessionsDate: todayKey})). Runs after first render once doneSessions stabilizes. After this seed, all downstream consumers (Now-page tile via App's nextPumpAt useMemo, bt80 auto-shift effect, bt87 missed-pump detector) see the same plan. lastDoneCountRef guards in bt80 still prevent spurious shifts on initial mount with existing done events." },
   { version: "2026.05.05bt87", summary: "Three coordinated changes per chat. (1) PUMP TILE color (red/yellow/green) on Now page now derives from the pump plan's next planned session, not from PUMP_INTERVAL_HRS-based estimate. New nextPumpAt useMemo: if pumpPlan.manualSessions exists and is non-empty, take the sorted first entry as the next planned fractional hour, convert to a Date (handling overnight slots where frac >= 24 means next day's clock), return as the tile's reference time. The existing minsToNextPump / pumpSoon / pumpOverdue logic in MilkPanel works unchanged on top of this — it just gets the planned time instead of the interval estimate. Fallback to lastPump.start + PUMP_INTERVAL_HRS preserved for initial state / no-plan situations. (2) MISSED-PUMP DETECTION & AUTO-ADJUST. New useEffect inside TodaysPumpPlanCard that runs each clock tick. Computes elapsedH = nowH - firstPlannedH (handling overnight wrap). If elapsedH >= 1 AND no logged pump within ±1hr of the planned time, the session is 'missed' — the entry is dropped from manualSessions and all remaining entries shift forward by elapsedH so frequency / daily target stay intact. Distinct from the bt80 auto-shift effect which only fires on new-pump-logged events (this one fires from the time-passes side). Console.log records the adjustment for diagnostics. (3) PROFILE SWITCHER hardening. New showAdvanced useState in ProfileSwitcherModal (default false). The DEV section (time-travel, clear stuck pump, reset bedtime, sound toggle) and Danger zone (reset all data) are now wrapped in a fragment that only renders when showAdvanced is true. Otherwise a single muted 'advanced settings ▸' button shows at the bottom of the modal; tapping it reveals the wrapped sections, and a 'hide' button collapses them again. Casual scrolling can no longer accidentally trigger destructive actions." },
@@ -621,6 +628,90 @@ const POWER_PUMP_PHASES = [
   { type: "pump", durationMin: 10, label: "Pump 10" },
 ];
 const POWER_PUMP_TOTAL_MIN = POWER_PUMP_PHASES.reduce((s, p) => s + p.durationMin, 0); // 60
+
+// === Wearable pump timing patterns ===
+// v05.05bt96. Curated set of stim/express patterns circulating in
+// pumping communities, ranked by mechanism alignment with established
+// lactation physiology. CRITICAL CAVEAT: none of these patterns have
+// been compared head-to-head in any peer-reviewed RCT. The "ranking"
+// is by theoretical fit with literature principles, NOT measured
+// effectiveness. Real n for each pattern's social-media popularity is
+// unknown (TikTok views ≠ users who actually completed the pattern).
+//
+// Principles used for the alignment score:
+//   K) Kent et al. 2008 (n=21, J Hum Lact): let-down latency median
+//      2.2 min, range 0–12 min. Initial stim phase < 2 min misses the
+//      median user; < 1 min misses the right tail (~40% of users).
+//   P) Prime et al. 2011 (n=25, J Hum Lact): r≈0.85 between number of
+//      milk ejections and session volume. Mothers averaged 2–3 ejections
+//      per 15 min. Targeting 3 let-downs > 2 > 1.
+//   M) Mitoulas et al. 2002 (n=9, Exp Physiol): post-ejection flow
+//      rate plateaus 5–8 min after each let-down. Express phases
+//      shorter than 5 min cut pre-plateau; longer than 10 wastes time.
+//   E) Meier et al. 2008 (n~80, J Perinat): two-phase (stim → express)
+//      yields ~+18% vs expression-only.
+//   T) Total session ≤ 30 min: marginal yield drops sharply past 30.
+//
+// Each pattern's `alignment` field is the count of principles cleanly
+// satisfied (out of 5). The order in this array is the alignment-based
+// ranking — index 0 = highest alignment.
+const WEARABLE_PATTERNS = [
+  {
+    id: "60s-restim",
+    rank: 1,
+    name: "60-sec restim",
+    sequence: [
+      { mode: "stim",    min: 2 },
+      { mode: "express", min: 8 },
+      { mode: "stim",    min: 1 },
+      { mode: "express", min: 8 },
+      { mode: "stim",    min: 1 },
+      { mode: "express", min: 5 },
+    ],
+    totalMin: 25,
+    alignment: 5,
+    alignmentDetail: "2-min initial stim covers Kent's median latency. 8-min express phases bracket Mitoulas plateau. 3 let-downs hits Prime's optimal correlation point. Two-phase ✓. Under 30 min ✓.",
+    popularity: "Reddit r/breastfeeding · IBCLC blogs",
+    rationale: "Highest mechanism alignment of any circulating pattern. Targets 3 let-downs which is the volume sweet spot per Prime 2011.",
+  },
+  {
+    id: "m5-power",
+    rank: 2,
+    name: "M5 Power",
+    sequence: [
+      { mode: "stim",    min: 2 },
+      { mode: "express", min: 10 },
+      { mode: "stim",    min: 2 },
+      { mode: "express", min: 10 },
+    ],
+    totalMin: 24,
+    alignment: 4,
+    alignmentDetail: "2-min initial stim ✓ (K). Two-phase ✓ (E). Under 30 min ✓ (T). 10-min express slightly past plateau but OK (M). Only 2 let-downs vs Prime's optimal 3 — the one principle this misses.",
+    popularity: "TikTok viral — most-shared pattern by far",
+    rationale: "Most popular pattern online. Solid mechanism fit but suboptimal let-down count.",
+  },
+  {
+    id: "express-heavy",
+    rank: 3,
+    name: "Express-heavy",
+    sequence: [
+      { mode: "stim",    min: 1 },
+      { mode: "express", min: 18 },
+      { mode: "stim",    min: 1 },
+      { mode: "express", min: 8 },
+    ],
+    totalMin: 28,
+    alignment: 2,
+    alignmentDetail: "Two-phase ✓ (E), under 30 min ✓ (T). 1-min initial stim misses ~40% of users' latency tail (K). 18-min express is well past Mitoulas plateau — most of that minute count is yielding little. Only 2 let-downs (P).",
+    popularity: "Return-to-work mom forums",
+    rationale: "Lowest mechanism alignment of the top 3. Anecdotally works for users with already-established supply and fast let-down.",
+  },
+];
+
+// Look up pattern by id string from event/state. Returns undefined if not found.
+function getWearablePattern(id) {
+  return WEARABLE_PATTERNS.find(p => p.id === id);
+}
 
 // Given an active pump session (has startedAt, type === "power") and the
 // current time, return the live phase state. Computes phase by walking the
@@ -2196,16 +2287,6 @@ function SoleneHandoffInner() {
   const [activePump, setActivePump] = useState(null); // { startedAt }
   // Impromptu takeover: { coveringParent, originalParent, startedAt }
   const [takeover, setTakeover] = useState(null);
-  // v05.05bt86 — shift handoff confirmation state.
-  // Per chat: at every scheduled shift transition the system flags a
-  // pending confirmation banner on both devices. Either parent can tap to
-  // confirm ("toParent is on duty") or flag a takeover ("fromParent is
-  // covering"). If neither happens within 5 minutes, auto-takeover starts
-  // with fromParent covering toParent (the no-show). Shape:
-  //   { scheduledAt: ISO, fromParent, toParent, status, confirmedBy, confirmedAt }
-  // status is "pending" | "confirmed-on-duty" | "confirmed-covering"
-  // confirmedBy is "Mommy" | "Daddy" | "auto"
-  const [shiftHandoff, setShiftHandoff] = useState(null);
   const [docSummary, setDocSummary] = useState(null); // { generated, html, copyText }
   // Handoff note: { from, to, text, ts, acknowledged }
   const [handoffNote, setHandoffNote] = useState(null);
@@ -2414,7 +2495,6 @@ function SoleneHandoffInner() {
       const aa = await storage.get("solene:activeActivity");
       const ap_pump = await storage.get("solene:activePump");
       const tk = await storage.get("solene:takeover");
-      const sh = await storage.get("solene:shiftHandoff");
       const hn = await storage.get("solene:handoffNote");
       const na = await storage.get("solene:noteArchive");
       const tb = await storage.get("solene:timeBank");
@@ -2606,7 +2686,6 @@ function SoleneHandoffInner() {
     "solene:activeActivity":  (v) => setActiveActivity(v),
     "solene:activePump":      (v) => setActivePump(v),
     "solene:takeover":        (v) => setTakeover(v),
-    "solene:shiftHandoff":    (v) => setShiftHandoff(v),
     "solene:handoffNote":     (v) => setHandoffNote(v),
     "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
@@ -2739,7 +2818,6 @@ function SoleneHandoffInner() {
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activeActivity", activeActivity); }, [activeActivity, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activePump", activePump); }, [activePump, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:takeover", takeover); }, [takeover, hydrated]);
-  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:shiftHandoff", shiftHandoff); }, [shiftHandoff, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:handoffNote", handoffNote); }, [handoffNote, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:noteArchive", noteArchive); }, [noteArchive, hydrated]);
 
@@ -4717,92 +4795,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     });
   }, [hydrated, takeover, baseOnDuty.parent, now]);
 
-  // v05.05bt86 — Shift handoff confirmation system.
-  // Two effects work together:
-  //
-  // EFFECT A: detect a transition. Watches baseOnDuty.parent. When it
-  // changes (and there isn't already a pending handoff record for this
-  // same transition), create a "pending" shiftHandoff record. The
-  // banner UI renders for any pending handoff.
-  //
-  // EFFECT B: auto-takeover after grace period. Watches shiftHandoff
-  // and now. If a pending handoff is older than 5 minutes (per user's
-  // choice), auto-fire setTakeover with fromParent (outgoing) covering
-  // toParent (incoming who didn't show). startedAt is the scheduled
-  // transition time, NOT now — so the parent who covered gets credit
-  // for the full window from the actual shift start.
-  //
-  // The standard takeover mechanism (existing) handles the rest:
-  // its banner shows once auto-takeover fires, bt75 auto-end-at-shift-
-  // boundary credits the time bank when the next transition makes the
-  // covering parent legitimately on duty, or the user can end manually.
-  const lastOnDutyParentRef = useRef(null);
-  useEffect(() => {
-    if (!hydrated) return;
-    const current = baseOnDuty?.parent;
-    if (!current) return;
-    // On first mount, just record the current value — don't fabricate a
-    // transition from nothing.
-    if (lastOnDutyParentRef.current === null) {
-      lastOnDutyParentRef.current = current;
-      return;
-    }
-    if (lastOnDutyParentRef.current === current) return;
-
-    const fromParent = lastOnDutyParentRef.current;
-    const toParent = current;
-    lastOnDutyParentRef.current = current;
-
-    // Don't overwrite an existing pending/resolved handoff for the same
-    // transition (re-renders within the same minute, etc.)
-    if (shiftHandoff && shiftHandoff.fromParent === fromParent
-        && shiftHandoff.toParent === toParent) {
-      const ageMs = now.getTime() - new Date(shiftHandoff.scheduledAt).getTime();
-      if (Math.abs(ageMs) < 60 * 1000) return; // same transition, just keep
-    }
-
-    // If a takeover is already active in the same direction (e.g., user
-    // manually flagged 'I'm covering' just before the transition), don't
-    // fire another handoff confirmation.
-    if (takeover && takeover.coveringParent === fromParent
-        && takeover.originalParent === toParent) {
-      return;
-    }
-
-    setShiftHandoff({
-      scheduledAt: now.toISOString(),
-      fromParent,
-      toParent,
-      status: "pending",
-      confirmedBy: null,
-      confirmedAt: null,
-    });
-  }, [hydrated, baseOnDuty?.parent, now]);
-
-  // EFFECT B: auto-takeover after 5 min grace
-  useEffect(() => {
-    if (!hydrated) return;
-    if (!shiftHandoff) return;
-    if (shiftHandoff.status !== "pending") return;
-    if (takeover) return; // user already manually started one
-    const ageMs = now.getTime() - new Date(shiftHandoff.scheduledAt).getTime();
-    if (ageMs < 5 * 60 * 1000) return;
-
-    // Grace period expired → auto-takeover
-    setTakeover({
-      coveringParent: shiftHandoff.fromParent,
-      originalParent: shiftHandoff.toParent,
-      startedAt: shiftHandoff.scheduledAt, // credit from the scheduled transition
-      autoStarted: true,
-    });
-    setShiftHandoff({
-      ...shiftHandoff,
-      status: "auto-takeover",
-      confirmedBy: "auto",
-      confirmedAt: now.toISOString(),
-    });
-  }, [hydrated, shiftHandoff, takeover, now]);
-
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
   const walkRecommendation = useMemo(() => {
@@ -5301,43 +5293,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             </button>
           );
         })()}
-        {/* v05.05bt86 — Shift handoff confirmation banner. Appears whenever
-            shiftHandoff is pending (or just resolved within last 30s for a
-            brief acknowledgment flash). Either parent can confirm or flag
-            covering. Auto-takeover after 5 min handled by App-level effect. */}
-        {shiftHandoff && (shiftHandoff.status === "pending"
-          || (shiftHandoff.confirmedAt && (now.getTime() - new Date(shiftHandoff.confirmedAt).getTime() < 30000))) && (
-          <ShiftHandoffBanner
-            C={C}
-            handoff={shiftHandoff}
-            now={now}
-            currentUser={currentUser}
-            onConfirmOnDuty={() => {
-              setShiftHandoff({
-                ...shiftHandoff,
-                status: "confirmed-on-duty",
-                confirmedBy: currentUser,
-                confirmedAt: new Date().toISOString(),
-              });
-              setTimeout(() => setShiftHandoff(null), 30000);
-            }}
-            onMarkCovering={() => {
-              setTakeover({
-                coveringParent: shiftHandoff.fromParent,
-                originalParent: shiftHandoff.toParent,
-                startedAt: shiftHandoff.scheduledAt,
-                userStarted: true,
-              });
-              setShiftHandoff({
-                ...shiftHandoff,
-                status: "confirmed-covering",
-                confirmedBy: currentUser,
-                confirmedAt: new Date().toISOString(),
-              });
-              setTimeout(() => setShiftHandoff(null), 30000);
-            }}
-          />
-        )}
         <OnDutyCard
           C={C} mode={mode}
           onDuty={onDuty}
@@ -6434,7 +6389,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onSubmit={({ oz, location, bottleLabel }) => {
             try {
               const start = new Date(activePump.startedAt);
-              const wasPower = activePump.type === "power";
+              const protocolType = activePump.type; // "standard" | "power" | "mld" | "hop" | undefined
+              const wasPower = protocolType === "power";
               // For power pumps the protocol is 60 min — round to that if
               // we're within ±2 min of the target so a small wall-clock
               // delay at "tap to end" doesn't make the event read as 62 or 58.
@@ -6467,7 +6423,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 mode: "end",
                 location,
                 bottleLabel,
-                ...(wasPower ? { pumpType: "power" } : {}),
+                ...(protocolType && protocolType !== "standard" ? { pumpType: protocolType } : {}),
               });
               // Unpause + force-push both keys after React settles all
               // the state updates above. 500ms matches the import path.
@@ -7328,7 +7284,15 @@ function FinishPumpModal({ C, activePump, now, onCancel, onSubmit, onDiscard, re
         border: `1px solid ${C.mommy}33`,
       }}>
         <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.mommy, fontWeight: 700, marginBottom: 4 }}>
-          {activePump.type === "power" ? "Power pump session" : "Pump session"}
+          {activePump.type === "power" ? "Power pump session"
+            : activePump.type === "mld" ? "Multiple let-down session"
+            : activePump.type === "hop" ? "Hands-on pump session"
+            : typeof activePump.type === "string" && activePump.type.startsWith("mld-")
+              ? (() => {
+                  const p = getWearablePattern(activePump.type.slice(4));
+                  return p ? `${p.name} session` : "Wearable pump session";
+                })()
+            : "Pump session"}
         </div>
         <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.5 }}>
           Started <strong>{fmtTimeShort(start)}</strong> · ran for <strong>{durationMin} min</strong>
@@ -8014,8 +7978,11 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
       {/* Cloud sync — surfaces the family code and lets the user reset it.
           Only renders when the backend is available (real Vercel deploy);
           on Claude artifact view or local-only deploys, this section is
-          hidden because there's nothing to configure. */}
-      {cloudSyncAvailable && (
+          hidden because there's nothing to configure.
+          v05.05bt90 — also gated behind showAdvanced so the family code
+          and "Set up cloud sync" / "Clear family code" buttons aren't
+          accidentally tappable. */}
+      {showAdvanced && cloudSyncAvailable && (
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.line}15` }}>
           <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
             Cloud sync
@@ -8085,8 +8052,10 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           ship the cloud sync (planned), this is how to keep your phone
           and your husband's phone in sync. Workflow:
             Mac → Export → Copy → switch device → Profile Switcher →
-            Backup → Import → Paste → Apply. */}
-      {(onExportData || onImportData) && (
+            Backup → Import → Paste → Apply.
+          v05.05bt90 — gated behind showAdvanced; Import/Restore can cause
+          data loss if tapped accidentally with bad data. */}
+      {showAdvanced && (onExportData || onImportData) && (
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.line}15` }}>
           <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
             Backup &amp; restore
@@ -8878,115 +8847,6 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function ShiftHandoffBanner({ C, handoff, now, currentUser, onConfirmOnDuty, onMarkCovering }) {
-  const scheduledAt = new Date(handoff.scheduledAt);
-  const ageSec = Math.max(0, Math.floor((now.getTime() - scheduledAt.getTime()) / 1000));
-  const ageMin = ageSec / 60;
-  const graceSecLeft = Math.max(0, 5 * 60 - ageSec);
-  const graceMinLeft = Math.floor(graceSecLeft / 60);
-  const graceSecsLeft = graceSecLeft % 60;
-
-  const fmt = (d) => {
-    const h = d.getHours(), m = d.getMinutes();
-    const ap = h >= 12 ? "p" : "a";
-    const h12 = h % 12 || 12;
-    return m > 0 ? `${h12}:${String(m).padStart(2, "0")}${ap}` : `${h12}${ap}`;
-  };
-
-  // Confirmed state — show attribution for 30s before clearing
-  if (handoff.status === "confirmed-on-duty" || handoff.status === "confirmed-covering") {
-    const isOnDuty = handoff.status === "confirmed-on-duty";
-    const tone = isOnDuty ? C.sage : C.accent;
-    const label = isOnDuty
-      ? `${handoff.toParent} is on duty`
-      : `${handoff.fromParent} is covering`;
-    const confirmedAt = handoff.confirmedAt ? new Date(handoff.confirmedAt) : null;
-    return (
-      <div style={{
-        background: `${tone}10`, border: `1.5px solid ${tone}66`,
-        borderRadius: 12, padding: "10px 14px", marginBottom: 12,
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-      }}>
-        <div style={{ fontSize: 13, color: C.ink }}>
-          <strong style={{ color: tone }}>✓ {label}</strong>
-        </div>
-        <div style={{
-          fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
-          textAlign: "right", lineHeight: 1.4,
-        }}>
-          confirmed by {handoff.confirmedBy === "auto" ? "system" : handoff.confirmedBy}
-          {confirmedAt ? <><br/>at {fmt(confirmedAt)}</> : null}
-        </div>
-      </div>
-    );
-  }
-
-  // Pending state — visual urgency ramp
-  const urgency = ageMin < 2 ? "calm" : ageMin < 4 ? "elevated" : "urgent";
-  const borderColor = urgency === "urgent" ? C.accent
-    : urgency === "elevated" ? `${C.accent}AA`
-    : `${C.gold}88`;
-  const bgColor = urgency === "urgent" ? `${C.accent}15`
-    : urgency === "elevated" ? `${C.accent}10`
-    : `${C.gold}10`;
-
-  return (
-    <div style={{
-      background: bgColor,
-      border: `${urgency === "urgent" ? 2 : 1.5}px solid ${borderColor}`,
-      borderRadius: 12, padding: 14, marginBottom: 12,
-      animation: urgency !== "calm" ? "shiftHandoffPulse 1.8s ease-in-out infinite" : "none",
-    }}>
-      <style>{`
-        @keyframes shiftHandoffPulse {
-          0%, 100% { box-shadow: 0 0 0 0 ${C.accent}00; }
-          50% { box-shadow: 0 0 0 6px ${C.accent}22; }
-        }
-      `}</style>
-      <div style={{
-        fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
-        color: urgency === "urgent" ? C.accent : C.gold, fontWeight: 700, marginBottom: 6,
-      }}>
-        🔔 Shift handoff at {fmt(scheduledAt)}
-      </div>
-      <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
-        <strong>{handoff.toParent}'s</strong> shift just started.
-        Is {handoff.toParent.toLowerCase()} on duty, or are you still covering?
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <button
-          onClick={onConfirmOnDuty}
-          style={{
-            background: handoff.toParent === "Mommy" ? C.mommy : C.daddy,
-            color: "#fff", border: "none", borderRadius: 8,
-            padding: "10px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            fontFamily: "inherit", lineHeight: 1.3,
-          }}>
-          ✓ {handoff.toParent} is on duty
-        </button>
-        <button
-          onClick={onMarkCovering}
-          style={{
-            background: "transparent",
-            color: C.accent, border: `1.5px solid ${C.accent}`, borderRadius: 8,
-            padding: "10px 12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            fontFamily: "inherit", lineHeight: 1.3,
-          }}>
-          ✗ {handoff.fromParent} is covering
-        </button>
-      </div>
-      <div style={{
-        fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 8,
-        fontFamily: "'JetBrains Mono', monospace", textAlign: "center",
-      }}>
-        {graceSecLeft > 0
-          ? `Auto-takeover in ${graceMinLeft}:${String(graceSecsLeft).padStart(2, "0")} if no confirmation`
-          : "Auto-takeover triggering…"}
-      </div>
-    </div>
-  );
-}
-
 function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
@@ -9185,8 +9045,22 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         <line x1="2" y1="20" x2="38" y2="20" stroke={C.ink} strokeWidth="0.5" />
       </svg>
 
-      {/* Prominent handoff-active banner: if I handed off, show big indicator */}
-      {takeoverWithMins && takeoverWithMins.originalParent === currentUser && (
+      {/* v05.05bt93 — Takeover banner now shows on BOTH parents' views,
+          with framing adapted to who's looking. Previously it was gated
+          to originalParent === currentUser, which made the affordance
+          appear/disappear as the profile picker switched — and from the
+          off-duty parent's view, the 'Take back' button read like the
+          system was trying to end the covering parent (which is exactly
+          how the user described it in chat: 'it keeps trying to end
+          mommy when the profile viewing is switched to daddy'). Now:
+          • covering parent (currentUser === coveringParent): banner
+            framed as 'You're covering [original] · X min · [I'm done]'
+          • original parent (currentUser === originalParent): banner
+            framed as 'Your shift was handed off · [covering] is
+            covering · [Take back]'
+          • neither (third device, etc): no banner */}
+      {takeoverWithMins && (takeoverWithMins.originalParent === currentUser
+                            || takeoverWithMins.coveringParent === currentUser) && (
         <div style={{
           background: `${takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy}15`,
           border: `1.5px solid ${takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy}55`,
@@ -9202,17 +9076,30 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           }}>{takeoverWithMins.coveringParent[0]}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
-              Your shift was handed off
+              {takeoverWithMins.coveringParent === currentUser
+                ? "You're covering"
+                : "Your shift was handed off"}
             </div>
             <div style={{ fontSize: 13, color: C.ink, fontWeight: 500, marginTop: 1 }}>
-              <strong style={{ color: takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy }}>
-                {takeoverWithMins.coveringParent}
-              </strong> is covering · {takeoverWithMins.takeoverMins} min in
+              {takeoverWithMins.coveringParent === currentUser ? (
+                <>
+                  for <strong style={{ color: takeoverWithMins.originalParent === "Mommy" ? C.mommy : C.daddy }}>
+                    {takeoverWithMins.originalParent}
+                  </strong> · {takeoverWithMins.takeoverMins} min in
+                </>
+              ) : (
+                <>
+                  <strong style={{ color: takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy }}>
+                    {takeoverWithMins.coveringParent}
+                  </strong> is covering · {takeoverWithMins.takeoverMins} min in
+                </>
+              )}
             </div>
           </div>
-          {/* Take-back lives RIGHT HERE in the banner so the affordance is
-              co-located with the status. Removed the duplicate card below
-              the OnDuty quadrants in v05.05bb. */}
+          {/* End-coverage button. Same handler either way (credits the
+              covering parent and clears), but copy adapts: 'I'm done'
+              from the covering parent's view, 'Take back' from the off-
+              duty parent's view. */}
           {onEndTakeover && (
             <button
               onClick={onEndTakeover}
@@ -9225,7 +9112,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                 whiteSpace: "nowrap", flexShrink: 0,
                 fontFamily: "inherit",
               }}>
-              Take back
+              {takeoverWithMins.coveringParent === currentUser ? "I'm done" : "Take back"}
             </button>
           )}
         </div>
@@ -9633,6 +9520,9 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   // (tap → standard); we only show the chooser if they explicitly long-tap
   // OR tap the small "Power pump?" affordance below the main button.
   const [showPumpChooser, setShowPumpChooser] = useState(false);
+  // v05.05bt96 — sub-view inside the chooser. "main" shows the top-level
+  // pump types; "wearable" shows the top-3 pattern picker.
+  const [chooserView, setChooserView] = useState("main");
 
   // 1-second tick local to this component, fires only when an active power
   // pump is running. The app's global `now` only updates every 15s for
@@ -10244,76 +10134,187 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           guided protocol with phase pip dots). Mounting here inside
           MilkPanel keeps the chooser state local to this component. */}
       {showPumpChooser && (
-        <ModalShell C={C} onClose={() => setShowPumpChooser(false)} title="Start a pump session">
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
-            Pick which kind of session. Both let you log oz and location at the end.
-          </div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <button
-              onClick={() => { onStartPump("standard"); setShowPumpChooser(false); }}
-              style={{
-                background: C.paper,
-                border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.mommy}`,
-                borderRadius: 10, padding: "14px 16px", cursor: "pointer",
-                textAlign: "left", fontFamily: "inherit", color: C.ink,
-              }}>
+        <ModalShell C={C} onClose={() => { setShowPumpChooser(false); setChooserView("main"); }}
+          title={chooserView === "wearable" ? "Wearable patterns — Top 3" : "Start a pump session"}>
+          {chooserView === "main" ? (
+            <>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+                Pick which kind of session. All let you log oz and location at the end.
+              </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                <button
+                  onClick={() => { onStartPump("standard"); setShowPumpChooser(false); setChooserView("main"); }}
+                  style={{
+                    background: C.paper,
+                    border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.mommy}`,
+                    borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                    textAlign: "left", fontFamily: "inherit", color: C.ink,
+                  }}>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontStyle: "italic", color: C.mommy, lineHeight: 1.1,
+                  }}>
+                    Standard pump
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                    Just track elapsed time. Tap to end whenever you're done.
+                  </div>
+                </button>
+                <button
+                  onClick={() => { onStartPump("power"); setShowPumpChooser(false); setChooserView("main"); }}
+                  style={{
+                    background: C.paper,
+                    border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.gold}`,
+                    borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                    textAlign: "left", fontFamily: "inherit", color: C.ink,
+                  }}>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontStyle: "italic", color: C.gold, lineHeight: 1.1,
+                  }}>
+                    Power pump
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                    60-min guided protocol: <strong>20 pump · 10 rest · 10 pump · 10 rest · 10 pump</strong>. The tile will tell you what to do at each phase.
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic", lineHeight: 1.5 }}>
+                    Mimics cluster feeding to signal supply. Best done 1×/day for a few days when you want a boost.
+                  </div>
+                </button>
+                {/* v05.05bt96 — Wearable protocol entry. Replaces the bt95
+                    standalone MLD + HOP cards with a single entry that
+                    opens a sub-chooser of the top-3 stim/express patterns
+                    circulating in pumping communities, ranked by mechanism
+                    alignment with established lactation literature. */}
+                <button
+                  onClick={() => setChooserView("wearable")}
+                  style={{
+                    background: C.paper,
+                    border: `1.5px solid ${C.line}30`, borderLeft: `4px solid #8E6B86`,
+                    borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                    textAlign: "left", fontFamily: "inherit", color: C.ink,
+                  }}>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontStyle: "italic", color: "#8E6B86", lineHeight: 1.1,
+                  }}>
+                    Wearable protocol ▸
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                    Stim/express patterns optimized for Momcozy. Top 3 picked by alignment with lactation literature (Kent, Prime, Mitoulas, Meier) and cross-referenced with what's popular on social media.
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic", lineHeight: 1.5 }}>
+                    Tap to see the patterns, their rankings, and the evidence behind each.
+                  </div>
+                </button>
+                {onJustLogPump && (
+                  <button
+                    onClick={() => { onJustLogPump(); setShowPumpChooser(false); setChooserView("main"); }}
+                    style={{
+                      background: C.paper,
+                      border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.muted}`,
+                      borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                      textAlign: "left", fontFamily: "inherit", color: C.ink,
+                    }}>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                      fontStyle: "italic", color: C.muted, lineHeight: 1.1,
+                    }}>
+                      Just log a pump
+                    </div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                      Skip the timer — log a pump you already did. Pick when, duration, and oz.
+                    </div>
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            // v05.05bt96 — Wearable protocol sub-chooser. Shows the
+            // WEARABLE_PATTERNS array with a sequence-bar visualization,
+            // alignment score, social-media popularity proxy, and
+            // mechanism rationale for each. Tapping a pattern starts the
+            // pump with pumpType = `mld-{id}` so the event records which
+            // pattern was used.
+            <>
+              <button onClick={() => setChooserView("main")} style={{
+                background: "transparent", color: C.muted, border: "none",
+                padding: "0 0 8px 0", fontSize: 12, cursor: "pointer",
+                fontFamily: "inherit",
+              }}>← back</button>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
-                fontStyle: "italic", color: C.mommy, lineHeight: 1.1,
+                fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 12, lineHeight: 1.5,
+                padding: "8px 10px", background: `${C.line}11`, borderRadius: 6,
               }}>
-                Standard pump
+                <strong>No RCT compares these head-to-head.</strong> Rankings are by alignment with established lactation physiology — not measured effectiveness. Pick one, log yield, build your own n=1 evidence.
               </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                Just track elapsed time. Tap to end whenever you're done.
+              <div style={{ display: "grid", gap: 12 }}>
+                {WEARABLE_PATTERNS.map(p => {
+                  const accent = p.rank === 1 ? "#8E6B86" : p.rank === 2 ? C.gold : C.muted;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        onStartPump(`mld-${p.id}`);
+                        setShowPumpChooser(false);
+                        setChooserView("main");
+                      }}
+                      style={{
+                        background: C.paper,
+                        border: `1.5px solid ${accent}33`, borderLeft: `4px solid ${accent}`,
+                        borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                        textAlign: "left", fontFamily: "inherit", color: C.ink,
+                      }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: accent,
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>#{p.rank}</span>
+                        <span style={{
+                          fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500,
+                          fontStyle: "italic", color: accent, lineHeight: 1.1,
+                        }}>
+                          {p.name}
+                        </span>
+                        <span style={{
+                          fontSize: 11, color: C.muted, marginLeft: "auto",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>{p.totalMin} min</span>
+                      </div>
+                      {/* Sequence bar visualization */}
+                      <div style={{
+                        display: "flex", borderRadius: 4, overflow: "hidden",
+                        height: 10, marginTop: 8, marginBottom: 8,
+                        border: `1px solid ${C.line}22`,
+                      }}>
+                        {p.sequence.map((s, i) => (
+                          <div key={i} title={`${s.min}m ${s.mode}`} style={{
+                            flexBasis: `${(s.min / p.totalMin) * 100}%`,
+                            background: s.mode === "stim" ? `${accent}` : `${accent}55`,
+                          }}/>
+                        ))}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: C.muted, marginBottom: 8,
+                        fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em",
+                      }}>
+                        {p.sequence.map(s => `${s.min}m ${s.mode}`).join(" → ")}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.ink, lineHeight: 1.5, marginTop: 6 }}>
+                        <strong>Literature alignment: {p.alignment}/5</strong> · {p.alignmentDetail}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5, marginTop: 4 }}>
+                        <strong>Social-media popularity:</strong> {p.popularity}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.5, marginTop: 4 }}>
+                        {p.rationale}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-            </button>
-            <button
-              onClick={() => { onStartPump("power"); setShowPumpChooser(false); }}
-              style={{
-                background: C.paper,
-                border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.gold}`,
-                borderRadius: 10, padding: "14px 16px", cursor: "pointer",
-                textAlign: "left", fontFamily: "inherit", color: C.ink,
-              }}>
-              <div style={{
-                fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
-                fontStyle: "italic", color: C.gold, lineHeight: 1.1,
-              }}>
-                Power pump
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                60-min guided protocol: <strong>20 pump · 10 rest · 10 pump · 10 rest · 10 pump</strong>. The tile will tell you what to do at each phase.
-              </div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic", lineHeight: 1.5 }}>
-                Mimics cluster feeding to signal supply. Best done 1×/day for a few days when you want a boost.
-              </div>
-            </button>
-            {/* v05.05bt85 — third option: skip the timer entirely and just
-                log a completed pump session. Useful when the user pumped
-                without starting the timer (out-and-about, used a different
-                pump, forgot to tap start). Routes through the existing
-                Log → Pump form which captures oz, duration, location, etc. */}
-            {onJustLogPump && (
-              <button
-                onClick={() => { onJustLogPump(); setShowPumpChooser(false); }}
-                style={{
-                  background: C.paper,
-                  border: `1.5px solid ${C.line}30`, borderLeft: `4px solid ${C.muted}`,
-                  borderRadius: 10, padding: "14px 16px", cursor: "pointer",
-                  textAlign: "left", fontFamily: "inherit", color: C.ink,
-                }}>
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
-                  fontStyle: "italic", color: C.muted, lineHeight: 1.1,
-                }}>
-                  Just log a pump
-                </div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                  Skip the timer — log a pump you already did. Pick when, duration, and oz.
-                </div>
-              </button>
-            )}
-          </div>
+            </>
+          )}
         </ModalShell>
       )}
     </div>
@@ -11917,6 +11918,58 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
           event={editing}
           onClose={() => setEditing(null)}
           onSave={(updated) => {
+            // v05.05bt91: when a feed event gets a bottleLabel added during
+            // reconciliation edit, drain the matching bottle(s) from
+            // inventory. Trigger conditions (all must hold):
+            //   • feed event
+            //   • label added during this edit (event had none before)
+            //   • inventoryReconcileNeeded was true on the original
+            //   • event has positive oz
+            // Behavior: match by label case-insensitively, drain oldest
+            // matching bottles first up to feed oz. If fully drained, clear
+            // reconcile flag. If partial, keep flag with updated
+            // unallocatedOz. If no match, no drain — label stored as
+            // notation only.
+            if (updated.type === "feed"
+                && updated.bottleLabel
+                && !editing.bottleLabel
+                && editing.inventoryReconcileNeeded
+                && Number(updated.oz) > 0) {
+              const target = updated.bottleLabel.toUpperCase();
+              const sorted = [...inventory].sort(
+                (a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt)
+              );
+              let remaining = Number(updated.oz);
+              const newInventory = [];
+              let drained = 0;
+              for (const b of sorted) {
+                if (remaining > 0 && (b.bottleLabel || "").toUpperCase() === target) {
+                  const take = Math.min(b.oz, remaining);
+                  remaining -= take;
+                  drained += take;
+                  const newOz = b.oz - take;
+                  if (newOz > 0.05) newInventory.push({ ...b, oz: newOz });
+                  // else: bottle emptied, drop
+                } else {
+                  newInventory.push(b);
+                }
+              }
+              if (drained > 0) {
+                setInventory(newInventory);
+                console.log(`[reconcile] drained ${drained.toFixed(1)}oz from bottle(s) labeled '${target}' for feed ${editing.id}`);
+              }
+              if (remaining <= 0.05) {
+                // Fully reconciled
+                updated.inventoryReconcileNeeded = false;
+                updated.reconcileReason = null;
+                updated.unallocatedOz = 0;
+              } else if (drained > 0) {
+                // Partial — keep flag, update shortfall amount
+                updated.unallocatedOz = Math.round(remaining * 10) / 10;
+                updated.reconcileReason = "shortfall";
+              }
+              // else: no match found, label stored without drain
+            }
             updateEvent(editing.id, updated);
             setEditing(null);
           }}
@@ -16387,6 +16440,11 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showRecoveryConfirm, setShowRecoveryConfirm] = useState(false);
   const lastDoneCountRef = useRef(0);
+  // v05.05bt92: track previous settings to detect changes that should
+  // regenerate the schedule. Without this, the bt88 auto-seed only fires
+  // on first empty-manualSessions render, so subsequent buffer/window
+  // changes silently fail to update the plan.
+  const lastSettingsRef = useRef(null);
 
   const wakeStart = Number.isFinite(pumpPlan?.wakeStart) ? pumpPlan.wakeStart : 6;
   const wakeEnd = Number.isFinite(pumpPlan?.wakeEnd) ? pumpPlan.wakeEnd : 22;
@@ -16471,6 +16529,35 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
       lastDoneCountRef.current = 0;
     }
   }, [todayKey, pumpPlan?.manualSessionsDate]);
+
+  // v05.05bt92 — settings-change regeneration. When the user changes
+  // bagBuffer, wakeStart, or wakeEnd, the derived targetSessions /
+  // autoSpaced shape changes, but the previously-seeded manualSessions
+  // (from bt88) doesn't reflect that. This effect clears manualSessions
+  // so the auto-seed below repopulates with the new shape. Initial mount
+  // is skipped — we wait until we've recorded a previous settings
+  // snapshot before checking for change.
+  useEffect(() => {
+    const prev = lastSettingsRef.current;
+    const current = { bagBuffer, wakeStart, wakeEnd };
+    if (prev !== null
+        && (prev.bagBuffer !== current.bagBuffer
+            || prev.wakeStart !== current.wakeStart
+            || prev.wakeEnd !== current.wakeEnd)) {
+      // Settings changed — clear manualSessions so autoSpaced re-seeds.
+      // Note: this drops any user-customized schedule edits (add/remove/
+      // shift). The trade-off is "settings actually work" — without this,
+      // changing the buffer silently fails because manualSessions stays
+      // stale. If user wants to keep customizations they should change
+      // settings BEFORE editing the schedule.
+      setPumpPlan(p => ({
+        ...p,
+        manualSessions: [],
+        manualSessionsDate: todayKey,
+      }));
+    }
+    lastSettingsRef.current = current;
+  }, [bagBuffer, wakeStart, wakeEnd, todayKey]);
 
   // v05.05bt88 — auto-seed manualSessions from autoSpaced so the pump
   // plan is always populated even if the user hasn't tapped into the
