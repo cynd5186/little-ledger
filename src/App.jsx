@@ -15,15 +15,16 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt97";
+const APP_VERSION = "2026.05.05bt98";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "FIX FOR SPURIOUS TAKEOVER LOOP. Bug: chain of fake 'Daddy covered Mommy · 5m/6m/14m/…' entries logging every ~15s, plus the bt84 'cloud sync paused' banner firing as the events array bloated. Root cause: stale takeover in cloud kept getting re-applied by the poll setter even after local cleared it — bt75 would auto-end, log an event, push null, but next poll resurrected the stale value and the cycle repeated. Fix: cloud setter now rejects takeovers older than 6 hours (debris from earlier sessions) AND rejects re-application of a takeover that was just cleared locally within the last 5 min. Should stop the chain immediately once deployed. After deploy you can tap 🗑 on the existing spurious entries to clean them up.",
+  "PHASE-AWARE TIMER FOR WEARABLE PROTOCOLS. Same kind of tile as the power pump now appears for the wearable patterns (60-sec restim, M5 Power, Express-heavy). Shows the current phase (Stim or Express), countdown to next phase (M:SS), elapsed/total minutes, proportional pip row with one segment per phase, and a 'Tap mode → STIM next' / 'Tap mode → EXPRESS next' prompt in the last 10 seconds of each phase — so you know when to switch your Momcozy mode. Stim phases pulse mauve; express phases sit on rose. Tile turns sage when complete.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt98", summary: "Phase-aware in-pump display for the wearable MLD patterns. Mirrors the power-pump UI for parity. NEW helper getWearableMldPhase(activePump, now) defined next to getPowerPumpPhase: takes an activePump whose type matches `mld-{id}`, looks up the pattern via getWearablePattern, walks the sequence to find the current segment, returns { complete, phaseIndex, mode ('stim'|'express'), phaseLabel, phaseDurationMs, phaseElapsedMs, phaseRemainingMs, totalElapsedMs, totalRemainingMs, pattern, nextMode }. MilkPanel changes: (1) the 1-second tick interval that was previously gated to activePump?.type === 'power' now also runs for any mld-* type, so countdown updates smoothly; (2) localNow set to new Date() during both power AND mld sessions; (3) new isMldType derivation; (4) new mldPhase memo from getWearableMldPhase. RENDER: new branch added between the power-pump branch and the standard-pump branch. When mldPhase is non-null, render a gradient tile with phaseColor mauve (#8E6B86) for stim segments and C.mommy for express segments, sage on complete. Contents mirror the power tile: eyebrow with pattern name + total minutes (e.g. '60-sec restim · 14/25 min'), large italic phase label ('Stim' / 'Express' / '{name} complete'), countdown M:SS in mono, sequence pip row with one bar per phase whose flex-basis is proportional to that phase's minute fraction, mono row of phase abbreviations (S2/E8/S1/E8/S1/E5) underneath. NEW addition not in the power tile: when phaseRemainSec <= 10 AND nextMode exists, a translucent banner appears mid-tile with the message 'Tap mode → STIM next' or 'Tap mode → EXPRESS next' — Momcozy-specific guidance for the user to physically tap the pump's mode button at the upcoming transition. Tap-anywhere-on-tile still ends the pump (calls onEndActivePump) just like power. Sequence rendering uses the WEARABLE_PATTERNS[k].sequence data directly so any future pattern additions automatically get the right pip layout." },
   { version: "2026.05.05bt97", summary: "Spurious-takeover loop fix. Per user report: 'There's still a very bad bug where it keeps logging takeovers that do not exist and I keep having sync error issues.' Cycle analysis: (1) cloud holds a stale takeover (debris from pre-bt94 bt86 auto-fires, or partner device that hasn't synced clear), (2) cloud poll setter at cloudKeySetters['solene:takeover'] blindly applies it via setTakeover(v), (3) bt75 auto-end-takeover effect detects baseOnDuty.parent === takeover.coveringParent + ageMs >= 30s, fires setTakeover(null) and addEvent(takeover), (4) journal gains a new 'Daddy covered Mommy · Xm' entry, (5) local pushes null to cloud but a stale poll wins the race, restoring the takeover, (6) cycle repeats every ~15s creating a chain of fake entries. Bonus: bloating events array eventually trips bt84's peak-event-count safety net when one device pushes a smaller array than another has — banner reads 'Cloud sync paused — possible data loss prevented.' FIX: two-layer defense in cloud setter for solene:takeover. (1) Age guard: takeovers with startedAt > 6h old are treated as debris and ignored. Most real takeovers resolve within 1h; 6h is generous. console.warn flags the rejection. (2) Recently-cleared guard: new autoEndedTakeoverRef tracks {startedAt, clearedAt} whenever local clears a takeover (both bt75 auto-end at line 4770 and the manual onEndTakeover at line 5423). Cloud setter checks: if incoming.startedAt === ref.startedAt AND clearedAt is within last 5 min, reject. Breaks the resurrection cycle immediately after first auto-end. setTakeover preserved when guards don't fire (normal cross-device takeover propagation still works for fresh, non-cleared values)." },
   { version: "2026.05.05bt96", summary: "Wearable timing-pattern sub-chooser. Per chat ('create an alternative pump protocol in addition to standard and power pump, and when the user clicks on that, pop up the top 3 most-aligned momcozy settings'). NEW module-level constant WEARABLE_PATTERNS with three entries: 60-sec restim (rank 1, alignment 5/5, Reddit/IBCLC popular, sequence 2/8/1/8/1/5 totaling 25 min), M5 Power (rank 2, alignment 4/5, TikTok viral, sequence 2/10/2/10 totaling 24 min), Express-heavy (rank 3, alignment 2/5, RTW forums, sequence 1/18/1/8 totaling 28 min). Each pattern carries: id, rank, name, sequence (array of {mode: 'stim'|'express', min}), totalMin, alignment (count of 5 literature principles satisfied), alignmentDetail (specific principle-by-principle breakdown citing Kent 2008 latency, Prime 2011 let-down correlation, Mitoulas 2002 flow plateau, Meier 2008 two-phase, total ≤30 min), popularity (social-media origin proxy), rationale. PUMPCHOOSER restructured: new chooserView state ('main' | 'wearable'), default 'main'. Main view now has Standard / Power / Wearable protocol ▸ / Just log a pump (bt95's MLD and HOP standalone cards removed — superseded). Wearable card opens sub-view via setChooserView('wearable'). Sub-view has: ← back button to return to main, italic caveat banner ('No RCT compares these head-to-head'), three pattern cards. Each pattern card renders the sequence as a tiny horizontal bar with stim segments in full accent color and express segments in 33% accent — proportional widths by minute fraction. Below the bar: monospace text of sequence (e.g. '2m stim → 8m express → …'), bold literature alignment line with detail paragraph, social-media popularity line, italic mechanism rationale. Tapping a pattern: onStartPump(`mld-${pattern.id}`) + close chooser. FinishPumpModal session header recognizes the mld-* prefix via getWearablePattern() helper and renders the readable name. pumpType field on the event records the full mld-{id} so journal and future analytics can compare across patterns. Future work (still deferred): in-pump phase coaching to prompt mode switches at sequence boundaries; per-pattern yield comparison chart on Milk tab once enough sessions per pattern are logged." },
   { version: "2026.05.05bt95", summary: "Pump chooser gains two evidence-based protocol options beside Power pump. (1) MULTIPLE LET-DOWN (MLD) — dusk mauve (#8E6B86) left border, routed via onStartPump('mld'). Card copy emphasizes ~25-30 min session targeting 2-3 let-downs by tapping pump back to stim mode when flow slows. Momcozy-specific note: tap mode button to switch stim ⇄ express. (2) HANDS-ON PUMPING (HOP) — sage left border, routed via onStartPump('hop'). Card copy describes pre-pump 30s massage, in-session compression in rotating quadrants, post-pump 2-3 min hand expression. Cites Morton et al. 2009: +48% volume, +49% fat content vs pump alone. FinishPumpModal session header (line ~7199) updated to render protocol-specific label: 'Multiple let-down session' / 'Hands-on pump session' / 'Power pump session' / 'Pump session' by activePump.type. FinishPumpModal save handler (line ~6303) generalized: protocolType captured from activePump.type, durationMin still POWER_PUMP_TOTAL_MIN-snapped only when protocol === 'power' (mld/hop are user-paced), pumpType field persisted on the event for any non-standard protocol so journal renders + future analytics can distinguish them. Future work (deferred): in-pump phase coaching — timed prompts for MLD restim cycles and HOP compression reminders during the active session, plus Momcozy-specific mode-switch alerts." },
@@ -749,6 +750,56 @@ function getPowerPumpPhase(activePump, now) {
     phaseIndex: POWER_PUMP_PHASES.length,
     totalElapsedMs: elapsedMs,
     totalRemainingMs: 0,
+  };
+}
+
+// v05.05bt98 — phase computation for wearable MLD patterns.
+// Parallel to getPowerPumpPhase. Given an activePump with type starting
+// "mld-{id}" matching one of WEARABLE_PATTERNS, returns:
+//   { complete, phaseIndex, mode ("stim"|"express"), phaseLabel,
+//     phaseDurationMs, phaseElapsedMs, phaseRemainingMs,
+//     totalElapsedMs, totalRemainingMs, pattern }
+// Used by the active-pump tile to render the same kind of phase
+// countdown + mode-switch prompts as the power pump tile.
+function getWearableMldPhase(activePump, now) {
+  if (!activePump || typeof activePump.type !== "string") return null;
+  if (!activePump.type.startsWith("mld-")) return null;
+  const patternId = activePump.type.slice(4);
+  const pattern = getWearablePattern(patternId);
+  if (!pattern) return null;
+  const startMs = new Date(activePump.startedAt).getTime();
+  const elapsedMs = now.getTime() - startMs;
+  if (elapsedMs < 0) return null;
+  const totalMs = pattern.totalMin * 60000;
+  let cumul = 0;
+  for (let i = 0; i < pattern.sequence.length; i++) {
+    const seg = pattern.sequence[i];
+    const segDurationMs = seg.min * 60000;
+    const segEnd = cumul + segDurationMs;
+    if (elapsedMs < segEnd) {
+      const phaseElapsedMs = elapsedMs - cumul;
+      return {
+        complete: false,
+        phaseIndex: i,
+        mode: seg.mode, // "stim" | "express"
+        phaseLabel: seg.mode === "stim" ? "Stim" : "Express",
+        phaseDurationMs: segDurationMs,
+        phaseElapsedMs,
+        phaseRemainingMs: segDurationMs - phaseElapsedMs,
+        totalElapsedMs: elapsedMs,
+        totalRemainingMs: totalMs - elapsedMs,
+        pattern,
+        nextMode: i + 1 < pattern.sequence.length ? pattern.sequence[i + 1].mode : null,
+      };
+    }
+    cumul = segEnd;
+  }
+  return {
+    complete: true,
+    phaseIndex: pattern.sequence.length,
+    totalElapsedMs: elapsedMs,
+    totalRemainingMs: 0,
+    pattern,
   };
 }
 
@@ -9577,14 +9628,18 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   // reads from this localNow instead of the global `now`.
   const [tickCount, setTickCount] = useState(0);
   useEffect(() => {
-    if (activePump?.type !== "power") return;
+    if (activePump?.type !== "power"
+        && !(typeof activePump?.type === "string" && activePump.type.startsWith("mld-"))) return;
     const id = setInterval(() => setTickCount(t => t + 1), 1000);
     return () => clearInterval(id);
   }, [activePump?.type]);
-  const localNow = activePump?.type === "power" ? new Date() : now;
+  const isMldType = typeof activePump?.type === "string" && activePump.type.startsWith("mld-");
+  const localNow = (activePump?.type === "power" || isMldType) ? new Date() : now;
 
   // Live power-pump phase. null when no active pump or active is standard.
   const powerPhase = activePump?.type === "power" ? getPowerPumpPhase(activePump, localNow) : null;
+  // v05.05bt98 — live wearable MLD phase. Parallel to powerPhase.
+  const mldPhase = isMldType ? getWearableMldPhase(activePump, localNow) : null;
 
   // Find soonest-expiring RT item.
   // expiresAt is the 6h HARD limit (the actual discard time, what "exp"
@@ -9812,6 +9867,131 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 <span>PUMP 10</span>
                 <span>REST 10</span>
                 <span>PUMP 10</span>
+              </div>
+            </button>
+          );
+        }
+
+        // v05.05bt98 — Branch 1b: Active wearable MLD pump — phase-aware
+        // display with current mode (stim/express), countdown to next
+        // transition, sequence pip dots, and Momcozy mode-switch prompt.
+        if (mldPhase) {
+          const isComplete = mldPhase.complete;
+          const pattern = mldPhase.pattern;
+          const phaseRemainSec = isComplete ? 0 : Math.max(0, Math.ceil(mldPhase.phaseRemainingMs / 1000));
+          const remMin = Math.floor(phaseRemainSec / 60);
+          const remSec = phaseRemainSec % 60;
+          const fmtRem = `${remMin}:${String(remSec).padStart(2, "0")}`;
+          const totalMinIn = Math.floor(mldPhase.totalElapsedMs / 60000);
+          // Stim = full mauve (active stimulation); Express = softer rose
+          // (mommy color); complete = sage green.
+          const phaseColor = isComplete ? "#7B9B6E"
+            : mldPhase.mode === "stim" ? "#8E6B86"
+            : C.mommy;
+          const phaseLabel = isComplete ? `${pattern.name} complete`
+            : mldPhase.mode === "stim" ? "Stim" : "Express";
+          const phaseProgress = isComplete ? 1
+            : mldPhase.phaseElapsedMs / mldPhase.phaseDurationMs;
+          // Momcozy-specific guidance for the very next mode change.
+          // Surfaces in the last 10s of each phase as an urgent prompt.
+          const nearTransition = !isComplete && phaseRemainSec <= 10 && mldPhase.nextMode;
+          const transitionPrompt = nearTransition
+            ? (mldPhase.nextMode === "stim"
+                ? "Tap mode → STIM next"
+                : "Tap mode → EXPRESS next")
+            : null;
+
+          return (
+            <button
+              onClick={onEndActivePump}
+              style={{
+                width: "100%",
+                background: `linear-gradient(135deg, ${phaseColor}, ${phaseColor}DD)`,
+                color: "#fff", border: "none",
+                borderRadius: 10, padding: "14px 16px",
+                marginBottom: 12,
+                display: "flex", flexDirection: "column", gap: 10,
+                boxShadow: `0 2px 10px ${phaseColor}55`,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                position: "relative",
+                overflow: "hidden",
+              }}>
+              <div style={{
+                position: "absolute", top: 0, bottom: 0, left: 0,
+                width: `${phaseProgress * 100}%`,
+                background: "rgba(255,255,255,0.10)",
+                pointerEvents: "none",
+                transition: "width 0.6s ease",
+              }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
+                <Timer size={28} className={!isComplete && mldPhase.mode === "stim" ? "pulse-soft" : ""} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.9 }}>
+                    {pattern.name} · {totalMinIn}/{pattern.totalMin} min
+                  </div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
+                    lineHeight: 1.05, marginTop: 2, fontStyle: "italic",
+                  }}>
+                    {phaseLabel}
+                  </div>
+                  <div style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", opacity: 0.95, marginTop: 4, fontWeight: 600 }}>
+                    {isComplete ? "tap to log oz" : `${fmtRem} left in this phase`}
+                  </div>
+                </div>
+              </div>
+              {/* Momcozy mode-switch prompt — surfaces when phase is about
+                  to end, telling user which mode to tap on the pump. */}
+              {transitionPrompt && (
+                <div style={{
+                  background: "rgba(255,255,255,0.18)",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textAlign: "center",
+                  letterSpacing: "0.05em",
+                  position: "relative",
+                }}>
+                  {transitionPrompt}
+                </div>
+              )}
+              {/* Sequence pip row — one segment per phase in the pattern.
+                  Each segment width proportional to that phase's duration.
+                  Filled = done, animated progress fill = current, empty = upcoming. */}
+              <div style={{ display: "flex", gap: 4, position: "relative" }}>
+                {pattern.sequence.map((s, i) => {
+                  const done = isComplete || i < mldPhase.phaseIndex;
+                  const current = !isComplete && i === mldPhase.phaseIndex;
+                  return (
+                    <div key={i} style={{
+                      flexBasis: `${(s.min / pattern.totalMin) * 100}%`,
+                      height: 6,
+                      borderRadius: 3,
+                      background: done ? "rgba(255,255,255,0.85)" : current ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.12)",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}>
+                      {current && (
+                        <div style={{
+                          position: "absolute", top: 0, bottom: 0, left: 0,
+                          width: `${phaseProgress * 100}%`,
+                          background: "rgba(255,255,255,0.85)",
+                          transition: "width 0.6s ease",
+                        }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, opacity: 0.75, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em", fontWeight: 600 }}>
+                {pattern.sequence.map((s, i) => (
+                  <span key={i} style={{ flexBasis: `${(s.min / pattern.totalMin) * 100}%` }}>
+                    {s.mode === "stim" ? "S" : "E"}{s.min}
+                  </span>
+                ))}
               </div>
             </button>
           );
