@@ -15,15 +15,16 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt96";
+const APP_VERSION = "2026.05.05bt97";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "NEW WEARABLE PROTOCOL option in the pump chooser. Replaces bt95's MLD + HOP cards with a single 'Wearable protocol ▸' entry that opens a sub-chooser of the top-3 stim/express timing patterns circulating in pumping communities. Each pattern card shows: rank, name, sequence-bar visualization, exact timing (e.g. '2m stim → 8m express → 1m stim → 8m express → 1m stim → 5m express'), literature alignment score (X/5 principles satisfied), social-media popularity proxy, and the mechanism rationale. Banner at top of sub-chooser reminds you: 'No RCT compares these head-to-head' — rankings are alignment-based, not effectiveness-based. Tap a pattern to start. Session header on the active-pump tile shows the pattern name. pumpType is persisted as `mld-{id}` on the event so you can compare yield across patterns later as your own n=1 study.",
+  "FIX FOR SPURIOUS TAKEOVER LOOP. Bug: chain of fake 'Daddy covered Mommy · 5m/6m/14m/…' entries logging every ~15s, plus the bt84 'cloud sync paused' banner firing as the events array bloated. Root cause: stale takeover in cloud kept getting re-applied by the poll setter even after local cleared it — bt75 would auto-end, log an event, push null, but next poll resurrected the stale value and the cycle repeated. Fix: cloud setter now rejects takeovers older than 6 hours (debris from earlier sessions) AND rejects re-application of a takeover that was just cleared locally within the last 5 min. Should stop the chain immediately once deployed. After deploy you can tap 🗑 on the existing spurious entries to clean them up.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt97", summary: "Spurious-takeover loop fix. Per user report: 'There's still a very bad bug where it keeps logging takeovers that do not exist and I keep having sync error issues.' Cycle analysis: (1) cloud holds a stale takeover (debris from pre-bt94 bt86 auto-fires, or partner device that hasn't synced clear), (2) cloud poll setter at cloudKeySetters['solene:takeover'] blindly applies it via setTakeover(v), (3) bt75 auto-end-takeover effect detects baseOnDuty.parent === takeover.coveringParent + ageMs >= 30s, fires setTakeover(null) and addEvent(takeover), (4) journal gains a new 'Daddy covered Mommy · Xm' entry, (5) local pushes null to cloud but a stale poll wins the race, restoring the takeover, (6) cycle repeats every ~15s creating a chain of fake entries. Bonus: bloating events array eventually trips bt84's peak-event-count safety net when one device pushes a smaller array than another has — banner reads 'Cloud sync paused — possible data loss prevented.' FIX: two-layer defense in cloud setter for solene:takeover. (1) Age guard: takeovers with startedAt > 6h old are treated as debris and ignored. Most real takeovers resolve within 1h; 6h is generous. console.warn flags the rejection. (2) Recently-cleared guard: new autoEndedTakeoverRef tracks {startedAt, clearedAt} whenever local clears a takeover (both bt75 auto-end at line 4770 and the manual onEndTakeover at line 5423). Cloud setter checks: if incoming.startedAt === ref.startedAt AND clearedAt is within last 5 min, reject. Breaks the resurrection cycle immediately after first auto-end. setTakeover preserved when guards don't fire (normal cross-device takeover propagation still works for fresh, non-cleared values)." },
   { version: "2026.05.05bt96", summary: "Wearable timing-pattern sub-chooser. Per chat ('create an alternative pump protocol in addition to standard and power pump, and when the user clicks on that, pop up the top 3 most-aligned momcozy settings'). NEW module-level constant WEARABLE_PATTERNS with three entries: 60-sec restim (rank 1, alignment 5/5, Reddit/IBCLC popular, sequence 2/8/1/8/1/5 totaling 25 min), M5 Power (rank 2, alignment 4/5, TikTok viral, sequence 2/10/2/10 totaling 24 min), Express-heavy (rank 3, alignment 2/5, RTW forums, sequence 1/18/1/8 totaling 28 min). Each pattern carries: id, rank, name, sequence (array of {mode: 'stim'|'express', min}), totalMin, alignment (count of 5 literature principles satisfied), alignmentDetail (specific principle-by-principle breakdown citing Kent 2008 latency, Prime 2011 let-down correlation, Mitoulas 2002 flow plateau, Meier 2008 two-phase, total ≤30 min), popularity (social-media origin proxy), rationale. PUMPCHOOSER restructured: new chooserView state ('main' | 'wearable'), default 'main'. Main view now has Standard / Power / Wearable protocol ▸ / Just log a pump (bt95's MLD and HOP standalone cards removed — superseded). Wearable card opens sub-view via setChooserView('wearable'). Sub-view has: ← back button to return to main, italic caveat banner ('No RCT compares these head-to-head'), three pattern cards. Each pattern card renders the sequence as a tiny horizontal bar with stim segments in full accent color and express segments in 33% accent — proportional widths by minute fraction. Below the bar: monospace text of sequence (e.g. '2m stim → 8m express → …'), bold literature alignment line with detail paragraph, social-media popularity line, italic mechanism rationale. Tapping a pattern: onStartPump(`mld-${pattern.id}`) + close chooser. FinishPumpModal session header recognizes the mld-* prefix via getWearablePattern() helper and renders the readable name. pumpType field on the event records the full mld-{id} so journal and future analytics can compare across patterns. Future work (still deferred): in-pump phase coaching to prompt mode switches at sequence boundaries; per-pattern yield comparison chart on Milk tab once enough sessions per pattern are logged." },
   { version: "2026.05.05bt95", summary: "Pump chooser gains two evidence-based protocol options beside Power pump. (1) MULTIPLE LET-DOWN (MLD) — dusk mauve (#8E6B86) left border, routed via onStartPump('mld'). Card copy emphasizes ~25-30 min session targeting 2-3 let-downs by tapping pump back to stim mode when flow slows. Momcozy-specific note: tap mode button to switch stim ⇄ express. (2) HANDS-ON PUMPING (HOP) — sage left border, routed via onStartPump('hop'). Card copy describes pre-pump 30s massage, in-session compression in rotating quadrants, post-pump 2-3 min hand expression. Cites Morton et al. 2009: +48% volume, +49% fat content vs pump alone. FinishPumpModal session header (line ~7199) updated to render protocol-specific label: 'Multiple let-down session' / 'Hands-on pump session' / 'Power pump session' / 'Pump session' by activePump.type. FinishPumpModal save handler (line ~6303) generalized: protocolType captured from activePump.type, durationMin still POWER_PUMP_TOTAL_MIN-snapped only when protocol === 'power' (mld/hop are user-paced), pumpType field persisted on the event for any non-standard protocol so journal renders + future analytics can distinguish them. Future work (deferred): in-pump phase coaching — timed prompts for MLD restim cycles and HOP compression reminders during the active session, plus Momcozy-specific mode-switch alerts." },
   { version: "2026.05.05bt94", summary: "Removed bt86's shift handoff confirmation system per user direction ('let's remove the checkpoint confirmation, I think it's over complicated'). Cleanup spans: (1) shiftHandoff state declaration removed from App. (2) localStorage hydration line removed. (3) cloudKeySetters entry for solene:shiftHandoff removed. (4) Autosave useEffect removed. (5) Effect A (transition detection that watched baseOnDuty.parent and created pending handoff records) removed. (6) Effect B (auto-takeover after 5min grace) removed. (7) ShiftHandoffBanner render in App-level render tree (above OnDutyCard) removed along with its onConfirmOnDuty + onMarkCovering handlers. (8) ShiftHandoffBanner component definition removed (~107 lines). Behavior reverts to pre-bt86: at scheduled shift transitions the on-duty display flips silently. Manual takeover via 'Tag in [partner]' button works as before; bt93's two-sided takeover banner means both covering and original parent can end it from their respective views. The original concern that motivated bt86 ('partner went on an errand longer than expected, I didn't realize I was covering') now relies on the user noticing and tapping the manual takeover button — same as before. Historical bt86 changelog entry preserved for reference but no live code refs it." },
@@ -2304,6 +2305,10 @@ function SoleneHandoffInner() {
   const [newBottleLocation, setNewBottleLocation] = useState(null);
   // Track previous on-duty parent so we can prompt at handoff
   const prevOnDutyRef = useRef(null);
+  // v05.05bt97 — tracks the most recently auto-ended takeover so the
+  // cloud setter can refuse to re-apply it if a stale poll brings it
+  // back. See cloudKeySetters['solene:takeover'].
+  const autoEndedTakeoverRef = useRef(null);
   const [showHandoffPrompt, setShowHandoffPrompt] = useState(false);
   // Time Bank: { balance: number (minutes; positive = Mommy owes Daddy), transactions: [{id, ts, from, to, mins, reason, kind: 'owed'|'gift'|'paid'}] }
   const [timeBank, setTimeBank] = useState({ balance: 0, transactions: [] });
@@ -2685,7 +2690,36 @@ function SoleneHandoffInner() {
     "solene:appointments":    (v) => setAppointments(Array.isArray(v) ? v : []),
     "solene:activeActivity":  (v) => setActiveActivity(v),
     "solene:activePump":      (v) => setActivePump(v),
-    "solene:takeover":        (v) => setTakeover(v),
+    // v05.05bt97 — defensive guards on takeover cloud setter to break
+    // the spurious-takeover loop reported by user. Symptom: chain of
+    // "Daddy covered Mommy · 5m/6m/14m/…" entries logged every ~15s.
+    // Root cause: stale takeover state in cloud (one device cleared it,
+    // another device pushed back the old value, or pre-bt94 debris).
+    // Local bt75 auto-end clears local takeover and logs an event, but
+    // next cloud poll re-applies the stale value, bt75 fires again,
+    // another event, repeat. Two guards:
+    //  (1) Age check: reject incoming takeovers older than 6 hours.
+    //      Most real takeovers resolve within 1 hour; >6h is debris.
+    //  (2) Recently-cleared check: when bt75 auto-ends a takeover, the
+    //      autoEndedTakeoverRef records its startedAt for 5 minutes.
+    //      Cloud setter rejects any incoming takeover whose startedAt
+    //      matches the recently-cleared one within that window.
+    "solene:takeover": (v) => {
+      if (v && v.startedAt) {
+        const ageHr = (Date.now() - new Date(v.startedAt).getTime()) / 3600000;
+        if (ageHr > 6) {
+          console.warn(`[cloud-sync] rejecting stale takeover from cloud (age ${ageHr.toFixed(1)}h, startedAt ${v.startedAt})`);
+          return;
+        }
+        const recent = autoEndedTakeoverRef.current;
+        if (recent && recent.startedAt === v.startedAt
+            && (Date.now() - recent.clearedAt) < 5 * 60 * 1000) {
+          console.warn(`[cloud-sync] rejecting recently-cleared takeover (cleared ${((Date.now() - recent.clearedAt) / 1000).toFixed(0)}s ago)`);
+          return;
+        }
+      }
+      setTakeover(v);
+    },
     "solene:handoffNote":     (v) => setHandoffNote(v),
     "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
@@ -4767,6 +4801,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
     const startMs = new Date(takeover.startedAt).getTime();
     const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
+    // v05.05bt97: record what we're clearing so cloud setter can reject
+    // a stale poll trying to bring it back.
+    autoEndedTakeoverRef.current = {
+      startedAt: takeover.startedAt,
+      clearedAt: Date.now(),
+    };
     setTakeover(null);
     try { localStorage.setItem("solene:takeover", "null"); } catch {}
     const newTransactions = [
@@ -5386,6 +5426,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             if (!takeover) return;
             const startMs = new Date(takeover.startedAt).getTime();
             const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
+            // v05.05bt97: record cleared takeover so cloud poll can't
+            // resurrect it. Same guard as the bt75 auto-end path.
+            autoEndedTakeoverRef.current = {
+              startedAt: takeover.startedAt,
+              clearedAt: Date.now(),
+            };
             // CLEAR FIRST — this guarantees that even if anything below
             // throws, the takeover state is cleared. Previously the clear
             // was at the end, so a failure in addEvent or setTimeBank
