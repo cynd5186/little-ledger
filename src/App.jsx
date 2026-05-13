@@ -15,15 +15,19 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt98";
+const APP_VERSION = "2026.05.05bt102";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "PHASE-AWARE TIMER FOR WEARABLE PROTOCOLS. Same kind of tile as the power pump now appears for the wearable patterns (60-sec restim, M5 Power, Express-heavy). Shows the current phase (Stim or Express), countdown to next phase (M:SS), elapsed/total minutes, proportional pip row with one segment per phase, and a 'Tap mode → STIM next' / 'Tap mode → EXPRESS next' prompt in the last 10 seconds of each phase — so you know when to switch your Momcozy mode. Stim phases pulse mauve; express phases sit on rose. Tile turns sage when complete.",
+  "NEW PLOT on the Milk tab: time of day vs oz pumped, last 21 days. Each dot is one pump session — darker = recent, fades with age. Gold line traces the hourly median; gold shading underneath shows the IQR (25th–75th percentile). Insight footer calls out your Peak hours (gold ring on plot, with median oz + sample size) and Low hours (coral ring). Bins with fewer than 3 samples are ignored for peak/low calls so single-session outliers don't dominate. Need at least 5 logged pumps to render — placeholder shown otherwise.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt102", summary: "PumpTimeVsOzCard component added to Milk tab between DailyBurnHistoryCard and DailyPumpHistoryCard. Per user request 'time vs oz plot for pumping milk · I want to know when are my highs and lows.' Data: events filtered to pump type AND oz > 0 AND mode !== 'start' from the last 21 days (rolling window, midnight-anchored), mapped to {hour: ts.getHours() + ts.getMinutes()/60, oz, ageDays}. Binning: 2-hour bins for the median curve (12 bins per day) — smoother than hourly for sparse data, finer than 4-hour blocks for circadian detail. Per bin: median (with even-length handling), p25, p75, n. Peak/low computation filters to bins with n >= 3 so single-session outliers don't dominate calls. SVG render at 320×180 viewBox: y-axis 0 to ceil(max+0.5) capped min at 8oz with gridlines every 2oz, x-axis 0–24 with labels at 0/6/12/18/24 in 12-hour format; IQR polygon (rendered first as low-opacity gold fill); scatter circles (r=2.8, opacity scales from 1.0 at age=0 to 0.3 at age=21d via Math.max(0.3, 1-ageDays/21)); median polyline in gold; peak bin highlighted with gold ring (r=5), low bin highlighted with coral ring (#C18D7A) — both only when at least 3 samples exist. Footer is a 2-column grid showing Peak and Low with bin time range (h-1 to h+1), median oz, and n. Body copy explains the visualization conventions. Empty state when data.length < 5 shows muted italic placeholder. Component rendered with currentUser === 'Mommy' gate." },
+  { version: "2026.05.05bt101", summary: "Inventory bottle-resurrection fix. Per user report ('I used up all bottles in fridge and I see it logged but one of the bottles still is seen in the inventory file'). Diagnosis follows the bt97 takeover-loop pattern: local drains a bottle (via FeedForm bottle picker → setInventory removes the bottle id, or drainInventory → splice, or removeInventory → filter), local autosave queues a push to cloud, but the cloud poll (every ~5s) fires first and fetches the previous still-full snapshot. The cloud setter at cloudKeySetters['solene:inventory'] applies that stale snapshot via setInventory. The bt84 shrinkage guards only protect against EMPTY-or-3+SMALLER incoming inventory — they don't protect against same-size or LARGER incoming (which is what happens when cloud has the un-drained version). The drained bottle id reappears. FIX: parallel to bt97's autoEndedTakeoverRef. New recentlyDrainedBottleIdsRef ref (Map<id, clearedAt-ms>) and new inventoryPrevRef. New useEffect watches [inventory, hydrated]: diffs inventoryPrevRef against current inventory, adds any disappeared id to the ref with Date.now() timestamp. Same effect expires entries older than 5 min on each pass so the map doesn't grow indefinitely. Cloud setter wraps incoming with a filter step BEFORE the existing bt84 guards: any incoming bottle whose id has a recently-drained timestamp within the last 5 min is dropped from the incoming array (with console.warn for diagnostics). The bt84 length-based guards then apply to the filtered array. Net effect: local drain → push queued → cloud poll fires → cloud snapshot still has the bottle → filter strips it → setInventory sees the proper drained state → no resurrection. Covers all removal paths (drainInventory helper, FeedForm explicit allocation, UseBottleModal onUse, removeInventory manual delete, emptyLocation bulk wipe) automatically since they all funnel through setInventory and the diff effect catches removed ids regardless of origin." },
+  { version: "2026.05.05bt100", summary: "DailyPumpHistoryCard component added to Milk tab between DailyBurnHistoryCard (bt78) and TodaysPumpPlanCard (bt80). Per user request for 'summary brief history of the days prior that has total oz pumped and total calories burned and the percentage of my goal I met and the percentage or the amount of planned pumps missed.' Computes for each of 6 prior days (today excluded — still partial): intakeOz from that day's feed events, pumpedOz from that day's pump events (mode !== 'start'), pumpCount, avgYield (pumpedOz/pumpCount with 4oz fallback), targetOz (intakeOz + bagBuffer × 4 from current setting), targetSessions (max(5, ceil(targetOz/avgYield))), missed (max(0, targetSessions - pumpCount)), goalPct (round(pumpedOz/targetOz × 100)), kcal (pumpedOz × KCAL_PER_OZ_BM). Note that targetOz uses CURRENT bagBuffer setting against EACH DAY's actual intake — not a rolling 3-day avg — so the goal each day matches what Solène actually consumed that day plus current buffer preference. UI: grid header (Day / Pumped / Kcal / Sessions / Missed), then one row per day with day-of-week short label + M/D date column, pumpedOz with goal% subtitle color-coded by tier (sage ≥95, gold ≥75, coral >0, muted 0), kcal with thousands separator, pumpCount/targetSessions fraction, missed count colored by severity (coral >2, gold >0, muted 0). Days with no data show centered dot placeholder. Footer states the goal computation so user knows how the % was derived. Rendered with currentUser === 'Mommy' gate, same as DailyBurnHistoryCard." },
+  { version: "2026.05.05bt99", summary: "Pump plan spacing math respects minimum start-to-start interval. Per user feedback ('some things don't make sense in terms of the runaround time from finishing pumping to start of another pump'). Diagnosis: autoSpaced useMemo in TodaysPumpPlanCard used `lastDoneH + 1.5` as the floor for earliestNext, and the multi-session distribution branch divided remaining-day-span by remaining-session-count without enforcing a minimum gap. After a 30-min session, the next pump could be planned only 1h later (1.5h start-to-start - 0.5h session = 1h rest). Physiologically tight — FIL clearance and let-down readiness benefit from ≥1.5h rest. FIX: new constant MIN_PUMP_INTERVAL_HRS = 2.0 (= ~30 min session + ~1.5 hr rest). Applied in two places. (1) Floor: earliestNext = max(lastDoneH + MIN_PUMP_INTERVAL_HRS, wakeStart). When no done sessions, baseline pushed back from wakeStart - 1.5 to wakeStart - MIN_INTERVAL so first session lands AT wakeStart. (2) Distribution: maxFitCount = floor(span / MIN_INTERVAL) + 1 caps the count of sessions that can fit in remaining window with proper spacing. actualCount = min(inWindowCount, maxFitCount). When user is running behind and N target sessions can't fit, only maxFitCount are placed today — drops the excess rather than cramming them together. The empty-span fallback (span <= 0) staggers by MIN_INTERVAL pushing past wakeEnd, signaling sessions that can't fit at all in the wake window. Side effect: daily target may go slightly under-met on bad days. That's a deliberate trade — covered by bt87 missed-pump auto-shift (which compensates the next day) and recovery mode's overnight slot (which adds a 26h frac slot for cumulative deficit catchup). Affects pumps logged Mommy-side only; daddy doesn't pump." },
   { version: "2026.05.05bt98", summary: "Phase-aware in-pump display for the wearable MLD patterns. Mirrors the power-pump UI for parity. NEW helper getWearableMldPhase(activePump, now) defined next to getPowerPumpPhase: takes an activePump whose type matches `mld-{id}`, looks up the pattern via getWearablePattern, walks the sequence to find the current segment, returns { complete, phaseIndex, mode ('stim'|'express'), phaseLabel, phaseDurationMs, phaseElapsedMs, phaseRemainingMs, totalElapsedMs, totalRemainingMs, pattern, nextMode }. MilkPanel changes: (1) the 1-second tick interval that was previously gated to activePump?.type === 'power' now also runs for any mld-* type, so countdown updates smoothly; (2) localNow set to new Date() during both power AND mld sessions; (3) new isMldType derivation; (4) new mldPhase memo from getWearableMldPhase. RENDER: new branch added between the power-pump branch and the standard-pump branch. When mldPhase is non-null, render a gradient tile with phaseColor mauve (#8E6B86) for stim segments and C.mommy for express segments, sage on complete. Contents mirror the power tile: eyebrow with pattern name + total minutes (e.g. '60-sec restim · 14/25 min'), large italic phase label ('Stim' / 'Express' / '{name} complete'), countdown M:SS in mono, sequence pip row with one bar per phase whose flex-basis is proportional to that phase's minute fraction, mono row of phase abbreviations (S2/E8/S1/E8/S1/E5) underneath. NEW addition not in the power tile: when phaseRemainSec <= 10 AND nextMode exists, a translucent banner appears mid-tile with the message 'Tap mode → STIM next' or 'Tap mode → EXPRESS next' — Momcozy-specific guidance for the user to physically tap the pump's mode button at the upcoming transition. Tap-anywhere-on-tile still ends the pump (calls onEndActivePump) just like power. Sequence rendering uses the WEARABLE_PATTERNS[k].sequence data directly so any future pattern additions automatically get the right pip layout." },
   { version: "2026.05.05bt97", summary: "Spurious-takeover loop fix. Per user report: 'There's still a very bad bug where it keeps logging takeovers that do not exist and I keep having sync error issues.' Cycle analysis: (1) cloud holds a stale takeover (debris from pre-bt94 bt86 auto-fires, or partner device that hasn't synced clear), (2) cloud poll setter at cloudKeySetters['solene:takeover'] blindly applies it via setTakeover(v), (3) bt75 auto-end-takeover effect detects baseOnDuty.parent === takeover.coveringParent + ageMs >= 30s, fires setTakeover(null) and addEvent(takeover), (4) journal gains a new 'Daddy covered Mommy · Xm' entry, (5) local pushes null to cloud but a stale poll wins the race, restoring the takeover, (6) cycle repeats every ~15s creating a chain of fake entries. Bonus: bloating events array eventually trips bt84's peak-event-count safety net when one device pushes a smaller array than another has — banner reads 'Cloud sync paused — possible data loss prevented.' FIX: two-layer defense in cloud setter for solene:takeover. (1) Age guard: takeovers with startedAt > 6h old are treated as debris and ignored. Most real takeovers resolve within 1h; 6h is generous. console.warn flags the rejection. (2) Recently-cleared guard: new autoEndedTakeoverRef tracks {startedAt, clearedAt} whenever local clears a takeover (both bt75 auto-end at line 4770 and the manual onEndTakeover at line 5423). Cloud setter checks: if incoming.startedAt === ref.startedAt AND clearedAt is within last 5 min, reject. Breaks the resurrection cycle immediately after first auto-end. setTakeover preserved when guards don't fire (normal cross-device takeover propagation still works for fresh, non-cleared values)." },
   { version: "2026.05.05bt96", summary: "Wearable timing-pattern sub-chooser. Per chat ('create an alternative pump protocol in addition to standard and power pump, and when the user clicks on that, pop up the top 3 most-aligned momcozy settings'). NEW module-level constant WEARABLE_PATTERNS with three entries: 60-sec restim (rank 1, alignment 5/5, Reddit/IBCLC popular, sequence 2/8/1/8/1/5 totaling 25 min), M5 Power (rank 2, alignment 4/5, TikTok viral, sequence 2/10/2/10 totaling 24 min), Express-heavy (rank 3, alignment 2/5, RTW forums, sequence 1/18/1/8 totaling 28 min). Each pattern carries: id, rank, name, sequence (array of {mode: 'stim'|'express', min}), totalMin, alignment (count of 5 literature principles satisfied), alignmentDetail (specific principle-by-principle breakdown citing Kent 2008 latency, Prime 2011 let-down correlation, Mitoulas 2002 flow plateau, Meier 2008 two-phase, total ≤30 min), popularity (social-media origin proxy), rationale. PUMPCHOOSER restructured: new chooserView state ('main' | 'wearable'), default 'main'. Main view now has Standard / Power / Wearable protocol ▸ / Just log a pump (bt95's MLD and HOP standalone cards removed — superseded). Wearable card opens sub-view via setChooserView('wearable'). Sub-view has: ← back button to return to main, italic caveat banner ('No RCT compares these head-to-head'), three pattern cards. Each pattern card renders the sequence as a tiny horizontal bar with stim segments in full accent color and express segments in 33% accent — proportional widths by minute fraction. Below the bar: monospace text of sequence (e.g. '2m stim → 8m express → …'), bold literature alignment line with detail paragraph, social-media popularity line, italic mechanism rationale. Tapping a pattern: onStartPump(`mld-${pattern.id}`) + close chooser. FinishPumpModal session header recognizes the mld-* prefix via getWearablePattern() helper and renders the readable name. pumpType field on the event records the full mld-{id} so journal and future analytics can compare across patterns. Future work (still deferred): in-pump phase coaching to prompt mode switches at sequence boundaries; per-pattern yield comparison chart on Milk tab once enough sessions per pattern are logged." },
@@ -2360,6 +2364,16 @@ function SoleneHandoffInner() {
   // cloud setter can refuse to re-apply it if a stale poll brings it
   // back. See cloudKeySetters['solene:takeover'].
   const autoEndedTakeoverRef = useRef(null);
+  // v05.05bt101 — track inventory IDs that were just removed locally
+  // (drained via feed log, manually deleted, or emptyLocation bulk).
+  // Cloud poll setter rejects any incoming inventory that would re-add
+  // these IDs within 5 minutes — protects against the cloud poll racing
+  // a local drain (cloud has stale full snapshot, local empties, poll
+  // resurrects bottles). Map<bottleId, clearedAt-ms>.
+  const recentlyDrainedBottleIdsRef = useRef(new Map());
+  // Previous inventory snapshot — used by an effect below to diff
+  // and detect which bottle ids disappeared since last render.
+  const inventoryPrevRef = useRef([]);
   const [showHandoffPrompt, setShowHandoffPrompt] = useState(false);
   // Time Bank: { balance: number (minutes; positive = Mommy owes Daddy), transactions: [{id, ts, from, to, mins, reason, kind: 'owed'|'gift'|'paid'}] }
   const [timeBank, setTimeBank] = useState({ balance: 0, transactions: [] });
@@ -2720,7 +2734,20 @@ function SoleneHandoffInner() {
       // is behind) would otherwise wipe legitimate local data. Threshold:
       // 3+ items dropped from local OR a non-empty local being replaced
       // by exactly []. Mirrors the events peak-count net in storage.set.
-      const incoming = Array.isArray(v) ? v : [];
+      const rawIncoming = Array.isArray(v) ? v : [];
+      // v05.05bt101 — also filter out incoming bottles whose ids are in
+      // the recently-drained ref. Cloud may have a stale snapshot that
+      // still contains a bottle we just drained locally; without this
+      // filter the cloud poll resurrects it.
+      const incoming = rawIncoming.filter(b => {
+        if (!b || !b.id) return true;
+        const drainedAt = recentlyDrainedBottleIdsRef.current.get(b.id);
+        if (drainedAt && (Date.now() - drainedAt) < 5 * 60 * 1000) {
+          console.warn(`[cloud-poll] rejecting recently-drained bottle id=${b.id} (drained ${((Date.now() - drainedAt) / 1000).toFixed(0)}s ago)`);
+          return false;
+        }
+        return true;
+      });
       setInventory(prev => {
         if (prev.length > 0 && incoming.length === 0) {
           console.warn(`[cloud-poll] refusing inventory wipe: cloud=[] but local=${prev.length}. Keeping local.`);
@@ -2874,6 +2901,26 @@ function SoleneHandoffInner() {
   const isWiping = () => typeof window !== "undefined" && window.__soleneWiping === true;
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:events", events); }, [events, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:inventory", inventory); }, [inventory, hydrated]);
+
+  // v05.05bt101 — diff inventory to detect removed bottle ids, push
+  // them to recentlyDrainedBottleIdsRef with timestamp. Also expire
+  // entries older than 5 min on each pass so the map doesn't grow.
+  useEffect(() => {
+    if (!hydrated) return;
+    const prev = inventoryPrevRef.current || [];
+    const currentIds = new Set(inventory.map(b => b.id));
+    for (const b of prev) {
+      if (b.id && !currentIds.has(b.id)) {
+        recentlyDrainedBottleIdsRef.current.set(b.id, Date.now());
+      }
+    }
+    inventoryPrevRef.current = inventory;
+    // Expire entries older than 5 min
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    for (const [id, at] of recentlyDrainedBottleIdsRef.current) {
+      if (at < cutoff) recentlyDrainedBottleIdsRef.current.delete(id);
+    }
+  }, [inventory, hydrated]);
 
   // v05.05bt55 — Defensive backfill: ensure every inventory item has an `id`.
   // Bug being fixed: when a bottle is used from the Now-page picker, the
@@ -16523,6 +16570,362 @@ function PumpGoalsCard({ C, events, now, mommyMaintenanceCal, setMommyMaintenanc
 // anti-gamification stance, present data, don't score it. Same kcal
 // formula as the running todayCalories useMemo: pump oz × KCAL_PER_OZ_BM
 // plus breastfeed min × KCAL_PER_BF_MINUTE.
+// v05.05bt100 — Daily pump history summary card. Tabular per-day stats
+// for the prior 6 days, paired with the bar-chart burn history above.
+// Per-row: oz pumped, kcal burned, pumps logged / target sessions,
+// % of oz-goal met, count of planned pumps missed. Today is excluded
+// since partial (the running totals are visible in TodaysPumpPlanCard
+// and the bar chart anyway). Goal/target each day is computed using
+// that day's actual feed intake + the current bagBuffer setting, NOT
+// the global current target — so each day's goal reflects what Solène
+// actually consumed that day, which is the meaningful baseline.
+// v05.05bt102 — Time-of-day vs oz scatter for pump sessions.
+// Each dot is one pump event over the last 21 days; older dots
+// are more translucent. A gold polyline traces the hourly median
+// so the circadian pattern surfaces visually. Insight footer
+// calls out peak and low hours by median (requires ≥3 samples
+// per bin to qualify, so single-session outliers don't dominate).
+function PumpTimeVsOzCard({ C, events, now }) {
+  const data = useMemo(() => {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 21);
+    cutoff.setHours(0, 0, 0, 0);
+    return events
+      .filter(e =>
+        e.type === "pump"
+        && typeof e.oz === "number"
+        && e.oz > 0
+        && e.mode !== "start"
+      )
+      .map(e => {
+        const ts = new Date(e.ts);
+        if (isNaN(ts.getTime())) return null;
+        if (ts < cutoff) return null;
+        return {
+          hour: ts.getHours() + ts.getMinutes() / 60,
+          oz: e.oz,
+          ageDays: (now.getTime() - ts.getTime()) / 86400000,
+        };
+      })
+      .filter(Boolean);
+  }, [events, now]);
+
+  const binnedMedians = useMemo(() => {
+    // 2-hour bins — smoother than hourly for sparse data, finer than
+    // 4-hour blocks for circadian detail. So 12 bins per day.
+    const BIN_HRS = 2;
+    const nBins = 24 / BIN_HRS;
+    const bins = Array.from({ length: nBins }, () => []);
+    for (const p of data) {
+      const idx = Math.min(nBins - 1, Math.floor(p.hour / BIN_HRS));
+      bins[idx].push(p.oz);
+    }
+    return bins.map((vals, idx) => {
+      if (vals.length === 0) return null;
+      const sorted = [...vals].sort((a, b) => a - b);
+      const median = sorted.length % 2 === 0
+        ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+        : sorted[Math.floor(sorted.length / 2)];
+      const p25 = sorted[Math.floor(sorted.length * 0.25)];
+      const p75 = sorted[Math.floor(sorted.length * 0.75)];
+      return {
+        hour: idx * BIN_HRS + BIN_HRS / 2,
+        median, p25, p75, n: vals.length,
+      };
+    });
+  }, [data]);
+
+  // Peak/low only from bins with ≥3 samples so outliers don't dominate
+  const qualifiedBins = binnedMedians.filter(b => b && b.n >= 3);
+  const peakBin = qualifiedBins.length
+    ? [...qualifiedBins].sort((a, b) => b.median - a.median)[0]
+    : null;
+  const lowBin = qualifiedBins.length
+    ? [...qualifiedBins].sort((a, b) => a.median - b.median)[0]
+    : null;
+
+  const fmtHr = h => {
+    if (h == null) return "—";
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    const ampm = hh < 12 ? "a" : "p";
+    const h12 = hh === 0 ? 12 : hh > 12 ? hh - 12 : hh;
+    return `${h12}${mm > 0 ? `:${String(mm).padStart(2, "0")}` : ""}${ampm}`;
+  };
+
+  if (data.length < 5) {
+    return (
+      <Section C={C} title="Time of day vs oz">
+        <div style={{
+          background: C.paper, borderRadius: 12, padding: 20,
+          border: `1px solid ${C.line}15`,
+          fontSize: 12, color: C.muted, textAlign: "center", fontStyle: "italic", lineHeight: 1.5,
+        }}>
+          Need at least 5 logged pumps to plot. You have {data.length}.
+        </div>
+      </Section>
+    );
+  }
+
+  // SVG layout
+  const W = 320, H = 180;
+  const padL = 32, padR = 10, padT = 12, padB = 28;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const maxOz = Math.max(8, Math.ceil(Math.max(...data.map(p => p.oz)) + 0.5));
+  const hourToX = h => padL + (h / 24) * plotW;
+  const ozToY = oz => padT + plotH - (oz / maxOz) * plotH;
+
+  // IQR shading polygon (only for bins with n >= 3)
+  const iqrBins = binnedMedians.filter(b => b && b.n >= 3);
+  const iqrPoints = iqrBins.length >= 2 ? [
+    ...iqrBins.map(b => `${hourToX(b.hour)},${ozToY(b.p75)}`),
+    ...[...iqrBins].reverse().map(b => `${hourToX(b.hour)},${ozToY(b.p25)}`),
+  ].join(" ") : null;
+  const medianPolyline = binnedMedians.filter(Boolean).map(b => `${hourToX(b.hour)},${ozToY(b.median)}`).join(" ");
+
+  // Y-axis ticks
+  const yTicks = [];
+  for (let v = 2; v <= maxOz; v += 2) yTicks.push(v);
+
+  return (
+    <Section C={C} title={`Time of day vs oz · last 21 days (n=${data.length})`}>
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 14,
+        border: `1px solid ${C.line}15`,
+      }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+          {/* Y gridlines + labels */}
+          {yTicks.map(v => (
+            <g key={v}>
+              <line x1={padL} x2={W - padR} y1={ozToY(v)} y2={ozToY(v)} stroke={`${C.line}26`} strokeWidth="1" />
+              <text x={padL - 4} y={ozToY(v) + 3} fontSize="9" fill={C.muted} textAnchor="end"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}>{v}</text>
+            </g>
+          ))}
+          <text x={padL - 4} y={padT + 4} fontSize="8" fill={C.muted} textAnchor="end"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}>oz</text>
+
+          {/* X-axis labels */}
+          {[0, 6, 12, 18, 24].map(h => (
+            <g key={h}>
+              <line x1={hourToX(h)} x2={hourToX(h)} y1={padT + plotH}
+                y2={padT + plotH + 3} stroke={`${C.line}55`} strokeWidth="1" />
+              <text x={hourToX(h)} y={padT + plotH + 14} fontSize="9" fill={C.muted} textAnchor="middle"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                {h === 0 || h === 24 ? "12a" : h === 12 ? "12p" : h < 12 ? `${h}a` : `${h - 12}p`}
+              </text>
+            </g>
+          ))}
+
+          {/* IQR shading */}
+          {iqrPoints && (
+            <polygon points={iqrPoints} fill={C.gold} opacity="0.10" />
+          )}
+
+          {/* Scatter dots — recent darker (full opacity), older fades to ~30% */}
+          {data.map((p, i) => (
+            <circle
+              key={i}
+              cx={hourToX(p.hour)}
+              cy={ozToY(p.oz)}
+              r="2.8"
+              fill={C.mommy}
+              opacity={Math.max(0.3, 1 - p.ageDays / 21)}
+            />
+          ))}
+
+          {/* Median polyline */}
+          {medianPolyline && (
+            <polyline points={medianPolyline} fill="none" stroke={C.gold} strokeWidth="2" opacity="0.85" />
+          )}
+
+          {/* Peak / low annotations */}
+          {peakBin && (
+            <circle cx={hourToX(peakBin.hour)} cy={ozToY(peakBin.median)} r="5"
+              fill="none" stroke={C.gold} strokeWidth="1.5" />
+          )}
+          {lowBin && lowBin.hour !== peakBin?.hour && (
+            <circle cx={hourToX(lowBin.hour)} cy={ozToY(lowBin.median)} r="5"
+              fill="none" stroke="#C18D7A" strokeWidth="1.5" />
+          )}
+        </svg>
+
+        {/* Insight summary */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10,
+          paddingTop: 10, borderTop: `1px solid ${C.line}15`,
+        }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              Peak
+            </div>
+            <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, marginTop: 2,
+              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              {peakBin ? `${fmtHr(peakBin.hour - 1)}–${fmtHr(peakBin.hour + 1)}` : "—"}
+            </div>
+            <div style={{ fontSize: 10, color: C.gold, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+              {peakBin ? `median ${peakBin.median.toFixed(1)} oz · n=${peakBin.n}` : "need ≥3 samples"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              Low
+            </div>
+            <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, marginTop: 2,
+              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              {lowBin ? `${fmtHr(lowBin.hour - 1)}–${fmtHr(lowBin.hour + 1)}` : "—"}
+            </div>
+            <div style={{ fontSize: 10, color: "#C18D7A", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
+              {lowBin ? `median ${lowBin.median.toFixed(1)} oz · n=${lowBin.n}` : "need ≥3 samples"}
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 8, lineHeight: 1.5 }}>
+          Each dot is one pump session — darker = recent. Gold line = hourly median; shading = IQR (25th–75th percentile). Bins with &lt;3 samples ignored for peak/low calls.
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
+  const days = useMemo(() => {
+    const out = [];
+    // 6 prior days (oldest to newest), excluding today
+    for (let i = 6; i >= 1; i--) {
+      const day = new Date(now);
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - i);
+      const next = new Date(day);
+      next.setDate(next.getDate() + 1);
+
+      // Per-day aggregates from events
+      const feeds = events.filter(e =>
+        e.type === "feed"
+        && e.oz
+        && new Date(e.ts) >= day
+        && new Date(e.ts) < next
+      );
+      const pumps = events.filter(e =>
+        e.type === "pump"
+        && e.mode !== "start"
+        && new Date(e.ts) >= day
+        && new Date(e.ts) < next
+      );
+
+      const intakeOz = feeds.reduce((s, e) => s + (e.oz || 0), 0);
+      const pumpedOz = pumps.reduce((s, e) => s + (e.oz || 0), 0);
+      const pumpCount = pumps.length;
+      const targetOz = intakeOz + bagBuffer * 4;
+      // avgYield estimated from this day's actual pumps; fallback 4oz
+      const avgYield = pumpCount > 0 ? pumpedOz / pumpCount : 4;
+      const targetSessions = targetOz > 0
+        ? Math.max(5, Math.ceil(targetOz / Math.max(2, avgYield)))
+        : 0;
+      const missed = Math.max(0, targetSessions - pumpCount);
+      const goalPct = targetOz > 0 ? Math.round((pumpedOz / targetOz) * 100) : 0;
+      const kcal = Math.round(pumpedOz * KCAL_PER_OZ_BM);
+
+      out.push({
+        date: day,
+        intakeOz: Math.round(intakeOz * 10) / 10,
+        pumpedOz: Math.round(pumpedOz * 10) / 10,
+        kcal, pumpCount, targetSessions, missed, goalPct,
+        hasData: pumpCount > 0 || feeds.length > 0,
+      });
+    }
+    return out;
+  }, [events, now, bagBuffer]);
+
+  const dayLetter = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <Section C={C} title="Daily summary · last 6">
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 14,
+        border: `1px solid ${C.line}15`,
+      }}>
+        {/* Header row */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "44px 1fr 1fr 1fr 1fr",
+          gap: 4,
+          fontSize: 9,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: C.muted,
+          fontWeight: 700,
+          paddingBottom: 8,
+          borderBottom: `1px solid ${C.line}15`,
+          marginBottom: 6,
+        }}>
+          <div>Day</div>
+          <div style={{ textAlign: "right" }}>Pumped</div>
+          <div style={{ textAlign: "right" }}>Kcal</div>
+          <div style={{ textAlign: "right" }}>Sessions</div>
+          <div style={{ textAlign: "right" }}>Missed</div>
+        </div>
+        {/* Data rows */}
+        {days.map((d, i) => {
+          const dow = d.date.getDay();
+          const dateLabel = `${d.date.getMonth() + 1}/${d.date.getDate()}`;
+          // Color the % indicator by how close to goal
+          const pctColor = d.goalPct >= 95 ? "#7B9B6E"  // sage = met
+            : d.goalPct >= 75 ? C.gold                   // gold = close
+            : d.goalPct > 0 ? "#C18D7A"                  // coral = under
+            : C.muted;                                   // grey = no data
+          return (
+            <div key={i}>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "44px 1fr 1fr 1fr 1fr",
+                gap: 4,
+                alignItems: "baseline",
+                padding: "6px 0",
+                fontSize: 12,
+                color: C.ink,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <div style={{ fontSize: 11 }}>
+                  <div style={{ color: C.muted, fontWeight: 600 }}>{dayLetter[dow]}</div>
+                  <div style={{ fontSize: 9, color: C.muted }}>{dateLabel}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  {d.hasData ? (
+                    <>
+                      <div style={{ fontWeight: 600 }}>{d.pumpedOz}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>oz</span></div>
+                      <div style={{ fontSize: 9, color: pctColor, fontWeight: 600 }}>{d.goalPct}% goal</div>
+                    </>
+                  ) : <span style={{ color: C.muted }}>·</span>}
+                </div>
+                <div style={{ textAlign: "right", fontWeight: 500 }}>
+                  {d.hasData ? d.kcal.toLocaleString() : <span style={{ color: C.muted }}>·</span>}
+                </div>
+                <div style={{ textAlign: "right", fontWeight: 500 }}>
+                  {d.hasData ? `${d.pumpCount}/${d.targetSessions}` : <span style={{ color: C.muted }}>·</span>}
+                </div>
+                <div style={{
+                  textAlign: "right", fontWeight: 600,
+                  color: d.missed > 2 ? "#C18D7A" : d.missed > 0 ? C.gold : C.muted,
+                }}>
+                  {d.hasData ? d.missed : <span style={{ color: C.muted }}>·</span>}
+                </div>
+              </div>
+              {i < days.length - 1 && <div style={{ borderBottom: `1px dashed ${C.line}15` }} />}
+            </div>
+          );
+        })}
+        <div style={{
+          fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 10, lineHeight: 1.4,
+        }}>
+          Goal = day's actual feed intake + freezer-bag buffer ({bagBuffer} × 4 oz). Today excluded — still in progress.
+        </div>
+      </div>
+    </Section>
+  );
+}
+
 function DailyBurnHistoryCard({ C, events, now }) {
   const days = useMemo(() => {
     // Build [oldest..newest] array of last 7 days. Each day's window is
@@ -16871,23 +17274,47 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   // v05.05bt81: during recovery, ALWAYS append an overnight slot (2am next
   // day = frac 26) on top of the in-window distribution so the user has
   // a MOTN session pre-scheduled.
+  // v05.05bt99 — minimum START-to-START interval between pumps.
+  // Previously hardcoded as 1.5h, which gave only ~1h rest after a
+  // 30-min session — physiologically too tight (FIL clearance + let-
+  // down readiness benefit from 1.5h+ rest). Bumped to 2.0h:
+  // 30-min session + ~1.5h rest = 2h interval. Also enforced as a
+  // minimum spacing in the distribution math below, so even when the
+  // user is running behind, sessions don't get jammed too close.
+  const MIN_PUMP_INTERVAL_HRS = 2.0;
+
   const autoSpaced = useMemo(() => {
     const overnight = recoveryActive ? [26.0] : [];
     const inWindowCount = Math.max(0, targetSessions - doneSessions.length - overnight.length);
     if (inWindowCount === 0) return overnight;
     const lastDoneH = doneSessions.length > 0
       ? doneSessions[doneSessions.length - 1].h
-      : wakeStart - 1.5;
-    const earliestNext = Math.max(lastDoneH + 1.5, wakeStart);
+      : wakeStart - MIN_PUMP_INTERVAL_HRS;
+    const earliestNext = Math.max(lastDoneH + MIN_PUMP_INTERVAL_HRS, wakeStart);
     let inWindow;
-    if (inWindowCount === 1) inWindow = [Math.min(wakeEnd, earliestNext + 2)];
-    else {
+    if (inWindowCount === 1) {
+      inWindow = [Math.min(wakeEnd, earliestNext + 2)];
+    } else {
       const span = Math.max(0, wakeEnd - earliestNext);
+      // Cap actual session count to what fits with min interval.
+      // If user is running behind and span/(N-1) would be < min, fit fewer
+      // sessions today — the daily target may go unmet, but that's better
+      // than scheduling impossibly-tight back-to-back pumps. Recovery mode
+      // will catch up via the overnight slot, and bt87's missed-pump
+      // handler will further self-correct over time.
+      const maxFitCount = Math.max(1, Math.floor(span / MIN_PUMP_INTERVAL_HRS) + 1);
+      const actualCount = Math.min(inWindowCount, maxFitCount);
       if (span <= 0) {
-        inWindow = Array.from({ length: inWindowCount }, (_, i) => earliestNext + i * 1.5);
+        // No room left in window — stagger by min interval anyway (will
+        // push past wakeEnd but at least won't pile on top of each other).
+        inWindow = Array.from({ length: actualCount }, (_, i) =>
+          earliestNext + i * MIN_PUMP_INTERVAL_HRS
+        );
       } else {
-        const spacing = span / (inWindowCount - 1);
-        inWindow = Array.from({ length: inWindowCount }, (_, i) => earliestNext + spacing * i);
+        const spacing = actualCount > 1 ? span / (actualCount - 1) : 0;
+        inWindow = Array.from({ length: actualCount }, (_, i) =>
+          earliestNext + spacing * i
+        );
       }
     }
     return [...inWindow, ...overnight];
@@ -17566,6 +17993,26 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
           (eat more on big-pump days), not for self-judgment. */}
       {currentUser === "Mommy" && (
         <DailyBurnHistoryCard C={C} events={events} now={now} />
+      )}
+
+      {/* v05.05bt102 — time-of-day scatter for pump output. Lives
+          between the burn history (calorie context) and the daily
+          summary (per-day stats). Shows the circadian pattern over
+          last 21 days so user can identify peak / low hours. */}
+      {currentUser === "Mommy" && (
+        <PumpTimeVsOzCard C={C} events={events} now={now} />
+      )}
+
+      {/* v05.05bt100 — daily pump history summary. Per-row stats for
+          prior 6 days: oz pumped, kcal, sessions vs target, % goal,
+          missed count. Anchors the pump-schedule context with rear-
+          view data so the user can see whether yesterday/the week
+          has been hitting target. */}
+      {currentUser === "Mommy" && (
+        <DailyPumpHistoryCard
+          C={C} events={events} now={now}
+          bagBuffer={Number.isFinite(pumpPlan?.bagBuffer) ? pumpPlan.bagBuffer : 1}
+        />
       )}
 
       {currentUser === "Mommy" && (
