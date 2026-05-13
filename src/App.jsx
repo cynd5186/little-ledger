@@ -15,15 +15,24 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt102";
+const APP_VERSION = "2026.05.05bt111";
 // Notes for THIS build, shown in the About panel of the Profile Switcher modal.
 // Keep to a couple of lines per item — these are personal release notes, not
 // a full changelog. The full changelog lives in CHANGELOG below.
 const APP_BUILD_NOTES = [
-  "NEW PLOT on the Milk tab: time of day vs oz pumped, last 21 days. Each dot is one pump session — darker = recent, fades with age. Gold line traces the hourly median; gold shading underneath shows the IQR (25th–75th percentile). Insight footer calls out your Peak hours (gold ring on plot, with median oz + sample size) and Low hours (coral ring). Bins with fewer than 3 samples are ignored for peak/low calls so single-session outliers don't dominate. Need at least 5 logged pumps to render — placeholder shown otherwise.",
+  "HANDOFF PAUSED LIVES IN THE COUNTDOWN CHIP NOW. Cleaner placement: the 'X min until handoff' chip next to the on-duty parent name now flips to 'handoff paused · [parent] away until [date]' when partner is out of town. Italic, muted, dashed border so it visually reads as a paused state vs the normal countdown. The bottom action row is no longer replaced wholesale — the leave-note button and tag-in chip are simply hidden individually, and the past-notes archive chip stays accessible if you have any. Less duplicated information, less visual noise.",
 ];
 // CHANGELOG — newest first. Each entry is { version, date, summary }.
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt111", summary: "Handoff-paused indicator relocated. Per user: 'the handoff paused should just replace temporarily the area where it says X min until handoff...that way it is not confusing.' The bt109 implementation put a 'Handoff paused' pill in the bottom action row, creating two visual surfaces about handoff state (the normal countdown chip near the parent name was still showing the regular X min until handoff, and the paused pill was below). Confusing. FIX: collapse to one. Countdown chip at ~line 9372 now conditionally renders: when handoffPaused, displays 'handoff paused · [tripParent] away until [date]' with muted color, dashed border, italic font; when not paused, displays the normal '[countdown] until handoff to [next.parent]' with urgency color. Bottom action row reverted to its pre-bt109 unconditional render — leave-note button and tag-in chip each individually gated on !handoffPaused (so they're hidden when paused), past-notes archive chip unconditional. Orphan ternary closing ')}' from bt109 cleaned up. Less visual real estate consumed by the paused state, single source of truth for handoff status, easier to scan." },
+  { version: "2026.05.05bt110", summary: "Solo-day task plan now schedules instead of giving up. Per user: 'if a person is out of town, the app should still try to create a task schedule based on nap/baby down windows and during wearable pumping.' Two new module-level helpers added. (1) predictNapWindows(events, now): pairs sleep_down → next sleep_up from trailing 7d, filters to daytime starts (6a–8p) and 5min–6h durations, clusters by 2-hour start-hour bucket, keeps buckets with ≥3 occurrences. For each qualifying bucket, computes median start hour and median duration, builds a Date for today at that start; if past now, skips. Returns array of { start, end, durationMin, kind: 'nap', context: 'predicted nap · n=N/7d', focusLevel, sampleSize }. (2) getWearablePumpWindows(pumpPlan, now): iterates pumpPlan.manualSessions (today's planned pump hours), skips past, for each builds 20-min block (25-min MLD typical minus ~5 min setup overhead). Returns { start, end, durationMin: 20, kind: 'pump-wearable', context: 'pump · wearable only', focusLevel }. TodayTaskPlanCard signature gains pumpPlan prop. availableBlocks useMemo: when isPartnerAway, returns [...predictNapWindows(events, now), ...getWearablePumpWindows(pumpPlan, now)].sort(start) instead of [] short-circuit. blockMatches (two-pass focus-aware suggestion) applies to these blocks unchanged. Suggestion section render branched: when isPartnerAway AND blockMatches.length === 0, renders the bt106 generic 'Solo today' fallback with updated copy reflecting prediction attempt; when isPartnerAway AND blockMatches.length > 0, renders 'Solo · suggested blocks' header with '{partner} away' italic note in upper right, then up to 5 block rows each showing time range / duration / focus level / kind label (with n=N for naps) / suggested task with focus-mismatch indicator if applicable / fallback rest-or-smaller-task message if no fit. Footer copy explains data sources and reminds reality varies. Wiring: pumpPlan plumbed App → ShiftsView → TodayTaskPlanCard. useMemo dep array updated to include pumpPlan." },
+  { version: "2026.05.05bt109", summary: "Pause handoff surfaces during parent-out-of-town window. Per user: 'if a parent is out of town, then handoff is effectively paused until the person returns.' Implementation: new derived handoffPaused boolean at App level, computed inline when passing props to OnDutyCard: !!(parentAway && from <= now && (!until || until >= now)). Three new props plumbed to OnDutyCard: handoffPaused (bool), tripParent (string|null — renamed from awayParent to avoid collision with the existing const awayParent = onsite?.parent at OnDutyCard line 9099 that represents on-site work, not business trip), tripUntil (ISO string|null). Four gating points inside OnDutyCard. (1) Takeover banner at line ~9281 — conditional now `!handoffPaused && takeoverWithMins && (...)` so banner doesn't render when handoff is paused. (2) showInlineNote at ~9103 — prefixed `!handoffPaused &&` to suppress inline display of partner-left notes. (3) Tag-in chip at ~9568 — conditional now `!handoffPaused && !takeoverWithMins && onDuty.parent === currentUser` so initiating a takeover isn't offered. (4) Entire bottom action row at ~9548 ternary-wrapped: when handoffPaused, renders single muted dashed pill 'Handoff paused — [tripParent] is away · home [date]' with past-notes chip alongside if archiveCount > 0; when not paused, renders the existing Leave-a-note button + tag-in chip + past-notes chip layout. The handoff note state itself is preserved (so when partner returns, anything they wrote pre-trip is still readable in the archive). bt75 auto-end-takeover effect untouched so any pre-existing stuck takeover can still be cleaned via Profile Switcher modal. The handoff note editor modal (showHandoffNoteEditor) and onOpenNoteEditor callback are still wired — just no entry point surfaced during pause; future builds could add an asymmetric one-way 'message partner' affordance if needed, but for now full pause matches user intent." },
+  { version: "2026.05.05bt108", summary: "ParentAwayBanner relocated from top of ShiftsView to inside the 'Day plan' Section, rendered as the first child above the Today/Tomorrow DayPlanCards. Per user: 'i think the mark someone out of town should live under the day plans because that is where meetings, appointmens nd such live.' Behavior unchanged — same muted '+ mark someone out of town' affordance when null; same colored banner with parent + dates when set; same tap-to-open ParentAwayModal; same effect on TodayTaskPlanCard's availableBlocks (suggestions section shows 'Solo today' message when partner is away). Only the render location moved. The Day plan section now reads top-to-bottom: out-of-town context (upstream) → Today's DayPlanCard → Tomorrow's DayPlanCard → helper footer text. This makes the trip context act as an information banner that informs the day cards below it, rather than a tab-level header that competed visually with the TodayTaskPlanCard." },
+  { version: "2026.05.05bt107", summary: "Task plan v2 per user: 'also need to consider what time is your most focus time vs. most tired time etc. also i should be able to edit tasks like if i scored it incorrectly or if i put the wrong time. should there be a component of the app suggesting if work can be diced into pieces — the app would have to be smart enough to try to intuit what the task is and what it would involve.' Three additions. (1) FOCUS LEVELS. New module-level getFocusForHour(h) using literature defaults — 9-12 high (cognitive peak), 13-15 low (post-lunch dip), 15-18 high (second wind), 20+/before 7 low (evening fatigue), else medium. Schmidt et al. 2007 on chronotype + standard circadian alertness research. getBlockFocusLevel(start) wraps for a Date. Task model gains focusLevel: 'high'|'medium'|'low' field, defaulting to 'medium' for legacy entries via (t.focusLevel || 'medium'). Add form gains a 3-button SegControl after effort: High · deep (daddy blue tint), Medium (gold), Low · admin (muted). Each shift-derived block now tagged with focusLevel via getBlockFocusLevel(blockStart). blockMatches useMemo refactored to two-pass: pass 1 finds first task where used.has=false AND effortMin<=durationMin AND focusLevel matches block; pass 2 falls back to any non-used fitting task. Block render shows colored 'HIGH FOCUS' / 'MEDIUM FOCUS' / 'LOW FOCUS' label in upper right, context (e.g., 'Daddy is on duty') below. When the fallback fires (suggested focus !== block focus), suggestion line appends '(best fit available — N focus task)' italic note. Open-task rows now show a small focus dot (8×8 circle, color-coded) before the title. Future v3: user-personal focus override (override literature defaults with her own pattern) — currently global. (2) EDIT. New editingTask local state (null or task object). Task row title is now a button — tap to open EditTaskModal. EditTaskModal is essentially the add form duplicated with prepopulated values; Save / Delete buttons. saveEdit handler in App-scoped card setTasks(map t=>t.id===u.id?{...t,...u}:t). Task row also continues to show inline checkbox to toggle complete and trash to delete (unchanged from bt105). Body subtitle below title reads 'effort · tap to edit' for discoverability. (3) CHUNKING. New module-level suggestTaskChunks(task) function. Chunk size scales: 30m base, 45m for >90, 60m for >180. numChunks = max(2, ceil(totalEffort/chunkSize)). 10 keyword patterns checked against task title for label seed: write|draft|essay|post|report, code|implement|build|develop|feature, plan|strategy|roadmap, review|feedback|edit, prepare|prep, research|study|learn, clean|tidy|organize|sort, meeting|call|1:1, email|respond|reply, bills|finance|tax. Generic 'Setup + start / Main work / Wrap up + review' fallback. Labels truncated/padded to numChunks. Effort spread evenly with last chunk absorbing remainder. Task row affordance: ⨯ split button (small bordered text) renders when effortMin >= 45, before the trash icon. Tapping sets splittingTask state. SplitTaskModal renders the chunks editable: per-chunk title input + 5-option effort SegControl (15/30/45/60/90), trash to remove, + Add another chunk button. Total effort tally with diff from original shown above Apply button. applyChunks handler creates new task ids with chunkOf: original.id breadcrumb, inherits regretScore + focusLevel from original, removes original via filter. LLM-driven semantic decomposition deferred — would call Claude API server-side with task title + context for actually-intelligent breakdown; heuristic version covers common task shapes for now." },
+  { version: "2026.05.05bt106", summary: "Parent-out-of-town context state + UI + task-plan integration. Per user: 'add a daddy out of town and mommy out of town for business trips — this is not to accumulate time because this is just an it is what it is. But I need this to be taken into consideration when doing today's task plan.' Implementation: NEW parentAway state at App level, shape { parent: 'Mommy'|'Daddy', from: ISO, until: ISO|null, reason?: string|null } or null. Persisted via solene:parentAway, hydrated on boot, cloud-synced via cloudKeySetters entry. NEW ParentAwayBanner component: when parentAway is null renders a muted dashed-border '+ mark someone out of town' button; when parentAway is set renders a colored banner (mommy or daddy accent based on who's away) with eyebrow 'Out of town' or 'Upcoming · away' (when from > now), parent name in bold accent, date range with 'home {weekday M/D}' format, optional reason below in italic. Whole banner is tappable to open the editor. NEW ParentAwayModal component: form with SegControl parent picker, datetime-local from + optional until, free-text reason input. Save button persists; Clear button (only when parentAway exists) clears state. Caveat copy at top explicitly states 'Does not affect time bank — business trips are context, not coverage debt.' TaskPlan integration: TodayTaskPlanCard signature gains parentAway prop. availableBlocks useMemo now checks if partner is away (parent matches AND from <= now AND (no until OR until >= now)); if so returns [] short-circuit. Suggestions section detects partner-away condition and renders a 'Solo today' gold-dashed box with copy 'Daddy is away. No off-duty blocks today — work happens during nap/baby-down windows only. Pick lower-effort tasks and protect the longest predicted nap for the highest-regret item' INSTEAD of the normal block list. Wiring: tasks/setTasks AND parentAway/setParentAway plumbed from App → ShiftsView; ShiftsView renders ParentAwayBanner at very top, then conditionally TodayTaskPlanCard, then DayInLifeCard. New showAwayModal local state in ShiftsView; ParentAwayModal rendered at modal stack. Future: hide bt75 takeover banner when partner is away (no one to tag back to); affect Daddy's view in symmetric way once Daddy gets his own task planner; project away dates onto the schedule view itself (e.g., grey out partner's shifts during trip window)." },
+  { version: "2026.05.05bt105", summary: "TodayTaskPlanCard MVP — first piece of the working-parent-OS scope expansion. Per chat: 'I am trying to manage WFH days, how do I get work done with baby ... if I knew baby's patterns and when my shifts are, perhaps I could input the things I am trying to get done today and the priorities ... I want the app to help me not be overexhausted.' Strategic positioning per chat: the baby-tracker functionality is table stakes; this is the moat — integrating childcare patterns with task scheduling for working parents. State model: tasks = [{id, title, effortMin, regretScore: 1-5, createdAt: ISO, completedAt: ISO|null}]. New tasks state at App level with persistence (storage.set on solene:tasks autosave effect), hydration on app boot (Array.isArray check), and cloud sync via cloudKeySetters['solene:tasks'] for cross-device. New TodayTaskPlanCard component placed above TodaysPumpPlanCard in module order. Card features: (1) Header showing 'N open · M done' count with prominent '+ Add task' button. (2) Add form with title input, effort SegControl (15/30/60/90/120 mins), regret 1-5 buttons with color-coding (1-2 muted, 3 gold, 4 coral, 5 deep red) AND text label below explaining 'Significantly behind if not' etc. for the selected value — the affective-forecasting framing. (3) Schedule-aware suggestion section: derives availableBlocks from activeShifts[partner] (off-duty windows for Mommy = when Daddy is on duty), then matches highest-regret task fitting each block via greedy used-set algo. Renders top 4 blocks with time range, duration, context label, and suggested task with its regret badge. Blocks without fits show 'Breathing room' instead. (4) Open tasks list sorted by regret desc then createdAt asc, each row: checkbox, regret badge in color, title + effort, trash icon. (5) Done-today section appears below with strikethrough + undo button. (6) Footer text adapts by viewer (Mommy gets explanation; Daddy gets 'switch profile to plan from her perspective'). Rendered with currentUser === 'Mommy' gate at top of ShiftsView (Schedule tab). Plumbed tasks/setTasks through ShiftsView props. NOT YET BUILT (deferred from chat scoping): nap-window prediction from sleep events, Monday.com integration, pattern learning from completion data, V3 contingency awareness (delay propagation). MVP validates whether the schedule-aware suggestion feels useful before investing further." },
+  { version: "2026.05.05bt104", summary: "Two changes per chat. (1) END-based spacing. Per user 'I can't have pumped and then I have another one due in 30 min ... should it be based off of end of a pump session?' Previous bt99 used MIN_PUMP_INTERVAL_HRS = 2 from doneSessions[].h (start hour). For 60-min power pumps starting at 4pm, lastDoneH=16, earliestNext=18 (6pm) — but the session ended at 5pm so that's only 1h rest. FIX: doneSessions[].endH now derived as h + durationMin/60 (durationMin pulled from event). New constants MIN_REST_HRS=1.5 and DEFAULT_SESSION_HRS=0.5. Floor: earliestNext = max(lastEndH + MIN_REST_HRS, wakeStart). MIN_PLANNED_INTERVAL between unlogged planned sessions = DEFAULT_SESSION_HRS + MIN_REST_HRS = 2h (same as bt99 for typical 30-min). Power pump effect: lastEndH = startH + 1.0 (vs startH for 30-min), earliestNext +1.5 = 2.5h start-to-start (vs old 2h). Power pump tile no longer makes user feel rushed back to standard pump 30 min later. (2) POWER PUMP AUTO-RECOMMENDATION. Per user 'add to the schedule when I should power pump ... based off of my actual data or recommended in the literature or anecdotal or a smart combo of all three.' NEW powerPumpRec useMemo in TodaysPumpPlanCard. Inputs: all pumps from event log, daysSinceLastPower (Infinity if never), avg7 = mean oz from last 7 days, avg14 = mean from last 14 days, lowest-yield 2-hr bin from last 21 days (filtered to bins with n>=3). Tier logic: returns null if last 14d has <10 sessions (insufficient data); null if daysSinceLastPower < 1 (too recent); 'strong' tier (coral) if avg7 is 10%+ below avg14 AND daysSinceLastPower>=1; 'maintenance' tier (gold) if daysSinceLastPower>=7 with no trend. Suggested hour: middle of lowest-yield bin if available, else 20:00 (8pm IBCLC consensus). Reasoning text: 'recent 7d avg X is Y% below 14d baseline' for strong, 'Nd since last power pump · maintenance dose' for maintenance. Banner renders at top of pump plan card with accent color matched to tier, eyebrow label, suggested time, reasoning string, and the low-bin median + n for transparency. Skipped without breaking the rest of the card. Future work: tap-to-start affordance on the banner that pre-fills the pump tile chooser with Power option (currently the user starts manually)." },
+  { version: "2026.05.05bt103", summary: "DailyPumpHistoryCard kcal-framing + Solène intake target context. Per chat: '% goal should be kcal goals ... also should be information on the goal for Solène's oz intake.' Two changes. (1) GOAL EXPRESSED IN KCAL: per-day computation now derives goalKcal = round(targetOz × KCAL_PER_OZ_BM) and pumpedKcal = round(pumpedOz × KCAL_PER_OZ_BM). goalPct = pumpedKcal / goalKcal × 100. Mathematically identical to bt100's oz-based % under fixed 22 kcal/oz conversion, but display is unit-consistent with the kcal column. Column header changed from 'Kcal' to 'Kcal · % goal'; cell content now stacks 'X kcal' as primary line and 'Y% of Zk' as subtitle, color-coded (sage ≥95%, gold 75-94%, coral <75%). Pumped column simplified to oz only. (2) SOLÈNE INTAKE TARGET HEADER: new getSoleneIntakeTarget(ageMonths) module-level function computing { kcal, oz, weight } using anchored WHO 50th-percentile female weight for age × FAO/WHO/UNU 2004 caloric requirements per kg. Anchor table covers 0-12 months at standard pediatric checkpoints; linear interpolation between anchors. Returns oz via kcal / 22. Card now renders a 3-column dashed-gold header band above the table showing target oz/day, target kcal/day, and est. weight kg — gives the user a reference point for what an age-appropriate intake looks like. Footer copy updated to explain the kcal-goal computation and the WHO/FAO sourcing, plus 'not a substitute for pediatrician guidance' caveat. Note: target is NOT used as the goal denominator — % still tracks each day's actual intake, since pumping volume should match what Solène actually consumed plus buffer (not her age-stat ideal). Target is reference info." },
   { version: "2026.05.05bt102", summary: "PumpTimeVsOzCard component added to Milk tab between DailyBurnHistoryCard and DailyPumpHistoryCard. Per user request 'time vs oz plot for pumping milk · I want to know when are my highs and lows.' Data: events filtered to pump type AND oz > 0 AND mode !== 'start' from the last 21 days (rolling window, midnight-anchored), mapped to {hour: ts.getHours() + ts.getMinutes()/60, oz, ageDays}. Binning: 2-hour bins for the median curve (12 bins per day) — smoother than hourly for sparse data, finer than 4-hour blocks for circadian detail. Per bin: median (with even-length handling), p25, p75, n. Peak/low computation filters to bins with n >= 3 so single-session outliers don't dominate calls. SVG render at 320×180 viewBox: y-axis 0 to ceil(max+0.5) capped min at 8oz with gridlines every 2oz, x-axis 0–24 with labels at 0/6/12/18/24 in 12-hour format; IQR polygon (rendered first as low-opacity gold fill); scatter circles (r=2.8, opacity scales from 1.0 at age=0 to 0.3 at age=21d via Math.max(0.3, 1-ageDays/21)); median polyline in gold; peak bin highlighted with gold ring (r=5), low bin highlighted with coral ring (#C18D7A) — both only when at least 3 samples exist. Footer is a 2-column grid showing Peak and Low with bin time range (h-1 to h+1), median oz, and n. Body copy explains the visualization conventions. Empty state when data.length < 5 shows muted italic placeholder. Component rendered with currentUser === 'Mommy' gate." },
   { version: "2026.05.05bt101", summary: "Inventory bottle-resurrection fix. Per user report ('I used up all bottles in fridge and I see it logged but one of the bottles still is seen in the inventory file'). Diagnosis follows the bt97 takeover-loop pattern: local drains a bottle (via FeedForm bottle picker → setInventory removes the bottle id, or drainInventory → splice, or removeInventory → filter), local autosave queues a push to cloud, but the cloud poll (every ~5s) fires first and fetches the previous still-full snapshot. The cloud setter at cloudKeySetters['solene:inventory'] applies that stale snapshot via setInventory. The bt84 shrinkage guards only protect against EMPTY-or-3+SMALLER incoming inventory — they don't protect against same-size or LARGER incoming (which is what happens when cloud has the un-drained version). The drained bottle id reappears. FIX: parallel to bt97's autoEndedTakeoverRef. New recentlyDrainedBottleIdsRef ref (Map<id, clearedAt-ms>) and new inventoryPrevRef. New useEffect watches [inventory, hydrated]: diffs inventoryPrevRef against current inventory, adds any disappeared id to the ref with Date.now() timestamp. Same effect expires entries older than 5 min on each pass so the map doesn't grow indefinitely. Cloud setter wraps incoming with a filter step BEFORE the existing bt84 guards: any incoming bottle whose id has a recently-drained timestamp within the last 5 min is dropped from the incoming array (with console.warn for diagnostics). The bt84 length-based guards then apply to the filtered array. Net effect: local drain → push queued → cloud poll fires → cloud snapshot still has the bottle → filter strips it → setInventory sees the proper drained state → no resurrection. Covers all removal paths (drainInventory helper, FeedForm explicit allocation, UseBottleModal onUse, removeInventory manual delete, emptyLocation bulk wipe) automatically since they all funnel through setInventory and the diff effect catches removed ids regardless of origin." },
   { version: "2026.05.05bt100", summary: "DailyPumpHistoryCard component added to Milk tab between DailyBurnHistoryCard (bt78) and TodaysPumpPlanCard (bt80). Per user request for 'summary brief history of the days prior that has total oz pumped and total calories burned and the percentage of my goal I met and the percentage or the amount of planned pumps missed.' Computes for each of 6 prior days (today excluded — still partial): intakeOz from that day's feed events, pumpedOz from that day's pump events (mode !== 'start'), pumpCount, avgYield (pumpedOz/pumpCount with 4oz fallback), targetOz (intakeOz + bagBuffer × 4 from current setting), targetSessions (max(5, ceil(targetOz/avgYield))), missed (max(0, targetSessions - pumpCount)), goalPct (round(pumpedOz/targetOz × 100)), kcal (pumpedOz × KCAL_PER_OZ_BM). Note that targetOz uses CURRENT bagBuffer setting against EACH DAY's actual intake — not a rolling 3-day avg — so the goal each day matches what Solène actually consumed that day plus current buffer preference. UI: grid header (Day / Pumped / Kcal / Sessions / Missed), then one row per day with day-of-week short label + M/D date column, pumpedOz with goal% subtitle color-coded by tier (sage ≥95, gold ≥75, coral >0, muted 0), kcal with thousands separator, pumpCount/targetSessions fraction, missed count colored by severity (coral >2, gold >0, muted 0). Days with no data show centered dot placeholder. Footer states the goal computation so user knows how the % was derived. Rendered with currentUser === 'Mommy' gate, same as DailyBurnHistoryCard." },
@@ -817,6 +826,41 @@ const DIAPER_URGENT_HOURS = 4;
 // Calorie estimates (research-based ranges)
 const KCAL_PER_OZ_BM = 22;          // ~20 kcal/oz milk + ~10% production overhead
 const KCAL_PER_BF_MINUTE = 4.5;     // average per minute of active nursing
+
+// v05.05bt103 — Solène's age-estimated daily intake target.
+// Uses WHO 50th-percentile female weight + 95-115 kcal/kg/day caloric
+// need (AAP/FAO 2004 for 0-6 mo). Returns { kcal, oz } given her age in
+// months. Linear interp for in-between months. NOT a replacement for
+// pediatrician-defined feeding plan; this is just a reference baseline.
+// Sources: WHO 2006 growth standards, FAO/WHO/UNU 2004 energy report.
+function getSoleneIntakeTarget(ageMonths) {
+  // [month, weightKg, kcalPerKg] anchors
+  const anchors = [
+    [0, 3.2, 113],
+    [1, 4.2, 108],
+    [2, 5.1, 103],
+    [3, 5.8, 99],
+    [4, 6.4, 96],
+    [5, 6.9, 94],
+    [6, 7.3, 92],
+    [9, 8.2, 81],
+    [12, 8.9, 78],
+  ];
+  const clamp = Math.max(0, Math.min(12, ageMonths));
+  let lo = anchors[0], hi = anchors[anchors.length - 1];
+  for (let i = 0; i < anchors.length - 1; i++) {
+    if (clamp >= anchors[i][0] && clamp <= anchors[i + 1][0]) {
+      lo = anchors[i]; hi = anchors[i + 1];
+      break;
+    }
+  }
+  const t = lo[0] === hi[0] ? 0 : (clamp - lo[0]) / (hi[0] - lo[0]);
+  const weight = lo[1] + (hi[1] - lo[1]) * t;
+  const kcalPerKg = lo[2] + (hi[2] - lo[2]) * t;
+  const kcal = Math.round(weight * kcalPerKg);
+  const oz = kcal / KCAL_PER_OZ_BM;
+  return { kcal, oz, weight };
+}
 
 // ---- Pediatric nap norms by age band (v05.05bt40) -----------------------
 // Synthesized from cross-referenced sleep-medicine guidance (AASM/AAP-aligned
@@ -2364,6 +2408,21 @@ function SoleneHandoffInner() {
   // cloud setter can refuse to re-apply it if a stale poll brings it
   // back. See cloudKeySetters['solene:takeover'].
   const autoEndedTakeoverRef = useRef(null);
+  // v05.05bt105 — Today's-plan task state. Shape:
+  //   { id, title, effortMin, regretScore (1-5), category?,
+  //     createdAt: ISO, completedAt: ISO|null }
+  // Tasks persist across days until marked done or deleted — they
+  // roll over naturally since "today's plan" carries unfinished work.
+  // The regretScore is the "how bad if not done today?" framing
+  // (1=tomorrow fine, 5=cannot push) which performs better than
+  // urgent/important for emotionally-charged decisions.
+  const [tasks, setTasks] = useState([]);
+  // v05.05bt106 — parent-out-of-town context. Shape:
+  //   { parent: "Mommy"|"Daddy", from: ISO, until: ISO|null, reason?: string }
+  // Purpose: pure context for the task planner so off-duty blocks aren't
+  // suggested while partner is unavailable. Does NOT affect time bank —
+  // business trips are acknowledged reality, not coverage debt.
+  const [parentAway, setParentAway] = useState(null);
   // v05.05bt101 — track inventory IDs that were just removed locally
   // (drained via feed log, manually deleted, or emptyLocation bulk).
   // Cloud poll setter rejects any incoming inventory that would re-add
@@ -2565,6 +2624,10 @@ function SoleneHandoffInner() {
       const aa = await storage.get("solene:activeActivity");
       const ap_pump = await storage.get("solene:activePump");
       const tk = await storage.get("solene:takeover");
+      const tasksFromStorage = await storage.get("solene:tasks");
+      if (Array.isArray(tasksFromStorage)) setTasks(tasksFromStorage);
+      const parentAwayFromStorage = await storage.get("solene:parentAway");
+      if (parentAwayFromStorage) setParentAway(parentAwayFromStorage);
       const hn = await storage.get("solene:handoffNote");
       const na = await storage.get("solene:noteArchive");
       const tb = await storage.get("solene:timeBank");
@@ -2799,6 +2862,8 @@ function SoleneHandoffInner() {
       setTakeover(v);
     },
     "solene:handoffNote":     (v) => setHandoffNote(v),
+    "solene:tasks":           (v) => setTasks(Array.isArray(v) ? v : []),
+    "solene:parentAway":      (v) => setParentAway(v),
     "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
     "solene:dailyContent":    (v) => v && setDailyContent(v),
@@ -2950,6 +3015,8 @@ function SoleneHandoffInner() {
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activeActivity", activeActivity); }, [activeActivity, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:activePump", activePump); }, [activePump, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:takeover", takeover); }, [takeover, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:tasks", tasks); }, [tasks, hydrated]);
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:parentAway", parentAway); }, [parentAway, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:handoffNote", handoffNote); }, [handoffNote, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:noteArchive", noteArchive); }, [noteArchive, hydrated]);
 
@@ -5472,6 +5539,15 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           myActiveCommitment={myActiveCommitment}
           onEndCommitmentEarly={endCommitmentEarly}
           handoffNote={handoffNote}
+          /* v05.05bt109 — when partner is out of town, handoff is
+             paused: no takeover banner, no tag-in button, no note
+             prompt. handoffPaused is true only during the active away
+             window (from <= now <= until, or open-ended if no until). */
+          handoffPaused={!!(parentAway
+            && new Date(parentAway.from) <= now
+            && (!parentAway.until || new Date(parentAway.until) >= now))}
+          tripParent={parentAway?.parent || null}
+          tripUntil={parentAway?.until || null}
           onAckNote={() => {
             setNoteArchive(prev => [
               { ...handoffNote, acknowledged: true, ackedAt: new Date().toISOString() },
@@ -5635,6 +5711,9 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             pendingTimeBankAction={pendingTimeBankAction}
             clearPendingTimeBankAction={() => setPendingTimeBankAction(null)}
             events={events}
+            tasks={tasks} setTasks={setTasks}
+            parentAway={parentAway} setParentAway={setParentAway}
+            pumpPlan={pumpPlan}
           />
         )}
         {tab === "bank" && (
@@ -8991,7 +9070,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -9025,7 +9104,9 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
 
   // Show handoff note to whoever it's addressed to (regardless of who's on duty).
   // This way Daddy (when viewing as Daddy) sees notes from Mommy, and vice versa.
-  const showInlineNote = handoffNote &&
+  // v05.05bt109 — suppressed while a partner is on a business trip
+  // (handoffPaused). Handoff is paused until they return.
+  const showInlineNote = !handoffPaused && handoffNote &&
     !handoffNote.acknowledged &&
     handoffNote.to === currentUser;
 
@@ -9203,7 +9284,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             framed as 'Your shift was handed off · [covering] is
             covering · [Take back]'
           • neither (third device, etc): no banner */}
-      {takeoverWithMins && (takeoverWithMins.originalParent === currentUser
+      {!handoffPaused && takeoverWithMins && (takeoverWithMins.originalParent === currentUser
                             || takeoverWithMins.coveringParent === currentUser) && (
         <div style={{
           background: `${takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy}15`,
@@ -9290,15 +9371,26 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           {onDuty.parent}
         </div>
         <div style={{
-          background: isUrgent ? C.accent : `${parentColor}22`,
-          color: isUrgent ? "#fff" : parentColor,
+          background: handoffPaused ? `${C.line}15`
+            : isUrgent ? C.accent : `${parentColor}22`,
+          color: handoffPaused ? C.muted
+            : isUrgent ? "#fff" : parentColor,
           padding: "6px 12px", borderRadius: 8,
           fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
           display: "flex", alignItems: "center", gap: 6, marginBottom: 2,
           maxWidth: "100%",
+          border: handoffPaused ? `1px dashed ${C.line}55` : "none",
+          fontStyle: handoffPaused ? "italic" : "normal",
         }}>
           <Timer size={13} style={{ flexShrink: 0 }} />
-          <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{next.parent}</span></span>
+          {handoffPaused ? (
+            <span>
+              handoff paused · {tripParent} away
+              {tripUntil && ` until ${new Date(tripUntil).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
+            </span>
+          ) : (
+            <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{next.parent}</span></span>
+          )}
         </div>
       </div>
 
@@ -9468,26 +9560,33 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         null
       ) : null}
 
-      {/* Bottom action row: leave-note (flex), tag-in (chip), past notes (chip) */}
+      {/* Bottom action row: leave-note (flex), tag-in (chip), past notes (chip).
+          v05.05bt111 — when handoff is paused (partner away), the leave-note
+          and tag-in affordances are individually hidden, but the row itself
+          stays present (past-notes archive remains). The "handoff paused"
+          indicator lives in the countdown chip area above. */}
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-        <button onClick={onOpenNoteEditor} style={{
-          flex: 1,
-          background: "transparent", color: C.muted,
-          border: `1px dashed ${C.line}33`, borderRadius: 8,
-          padding: "8px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          minWidth: 0,
-        }}>
-          <Edit3 size={11} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {handoffNote && handoffNote.from === currentUser && !handoffNote.acknowledged
-              ? `Edit note for ${currentUser === "Mommy" ? "Daddy" : "Mommy"}`
-              : `Leave a note for ${currentUser === "Mommy" ? "Daddy" : "Mommy"}`}
-          </span>
-        </button>
+        {!handoffPaused && (
+          <button onClick={onOpenNoteEditor} style={{
+            flex: 1,
+            background: "transparent", color: C.muted,
+            border: `1px dashed ${C.line}33`, borderRadius: 8,
+            padding: "8px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            minWidth: 0,
+          }}>
+            <Edit3 size={11} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {handoffNote && handoffNote.from === currentUser && !handoffNote.acknowledged
+                ? `Edit note for ${currentUser === "Mommy" ? "Daddy" : "Mommy"}`
+                : `Leave a note for ${currentUser === "Mommy" ? "Daddy" : "Mommy"}`}
+            </span>
+          </button>
+        )}
 
-        {/* Small tag-in chip — only visible when it's actually my shift and no takeover */}
-        {!takeoverWithMins && onDuty.parent === currentUser && (
+        {/* Small tag-in chip — only visible when it's actually my shift and no takeover.
+            v05.05bt109 — also suppressed while a partner is out of town (handoffPaused). */}
+        {!handoffPaused && !takeoverWithMins && onDuty.parent === currentUser && (
           <button
             onClick={() => {
               if (tagInConfirm) {
@@ -14116,7 +14215,7 @@ function SundayRoutineCard({ C, events, now }) {
   );
 }
 
-function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events }) {
+function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan }) {
   const [showAdd, setShowAdd] = useState(false);
   // NOTE: Time Bank and on-site state used to live here. Time Bank is now
   // its own tab (BankView), and on-site lives in NowView. The
@@ -14132,6 +14231,8 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
   // ahead, we open the Upcoming details and (if we can) narrow the filter.
   const [upcomingTrigger, setUpcomingTrigger] = useState(null); // { open: bool, filter: "week"|"month"|null }
   const [editingMeeting, setEditingMeeting] = useState(null); // meeting object being edited
+  // v05.05bt106 — modal for editing parent-out-of-town context
+  const [showAwayModal, setShowAwayModal] = useState(false);
 
   const addMeeting = (m) => {
     const newMeeting = { ...m, id: crypto.randomUUID() };
@@ -14167,6 +14268,20 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
 
   return (
     <div style={{ marginTop: 14 }}>
+      {/* v05.05bt105 — Today's task plan MVP. Working-parent OS wedge.
+          Renders above the Day-in-Life card so it's the first thing
+          you see on Schedule when you're trying to figure out your day.
+          Only renders when currentUser is Mommy (Daddy's view doesn't
+          have a planning context yet — could add in a future build). */}
+      {currentUser === "Mommy" && (
+        <TodayTaskPlanCard
+          C={C} tasks={tasks} setTasks={setTasks}
+          activeShifts={activeShifts} events={events} now={now}
+          currentUser={currentUser}
+          parentAway={parentAway}
+          pumpPlan={pumpPlan}
+        />
+      )}
       {/* v05.05bt50 — Day-in-Life card moved here from Wellness/AnalyticsSection.
           Collapsed by default; tap header to expand. */}
       <DayInLifeCard C={C} events={events} now={now} />
@@ -14217,6 +14332,12 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           expand. The Next-7-days peek strip below provides the broader
           weekly context. */}
       <Section C={C} title="Day plan">
+        {/* v05.05bt108 — out-of-town banner moved here per chat: this
+            section is where meetings/appointments live, so business-trip
+            context belongs alongside them. Sits above the Today/Tomorrow
+            cards as upstream context (informs the day cards below). */}
+        <ParentAwayBanner C={C} parentAway={parentAway} now={now}
+          onOpenEditor={() => setShowAwayModal(true)} />
         {(() => {
           // ---- Today
           const todayLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -14462,6 +14583,15 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
       })()}
 
       {showAdd && <AddMeetingModal C={C} onClose={() => setShowAdd(false)} onSubmit={addMeeting} currentUser={currentUser} />}
+      {showAwayModal && (
+        <ParentAwayModal
+          C={C}
+          parentAway={parentAway}
+          onClose={() => setShowAwayModal(false)}
+          onSave={(a) => { setParentAway(a); setShowAwayModal(false); }}
+          onClear={() => setParentAway(null)}
+        />
+      )}
 
       {/* Edit meeting modal — pre-fills the same form used for adding,
           updates in place on submit. */}
@@ -16790,6 +16920,15 @@ function PumpTimeVsOzCard({ C, events, now }) {
 }
 
 function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
+  // v05.05bt103 — Solène's age-estimated daily intake target, surfaced as
+  // a context header so the user can see what an age-appropriate intake
+  // would look like. NOT used as the goal denominator — the % goal still
+  // tracks against day-specific actual intake + buffer because that
+  // matches what the user actually needed to produce on that specific
+  // day. Target target is reference info, not target.
+  const ageMonths = ((now.getTime() - BIRTHDAY.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+  const target = getSoleneIntakeTarget(ageMonths);
+
   const days = useMemo(() => {
     const out = [];
     // 6 prior days (oldest to newest), excluding today
@@ -16824,14 +16963,19 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
         ? Math.max(5, Math.ceil(targetOz / Math.max(2, avgYield)))
         : 0;
       const missed = Math.max(0, targetSessions - pumpCount);
-      const goalPct = targetOz > 0 ? Math.round((pumpedOz / targetOz) * 100) : 0;
-      const kcal = Math.round(pumpedOz * KCAL_PER_OZ_BM);
+      // v05.05bt103 — express goal in kcal terms so the column header
+      // and column row both speak the same unit. Math is equivalent to
+      // oz-based % under fixed KCAL_PER_OZ_BM, but display is clearer.
+      const goalKcal = Math.round(targetOz * KCAL_PER_OZ_BM);
+      const pumpedKcal = Math.round(pumpedOz * KCAL_PER_OZ_BM);
+      const goalPct = goalKcal > 0 ? Math.round((pumpedKcal / goalKcal) * 100) : 0;
 
       out.push({
         date: day,
         intakeOz: Math.round(intakeOz * 10) / 10,
         pumpedOz: Math.round(pumpedOz * 10) / 10,
-        kcal, pumpCount, targetSessions, missed, goalPct,
+        kcal: pumpedKcal, goalKcal,
+        pumpCount, targetSessions, missed, goalPct,
         hasData: pumpCount > 0 || feeds.length > 0,
       });
     }
@@ -16846,6 +16990,41 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
         background: C.paper, borderRadius: 12, padding: 14,
         border: `1px solid ${C.line}15`,
       }}>
+        {/* v05.05bt103 — Solène's age-estimated intake target. Header
+            band gives the user a reference point for what an age-
+            appropriate daily intake looks like. Computed from WHO
+            50th-percentile weight + AAP/FAO 2004 caloric estimates. */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+          padding: "8px 10px", marginBottom: 12,
+          background: `${C.gold}11`, borderRadius: 8,
+          border: `1px dashed ${C.gold}33`,
+        }}>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              Solène's est. need
+            </div>
+            <div style={{ fontSize: 13, color: C.ink, fontFamily: "'JetBrains Mono', monospace", marginTop: 2, fontWeight: 600 }}>
+              ~{target.oz.toFixed(1)}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>oz/day</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              In kcal
+            </div>
+            <div style={{ fontSize: 13, color: C.ink, fontFamily: "'JetBrains Mono', monospace", marginTop: 2, fontWeight: 600 }}>
+              ~{target.kcal}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>kcal/day</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              Est. weight
+            </div>
+            <div style={{ fontSize: 13, color: C.ink, fontFamily: "'JetBrains Mono', monospace", marginTop: 2, fontWeight: 600 }}>
+              ~{target.weight.toFixed(1)}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>kg</span>
+            </div>
+          </div>
+        </div>
         {/* Header row */}
         <div style={{
           display: "grid",
@@ -16862,7 +17041,7 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
         }}>
           <div>Day</div>
           <div style={{ textAlign: "right" }}>Pumped</div>
-          <div style={{ textAlign: "right" }}>Kcal</div>
+          <div style={{ textAlign: "right" }}>Kcal · % goal</div>
           <div style={{ textAlign: "right" }}>Sessions</div>
           <div style={{ textAlign: "right" }}>Missed</div>
         </div>
@@ -16893,14 +17072,16 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
                 </div>
                 <div style={{ textAlign: "right" }}>
                   {d.hasData ? (
-                    <>
-                      <div style={{ fontWeight: 600 }}>{d.pumpedOz}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>oz</span></div>
-                      <div style={{ fontSize: 9, color: pctColor, fontWeight: 600 }}>{d.goalPct}% goal</div>
-                    </>
+                    <div style={{ fontWeight: 600 }}>{d.pumpedOz}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>oz</span></div>
                   ) : <span style={{ color: C.muted }}>·</span>}
                 </div>
                 <div style={{ textAlign: "right", fontWeight: 500 }}>
-                  {d.hasData ? d.kcal.toLocaleString() : <span style={{ color: C.muted }}>·</span>}
+                  {d.hasData ? (
+                    <>
+                      <div>{d.kcal.toLocaleString()}<span style={{ fontSize: 9, color: C.muted, marginLeft: 2 }}>kcal</span></div>
+                      <div style={{ fontSize: 9, color: pctColor, fontWeight: 600 }}>{d.goalPct}% of {d.goalKcal}</div>
+                    </>
+                  ) : <span style={{ color: C.muted }}>·</span>}
                 </div>
                 <div style={{ textAlign: "right", fontWeight: 500 }}>
                   {d.hasData ? `${d.pumpCount}/${d.targetSessions}` : <span style={{ color: C.muted }}>·</span>}
@@ -16919,7 +17100,7 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
         <div style={{
           fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 10, lineHeight: 1.4,
         }}>
-          Goal = day's actual feed intake + freezer-bag buffer ({bagBuffer} × 4 oz). Today excluded — still in progress.
+          Goal kcal = day's actual feed intake × {KCAL_PER_OZ_BM} kcal/oz + buffer ({bagBuffer} × 4 oz × {KCAL_PER_OZ_BM}). Today excluded — still in progress. Solène's need above is age-estimated (WHO 50th percentile weight × FAO/WHO kcal/kg); not a substitute for pediatrician guidance.
         </div>
       </div>
     </Section>
@@ -17044,6 +17225,1165 @@ function DailyBurnHistoryCard({ C, events, now }) {
 // reset at midnight. Auto-rebalance is implicit — as you log pumps,
 // the recompute redistributes any non-manual sessions across the
 // remaining wake window.
+
+// v05.05bt105 — Today's task plan MVP. The "working parent OS" wedge.
+// Lets the user input tasks with effort estimate + regret score
+// ("how bad if not done today?" — 1-5), then matches them to the
+// available time blocks today from her shift schedule. Aim: replace
+// the daily mental load of "what should I do during nap?" with a
+// schedule-aware suggestion.
+//
+// Design constraints (per chat):
+//   - Minimal task model: title, effort, regret, completedAt. No
+//     subtasks/tags/projects/dependencies.
+//   - Regret framing instead of urgent/important — affective forecasting
+//     is better for emotionally-charged prioritization.
+//   - Schedule-aware: read activeShifts to know when user is off-duty
+//     and can work; match tasks by effort fit.
+//   - Tasks roll over until done or deleted (no daily reset).
+//   - Tone: supportive, not judgey. "Tomorrow-you would be glad we did X"
+//     not "you failed at Y."
+// v05.05bt106 — Parent-out-of-town context UI. Banner shows the current
+// status at the top of the Schedule tab; tapping it opens the modal to
+// edit dates or clear. When inactive, a small muted button affords
+// "mark someone away" for setup. NOT a time-bank action — pure context.
+// v05.05bt107 — Task plan v2 helpers: focus-by-hour and chunk suggester.
+//
+// FOCUS-BY-HOUR. Default chronotype based on adult research (Schmidt
+// et al. 2007 et al.). Returns "high" | "medium" | "low" for an hour.
+// User can override with personalSchedule down the road; for now,
+// literature defaults apply globally. Adjust if your peak is shifted
+// (e.g., night-owl chronotype would shift this 2-3h later).
+//   7-9a:   medium (morning ramp)
+//   9a-12p: high (cognitive peak)
+//   12-1p:  medium (lunch)
+//   1-3p:   low (post-lunch dip — well-established)
+//   3-6p:   high (second wind)
+//   6-8p:   medium (winding down)
+//   8p+:    low (evening fatigue)
+function getFocusForHour(h) {
+  if (h >= 9 && h < 12) return "high";
+  if (h >= 15 && h < 18) return "high";
+  if (h >= 13 && h < 15) return "low";
+  if (h >= 20 || h < 7) return "low";
+  return "medium";
+}
+
+// Pick the dominant focus level of a block by sampling its start hour.
+// Could weight by duration across hours but for typical 30-90 min
+// blocks the start-hour dominates.
+function getBlockFocusLevel(start) {
+  const h = start.getHours();
+  return getFocusForHour(h);
+}
+
+// v05.05bt107 — Chunk suggester. Heuristic decomposition based on
+// keyword detection in the task title. Falls back to generic
+// start/main/wrap pattern when no keyword matches. Returns an array of
+// { title, effortMin } suggested chunks; user can edit before applying.
+// Smart-AI version (LLM-driven decomposition by actual semantic
+// understanding of the task) deferred until we have a server endpoint
+// — would call Claude API with the task title + context. Heuristic
+// version is decent for common task shapes.
+function suggestTaskChunks(task) {
+  const title = (task.title || "").toLowerCase();
+  const totalEffort = task.effortMin || 60;
+
+  // Chunk size: aim for 30-45 min pieces
+  let chunkSize = 30;
+  if (totalEffort > 90) chunkSize = 45;
+  if (totalEffort > 180) chunkSize = 60;
+  const numChunks = Math.max(2, Math.ceil(totalEffort / chunkSize));
+
+  // Keyword → suggested 3-step decomposition. Order = expected flow.
+  const patterns = [
+    { kw: ["write", "draft", "essay", "post", "report"],
+      labels: ["Outline + structure", "Draft body", "Edit + polish"] },
+    { kw: ["code", "implement", "build", "develop", "feature"],
+      labels: ["Scope + approach", "Implement core", "Test + cleanup"] },
+    { kw: ["plan", "strategy", "roadmap"],
+      labels: ["Research + options", "Decide + prioritize", "Document plan"] },
+    { kw: ["review", "feedback", "edit"],
+      labels: ["First pass scan", "Detailed read", "Notes + followups"] },
+    { kw: ["prepare", "prep"],
+      labels: ["Gather materials", "Build content", "Final touches"] },
+    { kw: ["research", "study", "learn"],
+      labels: ["Define questions", "Gather sources", "Synthesize findings"] },
+    { kw: ["clean", "tidy", "organize", "sort"],
+      labels: ["Triage what's here", "Process + sort", "Final pass + put away"] },
+    { kw: ["meeting", "call", "1:1"],
+      labels: ["Pre-read + agenda", "The meeting", "Followups + notes"] },
+    { kw: ["email", "respond", "reply"],
+      labels: ["Triage inbox", "Substantive replies", "Quick replies + clear"] },
+    { kw: ["bills", "finance", "tax"],
+      labels: ["Pull statements", "Reconcile + decide", "File + done"] },
+  ];
+
+  let labels = null;
+  for (const p of patterns) {
+    if (p.kw.some(k => title.includes(k))) { labels = p.labels; break; }
+  }
+  if (!labels) labels = ["Setup + start", "Main work", "Wrap up + review"];
+
+  // Adjust label count to numChunks
+  if (labels.length > numChunks) labels = labels.slice(0, numChunks);
+  while (labels.length < numChunks) labels.push(`Part ${labels.length + 1}`);
+
+  // Spread effort evenly, last chunk absorbs remainder
+  const baseEffort = Math.floor(totalEffort / numChunks);
+  return labels.map((label, i) => ({
+    title: label,
+    effortMin: i === labels.length - 1
+      ? totalEffort - baseEffort * (labels.length - 1)
+      : baseEffort,
+  }));
+}
+
+// v05.05bt110 — Predict today's nap windows from past 7 days of sleep events.
+// Returns array of { start: Date, end: Date, durationMin, kind: 'nap',
+// context: string, focusLevel: 'high'|'medium'|'low', sampleSize: int }
+// for naps the algorithm thinks will still happen TODAY (i.e. after now).
+//
+// Algorithm: pair sleep_down → next sleep_up within 6h, restrict to daytime
+// (6am–8pm start), cluster by 2-hour start-hour bucket. Buckets with ≥3
+// occurrences in the trailing 7 days become predicted nap windows for
+// today (median start hour, median duration). Past windows are filtered.
+function predictNapWindows(events, now) {
+  const cutoff = new Date(now.getTime() - 7 * 86400000);
+  const sleepEv = (events || [])
+    .filter(e => (e.type === "sleep_down" || e.type === "sleep_up")
+                 && !e.silent
+                 && new Date(e.ts) >= cutoff
+                 && new Date(e.ts) <= now)
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+  // Pair sleep_down → next sleep_up within 6h, daytime only
+  const naps = [];
+  for (let i = 0; i < sleepEv.length - 1; i++) {
+    const e = sleepEv[i];
+    if (e.type !== "sleep_down") continue;
+    const next = sleepEv[i + 1];
+    if (next.type !== "sleep_up") continue;
+    const start = new Date(e.ts);
+    const end = new Date(next.ts);
+    const durMin = (end - start) / 60000;
+    if (durMin <= 5 || durMin > 360) continue; // 5min–6h band
+    const startH = start.getHours() + start.getMinutes() / 60;
+    if (startH < 6 || startH > 20) continue; // daytime only
+    naps.push({ startH, durMin });
+  }
+
+  // Cluster by 2-hour bucket
+  const buckets = {};
+  for (const n of naps) {
+    const b = Math.floor(n.startH / 2) * 2;
+    if (!buckets[b]) buckets[b] = [];
+    buckets[b].push(n);
+  }
+
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const out = [];
+  for (const items of Object.values(buckets)) {
+    if (items.length < 3) continue;
+    const startHs = items.map(i => i.startH).sort((a, b) => a - b);
+    const durs = items.map(i => i.durMin).sort((a, b) => a - b);
+    const medStart = startHs[Math.floor(startHs.length / 2)];
+    const medDur = durs[Math.floor(durs.length / 2)];
+    const start = new Date(today);
+    start.setHours(Math.floor(medStart), Math.round((medStart % 1) * 60), 0, 0);
+    if (start <= now) continue; // past
+    const end = new Date(start.getTime() + medDur * 60000);
+    out.push({
+      start, end,
+      durationMin: Math.round(medDur),
+      kind: "nap",
+      context: `predicted nap · n=${items.length}/7d`,
+      focusLevel: getBlockFocusLevel(start),
+      sampleSize: items.length,
+    });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
+// v05.05bt110 — Build wearable-pump windows from today's pump plan.
+// Each upcoming planned pump becomes a 25-min wearable-only block.
+// User has to actually start the pump as wearable for the block to be
+// usable — block label makes that contingency explicit.
+function getWearablePumpWindows(pumpPlan, now) {
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+  const out = [];
+  for (const h of manual) {
+    const start = new Date(today);
+    const hh = Math.floor(h);
+    const mm = Math.round((h % 1) * 60);
+    start.setHours(hh, mm, 0, 0);
+    if (start <= now) continue;
+    // Typical wearable session ~25 min (MLD pattern); subtract 5 min for
+    // setup/cleanup overhead from the usable work time → 20 min.
+    const durationMin = 20;
+    const end = new Date(start.getTime() + durationMin * 60000);
+    out.push({
+      start, end, durationMin,
+      kind: "pump-wearable",
+      context: "pump · wearable only",
+      focusLevel: getBlockFocusLevel(start),
+    });
+  }
+  return out;
+}
+
+function ParentAwayBanner({ C, parentAway, now, onOpenEditor }) {
+  const isActiveAway = parentAway
+    && new Date(parentAway.from) <= now
+    && (!parentAway.until || new Date(parentAway.until) >= now);
+  const isUpcoming = parentAway && !isActiveAway && new Date(parentAway.from) > now;
+
+  const fmtDate = d => {
+    const dd = new Date(d);
+    return `${dd.toLocaleDateString(undefined, { weekday: "short" })} ${dd.getMonth() + 1}/${dd.getDate()}`;
+  };
+
+  if (!parentAway) {
+    return (
+      <button
+        onClick={onOpenEditor}
+        style={{
+          width: "100%",
+          background: "transparent",
+          color: C.muted,
+          border: `1px dashed ${C.line}33`,
+          borderRadius: 8,
+          padding: "8px 12px",
+          fontSize: 11,
+          fontFamily: "'JetBrains Mono', monospace",
+          letterSpacing: "0.04em",
+          cursor: "pointer",
+          marginBottom: 10,
+        }}>
+        + mark someone out of town
+      </button>
+    );
+  }
+
+  const accent = parentAway.parent === "Mommy" ? C.mommy : C.daddy;
+  return (
+    <button
+      onClick={onOpenEditor}
+      style={{
+        width: "100%",
+        background: `${accent}11`,
+        border: `1px solid ${accent}33`,
+        borderLeft: `4px solid ${accent}`,
+        borderRadius: 8,
+        padding: "10px 12px",
+        cursor: "pointer",
+        marginBottom: 12,
+        textAlign: "left",
+        fontFamily: "inherit",
+      }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <span style={{
+          fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
+          color: accent, fontWeight: 700,
+        }}>
+          {isUpcoming ? "Upcoming · away" : "Out of town"}
+        </span>
+        <span style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>tap to edit</span>
+      </div>
+      <div style={{ fontSize: 14, color: C.ink, marginTop: 4, lineHeight: 1.4 }}>
+        <strong style={{ color: accent }}>{parentAway.parent}</strong>
+        {isUpcoming ? ` away from ${fmtDate(parentAway.from)}` : " is away"}
+        {parentAway.until ? ` · home ${fmtDate(parentAway.until)}` : " · no return date set"}
+      </div>
+      {parentAway.reason && (
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
+          {parentAway.reason}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function ParentAwayModal({ C, parentAway, onClose, onSave, onClear }) {
+  const [parent, setParent] = useState(parentAway?.parent || "Daddy");
+  const [from, setFrom] = useState(parentAway?.from
+    ? toLocalDatetime(new Date(parentAway.from))
+    : toLocalDatetime(new Date()));
+  const [until, setUntil] = useState(parentAway?.until
+    ? toLocalDatetime(new Date(parentAway.until))
+    : "");
+  const [reason, setReason] = useState(parentAway?.reason || "");
+
+  function toLocalDatetime(d) {
+    const off = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - off).toISOString().slice(0, 16);
+  }
+
+  const submit = () => {
+    onSave({
+      parent,
+      from: new Date(from).toISOString(),
+      until: until ? new Date(until).toISOString() : null,
+      reason: reason.trim() || null,
+    });
+  };
+
+  return (
+    <ModalShell C={C} onClose={onClose} title="Out of town">
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: 1.5, fontStyle: "italic" }}>
+        Marks one parent as unavailable for the dates below. The task planner won't suggest off-duty blocks during this window. <strong>Does not affect time bank</strong> — business trips are context, not coverage debt.
+      </div>
+      <Field C={C} label="Who's away">
+        <SegControl C={C} value={parent} onChange={setParent} options={[
+          { v: "Mommy", l: "Mommy" },
+          { v: "Daddy", l: "Daddy" },
+        ]} />
+      </Field>
+      <Field C={C} label="From">
+        <input
+          type="datetime-local"
+          value={from}
+          onChange={e => setFrom(e.target.value)}
+          style={{
+            width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+            borderRadius: 8, fontSize: 14, background: C.bg, color: C.ink,
+            fontFamily: "inherit",
+          }}
+        />
+      </Field>
+      <Field C={C} label="Until (optional)">
+        <input
+          type="datetime-local"
+          value={until}
+          onChange={e => setUntil(e.target.value)}
+          style={{
+            width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+            borderRadius: 8, fontSize: 14, background: C.bg, color: C.ink,
+            fontFamily: "inherit",
+          }}
+        />
+        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4 }}>
+          Leave blank if return date is unknown. You can edit later.
+        </div>
+      </Field>
+      <Field C={C} label="Reason (optional)">
+        <input
+          type="text"
+          value={reason}
+          onChange={e => setReason(e.target.value)}
+          placeholder="Business trip · conference · etc"
+          style={{
+            width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
+            borderRadius: 8, fontSize: 14, background: C.bg, color: C.ink,
+            fontFamily: "inherit",
+          }}
+        />
+      </Field>
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button
+          onClick={submit}
+          style={{
+            flex: 1, background: C.mommy, color: "#fff", border: "none",
+            borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+          }}>
+          Save
+        </button>
+        {parentAway && (
+          <button
+            onClick={() => { onClear(); onClose(); }}
+            style={{
+              background: "transparent", color: "#A04848",
+              border: `1px solid #A0484866`,
+              borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}>
+            Clear
+          </button>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, currentUser, parentAway, pumpPlan }) {
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftEffort, setDraftEffort] = useState(30);
+  const [draftRegret, setDraftRegret] = useState(3);
+  const [draftFocus, setDraftFocus] = useState("medium");
+  // v05.05bt107 — edit modal state (which task is being edited; null = none)
+  const [editingTask, setEditingTask] = useState(null);
+  // Chunk-suggest modal state (which task to split; null = none)
+  const [splittingTask, setSplittingTask] = useState(null);
+
+  const activeTasks = tasks.filter(t => !t.completedAt);
+  const sortedActive = [...activeTasks].sort((a, b) => {
+    if (b.regretScore !== a.regretScore) return b.regretScore - a.regretScore;
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+  const completedToday = tasks.filter(t => {
+    if (!t.completedAt) return false;
+    const ca = new Date(t.completedAt);
+    const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+    return ca >= startToday;
+  });
+
+  // Derive available blocks today: off-duty windows from the current
+  // user's shift schedule (when they have time to themselves), plus
+  // predicted-nap overlap windows during their on-duty shifts (when
+  // baby is likely down). Each block has start, end, durationMin,
+  // context ("off duty", "nap window during shift", etc).
+  const availableBlocks = useMemo(() => {
+    if (currentUser !== "Mommy") return [];
+    const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+    const isPartnerAway = parentAway
+      && parentAway.parent === partner
+      && new Date(parentAway.from) <= now
+      && (!parentAway.until || new Date(parentAway.until) >= now);
+    // v05.05bt110 — when partner is away, off-duty shift blocks don't
+    // apply, but the home parent still has work windows: predicted naps
+    // (baby down) and wearable-pump sessions (hands free). Surface both
+    // instead of returning [].
+    if (isPartnerAway) {
+      const naps = predictNapWindows(events, now);
+      const pumps = getWearablePumpWindows(pumpPlan, now);
+      return [...naps, ...pumps].sort((a, b) => a.start - b.start);
+    }
+    const blocks = [];
+    const partnerShifts = (activeShifts?.[partner] || [])
+      .map(s => {
+        const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+        const [eh, em] = (s.end || "0:0").split(":").map(Number);
+        const start = new Date(now);
+        start.setHours(sh, sm || 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(eh, em || 0, 0, 0);
+        return { start, end };
+      })
+      .filter(s => s.end > now); // future / current shifts only
+    for (const sh of partnerShifts) {
+      const blockStart = sh.start > now ? sh.start : now;
+      const durationMin = Math.round((sh.end - blockStart) / 60000);
+      if (durationMin >= 15) {
+        // v05.05bt107 — tag block with focus level from time-of-day
+        blocks.push({
+          start: blockStart, end: sh.end, durationMin,
+          context: `${partner} is on duty`,
+          kind: "off-duty",
+          focusLevel: getBlockFocusLevel(blockStart),
+        });
+      }
+    }
+    // Predicted nap windows — derive from last 7 days of sleep events.
+    // Simple: find times when baby was asleep most days, treat those as
+    // likely-nap windows today. KISS for MVP — just look at sleep_down
+    // events from last 7 days, bin by hour, find consistent windows.
+    // TODO v2: more sophisticated prediction using actual patterns.
+    return blocks.sort((a, b) => a.start - b.start);
+  }, [activeShifts, currentUser, now, events, parentAway, pumpPlan]);
+
+  // For each block, find the highest-regret task that fits.
+  // v05.05bt107 — two-pass match: first try a task whose focusLevel
+  // matches the block's focusLevel, then fall back to any task that
+  // fits by duration. Within each pass, sortedActive is regret-descending.
+  const blockMatches = useMemo(() => {
+    const used = new Set();
+    return availableBlocks.map(block => {
+      let fit = sortedActive.find(t =>
+        !used.has(t.id)
+        && t.effortMin <= block.durationMin
+        && (t.focusLevel || "medium") === block.focusLevel
+      );
+      if (!fit) {
+        fit = sortedActive.find(t =>
+          !used.has(t.id) && t.effortMin <= block.durationMin
+        );
+      }
+      if (fit) used.add(fit.id);
+      return { ...block, suggested: fit };
+    });
+  }, [availableBlocks, sortedActive]);
+
+  const addTask = () => {
+    if (!draftTitle.trim()) return;
+    const newTask = {
+      id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      title: draftTitle.trim(),
+      effortMin: Number(draftEffort),
+      regretScore: Number(draftRegret),
+      focusLevel: draftFocus,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    };
+    setTasks(prev => [...prev, newTask]);
+    setDraftTitle("");
+    setDraftEffort(30);
+    setDraftRegret(3);
+    setDraftFocus("medium");
+    setShowAddForm(false);
+  };
+
+  // v05.05bt107 — apply edits from the edit modal
+  const saveEdit = (updated) => {
+    setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+    setEditingTask(null);
+  };
+
+  // v05.05bt107 — replace a task with its suggested chunks
+  const applyChunks = (originalId, chunks) => {
+    setTasks(prev => {
+      const original = prev.find(t => t.id === originalId);
+      if (!original) return prev;
+      const newTasks = chunks.map((c, i) => ({
+        id: `task_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+        title: c.title.trim(),
+        effortMin: Number(c.effortMin),
+        regretScore: original.regretScore, // inherit
+        focusLevel: original.focusLevel || "medium",
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        chunkOf: original.id, // breadcrumb (optional, not displayed)
+      }));
+      return [...prev.filter(t => t.id !== originalId), ...newTasks];
+    });
+    setSplittingTask(null);
+  };
+
+  const toggleComplete = (id) => {
+    setTasks(prev => prev.map(t =>
+      t.id === id
+        ? { ...t, completedAt: t.completedAt ? null : new Date().toISOString() }
+        : t
+    ));
+  };
+
+  const deleteTask = (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  const fmtTimeShort = d => {
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h < 12 ? "a" : "p";
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    return `${h12}${m > 0 ? `:${String(m).padStart(2, "0")}` : ""}${ampm}`;
+  };
+
+  const regretLabels = {
+    1: "Tomorrow's fine",
+    2: "Prefer today",
+    3: "Slightly behind if not",
+    4: "Significantly behind if not",
+    5: "Cannot push to tomorrow",
+  };
+  const regretColors = {
+    1: C.muted,
+    2: C.muted,
+    3: C.gold,
+    4: "#C18D7A",
+    5: "#A04848",
+  };
+
+  return (
+    <Section C={C} title="Today's task plan">
+      <div style={{
+        background: C.paper, borderRadius: 12, padding: 16,
+        border: `1px solid ${C.line}15`,
+      }}>
+        {/* Header with summary + Add button */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
+          marginBottom: 14, gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+              today
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontStyle: "italic", color: C.ink, marginTop: 2 }}>
+              {sortedActive.length} <span style={{ color: C.muted }}>open · {completedToday.length} done</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowAddForm(s => !s)}
+            style={{
+              background: showAddForm ? C.muted : C.mommy,
+              color: "#fff", border: "none",
+              borderRadius: 8, padding: "8px 14px",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+              fontFamily: "inherit",
+            }}>
+            {showAddForm ? "Cancel" : "+ Add task"}
+          </button>
+        </div>
+
+        {/* Add form */}
+        {showAddForm && (
+          <div style={{
+            background: `${C.mommy}08`, borderRadius: 8, padding: 12,
+            marginBottom: 14, border: `1px dashed ${C.mommy}33`,
+          }}>
+            <input
+              type="text"
+              value={draftTitle}
+              onChange={e => setDraftTitle(e.target.value)}
+              placeholder="What needs doing?"
+              autoFocus
+              style={{
+                width: "100%", padding: "8px 10px", border: `1px solid ${C.line}33`,
+                borderRadius: 6, fontSize: 14, background: C.bg, color: C.ink,
+                fontFamily: "inherit", marginBottom: 10,
+              }}
+            />
+            <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+              Effort
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 10 }}>
+              {[15, 30, 60, 90, 120].map(min => (
+                <button
+                  key={min}
+                  onClick={() => setDraftEffort(min)}
+                  style={{
+                    background: draftEffort === min ? C.mommy : C.bg,
+                    color: draftEffort === min ? "#fff" : C.ink,
+                    border: `1px solid ${C.line}33`,
+                    borderRadius: 6, padding: "6px 4px",
+                    fontSize: 11, cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                  {min < 60 ? `${min}m` : `${min / 60}h`}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+              Focus needed
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 10 }}>
+              {[
+                { v: "high", l: "High · deep", color: C.daddy },
+                { v: "medium", l: "Medium", color: C.gold },
+                { v: "low", l: "Low · admin", color: C.muted },
+              ].map(opt => (
+                <button
+                  key={opt.v}
+                  onClick={() => setDraftFocus(opt.v)}
+                  style={{
+                    background: draftFocus === opt.v ? opt.color : C.bg,
+                    color: draftFocus === opt.v ? "#fff" : C.ink,
+                    border: `1px solid ${C.line}33`,
+                    borderRadius: 6, padding: "6px 4px",
+                    fontSize: 11, cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}>
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+              How bad if not done today?
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 4 }}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setDraftRegret(n)}
+                  style={{
+                    background: draftRegret === n ? regretColors[n] : C.bg,
+                    color: draftRegret === n ? "#fff" : C.ink,
+                    border: `1px solid ${C.line}33`,
+                    borderRadius: 6, padding: "8px 4px",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: regretColors[draftRegret], fontStyle: "italic", textAlign: "center", marginBottom: 12, fontWeight: 600 }}>
+              {regretLabels[draftRegret]}
+            </div>
+            <button
+              onClick={addTask}
+              disabled={!draftTitle.trim()}
+              style={{
+                width: "100%",
+                background: draftTitle.trim() ? C.mommy : C.line,
+                color: "#fff", border: "none",
+                borderRadius: 8, padding: "10px",
+                fontSize: 13, fontWeight: 600,
+                cursor: draftTitle.trim() ? "pointer" : "not-allowed",
+                fontFamily: "inherit",
+              }}>
+              Add to plan
+            </button>
+          </div>
+        )}
+
+        {/* Schedule-aware suggestions */}
+        {(() => {
+          const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+          const isPartnerAway = parentAway
+            && parentAway.parent === partner
+            && new Date(parentAway.from) <= now
+            && (!parentAway.until || new Date(parentAway.until) >= now);
+          if (isPartnerAway) {
+            // v05.05bt110 — solo-day still gets block suggestions from
+            // predicted naps + planned wearable pumps. Falls back to the
+            // generic "Solo today" message only when no blocks could be
+            // derived (not enough sleep history, no upcoming pumps).
+            if (blockMatches.length === 0) {
+              return (
+                <div style={{
+                  background: `${C.gold}11`, border: `1px dashed ${C.gold}55`,
+                  borderRadius: 8, padding: "10px 12px", marginBottom: 14,
+                }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
+                    Solo today
+                  </div>
+                  <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5 }}>
+                    {partner} is away. No predictable nap or wearable-pump blocks yet — need a few more days of sleep data or schedule a pump first. Work happens during whatever quiet moments emerge today.
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
+                    Solo · suggested blocks
+                  </div>
+                  <div style={{ fontSize: 9, color: C.gold, fontStyle: "italic" }}>
+                    {partner} away
+                  </div>
+                </div>
+                {blockMatches.slice(0, 5).map((b, i) => {
+                  const kindLabel = b.kind === "nap" ? "predicted nap"
+                    : b.kind === "pump-wearable" ? "wearable pump"
+                    : b.context;
+                  return (
+                    <div key={i} style={{
+                      background: b.suggested ? `${C.gold}11` : "transparent",
+                      border: `1px solid ${b.suggested ? C.gold + "33" : C.line + "22"}`,
+                      borderRadius: 8, padding: "8px 10px", marginBottom: 6,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                        <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: C.ink, fontWeight: 600 }}>
+                          {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
+                        </div>
+                        <div style={{
+                          fontSize: 9, color: b.focusLevel === "high" ? C.daddy
+                            : b.focusLevel === "low" ? C.muted : C.gold,
+                          letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700,
+                        }}>
+                          {b.focusLevel} focus
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
+                        {kindLabel}{b.sampleSize ? ` (n=${b.sampleSize})` : ""}
+                      </div>
+                      {b.suggested ? (
+                        <div style={{ fontSize: 13, color: C.ink, marginTop: 4, lineHeight: 1.4 }}>
+                          <span style={{ color: regretColors[b.suggested.regretScore], fontWeight: 700, marginRight: 4 }}>
+                            {b.suggested.regretScore}
+                          </span>
+                          {b.suggested.title}
+                          {b.suggested.focusLevel && b.suggested.focusLevel !== b.focusLevel && (
+                            <span style={{ fontSize: 10, color: C.muted, marginLeft: 6, fontStyle: "italic" }}>
+                              (best fit — {b.suggested.focusLevel} focus task)
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4 }}>
+                          No open task fits. Use for rest, or a smaller task.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.5 }}>
+                  Predictions from last 7 days of sleep events + your planned pump times. Reality varies — protect the highest-regret task for the longest predicted nap.
+                </div>
+              </div>
+            );
+          }
+          if (blockMatches.length === 0 || sortedActive.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
+                Suggested for available blocks
+              </div>
+              {blockMatches.slice(0, 4).map((b, i) => (
+                <div key={i} style={{
+                  background: b.suggested ? `${C.gold}11` : "transparent",
+                  border: `1px solid ${b.suggested ? C.gold + "33" : C.line + "22"}`,
+                  borderRadius: 8, padding: "8px 10px", marginBottom: 6,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                    <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: C.ink, fontWeight: 600 }}>
+                      {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: b.focusLevel === "high" ? C.daddy
+                        : b.focusLevel === "low" ? C.muted : C.gold,
+                      letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700,
+                    }}>
+                      {b.focusLevel} focus
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>
+                    {b.context}
+                  </div>
+                  {b.suggested ? (
+                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4, lineHeight: 1.4 }}>
+                      <span style={{ color: regretColors[b.suggested.regretScore], fontWeight: 700, marginRight: 4 }}>
+                        {b.suggested.regretScore}
+                      </span>
+                      {b.suggested.title}
+                      {b.suggested.focusLevel && b.suggested.focusLevel !== b.focusLevel && (
+                        <span style={{ fontSize: 10, color: C.muted, marginLeft: 6, fontStyle: "italic" }}>
+                          (best fit available — {b.suggested.focusLevel} focus task)
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4 }}>
+                      No open task fits this block. Breathing room.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Open tasks list */}
+        {sortedActive.length === 0 && completedToday.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0", lineHeight: 1.5 }}>
+            No tasks yet. Add one above — title, rough effort, and how bad it'd feel to push it to tomorrow.
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 8 }}>
+              All tasks
+            </div>
+            {sortedActive.map(t => {
+              const focusColor = t.focusLevel === "high" ? C.daddy
+                : t.focusLevel === "low" ? C.muted : C.gold;
+              const canSplit = t.effortMin >= 45;
+              return (
+                <div key={t.id} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 0", borderBottom: `1px solid ${C.line}15`,
+                }}>
+                  <button
+                    onClick={() => toggleComplete(t.id)}
+                    style={{
+                      width: 20, height: 20, borderRadius: 4,
+                      border: `1.5px solid ${C.line}66`,
+                      background: "transparent", cursor: "pointer", flexShrink: 0,
+                    }}
+                    aria-label="Mark done"
+                  />
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: regretColors[t.regretScore],
+                    fontFamily: "'JetBrains Mono', monospace",
+                    width: 16, textAlign: "center", flexShrink: 0,
+                  }}>{t.regretScore}</span>
+                  {/* Focus dot — color-codes focus level */}
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: focusColor, flexShrink: 0,
+                  }} title={`${t.focusLevel || "medium"} focus`} />
+                  {/* Tap on body to edit */}
+                  <button
+                    onClick={() => setEditingTask(t)}
+                    style={{
+                      flex: 1, minWidth: 0, textAlign: "left",
+                      background: "transparent", border: "none", padding: 0,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}>
+                    <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.3 }}>{t.title}</div>
+                    <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {t.effortMin < 60 ? `${t.effortMin}m` : `${(t.effortMin / 60).toFixed(t.effortMin % 60 === 0 ? 0 : 1)}h`}
+                      {" · tap to edit"}
+                    </div>
+                  </button>
+                  {canSplit && (
+                    <button
+                      onClick={() => setSplittingTask(t)}
+                      style={{
+                        background: "transparent", border: `1px solid ${C.line}33`,
+                        borderRadius: 6, padding: "3px 8px", color: C.muted,
+                        fontSize: 10, cursor: "pointer", fontFamily: "inherit",
+                        flexShrink: 0,
+                      }}
+                      title="Split into smaller chunks">
+                      ⨯ split
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteTask(t.id)}
+                    style={{
+                      background: "transparent", border: "none", padding: 4,
+                      color: C.muted, cursor: "pointer", flexShrink: 0,
+                    }}
+                    aria-label="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+            {completedToday.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 9, color: C.muted, fontStyle: "italic", marginBottom: 4 }}>
+                  Done today ({completedToday.length})
+                </div>
+                {completedToday.map(t => (
+                  <div key={t.id} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
+                    opacity: 0.5,
+                  }}>
+                    <span style={{ fontSize: 13, color: C.ink, textDecoration: "line-through", flex: 1 }}>
+                      {t.title}
+                    </span>
+                    <button
+                      onClick={() => toggleComplete(t.id)}
+                      style={{
+                        background: "transparent", border: "none", padding: 2,
+                        color: C.muted, cursor: "pointer", fontSize: 10,
+                      }}>
+                      undo
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 12, lineHeight: 1.5 }}>
+          {currentUser !== "Mommy"
+            ? "Currently shows Mommy's view of blocks. Switch profile to plan from her perspective."
+            : "Blocks tagged by focus level using literature defaults (9–12 + 3–6 = high, 1–3p dip, 8p+ low). Suggestions try to match focus first, then fit any task by duration. Tap a task to edit; tap ⨯ split to break long tasks into chunks."}
+        </div>
+      </div>
+      {editingTask && (
+        <EditTaskModal
+          C={C}
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSave={saveEdit}
+          onDelete={() => { deleteTask(editingTask.id); setEditingTask(null); }}
+        />
+      )}
+      {splittingTask && (
+        <SplitTaskModal
+          C={C}
+          task={splittingTask}
+          onClose={() => setSplittingTask(null)}
+          onApply={(chunks) => applyChunks(splittingTask.id, chunks)}
+        />
+      )}
+    </Section>
+  );
+}
+
+// v05.05bt107 — Edit existing task. Same shape as add form but
+// pre-populated. Delete affordance also surfaces here.
+function EditTaskModal({ C, task, onClose, onSave, onDelete }) {
+  const [title, setTitle] = useState(task.title);
+  const [effortMin, setEffortMin] = useState(task.effortMin);
+  const [regretScore, setRegretScore] = useState(task.regretScore);
+  const [focusLevel, setFocusLevel] = useState(task.focusLevel || "medium");
+
+  const regretLabels = {
+    1: "Tomorrow's fine", 2: "Prefer today",
+    3: "Slightly behind if not", 4: "Significantly behind if not",
+    5: "Cannot push to tomorrow",
+  };
+  const regretColors = { 1: C.muted, 2: C.muted, 3: C.gold, 4: "#C18D7A", 5: "#A04848" };
+
+  const submit = () => {
+    if (!title.trim()) return;
+    onSave({
+      id: task.id,
+      title: title.trim(),
+      effortMin: Number(effortMin),
+      regretScore: Number(regretScore),
+      focusLevel,
+    });
+  };
+
+  return (
+    <ModalShell C={C} onClose={onClose} title="Edit task">
+      <input
+        type="text"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        autoFocus
+        style={{
+          width: "100%", padding: "8px 10px", border: `1px solid ${C.line}33`,
+          borderRadius: 6, fontSize: 14, background: C.bg, color: C.ink,
+          fontFamily: "inherit", marginBottom: 10,
+        }}
+      />
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+        Effort
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 10 }}>
+        {[15, 30, 60, 90, 120].map(min => (
+          <button key={min} onClick={() => setEffortMin(min)} style={{
+            background: effortMin === min ? C.mommy : C.bg,
+            color: effortMin === min ? "#fff" : C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 6, padding: "6px 4px",
+            fontSize: 11, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+          }}>{min < 60 ? `${min}m` : `${min / 60}h`}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+        Focus needed
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 10 }}>
+        {[
+          { v: "high", l: "High · deep", color: C.daddy },
+          { v: "medium", l: "Medium", color: C.gold },
+          { v: "low", l: "Low · admin", color: C.muted },
+        ].map(opt => (
+          <button key={opt.v} onClick={() => setFocusLevel(opt.v)} style={{
+            background: focusLevel === opt.v ? opt.color : C.bg,
+            color: focusLevel === opt.v ? "#fff" : C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 6, padding: "6px 4px",
+            fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+          }}>{opt.l}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+        How bad if not done today?
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4, marginBottom: 4 }}>
+        {[1, 2, 3, 4, 5].map(n => (
+          <button key={n} onClick={() => setRegretScore(n)} style={{
+            background: regretScore === n ? regretColors[n] : C.bg,
+            color: regretScore === n ? "#fff" : C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 6, padding: "8px 4px",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>{n}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: regretColors[regretScore], fontStyle: "italic", textAlign: "center", marginBottom: 14, fontWeight: 600 }}>
+        {regretLabels[regretScore]}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={submit} disabled={!title.trim()} style={{
+          flex: 1, background: title.trim() ? C.mommy : C.line, color: "#fff",
+          border: "none", borderRadius: 8, padding: "10px",
+          fontSize: 13, fontWeight: 600,
+          cursor: title.trim() ? "pointer" : "not-allowed",
+          fontFamily: "inherit",
+        }}>Save</button>
+        <button onClick={() => { onDelete(); }} style={{
+          background: "transparent", color: "#A04848",
+          border: `1px solid #A0484866`, borderRadius: 8, padding: "10px 14px",
+          fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+        }}>Delete</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// v05.05bt107 — Split task into chunks. Pre-populated with heuristic
+// suggestions based on title keywords; user can edit each chunk's
+// title and effort before applying. Apply replaces the original.
+function SplitTaskModal({ C, task, onClose, onApply }) {
+  const [chunks, setChunks] = useState(() => suggestTaskChunks(task));
+
+  const updateChunk = (i, patch) => {
+    setChunks(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c));
+  };
+  const addChunk = () => setChunks(prev => [...prev, { title: "Another piece", effortMin: 30 }]);
+  const removeChunk = i => setChunks(prev => prev.filter((_, idx) => idx !== i));
+
+  const totalEffort = chunks.reduce((s, c) => s + Number(c.effortMin || 0), 0);
+
+  return (
+    <ModalShell C={C} onClose={onClose} title="Split into chunks">
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 12, lineHeight: 1.5, fontStyle: "italic" }}>
+        Suggested chunks based on the task title. Edit titles and effort, add or remove pieces, then apply. The original task will be replaced; regret and focus carry over to each chunk.
+      </div>
+      <div style={{ fontSize: 11, color: C.ink, marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+        Original: <strong>{task.title}</strong> · {task.effortMin}m
+      </div>
+      {chunks.map((c, i) => (
+        <div key={i} style={{
+          background: `${C.line}08`, borderRadius: 8, padding: 10,
+          marginBottom: 8, border: `1px solid ${C.line}22`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <span style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", width: 20 }}>#{i + 1}</span>
+            <input
+              type="text"
+              value={c.title}
+              onChange={e => updateChunk(i, { title: e.target.value })}
+              style={{
+                flex: 1, padding: "6px 8px", border: `1px solid ${C.line}33`,
+                borderRadius: 6, fontSize: 13, background: C.bg, color: C.ink,
+                fontFamily: "inherit",
+              }}
+            />
+            <button onClick={() => removeChunk(i)} style={{
+              background: "transparent", border: "none", color: C.muted,
+              padding: 4, cursor: "pointer",
+            }} aria-label="Remove chunk">
+              <Trash2 size={12} />
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+            {[15, 30, 45, 60, 90].map(min => (
+              <button key={min} onClick={() => updateChunk(i, { effortMin: min })} style={{
+                background: c.effortMin === min ? C.mommy : C.bg,
+                color: c.effortMin === min ? "#fff" : C.ink,
+                border: `1px solid ${C.line}33`, borderRadius: 6, padding: "4px 2px",
+                fontSize: 10, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+              }}>{min < 60 ? `${min}m` : `${min / 60}h`}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button onClick={addChunk} style={{
+        width: "100%", background: "transparent", color: C.muted,
+        border: `1px dashed ${C.line}33`, borderRadius: 8,
+        padding: "8px", fontSize: 12, cursor: "pointer",
+        fontFamily: "inherit", marginBottom: 12,
+      }}>
+        + Add another chunk
+      </button>
+      <div style={{
+        fontSize: 11, color: C.muted, marginBottom: 10,
+        fontFamily: "'JetBrains Mono', monospace",
+        textAlign: "right",
+      }}>
+        Total: {totalEffort}m {totalEffort !== task.effortMin && (
+          <span style={{ color: C.gold }}>
+            ({totalEffort > task.effortMin ? "+" : ""}{totalEffort - task.effortMin}m from original)
+          </span>
+        )}
+      </div>
+      <button onClick={() => onApply(chunks)} disabled={chunks.length === 0} style={{
+        width: "100%", background: chunks.length > 0 ? C.mommy : C.line,
+        color: "#fff", border: "none", borderRadius: 8,
+        padding: "10px", fontSize: 13, fontWeight: 600,
+        cursor: chunks.length > 0 ? "pointer" : "not-allowed",
+        fontFamily: "inherit",
+      }}>
+        Apply — replace original with {chunks.length} chunks
+      </button>
+    </ModalShell>
+  );
+}
 
 function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   // v05.05bt80 — rewritten per user feedback:
@@ -17201,12 +18541,17 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
     return events
       .filter(e => e.type === "pump" && e.mode !== "start" && new Date(e.ts) >= startOfDay)
       .map(e => {
-        const ts = new Date(e.ts);
+        const ts = new Date(e.ts); // ts IS the start time (FinishPumpModal saves ts: start)
+        const durationMin = Number(e.durationMin) || 30;
+        const startH = ts.getHours() + ts.getMinutes() / 60;
         return {
-          h: ts.getHours() + ts.getMinutes() / 60,
+          h: startH,
+          endH: startH + durationMin / 60,
           oz: Number(e.oz) || 0,
+          durationMin,
           ts,
           eventId: e.id,
+          pumpType: e.pumpType, // "power" | "mld-*" | undefined for standard
         };
       })
       .sort((a, b) => a.h - b.h);
@@ -17274,41 +18619,45 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   // v05.05bt81: during recovery, ALWAYS append an overnight slot (2am next
   // day = frac 26) on top of the in-window distribution so the user has
   // a MOTN session pre-scheduled.
-  // v05.05bt99 — minimum START-to-START interval between pumps.
-  // Previously hardcoded as 1.5h, which gave only ~1h rest after a
-  // 30-min session — physiologically too tight (FIL clearance + let-
-  // down readiness benefit from 1.5h+ rest). Bumped to 2.0h:
-  // 30-min session + ~1.5h rest = 2h interval. Also enforced as a
-  // minimum spacing in the distribution math below, so even when the
-  // user is running behind, sessions don't get jammed too close.
-  const MIN_PUMP_INTERVAL_HRS = 2.0;
+  // v05.05bt104 — spacing math now uses END of last pump + REST period
+  // instead of START-to-START interval. A 60-min power pump should not
+  // leave only 30 min before the next planned session; spacing must
+  // factor in how long the session itself took.
+  // MIN_REST_HRS = 1.5h is the time from session END to next session
+  // START. With a typical 30-min session, this gives the same 2h start-
+  // to-start as bt99. With a 60-min power pump, it gives 2.5h start-to-
+  // start (vs the old 2h that would leave only 1h rest).
+  const MIN_REST_HRS = 1.5;
+  // Assumed session duration when seeding from autoSpaced (no real
+  // data yet). Used only for the initial baseline; once any pumps are
+  // logged, their actual durationMin drives the math.
+  const DEFAULT_SESSION_HRS = 0.5;
 
   const autoSpaced = useMemo(() => {
     const overnight = recoveryActive ? [26.0] : [];
     const inWindowCount = Math.max(0, targetSessions - doneSessions.length - overnight.length);
     if (inWindowCount === 0) return overnight;
-    const lastDoneH = doneSessions.length > 0
-      ? doneSessions[doneSessions.length - 1].h
-      : wakeStart - MIN_PUMP_INTERVAL_HRS;
-    const earliestNext = Math.max(lastDoneH + MIN_PUMP_INTERVAL_HRS, wakeStart);
+    // Floor for the next planned session — based on END of last logged
+    // pump (or a virtual session ending DEFAULT_SESSION_HRS before
+    // wakeStart if nothing logged yet) + the required rest period.
+    const lastEndH = doneSessions.length > 0
+      ? doneSessions[doneSessions.length - 1].endH
+      : wakeStart - MIN_REST_HRS;
+    const earliestNext = Math.max(lastEndH + MIN_REST_HRS, wakeStart);
+    // Min spacing between consecutive PLANNED sessions assumes
+    // DEFAULT_SESSION_HRS for each — we don't know their final duration
+    // yet, so we conservatively assume the typical 30-min session.
+    const MIN_PLANNED_INTERVAL = DEFAULT_SESSION_HRS + MIN_REST_HRS;
     let inWindow;
     if (inWindowCount === 1) {
-      inWindow = [Math.min(wakeEnd, earliestNext + 2)];
+      inWindow = [Math.min(wakeEnd, earliestNext + MIN_PLANNED_INTERVAL)];
     } else {
       const span = Math.max(0, wakeEnd - earliestNext);
-      // Cap actual session count to what fits with min interval.
-      // If user is running behind and span/(N-1) would be < min, fit fewer
-      // sessions today — the daily target may go unmet, but that's better
-      // than scheduling impossibly-tight back-to-back pumps. Recovery mode
-      // will catch up via the overnight slot, and bt87's missed-pump
-      // handler will further self-correct over time.
-      const maxFitCount = Math.max(1, Math.floor(span / MIN_PUMP_INTERVAL_HRS) + 1);
+      const maxFitCount = Math.max(1, Math.floor(span / MIN_PLANNED_INTERVAL) + 1);
       const actualCount = Math.min(inWindowCount, maxFitCount);
       if (span <= 0) {
-        // No room left in window — stagger by min interval anyway (will
-        // push past wakeEnd but at least won't pile on top of each other).
         inWindow = Array.from({ length: actualCount }, (_, i) =>
-          earliestNext + i * MIN_PUMP_INTERVAL_HRS
+          earliestNext + i * MIN_PLANNED_INTERVAL
         );
       } else {
         const spacing = actualCount > 1 ? span / (actualCount - 1) : 0;
@@ -17346,6 +18695,101 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
     }
     return autoSpaced;
   }, [pumpPlan?.manualSessions, doneSessions, autoSpaced]);
+
+  // v05.05bt104 — Power pump auto-recommendation. Smart-combo of:
+  //   (1) USER DATA: recent 7-day avg yield per session vs 14-day avg.
+  //       If recent < 90% of 14-day, supply trending down → trigger.
+  //       Time-of-day: lowest-yield 2-hr bin from last 21 days, since
+  //       power pumping when supply is naturally lowest gives the
+  //       biggest demand signal.
+  //   (2) LITERATURE: 1×/day max, multiple consecutive days for boost
+  //       (3-5 days typical), then off. Avoid back-to-back days >5.
+  //       Evening typically best (lower baseline = bigger relative
+  //       signal). Refs: La Leche League, multiple IBCLC consensus.
+  //   (3) ANECDOTAL: Reddit / TikTok lactation communities widely
+  //       recommend power pumping at evening / before bed for working
+  //       moms. Aligns with literature evening preference.
+  //
+  // Returns { suggested: bool, hour, reasoning, lookbackDays } or null
+  // when no recommendation should be shown (recent power pump, no data,
+  // supply healthy).
+  const powerPumpRec = useMemo(() => {
+    // Find last power pump (any day, not just today)
+    const allPumps = events
+      .filter(e => e.type === "pump" && e.mode !== "start" && typeof e.oz === "number" && e.oz > 0)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    const lastPower = allPumps.find(e => e.pumpType === "power");
+    const daysSinceLastPower = lastPower
+      ? (now.getTime() - new Date(lastPower.ts).getTime()) / (24 * 3600000)
+      : Infinity;
+
+    // Compute recent 7d and 14d avg yield per session
+    const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fourteenDaysAgo = new Date(now); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const last7 = allPumps.filter(e => new Date(e.ts) >= sevenDaysAgo);
+    const last14 = allPumps.filter(e => new Date(e.ts) >= fourteenDaysAgo);
+    const avg7 = last7.length > 0 ? last7.reduce((s, e) => s + e.oz, 0) / last7.length : 0;
+    const avg14 = last14.length > 0 ? last14.reduce((s, e) => s + e.oz, 0) / last14.length : 0;
+
+    // Not enough data: don't recommend (would be noise)
+    if (last14.length < 10) return null;
+
+    // Supply trending: recent < 90% of 14d baseline
+    const decliningPct = avg14 > 0 ? (1 - avg7 / avg14) * 100 : 0;
+    const isDecline = decliningPct >= 10;
+
+    // Find lowest-yield 2-hr bin in last 21 days for ideal time
+    const twentyOneDaysAgo = new Date(now); twentyOneDaysAgo.setDate(twentyOneDaysAgo.getDate() - 21);
+    const last21 = allPumps.filter(e => new Date(e.ts) >= twentyOneDaysAgo);
+    const bins = Array(12).fill(null).map(() => []);
+    for (const p of last21) {
+      const ts = new Date(p.ts);
+      const idx = Math.min(11, Math.floor((ts.getHours() + ts.getMinutes() / 60) / 2));
+      bins[idx].push(p.oz);
+    }
+    const binMedians = bins.map((vals, i) => {
+      if (vals.length < 3) return null;
+      const sorted = [...vals].sort((a, b) => a - b);
+      return { idx: i, hour: i * 2 + 1, median: sorted[Math.floor(sorted.length / 2)], n: vals.length };
+    }).filter(Boolean);
+    const lowBin = binMedians.length
+      ? [...binMedians].sort((a, b) => a.median - b.median)[0]
+      : null;
+
+    // Default suggested hour: 8pm (evening — literature + anecdotal consensus)
+    const suggestedHour = lowBin ? lowBin.hour : 20;
+
+    // Recommendation tier:
+    //   - Strong: declining trend AND no power pump in 2+ days
+    //   - Maintenance: no trend, no power pump in 7+ days
+    //   - Skip: power pumped recently
+    let tier = null;
+    let reasoning = "";
+    if (daysSinceLastPower < 1) {
+      return null; // Too recent
+    } else if (isDecline && daysSinceLastPower >= 1) {
+      tier = "strong";
+      reasoning = `recent 7d avg ${avg7.toFixed(1)}oz is ${decliningPct.toFixed(0)}% below your 14d baseline (${avg14.toFixed(1)}oz)`;
+    } else if (daysSinceLastPower >= 7) {
+      tier = "maintenance";
+      reasoning = `${Math.round(daysSinceLastPower)}d since last power pump · maintenance dose`;
+    } else {
+      return null;
+    }
+
+    return {
+      suggested: true,
+      hour: suggestedHour,
+      tier,
+      reasoning,
+      avg7: Math.round(avg7 * 10) / 10,
+      avg14: Math.round(avg14 * 10) / 10,
+      lookbackDays: 21,
+      lowBinTime: lowBin ? `${lowBin.idx * 2}:00–${(lowBin.idx + 1) * 2}:00` : null,
+      lowBinMedian: lowBin ? lowBin.median : null,
+      lowBinN: lowBin ? lowBin.n : 0,
+    };
+  }, [events, now]);
 
   // Auto-shift effect: when a new pump is logged off-schedule, shift remaining.
   useEffect(() => {
@@ -17563,6 +19007,57 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
         background: C.paper, borderRadius: 12, padding: 16,
         border: `1px solid ${C.line}15`,
       }}>
+        {/* v05.05bt104 — Power pump recommendation banner. Surfaces when
+            data signals (declining yield or extended gap since last power)
+            warrant suggesting one today. Tap to start the protocol. */}
+        {powerPumpRec && (() => {
+          const targetMs = (() => {
+            const d = new Date(now);
+            d.setHours(Math.floor(powerPumpRec.hour), Math.round((powerPumpRec.hour % 1) * 60), 0, 0);
+            return d;
+          })();
+          const ampm = targetMs.getHours() < 12 ? "am" : "pm";
+          const h12 = targetMs.getHours() === 0 ? 12
+            : targetMs.getHours() > 12 ? targetMs.getHours() - 12
+            : targetMs.getHours();
+          const isStrong = powerPumpRec.tier === "strong";
+          const accent = isStrong ? "#C18D7A" : C.gold;
+          return (
+            <div style={{
+              background: `${accent}11`,
+              border: `1px dashed ${accent}55`,
+              borderLeft: `4px solid ${accent}`,
+              borderRadius: 10, padding: "10px 12px", marginBottom: 12,
+            }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{
+                  fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase",
+                  color: accent, fontWeight: 700,
+                }}>
+                  {isStrong ? "⚠ supply trending" : "✦ maintenance"}
+                </span>
+                <span style={{ fontSize: 11, color: C.muted, marginLeft: "auto" }}>
+                  power pump suggested
+                </span>
+              </div>
+              <div style={{ fontSize: 14, color: C.ink, marginTop: 4, lineHeight: 1.4 }}>
+                Best at <strong>{h12}{ampm}</strong>
+                {powerPumpRec.lowBinTime && (
+                  <span style={{ color: C.muted, fontSize: 12 }}> · your lowest-yield window</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.5, fontStyle: "italic" }}>
+                {powerPumpRec.reasoning}
+                {powerPumpRec.lowBinMedian != null && (
+                  <span> · {powerPumpRec.lowBinTime} median {powerPumpRec.lowBinMedian.toFixed(1)}oz (n={powerPumpRec.lowBinN})</span>
+                )}
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                Combines your 7d vs 14d trend, lowest-yield bin from last 21 days, and IBCLC consensus on evening timing. Skip if you've already power-pumped today.
+              </div>
+            </div>
+          );
+        })()}
         {/* Header — frequency framing, not oz-to-go */}
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "baseline",
