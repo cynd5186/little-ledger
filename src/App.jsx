@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt146";
+const APP_VERSION = "2026.05.05bt147";
 const APP_BUILD_NOTES = [
-  "BIG redesign per mockup approval. (1) TIMELINE is now a minimal LIST — no card containers, rows separated by hairlines, with a 2px colored LEFT RAIL on every row encoding on-duty parent: 🟣 mauve=Mommy, 🔵 blue=Daddy, 🟡 gold=joint, ⚪ gray=routine. Same colors as the Right Now avatar so no separate legend. (2) HEADER is now editorial: italic serif 'Today' + a single mono meta line ('5 tasks · 4 routines · 3 open ⟶ fill'). The '3 open ⟶ fill' is a gold dotted link — tap it to expand suggestions. The big yellow open-blocks banner is gone. (3) Focus is a colored DOT before the title (mauve=deep, gold=medium, gray=light), regret is colored MONO TEXT on the right (R5 in red, R3 in gold). No more pills. (4) Section dividers are tiny lowercase mono labels ('— morning —'). (5) Earlier-today is a tiny mono '↑ earlier (N)' link, barely visible until tapped. (6) FAB swap: mauve + is now 'add task'; Brain Dump moves into the ⋯ menu (no more dual-FAB conflict). (7) NEW SUB-TAB 'All tasks' — flat list of every task you've ever added, grouped by status (Scheduled / Unscheduled / Brain dump / Done last 30 days), with filter chips + search. Tap any row to edit. (8) Dropped 'show why' toggle entirely (reasoning lives in the edit modal when you actually want it). Dropped ↕ move button (drag or tap-time-edit). Dropped per-row avatar circle, sub-context meta line on tasks/routines, and 'Today's task plan' Section title — all redundant.",
+  "DRAG FIX per chat. Drag was triggering accidentally because the whole row was a drag target — every tap-and-hold to read or edit was a near-miss. Fixed by adding a dedicated DRAG GRIP (⋮⋮ icon) on the far right of each task row. Drag now ONLY activates when you grab the grip. Tap the row anywhere else, hold as long as you want — no drag. Since the grip is intentional, the long-press window dropped 800ms → 300ms (fast and responsive instead of awkwardly slow). Swipe-to-delete still works on the row, drag works only on the grip — no more accidents.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt147", summary: "Drag affordance moved from full row to a dedicated grip handle. (1) Row container (the inner data-drop-key div) had its onTouchStart/Move/End/onMouseDown stripped of all drag handlers — keeps only swipe handlers (handleSwipeStart, handleSwipeMove on swipeStartRef.current truthy, handleSwipeEnd). Drop target detection still works because the row keeps data-drop-key; only the INITIATION moved off it. (2) New ⋮⋮ grip element rendered in the right column of each task row, after the regret button, before the close. Grip is a 14px system-ui ⋮⋮ in rgba(166,139,160,0.55) with padding 6/4/6/6, touchAction none, userSelect none. onTouchStart, onTouchMove (when draggingIdRef truthy), onTouchEnd wired to handleDragStart/Move/End. stopPropagation in onTouchStart/onMouseDown so the row's swipe handlers don't also fire. Cursor 'grab'. Title 'Hold and drag to move'. (3) handleDragStart long-press timer dropped 800→300ms. Comment updated to explain: grip is already an intentional grab, so a long delay just adds friction. Vibrate fallback also dropped 20→15ms (less haptic noise for a more deliberate motion). Movement-cancel threshold (25px) left untouched. (4) Helper text below timeline updated: 'long-press to drag' → 'grab ⋮⋮ to drag'. (5) Build verified clean. SCOPING: changes scoped to handleDragStart timing constant + row onTouchStart/Move/End + new grip element + helper text. Zero changes to drop target logic, swipe handlers, inline-edit handlers, palette, schema, business logic." },
   { version: "2026.05.05bt146", summary: "Big design pass per mockup approval (timeline-density.html + header-redesign.html + focus-quiz.html). Two builds combined as bt146 since the user requested 'do 145 and 146 first'. (A) TIMELINE — minimal list style: row containers dropped (no card background, no card border), rows separated by single hairline borderBottom (line22 alpha). 2px colored left rail rendered as absolute child inside row's position:relative wrapper, encoding owner (Daddy→C.daddy blue, joint→C.gold, Mommy→C.mommy mauve, routine→rgba(201,187,164,0.55) gray). Row grid columns 78→54px (no ↕ button to make room for), gap 10, padding 9/8/9/12 (left padding 12 to give rail 4px clearance). Time column drops the move ↕ button entirely; remaining content is range + duration. Title block adds a focus dot (8px circle, tap-to-cycle) before the title text. Title fontSize 17→15, line-height 1.2 (tighter), explicit whitespace:nowrap + textOverflow:ellipsis to handle long titles. Routine titles get italic. Sub-context meta line dropped EXCEPT for free blocks ('high-energy — tap to fill' etc). Right column collapsed from avatar+pills stack to a single regret button rendering as colored mono text (no pill background, no border, just R5 in regretColor). isFree drop-target visual: dashed mauve top border + mommy10 bg. Generic drop highlight: mommy0a tint. (B) HEADER — action strip with 3-element trio (stats chip / show-why toggle / + add button) replaced with editorial header: 24px italic Cormorant 'Today' h1 + mono 10px meta line. Meta format: '{N} tasks · {M} routines{ · {K} open ⟶ fill}'. The K-open piece is a dotted-underline gold button that toggles showOpenBlocks. 'Show why' toggle DROPPED entirely (the openRowWhys + showAllWhy state remain in source but no UI surfaces them; reasoning still appears in the edit modal when a task is opened). 'Today's task plan' Section title wrapper had already been dropped in bt140; no change needed there. (C) SECTION DIVIDERS — chunky pill with icon + bgTint + trailing gradient rule replaced with a single line of monospace text in section.color: '— morning —' (lowercase, letter-spacing 0.30em, fontWeight 600, padding 16/4/6). (D) EARLIER-TODAY — dashed pill ('↑ earlier today · 4 items · show') replaced with a tiny mono link '↑ EARLIER (4)' in rgba(124,107,90,0.55), letter-spacing 0.20em, padding 4/4/8. Bidirectional: same minimal style for the 'hide' state ('↓ HIDE EARLIER (4)'). (E) FAB — coral Brain Dump FAB replaced with a mauve '+ Add task' FAB (background C.mommy, same 56×56 / position fixed bottom 88 right 20 / boxShadow). onClick opens setShowNlInput (the existing NL parser). Visibility condition extended to also hide when !showNlInput && !showAddForm (so adding task hides the FAB). (F) BRAIN DUMP — moved from FAB into the ⋯ overflow menu. New menu item between 'Re-analyze schedule' and 'Export to Monday.com': icon '✎', label 'Brain dump', onClick toggles setShowBrainDump(true). All Brain Dump section + modal + drawer state preserved unchanged. (G) ALL TASKS SUB-TAB — new 4th sub-tab in ShiftsView pills array (between 'Mommy's Day' and 'Solène's Day'). Font sizes tightened (11→10, gap 6→4) to fit 4 pills on narrow phones. Renders new AllTasksView component. Component features: search box at top (italic serif placeholder), filter chips (ALL / SCHEDULED / UNSCHEDULED / DRAFT / DONE) with count badges, grouped flat list by status (when filter === all), tap row → opens centered EditTaskModal via new editingTaskFromAll state in ShiftsView. Each row: 54px grid with absolute colored left rail (status-based — green for done, coral for draft, gray for unscheduled, mauve for scheduled), mono time (scheduled time or relative done-date or 'drawer' or '—'), serif title with focus dot before, regret as colored mono text right. DONE filter limited to last 30 days. Sort: scheduled by time asc, done by completedAt desc, others by regret desc then createdAt asc. (H) Build verified clean via esbuild. SCOPING: edits scoped to ShiftsView sub-tab pills + AllTasks render branch, new AllTasksView component, TodayTaskPlanCard header / row / section-divider / earlier-pill / FAB / ⋯ menu. Zero changes to C palette, business logic, task/meeting/routine schema, drag handlers, swipe handlers, inline-edit handlers, Right Now card, Best Next Move countdown, Brain Dump section/modal/drawer, EditTaskModal, NL parser. Lingering bt144 features all preserved (long-press 800ms drag, swipe-to-delete, inline time picker, cycleFocusLevel, cycleRegret, BNM countdown timer, full-screen update modal)." },
   { version: "2026.05.05bt143", summary: "Five fixes per chat. (1) exportMondayCsv rewritten: header = ['Task', 'Scheduled Time']. Body = scheduled tasks (dayTimeline.kind==='task') with fmt12hr time, then unscheduledTasks with empty scheduledTime. Routines + meetings dropped (they're calendar events, not Monday board rows). Per user feedback that only those two columns need to be imported and the others are filled in within Monday. (2) handleDragStart long-press setTimeout 500→800ms. handleDragMove movement-cancel threshold 14→25px. User reported drag still triggering accidentally at 500/14; 800/25 raises the bar for committing a drag intent. Haptic vibrate also bumped 15→20ms. (3) assignTaskTimes algorithm reworked. Removed the focus-match-first filter (b.focusLevel === task.focusLevel before falling back to any fit). New logic: queue sorted by regret DESC then focus DESC (high before low) within same regret. For each task in queue, claim FIRST block that fits by duration — no focus filter. Highest-priority tasks land in earliest blocks, full stop. Reasoning: when partner is on duty, every block is a focus opportunity for the user (no childcare interruption), so the user's intuition is correct that deep work should claim partner-on-duty time regardless of circadian focus level. (4) NL 'Type your day, free-form' header now wrapped in a flex row with a × close button on the right (setShowNlInput(false) + clear nlText). (5) ModalShell signature gains `placement` prop. When placement==='center', the outer flex container uses alignItems:center, padding 20/12, the inner card uses borderRadius:16 (vs '20 20 0 0' bottom-sheet), maxHeight 'calc(100dvh - 40px)', drop shadow '0 24px 64px -16px rgba(0,0,0,0.35)'. Drag handle conditionally rendered only when !isCenter. EditTaskModal call site now passes placement='center'. Other ModalShell users unchanged (Logger, EditBottle, RoutineOverrideSheet, TodaySetupSheet, etc still bottom-sheet by default). SCOPING: exportMondayCsv, handleDragStart/Move, assignTaskTimes, NL form header, ModalShell + EditTaskModal call site. Zero changes to C palette, business logic outside scheduling, task/meeting schema, other tabs. Build verified clean via esbuild. DEFERRED: 'move to' picker re-surface; inline edit (tap time → edit time inline, tap focus → cycle inline, tap regret → cycle inline) — proposed in chat for next build; swipe-to-delete card; best-next-move timer when scheduled; combining on-duty + regret + focus into a single line; bedtime/wake setup; work-vs-home flag; quiz." },
   { version: "2026.05.05bt142", summary: "Focused fixes per chat. (1) New module-level helpers fmtTimeRange(a,b) and fmtDurationHM(min). fmtTimeRange uses {h, m, ap} with smart merging: same-half-of-day → '9-10p' / '10:30-11:30a', cross-half → '9a-12p'. Zero minutes collapse to bare hour. fmtDurationHM returns '30m' / '1h' / '1h 30m'. (2) Timeline time-column rewired to render fmtTimeRange on one 11px line + fmtDurationHM in 9px muted parens below. Mauve duration pill removed. textAlign explicitly 'left' so monospace stays left-aligned. (3) Title <span> in row gets explicit textAlign:'left' + display:'block' so the title text never reads as centered on any screen width. (4) babyContext derivation: when isRoutine && slot.joint, set babyContext = null (was 'both parents'). The JOINT CARE tag pill + ★ joint avatar already convey this; the text was redundant. (5) getBlockTag generic CARE BLOCK fallback returns null instead of a tag pill. Routines without specific tags (commute, workout, cook, etc.) now render with no left tag pill — visual noise reduction. Joint routines get a new explicit JOINT CARE tag (#C9A86A gold) so the user can see the symmetry between the joint avatar and the labeled context. (6) Earlier-today bidirectional: when showEarlier is true AND earlierCount > 0, the loop pushes a 'hide earlier today · N items' dashed pill at the top of the rows array BEFORE iterating; tapping it flips showEarlier to false. The original 'show' pill is preserved for the collapsed state. (7) ⋯ overflow menu item 'Copy to OneNote' removed. (8) New reanalyze() handler: collects all open tasks (non-completed), strips scheduledTime on them, runs getWorkableBlocks() + assignTaskTimes() once, applies via single setTasks update. ScheduleStatus banner gains reanalyzed:true flag (still consumed by existing banner render — message reads the same). Menu item 'Auto-fill unscheduled' replaced with 'Re-analyze schedule' that calls reanalyze(); disabled gate flipped from unscheduledTasks.length===0 → myTasks-non-completed.length===0. (9) Unscheduled-pile duration render + NL preview duration render switched to fmtDurationHM for consistency with the timeline. SCOPING: changes in module-level helpers (2 new functions), getBlockTag, dayTimeline render loop, ⋯ menu items array, new reanalyze handler. Zero changes to C palette, task/meeting schema, business logic outside reanalyze, shared components, other tabs. Build verified clean via esbuild. DEFERRED: open-blocks-list editable (change suggested task per row, change time per row); 6p-7p cooking + 6:30 task conflict resolution; bedtime/wake setup fields; bulk-select for editing; the FOCUS QUIZ (proposed in chat); work-vs-home task categorization; better contrast between open and closed cards (waiting on user feedback)." },
@@ -18806,14 +18807,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     if (!p) return;
     dragStartPosRef.current = p;
     cancelLongPress();
-    // v05.05bt141 → bt143 — Long-press window 500→800ms. User reported
-    // drag still triggers accidentally when she means to tap. 800ms is
-    // a deliberate hold; below that, a normal tap won't grab the gesture.
+    // v05.05bt147 — Drag now activates from a dedicated GRIP HANDLE only
+    // (the ⋮⋮ icon in the right column), not from the whole row. Since
+    // grabbing the grip is already an intentional action, the long-press
+    // window comes back down 800→300ms — fast enough to feel responsive,
+    // long enough to distinguish from a tap on the grip itself.
     longPressTimerRef.current = setTimeout(() => {
       setDraggingId(slot.id);
       draggingIdRef.current = slot.id;
-      if (navigator.vibrate) try { navigator.vibrate(20); } catch {}
-    }, 800);
+      if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
+    }, 300);
   };
 
   const handleDragMove = (e) => {
@@ -20859,10 +20862,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       }} />
                       <div
                       data-drop-key={dropKey || undefined}
-                      onTouchStart={isTask && !slot.completedAt ? (e) => { handleDragStart(e, slot); handleSwipeStart(e, slot); } : undefined}
-                      onTouchMove={isTask && !slot.completedAt && (draggingIdRef.current || swipeStartRef.current) ? (e) => { handleDragMove(e); handleSwipeMove(e); } : undefined}
-                      onTouchEnd={isTask && !slot.completedAt ? () => { handleDragEnd(); handleSwipeEnd(); } : undefined}
-                      onMouseDown={isTask && !slot.completedAt ? (e) => handleDragStart(e, slot) : undefined}
+                      onTouchStart={isTask && !slot.completedAt ? (e) => handleSwipeStart(e, slot) : undefined}
+                      onTouchMove={isTask && !slot.completedAt && swipeStartRef.current ? handleSwipeMove : undefined}
+                      onTouchEnd={isTask && !slot.completedAt ? handleSwipeEnd : undefined}
                       style={{
                       display: "grid",
                       gridTemplateColumns: "54px 1fr auto",
@@ -21058,12 +21060,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         )}
                       </div>
 
-                      {/* v05.05bt146 — Right column: just regret as colored
-                          mono text. Owner info already lives in the left
-                          rail color. Focus already lives in the dot before
-                          title. Avatar circle dropped from per-row render. */}
+                      {/* v05.05bt147 — Right column: regret as colored
+                          mono text + a dedicated DRAG GRIP. Drag only
+                          activates from the grip (not from tapping the
+                          row itself). Solves the "accidentally drag
+                          while reading" problem. */}
                       <div style={{
-                        display: "flex", alignItems: "center", gap: 6,
+                        display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
                       }}>
                         {isTask && !slot.completedAt && (
@@ -21081,6 +21084,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                             R{slot.regretScore}
                           </button>
                         )}
+                        {isTask && !slot.completedAt && (
+                          <div
+                            onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
+                            onTouchMove={draggingIdRef.current ? handleDragMove : undefined}
+                            onTouchEnd={handleDragEnd}
+                            onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
+                            title="Hold and drag to move"
+                            style={{
+                              padding: "6px 4px 6px 6px",
+                              cursor: "grab",
+                              color: "rgba(166,139,160,0.55)",
+                              fontSize: 14, lineHeight: 1,
+                              fontFamily: "system-ui, sans-serif",
+                              letterSpacing: "-0.2em",
+                              touchAction: "none",
+                              userSelect: "none",
+                            }}>
+                            ⋮⋮
+                          </div>
+                        )}
                       </div>
                       </div>
                     </div>
@@ -21094,7 +21117,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               fontSize: 11, color: "rgba(124,107,90,0.6)",
               marginTop: 14, fontStyle: "italic", textAlign: "center",
             }}>
-              Tap time, focus dot, or regret to edit · long-press to drag · swipe ← to delete.
+              Tap time, focus, or regret to edit · grab ⋮⋮ to drag · swipe ← to delete.
             </div>
           </div>
         )}
