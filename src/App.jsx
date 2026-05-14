@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt140";
+const APP_VERSION = "2026.05.05bt141";
 const APP_BUILD_NOTES = [
-  "Big restructure. (1) BANNER absorbs the brand: 3-line stack with small 'Little Ledger' subtitle, prominent 'for Solène.' brand mark (lowercase faint 'for', italic serif Solène in viewer color — mauve for Mommy, blue for Daddy — followed by a warm orange period, since solène means sun), and mono date/time row that's now ink-color bold and includes the weekday. Sync indicator is tri-state: GREEN LIVE (cloud + family code), YELLOW LOCAL (cloud but solo), RED OFFLINE. (2) Editorial 'Solène.' header below the banner REMOVED — it duplicated what the banner now shows. ~70px vertical space reclaimed. (3) PLAN sub-tab renamed to MOMMY'S DAY (mirrors Solène's Day for symmetry). (4) DRAG FIX: dragged card is now pointer-events: none so the row UNDER your finger is what registers as a drop target. (5) SECTION dividers got more distinct colors — sunrise orange / teal-green midday / ember-red evening / indigo night — bolder borders and bigger labels so you can tell them apart across the room. (6) ⋯ button removed; tap the task TITLE itself to edit (long-press still triggers drag). (7) 'Your Day' h2 dropped + 'N adjustments from base' dropped — both redundant. (8) Day controls consolidated into ONE compact strip just above the timeline: stats chip (taps to expand open-blocks suggestions), show-why toggle, + add button.",
+  "EIGHT FIXES per chat. (1) WORK MEETINGS now filter by parent — only YOUR meetings appear on Mommy's Day (was: Daddy's meetings polluted Mommy's timeline). (2) ON-DUTY FIX: a 10:39 task no longer says 'Mommy on duty' when Daddy is actually on baby shift. The avatar now reflects who has the baby at that slot, not the task owner. (3) DURATION shown on every row (small mauve pill below the end time) so you can verify what was captured. (4) PAST OPEN BLOCKS dropped — an 8am block at 11am is no longer rendered as 'open'. (5) AUTO-COLLAPSE rows >1 hour old behind a single 'earlier today · N items' pill. Less scrolling to find what's coming up. (6) DRAG-AND-DROP less twitchy: long-press 350→500ms, cancel-tolerance 8→14px. (7) POST-DROP FLASH: moved/swapped cards highlight gold for ~1.4s so you can tell at a glance what changed. (8) FAB HIDDEN while any modal/popup is open so it doesn't cover content at the bottom of popup cards.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt141", summary: "Eight fixes per chat. (1) dayTimeline meeting filter now drops meetings where (m.parent || currentUser) !== currentUser. InlineCommitmentForm has long stored a `parent` field on each meeting; the timeline just wasn't honoring it. Daddy-owned meetings no longer appear on Mommy's Day timeline. (2) On-duty avatar bug. Previous logic at the end of the babyContext derivation ran `if (isTask) owner = 'Mommy';` — this overrode the correctly-derived parent-on-shift owner for any task row. Effect: a Mommy-owned task at 10:39 (during Daddy's baby shift) showed an 'M' avatar and 'Mommy on duty' meta. Fix: drop the override entirely. Avatar + babyContext now both reflect who has the baby at slot time. Onsite mode owner→null (no avatar, meta still says 'grandparents have baby'). (3) Time column gets a third line — fontSize 8.5px mauve fontWeight 700 — showing `{slot.durationMin}m`. Renders for everything except free blocks. (4) buildDayTimeline output unchanged, but timeline render loop now skips slots where kind==='free' && slot.end < now (the block has already passed). (5) New showEarlier useState (default false). Compute earlierCount = count of non-free slots with end < now-3600000. Render loop checks: if (!showEarlier && non-free && end < earlierCutoff), inject a single 'earlier today · N items · show' dashed pill before the first such row and skip rendering individual past rows. Tap pill → setShowEarlier(true) → all past rows render normally. (6) Drag handlers: setTimeout for long-press 350→500. Movement-cancel threshold inside handleDragMove 8→14 px in both axes. Vibration cue still fires at successful long-press. (7) New recentlyMovedIds Set state + flashMoved(id) helper that adds id to set, schedules 1400ms removal. endDrag calls flashMoved on both the moved id and (for swaps) the swap partner. Row style adds justMoved derived = isTask && recentlyMovedIds.has(slot.id); applied as gold30 background + 2px gold border (overrides the normal mauve38 border, sits above paper-white #FDFAF1). Transition smooths it in and out via the existing 0.18s ease. (8) Brain Dump FAB wrapped in `{!showBrainDump && !editingTask && !editingRoutine && !showSetup && !splittingTask && !movePickerForTask && !showActionsMenu && (...)}` so it hides whenever any modal or sheet is open. SCOPING: changes scoped to dayTimeline useMemo, babyContext derivation, drag handlers + state, timeline render loop, FAB conditional. Zero changes to C palette, shared components, business logic outside this area, task/meeting/routine schemas. Build verified clean via esbuild. DEFERRED: bedtime/wake settings in TodaySetupSheet (state field outlined in code comments, UI to come); work-vs-home task category flag; auditing 'unscheduled style' for adoption; routines editor settings UI." },
   { version: "2026.05.05bt140", summary: "Major restructure per chat feedback. (1) Sticky banner restyled: 3-line stack inside logo flex. Line 1: 'Little Ledger' (12px serif italic muted, 0.85 opacity). Line 2: 'for Solène.' as the brand-mark feature — lowercase 'for' at 13px muted 0.55 opacity, 'Solène' at 19px serif italic in userTint (C.mommy or C.daddy), period in warm sun-orange #D9956A. Line 3: mono 10.5px ink600 row with fmtAge (muted 0.75) · weekday+date · h12 time · sync badge. Sync badge tri-state: cloudSyncAvailable && familyCode → #7B9B6E LIVE (green); cloudSyncAvailable && !familyCode → #D4A24A LOCAL (yellow); !cloudSyncAvailable → #B85040 OFFLINE (red). Dot has boxShadow 0 0 0 2px {color}30 for prominence. Logo bumped 32→36px. (2) Editorial <header> with Solène. h1 + tagline + Cyndell colophon + age/date/time/sync row REMOVED — wrapped in `<header style={{display:none}} />` placeholder to preserve outer DOM contract. Tagline and colophon will move to a Settings/About screen in a later build. (3) scheduleSubTab pill 'today' label 'Plan' → \"Mommy's Day\". Mirrors 'Solène's Day' for symmetry — both are 'the day from this person's POV'. (4) DRAG FIX: row container style now includes pointerEvents: isBeingDragged ? 'none' : 'auto'. Without this, document.elementFromPoint at the cursor returned the dragged card itself (since it's translated to follow the pointer with high z-index), so [data-drop-key] queries never found a target row. Now elementFromPoint correctly returns the row UNDER the dragged card, and swap/move dispatches fire as intended. (5) getDaySection colors retuned: MORNING #E68545 (sunrise orange, was #D9956A amber), MIDDAY #3B7B6E (deep teal-green peak, was #B89B7A gold — biggest visual jump for cross-room legibility), EVENING #B85040 (ember red-coral sunset, was #C18D7A rose), NIGHT #4A4B7C (indigo twilight, was #8B7AA8 lavender). Background tint alpha bumped 0.10→0.13-0.16. Section pill restyled: fontSize 10→11, letterSpacing 0.32em→0.30em, fontWeight 700→800, padding 5/11→6/13, border 1px+30alpha → 1.5px+55alpha, icon fontSize 12→14, trailing rule 1px+55alpha → 2px+88alpha with borderRadius 2. (6) ⋯ overflow button in row right column DROPPED. Title <span> now has onClick (gated by isTask && !slot.completedAt OR isRoutine) that dispatches to setEditingTask or setEditingRoutine. Cursor pointer + title attribute for affordance hint. Long-press on the row still triggers drag (handlers on container unchanged). Routine title also gets a new 'ADJUSTED' gold pill suffix when slot.overridden (visual indication that the routine has been overridden today). (7) Your Day section: h2 header + horizontal rule REMOVED. 'N adjustments from base' meta REMOVED from card header. Card header reduced to just the ⋯ overflow menu floated right (justifyContent flex-end). (8) NEW combined action strip rendered above the timeline rows: flex row with three elements. Element 1: stats chip (jet-brains mono 10px 0.14em letter-spacing) showing 'N tasks · M routines · K open' (K open colored gold; pulsing gold dot prefix when freeCount>0). The whole chip is a button — taps toggle setShowOpenBlocks (so freeCount>0 acts as both indicator AND expander trigger). Element 2: show/hide why toggle (mauve filled when on). Element 3: '+ add' button (mauve filled, white text, 5/13 padding, pill-shaped, m3 shadow) — opens NL input. Old standalone full-width gold 'open blocks to fill' banner REMOVED (return null when !showOpenBlocks). Old standalone full-width 'Add a task or jot your day…' pill REMOVED. The expanded open-blocks suggestion panel still renders when showOpenBlocks is true. SCOPING: changes split between App-level (banner + editorial header removal) and TodayTaskPlanCard (everything else). Zero changes to C palette, business logic, task model, modals, props. Build verified clean via esbuild." },
   { version: "2026.05.05bt139", summary: "Four changes per chat. (1) Sticky banner reorganized: a 2-line stack inside the logo flex container. Line 1 is a single serif italic 16px run: 'Little Ledger · For Solène' (For Solène in muted color, separator bullet at 0.6 opacity). Line 2 is mono 9.5px row of: fmtAge(BIRTHDAY,now) · date (short month/day) · time (h12) · sync dot (sage if cloudSyncAvailable, taupe otherwise). lineHeight 1.2, gap 2 between rows. Drops the prior 3-line cramped layout. (2) Today's Ledger h1 removed from the card header — was redundant with the wrapping Section's title 'Today's task plan'. Only the 11px mauve 'N adjustments from base' meta line remains. (3) DAY VIEW pill button removed from the header right-side flex group. Only the ⋯ overflow menu remains. (4) Pencil edit affordances removed from inside the title rows (both task pencil at bt127-era position and routine pencil from bt134). Replaced with a single ⋯ button (2px8 padding, 1px line-color outline, 13px) rendered as the last item in the right column flex stack — sits below the focus/regret badge pair for tasks, below the avatar for routines. For tasks: tap → setEditingTask(slot) which opens the existing EditTaskModal (Delete button lives inside that modal). For routines: tap → setEditingRoutine(slot) which opens RoutineOverrideSheet; outline goes gold when an override is active. Bottom helper copy updated: 'Tap any open block to fill it · long-press a task to drag · tap ⋯ to edit.' SCOPING: edits split between App-level banner JSX and TodayTaskPlanCard. Zero changes to C palette, business logic, modals, props, or other tabs. Build verified clean via esbuild." },
   { version: "2026.05.05bt138", summary: "Five changes per chat. (1) Sticky banner restructured. Wraps Little Ledger logo + a 3-line stack: 'Little Ledger' (serif italic 15px), 'For Solène · {fmtAge(BIRTHDAY, now)}' (serif italic 10.5px muted), and a third mono 9px row with shortened date (May 14 · 7:06p) + sync dot (sage when cloudSyncAvailable, taupe otherwise). Today's Ledger card subtitle stripped of date + clock — only 'N adjustments from base' remains. Reduces redundancy. (2) Open-blocks closed-state banner upgraded: linear-gradient gold-tint background, 1.5px gold border, inset highlight + soft glow shadow, pulsing 9px gold dot using the existing ll-ledger-pulse @keyframes, italic Cormorant '{n} open blocks to fill' (with the number in Inter weight 700 gold-colored), all-caps mono 'REVIEW →' label on the right. Padding 13px16. (3) Replaced per-row ? button in time column with new showAllWhy useState (default false) + global toggle button rendered in the Your Day header row. Toggle is a pill: mauve filled when on, transparent outlined when off. whyOpen derivation now: showAllWhy || openRowWhys.has(whyKey) — per-row state preserved as fallback / for future granular control. (4) Move button JSX block removed. (5) New drag-and-drop layer. New state: draggingId, dragOffset, dropTargetKey. New refs: dragStartPosRef, longPressTimerRef, draggingIdRef. Lifecycle: handleDragStart (onTouchStart/onMouseDown) records start point + arms a 350ms long-press timer; if move > 8px before timer fires, long-press is cancelled. After timer, draggingId set + haptic vibrate(15) if available. handleDragMove tracks pointer delta, applies it as transform on the dragged card, queries document.elementFromPoint for closest [data-drop-key] element. handleDragEnd parses the dropTargetKey ('kind|epochMs|id?') and dispatches: free → moveTaskToTime; task → swap scheduledTime with target. Each row in the timeline now sets data-drop-key (free or task only). Visual: dragged card scales 1.02 with 12px28 shadow; drop target gets 2px mauve border + mauve tint. Window-level useEffect attaches touchmove/touchend/mousemove/mouseup listeners during drag so user can move beyond the originating row. touch-action: none on draggable cards prevents page scroll during drag. SCOPING: edits split between (a) App-level sticky banner and (b) TodayTaskPlanCard render + state. Zero changes to C palette, business logic, task model, other tabs. Build verified clean via esbuild." },
@@ -18275,6 +18276,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // ? icons (which made cards chunky). One control at the top of
   // 'Your day' opens/closes all reasoning panels at once.
   const [showAllWhy, setShowAllWhy] = useState(false);
+  // v05.05bt141 — Collapse past rows. Anything whose end is more than
+  // 1 hour in the past is hidden by default behind a single 'earlier
+  // today (N)' pill that expands inline. Plus 'showEarlier' state.
+  const [showEarlier, setShowEarlier] = useState(false);
   // v05.05bt130 — open block suggestions hidden by default; reveal
   // on user toggle. The unscheduled pile already lets the user assign
   // tasks to time slots via the existing time field in EditTaskModal.
@@ -18297,12 +18302,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // movement translates the task card; releasing over another row's
   // time triggers a move (to free block) or swap (with another task).
   // Works on both touch + mouse.
+  // v05.05bt141 — Tuned for less sensitivity (350ms→500ms, 8px→14px
+  // cancel threshold) plus post-drop highlight so the moved card flashes
+  // gold for ~1.4s after release.
   const [draggingId, setDraggingId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dropTargetKey, setDropTargetKey] = useState(null);
+  const [recentlyMovedIds, setRecentlyMovedIds] = useState(() => new Set());
   const dragStartPosRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const draggingIdRef = useRef(null);
+
+  const flashMoved = (id) => {
+    setRecentlyMovedIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setTimeout(() => {
+      setRecentlyMovedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 1400);
+  };
 
   const cancelLongPress = () => {
     if (longPressTimerRef.current) {
@@ -18318,6 +18342,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         const hh = String(drop.start.getHours()).padStart(2, "0");
         const mm = String(drop.start.getMinutes()).padStart(2, "0");
         moveTaskToTime(moveId, `${hh}:${mm}`);
+        flashMoved(moveId);
       } else if (drop.kind === "task" && drop.id !== moveId) {
         const me = myTasks.find(t => t.id === moveId);
         const other = myTasks.find(t => t.id === drop.id);
@@ -18328,6 +18353,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
             if (t.id === other.id) return { ...t, scheduledTime: oldTime };
             return t;
           }));
+          flashMoved(moveId);
+          flashMoved(drop.id);
         }
       }
     }
@@ -18350,11 +18377,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     if (!p) return;
     dragStartPosRef.current = p;
     cancelLongPress();
+    // v05.05bt141 — Long-press window bumped 350→500ms. Less twitchy:
+    // gives the user time to commit to "I want to move this" before
+    // the card grabs the gesture from a normal tap or scroll.
     longPressTimerRef.current = setTimeout(() => {
       setDraggingId(slot.id);
       draggingIdRef.current = slot.id;
       if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
-    }, 350);
+    }, 500);
   };
 
   const handleDragMove = (e) => {
@@ -18363,7 +18393,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     if (!draggingIdRef.current && longPressTimerRef.current) {
       const dx = Math.abs(p.x - dragStartPosRef.current.x);
       const dy = Math.abs(p.y - dragStartPosRef.current.y);
-      if (dx > 8 || dy > 8) cancelLongPress();
+      // v05.05bt141 — Movement tolerance bumped 8→14px so a small
+      // finger jitter during long-press doesn't cancel the gesture.
+      if (dx > 14 || dy > 14) cancelLongPress();
       return;
     }
     if (!draggingIdRef.current) return;
@@ -18545,9 +18577,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
 
     // v05.05bt121 — today's meetings become kind:"meeting" slots so
     // they're visible in the timeline and naturally split free blocks
-    // for auto-schedule placement. v05.05bt122 — defensive: skip any
-    // meeting with invalid start/end so a single bad record doesn't
-    // crash the render.
+    // v05.05bt141 — Only include meetings that belong to the current
+    // viewer. Previously, both Mommy's and Daddy's meetings appeared
+    // on the Mommy's Day timeline, which is wrong: Daddy's 10am meeting
+    // doesn't block Mommy's calendar. Meetings store the owner as
+    // m.parent (set in InlineCommitmentForm). Fallback to currentUser
+    // if no parent recorded (legacy entries).
     const todayMeetings = (meetings || [])
       .map(m => {
         try {
@@ -18555,6 +18590,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
           const end = new Date(m.end);
           if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
           if (start.toDateString() !== now.toDateString()) return null;
+          const owner = m.parent || currentUser;
+          if (owner !== currentUser) return null;
           return {
             kind: "meeting",
             id: m.id,
@@ -20117,7 +20154,48 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   .map((s, i) => ({ s, i }))
                   .filter(x => x.s.kind === "task")
                   .map(x => x.i);
+                // v05.05bt141 — Past handling.
+                //  - free blocks whose end < now are dropped entirely
+                //    (an open block at 8am when it's 11am isn't open
+                //    anymore — it's gone)
+                //  - non-free rows whose end < now - 1h are bundled
+                //    into a single 'earlier today' collapse pill
+                const earlierCutoff = now.getTime() - 60 * 60 * 1000;
+                const earlierCount = dayTimeline.filter(s =>
+                  s.kind !== "free" && s.end.getTime() < earlierCutoff
+                ).length;
+                let earlierPillInserted = false;
                 dayTimeline.forEach((slot, i) => {
+                  // v05.05bt141 — skip past free blocks (they're not
+                  // actually open anymore)
+                  if (slot.kind === "free" && slot.end.getTime() < now.getTime()) {
+                    return;
+                  }
+                  // v05.05bt141 — collapse old non-free rows
+                  if (!showEarlier && slot.kind !== "free" && slot.end.getTime() < earlierCutoff) {
+                    if (!earlierPillInserted && earlierCount > 0) {
+                      earlierPillInserted = true;
+                      rows.push(
+                        <button key="earlier-pill"
+                          onClick={() => setShowEarlier(true)}
+                          style={{
+                            width: "100%", marginBottom: 12,
+                            display: "flex", alignItems: "center", gap: 10,
+                            background: "transparent",
+                            border: `1px dashed ${C.line}99`,
+                            borderRadius: 10, padding: "10px 14px",
+                            fontFamily: "'Cormorant Garamond', serif",
+                            fontStyle: "italic", fontSize: 13,
+                            color: "#7C6B5A", cursor: "pointer",
+                          }}>
+                          <span style={{ opacity: 0.6 }}>↑</span>
+                          <span>earlier today · {earlierCount} item{earlierCount !== 1 ? "s" : ""}</span>
+                          <span style={{ marginLeft: "auto", fontSize: 9, letterSpacing: "0.18em", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", fontStyle: "normal" }}>show</span>
+                        </button>
+                      );
+                    }
+                    return;
+                  }
                   const section = getDaySection(slot.start.getHours());
                   if (section.label !== lastSection) {
                     rows.push(
@@ -20184,12 +20262,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   const icon = getBlockIcon(slot);
                   const blockFocus = getBlockFocusLevel(slot.start);
 
-                  // baby state
+                  // baby state. v05.05bt141 — Avatar now reflects who
+                  // has the baby at the slot time (NOT the task owner).
+                  // Previous logic force-set owner = "Mommy" for tasks,
+                  // which incorrectly labeled tasks happening during
+                  // Daddy's shift as "Mommy on duty". Fix: drop the
+                  // override. Tasks on the Mommy's Day surface are
+                  // implicitly Mommy's already.
                   let babyContext = null;
                   let owner = null;
                   if (onsite) {
                     babyContext = "grandparents have baby";
-                    owner = isTask ? "Mommy" : null;
+                    owner = null;
                   } else if (isRoutine && slot.joint) {
                     babyContext = "both parents";
                     owner = "joint";
@@ -20205,7 +20289,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     };
                     if (findShiftAt("Mommy"))      { babyContext = "Mommy on duty"; owner = "Mommy"; }
                     else if (findShiftAt("Daddy")) { babyContext = "Daddy on duty"; owner = "Daddy"; }
-                    if (isTask) owner = "Mommy"; // task owner is always currentUser
                   }
                   // v05.05bt135 — separate text shown in meta from the
                   // avatar. The avatar already says "X on duty", so
@@ -20230,6 +20313,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         : null);
                   const isBeingDragged = draggingId === slot.id;
                   const isDropTarget = dropTargetKey === dropKey && draggingId && draggingId !== slot.id;
+                  // v05.05bt141 — Just-moved flash highlight (gold tint
+                  // for ~1.4s after drop) so the user can tell at a glance
+                  // which card landed where.
+                  const justMoved = isTask && recentlyMovedIds.has(slot.id);
 
                   rows.push(
                     <div
@@ -20247,15 +20334,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       background:
                         isFree ? (isDropTarget ? `${C.mommy}18` : "transparent")
                         : isTask && slot.completedAt ? "rgba(123, 155, 110, 0.08)"
+                        : justMoved ? `${C.gold}30`
                         : isDropTarget ? `${C.mommy}1a`
                         : "#FDFAF1",
                       border: isFree
                         ? (isDropTarget ? `2px dashed ${C.mommy}` : `1px dashed ${C.line}99`)
                         : isTask && slot.completedAt
                           ? "1px solid rgba(123, 155, 110, 0.3)"
-                          : isDropTarget
-                            ? `2px solid ${C.mommy}`
-                            : `1px solid ${C.mommy}38`,
+                          : justMoved
+                            ? `2px solid ${C.gold}`
+                            : isDropTarget
+                              ? `2px solid ${C.mommy}`
+                              : `1px solid ${C.mommy}38`,
                       borderRadius: 12,
                       boxShadow: isBeingDragged
                         ? "0 12px 28px -8px rgba(31, 27, 22, 0.35)"
@@ -20299,6 +20389,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         <span style={{ fontSize: 9, color: C.muted, fontWeight: 400 }}>
                           {fmt(slot.end)}
                         </span>
+                        {/* v05.05bt141 — Show duration explicitly so the
+                            user can verify what was captured. Mauve tint
+                            mono pill below the end time. */}
+                        {!isFree && slot.durationMin > 0 && (
+                          <div style={{
+                            marginTop: 3,
+                            fontSize: 8.5, color: C.mommy, fontWeight: 700,
+                            letterSpacing: "0.04em",
+                            opacity: 0.75,
+                          }}>
+                            {slot.durationMin}m
+                          </div>
+                        )}
                       </div>
 
                       {/* v05.05bt132 — Circle icons removed; tag pill + border
@@ -20847,7 +20950,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
 
       {/* v05.05bt132 — Brain Dump floating-action button.
           Clay-coral circular button, bottom-right of viewport.
-          Tap → quick capture modal. */}
+          Tap → quick capture modal.
+          v05.05bt141 — Hide while modals/sheets are open so it
+          doesn't cover content at the bottom of popup cards. */}
+      {!showBrainDump && !editingTask && !editingRoutine && !showSetup
+        && !splittingTask && !movePickerForTask && !showActionsMenu && (
       <button
         onClick={() => setShowBrainDump(true)}
         style={{
@@ -20865,6 +20972,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         }}
         title="Brain dump (quick capture)"
         aria-label="Brain dump">+</button>
+      )}
 
       {showBrainDump && (
         <div
