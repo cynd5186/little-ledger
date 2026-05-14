@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt141";
+const APP_VERSION = "2026.05.05bt142";
 const APP_BUILD_NOTES = [
-  "EIGHT FIXES per chat. (1) WORK MEETINGS now filter by parent — only YOUR meetings appear on Mommy's Day (was: Daddy's meetings polluted Mommy's timeline). (2) ON-DUTY FIX: a 10:39 task no longer says 'Mommy on duty' when Daddy is actually on baby shift. The avatar now reflects who has the baby at that slot, not the task owner. (3) DURATION shown on every row (small mauve pill below the end time) so you can verify what was captured. (4) PAST OPEN BLOCKS dropped — an 8am block at 11am is no longer rendered as 'open'. (5) AUTO-COLLAPSE rows >1 hour old behind a single 'earlier today · N items' pill. Less scrolling to find what's coming up. (6) DRAG-AND-DROP less twitchy: long-press 350→500ms, cancel-tolerance 8→14px. (7) POST-DROP FLASH: moved/swapped cards highlight gold for ~1.4s so you can tell at a glance what changed. (8) FAB HIDDEN while any modal/popup is open so it doesn't cover content at the bottom of popup cards.",
+  "Focused fixes per chat. (1) TIME RANGE compacted: a single line like '9-10p' or '10:30-11:30a' (shared am/pm collapsed), with '(30m)' or '(1h 30m)' in small muted parens below — no more stacked start/end. (2) DURATION format is now hours+minutes everywhere: '90m' → '1h 30m'. (3) TASK TEXT explicitly left-aligned (was sometimes reading as centered). (4) 'Both parents' meta text dropped — the new JOINT CARE pill conveys it. (5) CARE BLOCK generic tag dropped (visual noise). JOINT CARE replaces it on routines with slot.joint. (6) EARLIER TODAY collapse is now bidirectional — once expanded, a matching 'hide earlier today' pill at the top lets you re-collapse. (7) OneNote export menu item removed per chat (you don't use it). (8) RE-ANALYZE schedule (new): in the ⋯ menu, replaces 'Auto-fill unscheduled'. Unschedules every open task, then runs the focus+regret-aware assignment fresh. Use it after editing focus or regret to let the engine pick a better placement.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt142", summary: "Focused fixes per chat. (1) New module-level helpers fmtTimeRange(a,b) and fmtDurationHM(min). fmtTimeRange uses {h, m, ap} with smart merging: same-half-of-day → '9-10p' / '10:30-11:30a', cross-half → '9a-12p'. Zero minutes collapse to bare hour. fmtDurationHM returns '30m' / '1h' / '1h 30m'. (2) Timeline time-column rewired to render fmtTimeRange on one 11px line + fmtDurationHM in 9px muted parens below. Mauve duration pill removed. textAlign explicitly 'left' so monospace stays left-aligned. (3) Title <span> in row gets explicit textAlign:'left' + display:'block' so the title text never reads as centered on any screen width. (4) babyContext derivation: when isRoutine && slot.joint, set babyContext = null (was 'both parents'). The JOINT CARE tag pill + ★ joint avatar already convey this; the text was redundant. (5) getBlockTag generic CARE BLOCK fallback returns null instead of a tag pill. Routines without specific tags (commute, workout, cook, etc.) now render with no left tag pill — visual noise reduction. Joint routines get a new explicit JOINT CARE tag (#C9A86A gold) so the user can see the symmetry between the joint avatar and the labeled context. (6) Earlier-today bidirectional: when showEarlier is true AND earlierCount > 0, the loop pushes a 'hide earlier today · N items' dashed pill at the top of the rows array BEFORE iterating; tapping it flips showEarlier to false. The original 'show' pill is preserved for the collapsed state. (7) ⋯ overflow menu item 'Copy to OneNote' removed. (8) New reanalyze() handler: collects all open tasks (non-completed), strips scheduledTime on them, runs getWorkableBlocks() + assignTaskTimes() once, applies via single setTasks update. ScheduleStatus banner gains reanalyzed:true flag (still consumed by existing banner render — message reads the same). Menu item 'Auto-fill unscheduled' replaced with 'Re-analyze schedule' that calls reanalyze(); disabled gate flipped from unscheduledTasks.length===0 → myTasks-non-completed.length===0. (9) Unscheduled-pile duration render + NL preview duration render switched to fmtDurationHM for consistency with the timeline. SCOPING: changes in module-level helpers (2 new functions), getBlockTag, dayTimeline render loop, ⋯ menu items array, new reanalyze handler. Zero changes to C palette, task/meeting schema, business logic outside reanalyze, shared components, other tabs. Build verified clean via esbuild. DEFERRED: open-blocks-list editable (change suggested task per row, change time per row); 6p-7p cooking + 6:30 task conflict resolution; bedtime/wake setup fields; bulk-select for editing; the FOCUS QUIZ (proposed in chat); work-vs-home task categorization; better contrast between open and closed cards (waiting on user feedback)." },
   { version: "2026.05.05bt141", summary: "Eight fixes per chat. (1) dayTimeline meeting filter now drops meetings where (m.parent || currentUser) !== currentUser. InlineCommitmentForm has long stored a `parent` field on each meeting; the timeline just wasn't honoring it. Daddy-owned meetings no longer appear on Mommy's Day timeline. (2) On-duty avatar bug. Previous logic at the end of the babyContext derivation ran `if (isTask) owner = 'Mommy';` — this overrode the correctly-derived parent-on-shift owner for any task row. Effect: a Mommy-owned task at 10:39 (during Daddy's baby shift) showed an 'M' avatar and 'Mommy on duty' meta. Fix: drop the override entirely. Avatar + babyContext now both reflect who has the baby at slot time. Onsite mode owner→null (no avatar, meta still says 'grandparents have baby'). (3) Time column gets a third line — fontSize 8.5px mauve fontWeight 700 — showing `{slot.durationMin}m`. Renders for everything except free blocks. (4) buildDayTimeline output unchanged, but timeline render loop now skips slots where kind==='free' && slot.end < now (the block has already passed). (5) New showEarlier useState (default false). Compute earlierCount = count of non-free slots with end < now-3600000. Render loop checks: if (!showEarlier && non-free && end < earlierCutoff), inject a single 'earlier today · N items · show' dashed pill before the first such row and skip rendering individual past rows. Tap pill → setShowEarlier(true) → all past rows render normally. (6) Drag handlers: setTimeout for long-press 350→500. Movement-cancel threshold inside handleDragMove 8→14 px in both axes. Vibration cue still fires at successful long-press. (7) New recentlyMovedIds Set state + flashMoved(id) helper that adds id to set, schedules 1400ms removal. endDrag calls flashMoved on both the moved id and (for swaps) the swap partner. Row style adds justMoved derived = isTask && recentlyMovedIds.has(slot.id); applied as gold30 background + 2px gold border (overrides the normal mauve38 border, sits above paper-white #FDFAF1). Transition smooths it in and out via the existing 0.18s ease. (8) Brain Dump FAB wrapped in `{!showBrainDump && !editingTask && !editingRoutine && !showSetup && !splittingTask && !movePickerForTask && !showActionsMenu && (...)}` so it hides whenever any modal or sheet is open. SCOPING: changes scoped to dayTimeline useMemo, babyContext derivation, drag handlers + state, timeline render loop, FAB conditional. Zero changes to C palette, shared components, business logic outside this area, task/meeting/routine schemas. Build verified clean via esbuild. DEFERRED: bedtime/wake settings in TodaySetupSheet (state field outlined in code comments, UI to come); work-vs-home task category flag; auditing 'unscheduled style' for adoption; routines editor settings UI." },
   { version: "2026.05.05bt140", summary: "Major restructure per chat feedback. (1) Sticky banner restyled: 3-line stack inside logo flex. Line 1: 'Little Ledger' (12px serif italic muted, 0.85 opacity). Line 2: 'for Solène.' as the brand-mark feature — lowercase 'for' at 13px muted 0.55 opacity, 'Solène' at 19px serif italic in userTint (C.mommy or C.daddy), period in warm sun-orange #D9956A. Line 3: mono 10.5px ink600 row with fmtAge (muted 0.75) · weekday+date · h12 time · sync badge. Sync badge tri-state: cloudSyncAvailable && familyCode → #7B9B6E LIVE (green); cloudSyncAvailable && !familyCode → #D4A24A LOCAL (yellow); !cloudSyncAvailable → #B85040 OFFLINE (red). Dot has boxShadow 0 0 0 2px {color}30 for prominence. Logo bumped 32→36px. (2) Editorial <header> with Solène. h1 + tagline + Cyndell colophon + age/date/time/sync row REMOVED — wrapped in `<header style={{display:none}} />` placeholder to preserve outer DOM contract. Tagline and colophon will move to a Settings/About screen in a later build. (3) scheduleSubTab pill 'today' label 'Plan' → \"Mommy's Day\". Mirrors 'Solène's Day' for symmetry — both are 'the day from this person's POV'. (4) DRAG FIX: row container style now includes pointerEvents: isBeingDragged ? 'none' : 'auto'. Without this, document.elementFromPoint at the cursor returned the dragged card itself (since it's translated to follow the pointer with high z-index), so [data-drop-key] queries never found a target row. Now elementFromPoint correctly returns the row UNDER the dragged card, and swap/move dispatches fire as intended. (5) getDaySection colors retuned: MORNING #E68545 (sunrise orange, was #D9956A amber), MIDDAY #3B7B6E (deep teal-green peak, was #B89B7A gold — biggest visual jump for cross-room legibility), EVENING #B85040 (ember red-coral sunset, was #C18D7A rose), NIGHT #4A4B7C (indigo twilight, was #8B7AA8 lavender). Background tint alpha bumped 0.10→0.13-0.16. Section pill restyled: fontSize 10→11, letterSpacing 0.32em→0.30em, fontWeight 700→800, padding 5/11→6/13, border 1px+30alpha → 1.5px+55alpha, icon fontSize 12→14, trailing rule 1px+55alpha → 2px+88alpha with borderRadius 2. (6) ⋯ overflow button in row right column DROPPED. Title <span> now has onClick (gated by isTask && !slot.completedAt OR isRoutine) that dispatches to setEditingTask or setEditingRoutine. Cursor pointer + title attribute for affordance hint. Long-press on the row still triggers drag (handlers on container unchanged). Routine title also gets a new 'ADJUSTED' gold pill suffix when slot.overridden (visual indication that the routine has been overridden today). (7) Your Day section: h2 header + horizontal rule REMOVED. 'N adjustments from base' meta REMOVED from card header. Card header reduced to just the ⋯ overflow menu floated right (justifyContent flex-end). (8) NEW combined action strip rendered above the timeline rows: flex row with three elements. Element 1: stats chip (jet-brains mono 10px 0.14em letter-spacing) showing 'N tasks · M routines · K open' (K open colored gold; pulsing gold dot prefix when freeCount>0). The whole chip is a button — taps toggle setShowOpenBlocks (so freeCount>0 acts as both indicator AND expander trigger). Element 2: show/hide why toggle (mauve filled when on). Element 3: '+ add' button (mauve filled, white text, 5/13 padding, pill-shaped, m3 shadow) — opens NL input. Old standalone full-width gold 'open blocks to fill' banner REMOVED (return null when !showOpenBlocks). Old standalone full-width 'Add a task or jot your day…' pill REMOVED. The expanded open-blocks suggestion panel still renders when showOpenBlocks is true. SCOPING: changes split between App-level (banner + editorial header removal) and TodayTaskPlanCard (everything else). Zero changes to C palette, business logic, task model, modals, props. Build verified clean via esbuild." },
   { version: "2026.05.05bt139", summary: "Four changes per chat. (1) Sticky banner reorganized: a 2-line stack inside the logo flex container. Line 1 is a single serif italic 16px run: 'Little Ledger · For Solène' (For Solène in muted color, separator bullet at 0.6 opacity). Line 2 is mono 9.5px row of: fmtAge(BIRTHDAY,now) · date (short month/day) · time (h12) · sync dot (sage if cloudSyncAvailable, taupe otherwise). lineHeight 1.2, gap 2 between rows. Drops the prior 3-line cramped layout. (2) Today's Ledger h1 removed from the card header — was redundant with the wrapping Section's title 'Today's task plan'. Only the 11px mauve 'N adjustments from base' meta line remains. (3) DAY VIEW pill button removed from the header right-side flex group. Only the ⋯ overflow menu remains. (4) Pencil edit affordances removed from inside the title rows (both task pencil at bt127-era position and routine pencil from bt134). Replaced with a single ⋯ button (2px8 padding, 1px line-color outline, 13px) rendered as the last item in the right column flex stack — sits below the focus/regret badge pair for tasks, below the avatar for routines. For tasks: tap → setEditingTask(slot) which opens the existing EditTaskModal (Delete button lives inside that modal). For routines: tap → setEditingRoutine(slot) which opens RoutineOverrideSheet; outline goes gold when an override is active. Bottom helper copy updated: 'Tap any open block to fill it · long-press a task to drag · tap ⋯ to edit.' SCOPING: edits split between App-level banner JSX and TodayTaskPlanCard. Zero changes to C palette, business logic, modals, props, or other tabs. Build verified clean via esbuild." },
@@ -1174,6 +1175,38 @@ const fmtTimeShort = (d) => {
   const ap = h >= 12 ? "p" : "a";
   h = h % 12 || 12;
   return `${h}:${pad(m)}${ap}`;
+};
+// v05.05bt142 — compact range like "9-10p" / "10:30-11:30a" / "9a-12p".
+// Drops the :00 minutes; merges am/pm marker when both ends share it.
+const fmtTimeRange = (a, b) => {
+  if (!(a instanceof Date)) a = new Date(a);
+  if (!(b instanceof Date)) b = new Date(b);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return "—";
+  const fmtOne = (d, withAp) => {
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const ap = h >= 12 ? "p" : "a";
+    h = h % 12 || 12;
+    const t = m === 0 ? `${h}` : `${h}:${pad(m)}`;
+    return withAp ? `${t}${ap}` : t;
+  };
+  const apA = a.getHours() >= 12 ? "p" : "a";
+  const apB = b.getHours() >= 12 ? "p" : "a";
+  if (apA === apB) {
+    // share the suffix on the right
+    return `${fmtOne(a, false)}-${fmtOne(b, true)}`;
+  }
+  return `${fmtOne(a, true)}-${fmtOne(b, true)}`;
+};
+// v05.05bt142 — "1h 30m" / "30m" / "2h" instead of "90m". Cleaner reading.
+const fmtDurationHM = (totalMin) => {
+  const m = Math.max(0, Math.round(totalMin));
+  if (m === 0) return "0m";
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h === 0) return `${rem}m`;
+  if (rem === 0) return `${h}h`;
+  return `${h}h ${rem}m`;
 };
 const fmtShiftRange = (s) => {
   const [a, b] = s.start.split(":").map(Number);
@@ -17803,7 +17836,11 @@ function getBlockTag(slot) {
     if (slot.id === "workout") return { label: "MOVEMENT", color: "#7B9B6E" };
     if (slot.id === "last-pump") return { label: "HANDS-FREE", color: "#8B7AA8" };
     if (slot.id === "cook") return { label: "DOMESTIC", color: "#B89B7A" };
-    return { label: "CARE BLOCK", color: "#B89B7A" };
+    if (slot.joint) return { label: "JOINT CARE", color: "#C9A86A" };
+    // v05.05bt142 — generic "CARE BLOCK" tag dropped (visual noise, no
+    // information beyond the routine title itself). Return null → no
+    // tag pill renders.
+    return null;
   }
   if (slot.kind === "task") {
     if (slot.focusLevel === "high") return { label: "DEEP FOCUS", color: "#A68BA0" };
@@ -18843,6 +18880,38 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     setTimeout(() => setScheduleStatus(null), 4000);
   };
 
+  // v05.05bt142 — Re-analyze: unschedule every open task, then re-run
+  // the assign algorithm. Used after focus/regret edits when the user
+  // wants the engine to find a better placement. Completed tasks are
+  // left alone (their time is historical fact).
+  const reanalyze = () => {
+    const open = myTasks.filter(t => !t.completedAt);
+    if (open.length === 0) return;
+    // Strip scheduledTime for the open set so getWorkableBlocks /
+    // assignTaskTimes treat the day as a blank canvas around routines
+    // and meetings.
+    const openStripped = open.map(t => ({ ...t, scheduledTime: null }));
+    const workable = getWorkableBlocks();
+    if (workable.length === 0) {
+      setScheduleStatus({ slotted: 0, unscheduled: open.length, total: open.length, reanalyzed: true });
+      setTimeout(() => setScheduleStatus(null), 4000);
+      return;
+    }
+    const updates = assignTaskTimes(openStripped, workable);
+    const openIds = new Set(open.map(t => t.id));
+    setTasks(prev => prev.map(t => {
+      if (!openIds.has(t.id)) return t;
+      return { ...t, scheduledTime: updates[t.id] || null };
+    }));
+    setScheduleStatus({
+      slotted: Object.keys(updates).length,
+      unscheduled: open.length - Object.keys(updates).length,
+      total: open.length,
+      reanalyzed: true,
+    });
+    setTimeout(() => setScheduleStatus(null), 4000);
+  };
+
   // v05.05bt125 — Monday.com CSV export. Format mirrors Cyndell's
   // existing Monday board columns (Task / Scheduled Time / Doing On /
   // Done? / Due On / Actual Time / Focus Mode / Work Category /
@@ -19052,8 +19121,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               }}>
                 {[
                   { icon: "⚙", label: "Today's setup", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
-                  { icon: "✦", label: "Auto-fill unscheduled", onClick: () => { autoSchedule(); setShowActionsMenu(false); }, disabled: unscheduledTasks.length === 0 },
-                  { icon: "📋", label: "Copy to OneNote", onClick: () => { copyDayPlan(); setShowActionsMenu(false); } },
+                  { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
+                  // v05.05bt142 — "Copy to OneNote" removed per chat.
                   { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
                 ].map(item => (
                   <button key={item.label}
@@ -19144,7 +19213,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     }}>
                       {p.scheduledTime && <span style={{ color: C.gold, fontWeight: 700, marginRight: 6 }}>{p.scheduledTime}</span>}
                       {p.title}
-                      <span style={{ color: "#7C6B5A", marginLeft: 6 }}>· {p.effortMin}m</span>
+                      <span style={{ color: "#7C6B5A", marginLeft: 6 }}>· {fmtDurationHM(p.effortMin)}</span>
                     </div>
                   ))}
                 </div>
@@ -20156,14 +20225,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   .map(x => x.i);
                 // v05.05bt141 — Past handling.
                 //  - free blocks whose end < now are dropped entirely
-                //    (an open block at 8am when it's 11am isn't open
-                //    anymore — it's gone)
                 //  - non-free rows whose end < now - 1h are bundled
                 //    into a single 'earlier today' collapse pill
+                // v05.05bt142 — bidirectional: when expanded, render a
+                // matching "hide" pill at the top so the user can
+                // re-collapse.
                 const earlierCutoff = now.getTime() - 60 * 60 * 1000;
                 const earlierCount = dayTimeline.filter(s =>
                   s.kind !== "free" && s.end.getTime() < earlierCutoff
                 ).length;
+                if (showEarlier && earlierCount > 0) {
+                  rows.push(
+                    <button key="earlier-pill-hide"
+                      onClick={() => setShowEarlier(false)}
+                      style={{
+                        width: "100%", marginBottom: 12,
+                        display: "flex", alignItems: "center", gap: 10,
+                        background: "transparent",
+                        border: `1px dashed ${C.line}99`,
+                        borderRadius: 10, padding: "10px 14px",
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontSize: 13,
+                        color: "#7C6B5A", cursor: "pointer",
+                      }}>
+                      <span style={{ opacity: 0.6 }}>↑</span>
+                      <span>hide earlier today · {earlierCount} item{earlierCount !== 1 ? "s" : ""}</span>
+                      <span style={{ marginLeft: "auto", fontSize: 9, letterSpacing: "0.18em", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", fontStyle: "normal" }}>hide</span>
+                    </button>
+                  );
+                }
                 let earlierPillInserted = false;
                 dayTimeline.forEach((slot, i) => {
                   // v05.05bt141 — skip past free blocks (they're not
@@ -20275,7 +20365,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     babyContext = "grandparents have baby";
                     owner = null;
                   } else if (isRoutine && slot.joint) {
-                    babyContext = "both parents";
+                    // v05.05bt142 — "both parents" text dropped; the
+                    // JOINT CARE tag pill already conveys this. Avatar
+                    // shows the joint ★ glyph.
+                    babyContext = null;
                     owner = "joint";
                   } else {
                     const slotHour = slot.start.getHours() + slot.start.getMinutes() / 60;
@@ -20379,27 +20472,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       setDraftEffort(Math.min(120, Math.max(15, Math.round(slot.durationMin / 15) * 15)));
                       setShowAddForm(true);
                     } : undefined}>
-                      {/* Time column */}
+                      {/* Time column — v05.05bt142: single-line range
+                          "9-10p" with duration "(30m)" below in small
+                          parens. Left-aligned, monospace. */}
                       <div style={{
-                        fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "'JetBrains Mono', monospace",
                         color: isFree ? C.muted : C.gold, fontWeight: 600,
                         letterSpacing: "-0.02em", paddingTop: 2,
+                        textAlign: "left",
                       }}>
-                        {fmt(slot.start)}<br/>
-                        <span style={{ fontSize: 9, color: C.muted, fontWeight: 400 }}>
-                          {fmt(slot.end)}
-                        </span>
-                        {/* v05.05bt141 — Show duration explicitly so the
-                            user can verify what was captured. Mauve tint
-                            mono pill below the end time. */}
+                        <div style={{ fontSize: 11, lineHeight: 1.15 }}>
+                          {fmtTimeRange(slot.start, slot.end)}
+                        </div>
                         {!isFree && slot.durationMin > 0 && (
                           <div style={{
-                            marginTop: 3,
-                            fontSize: 8.5, color: C.mommy, fontWeight: 700,
-                            letterSpacing: "0.04em",
-                            opacity: 0.75,
+                            marginTop: 2,
+                            fontSize: 9, color: C.muted, fontWeight: 500,
+                            letterSpacing: "0.01em",
                           }}>
-                            {slot.durationMin}m
+                            ({fmtDurationHM(slot.durationMin)})
                           </div>
                         )}
                       </div>
@@ -20441,6 +20532,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                             letterSpacing: "-0.005em",
                             textDecoration: isTask && slot.completedAt ? "line-through" : "none",
                             cursor: ((isTask && !slot.completedAt) || isRoutine) ? "pointer" : "default",
+                            // v05.05bt142 — explicit left alignment so the
+                            // text never reads as centered (was happening
+                            // on some screen widths).
+                            textAlign: "left",
+                            display: "block",
                           }}
                           title={(isTask && !slot.completedAt) ? "Tap to edit" : isRoutine ? "Tap to adjust today" : null}>
                             {isFree ? "Open Block" : slot.title}
@@ -20869,7 +20965,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       fontFamily: "'JetBrains Mono', monospace",
                       letterSpacing: "0.04em", marginTop: 2,
                     }}>
-                      {t.effortMin < 60 ? `${t.effortMin}m` : `${(t.effortMin / 60).toFixed(t.effortMin % 60 === 0 ? 0 : 1)}h`}
+                      {fmtDurationHM(t.effortMin)}
                       {" · tap to edit"}
                     </div>
                   </button>
