@@ -15,11 +15,16 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt147";
+const APP_VERSION = "2026.05.05bt152";
 const APP_BUILD_NOTES = [
-  "DRAG FIX per chat. Drag was triggering accidentally because the whole row was a drag target — every tap-and-hold to read or edit was a near-miss. Fixed by adding a dedicated DRAG GRIP (⋮⋮ icon) on the far right of each task row. Drag now ONLY activates when you grab the grip. Tap the row anywhere else, hold as long as you want — no drag. Since the grip is intentional, the long-press window dropped 800ms → 300ms (fast and responsive instead of awkwardly slow). Swipe-to-delete still works on the row, drag works only on the grip — no more accidents.",
+  "Six fixes per chat. (1) DELETE button removed from timeline rows (too easy to mis-tap). Delete now lives ONLY in the All Tasks sub-tab — same two-tap confirm pattern but in a less crowded view where you go specifically to clean up. (2) FOCUS LEGEND added below the rail legend at the bottom of Mommy's Day. Deep / Medium / Light dots are now explained in the same place as the rail colors. (3) BANNER 'Little Ledger for Solène.' on ONE line. Was split across two lines for layout reasons — fixed. (4) WORKABLE BLOCKS unified with visible open blocks: the scheduler now uses every '+ Open' row on the timeline, not just partner shifts. Resolves the confusion of seeing open slots while tasks remained unscheduled. (5) RIGHT NOW card now leads with what's actually happening (slot title in serif: 'Open block', 'Cooking', '{task title}') with the time underneath in mono. No more naked '10–11a · CURRENT BLOCK' that didn't tell you anything. (6) BEST NEXT MOVE countdown reframed by distance: <90min → urgent gold pill, 90min–3h → calm 'at 2:30p' line, >3h → italic 'Quiet till 5p (5h)' or 'Got 5h until next task — slot something?' if you have unscheduled work pending. The scary '5h 17m' pill is gone for distant tasks.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt152", summary: "Six changes per chat. (1) Persistent × delete button removed from timeline rows (the right-column render in TodayTaskPlanCard). Right column now contains only regret + drag grip. Helper text below timeline updated to 'delete from All Tasks'. (2) AllTasksView: new pendingDeleteId state + pendingDeleteTimerRef. Right column of each row gets a × button with same two-tap pattern (first tap red-pill 'delete?', second tap deletes via setTasks(prev => prev.filter)). (3) FOCUS legend added in a second flex row inside the legend footer, divided by a hairline top border. Three swatches: 6px circles in C.mommy/C.gold/C.muted with 'Deep / Medium / Light' labels. (4) Banner brand mark: was a column-flex with three spans ('Little Ledger' / 'for Solène.' / mono meta row). Merged the first two: single span with inline 'Little Ledger' (17px muted) + 'for' (13px muted opacity 0.55) + 'Solène' (19px userTint) + '.' (19px warm orange). Single line, whitespace:nowrap, ellipsis. Mono meta row marginTop bumped 2→4 to compensate for the lost line. (5) getWorkableBlocks rewritten. Was: onsite branch used dayTimeline free blocks, WFH branch used availableBlocks (partner shifts only). Now: unconditional dayTimeline.filter(s => s.kind === 'free').map(...). Resolves the visible-open-vs-scheduler-blind mismatch. (6) Right Now: time-range div replaced. Was 20px Cormorant mauve serif of fmtTimeShort range + 9px mono 'CURRENT BLOCK' sub-label. Now: 18px Cormorant serif of slot title (italic for free/routine, plain for task/meeting; gold color for free, mauve for everything else) + 10.5px mono time-range underneath. Title overflow-ellipsis on narrow screens. (7) BNM countdown: new branching logic based on diffStartMin. ≤90min → existing gold pill ('starts in 17m', pulse at ≤5min). 90–180min → 'flat' style mono mauve 'at 2:30p'. >180min → italic Cormorant muted '{Xh}m until next task — slot something?' if unscheduledTasks.length > 0, else 'Quiet till {time} ({Xh})'. Negative diffStart with diffEnd > 0 → green 'Xm left' pill (unchanged). Negative both → coral 'ran over by Xm' (unchanged). Style enum {pill, flat} routes to inline-flex pill render OR plain div render. SCOPING: edits scoped to timeline right-column render, AllTasksView row state + render, legend footer, banner brand spans, getWorkableBlocks helper, Right Now slot-title vs time render, BNM countdown IIFE. Zero changes to C palette, schema, drag/swipe handlers, modals, sub-tabs, scheduling algorithm itself (just the workable set it operates over). Build verified clean via esbuild." },
+  { version: "2026.05.05bt151", summary: "Three changes per chat. (1) NlReviewModal redesigned. ModalShell now passed placement='center' (was bottom-sheet). Per-task row consolidated: grid 1fr/auto/auto/auto/auto = title-input + effort-select + focus-select + regret-select + × button. All on one line. selectStyle tightened (padding 6/6, fontSize 11, JetBrains Mono). Focus options renamed for compactness (high→deep, medium→med, low→light, plus auto). Effort same options (15/30/45/60/90/120). Removed showAdvanced state + dropdown toggle + the separate 3-column 'Advanced' grid (it was duplicating what's now inline). Header legend tightened to a single italic line explaining the controls. Title font in input switched to Cormorant Garamond serif to match the rest of the app. (2) assignTaskTimes now returns { updates, reasons } instead of just updates. For each task: if placed, reason = '→ {time} · {block-focus}-focus window · {task-focus} task · R{regret}'. If not placed: 'no block ≥ {effortMin}m (longest free: {longest}m)' or 'higher-regret tasks took all blocks of {effortMin}m+'. (3) commitNlPending, autoSchedule, reanalyze all updated to consume the new shape. setScheduleStatus payload extended with items[] (per-task {id, title, scheduled, reason}) and algorithm name. (4) Schedule banner: each summary line ('All N fit', 'M slotted · K didn't fit', 'N didn't fit') now ends with a 'show details' / 'show why' / 'hide why' italic dotted-underline button (new scheduleStatusOpen state). When expanded, banner reveals: mono uppercase algorithm name + italic Cormorant paragraph explanation of the algorithm + per-task list (green ✓ / red × icon, title in serif, mono reason below). Banner timeout extended 6000→12000ms to give time to read. Timeout also clears scheduleStatusOpen. (5) Build verified clean via esbuild. SCOPING: edits scoped to assignTaskTimes return shape, commitNlPending/autoSchedule/reanalyze status payload, schedule banner render + new open state, NlReviewModal component. Zero changes to C palette, schema, drag handlers, swipe handlers, AllTasksView, other modals." },
+  { version: "2026.05.05bt150", summary: "Two targeted fixes per chat. (1) DELETE: bt148/149 attempts (modal × inside inline edit + ref-based blur suppression) were unreliable on iOS. Replaced with a persistent × button rendered in the right column of every uncompleted task row, between the regret button and the drag grip. New pendingDeleteId state + pendingDeleteTimerRef + armDelete(taskId) helper. First tap calls armDelete (state set, 4s timeout queued to clear). Second tap (while state === slot.id) clears the timer, clears state, and calls deleteTask. Visual: at rest, × shown as a small 13px char in muted coral (rgba 184,80,64,0.6) with a hairline border (alpha 0.25). When armed, the button expands to a filled red pill with white 'delete?' text. The inline-edit × inside the title input was removed entirely (now just a text input, Escape to cancel, Enter/blur to save). inlineDeleteIntentRef still defined but unused (vestigial — left in place to keep the diff small; can be removed in a follow-up). (2) MONDAY EXPORT: exportMondayCsv rewritten. Removed the header row + CSV escaping. New format: one line per task, `${task.title} [${fmt12hr(task.start)}]`, or `${task.title} [unscheduled]` for the pile. Lines joined with newlines. clipboard.writeText fallback path preserved (sets mondayCsvFallback for the modal). setCopyStatus message changed from 'Monday CSV copied' to 'Monday list copied'. Function name unchanged (exportMondayCsv) to avoid disrupting the menu wiring. (3) Helper text below timeline updated: 'swipe ← to delete' replaced with 'tap × twice to delete'. (4) Build verified clean via esbuild. SCOPING: edits scoped to title inline-edit render (× dropped from inside), right-column render (new × button rendered), pendingDeleteId state + helper, exportMondayCsv body, footer helper. Zero changes to C palette, schema, drag handlers, swipe handlers, AllTasksView, other modals. Swipe-to-delete still functional (handlers unchanged) — × is just a more discoverable alternative." },
+  { version: "2026.05.05bt149", summary: "Bug fix + visual + filter batch. (1) inlineDeleteIntentRef useRef added. Input.onBlur checks this ref and skips commitInlineTitle when true. Delete button onTouchStart and onMouseDown set the ref to true. Without this, the input's blur fired before the click on the delete button, the editor closed via commitInlineTitle, the button unmounted, and the click never registered — symptom: delete looked broken. (2) buildDayTimeline rewritten to chunk free spans into 1-hour rows aligned to the top of each hour. New inner helper pushFreeChunks(from, to) iterates by 1-hour steps: nextHour = ceil(curStart to top-of-hour), chunkEnd = min(nextHour, to), pushes if chunkMin >= 15 (avoids sliver rows). The 9–12:30 free span now becomes four entries: 9–10, 10–11, 11–12, 12–12:30 instead of one big 9–12:30 row. Scheduler logic (availableBlocks + assignTaskTimes) unchanged — this is purely visual chunking of dayTimeline. (3) Free block row visual: background tinted ${gold}08 (was transparent), borderBottom 1px dashed ${gold}22 (was solid line22). Title text replaced from 'Open Block' (literal) to '+ Open · tap to fill' in C.gold weight 500. Sub-context line dropped from free rows (the title now carries the affordance). (4) ShiftsView 'today' constant filter now also checks m.parent || currentUser === currentUser. New tomorrowMeetings filter inside the day-plan IIFE has the same owner check. dayTimeline meeting filter from bt141 was already correct; this catches the Schedule sub-tab list and the Day Plan Today/Tomorrow Commitment cards. (5) Open Blocks suggestions panel: removed the 'SUGGESTIONS' mono pill from header (redundant with the title); added a 12.5px italic Cormorant intro paragraph below header explaining the panel: 'These are your free windows today — gaps between routines and meetings. Tap any block to fill it with a task, or accept the suggestion the engine picked from your queue.' The bold 'your free windows today' substring renders non-italic for emphasis. SCOPING: edits scoped to inline title-edit state + delete handler, buildDayTimeline module helper, row free-block render, ShiftsView meetings filter, Open Blocks panel intro. Zero changes to C palette, business logic outside chunking, task/meeting schema, drag/swipe handlers, sub-tabs, AllTasksView, modals." },
+  { version: "2026.05.05bt148", summary: "Eleven changes per chat. (1) ⋯ menu: dropped the standalone justify-end row above the timeline; menu now inline with the Today h1 (flex row, h1 left, ⋯ right). Same dropdown content (Today's setup, Re-analyze, Brain dump, Export). (2) Free blocks: left rail color logic updated to render faded rail (color + 88 alpha) when slot.kind === 'free', using same owner-based color mapping. Renders gray (line66) if owner null (onsite mode). (3) Legend: new footer block below the timeline, JetBrains Mono 9px, flex-wrap row of 4 swatches with 10px×2px colored bars + labels ('Mommy on duty', 'Daddy on duty', 'Joint', 'Routine'). Background C.line10, padding 10/12, borderRadius 8. (4) Inline title edit: new inlineTitleEdit state + commitInlineTitle(taskId, newTitle) helper. When inlineTitleEdit === slot.id, title span replaced with a flex row containing <input type='text'> (autoFocus, defaultValue slot.title, onBlur+Enter commit, Escape cancel) plus a red × delete button (confirm prompt before deleteTask). Title onClick now triggers setInlineTitleEdit instead of setEditingTask. (5) recentlyMovedIds setTimeout extended 1400ms→60min. The '· moved' inline tag (gold mono 9px next to title) was already wired in bt146; the timer extension makes it actually useful as a 'what changed?' indicator. (6) BNM logic: const nextMove = upcomingScheduled || topUnscheduled → const nextMove = upcomingScheduled. Drops the unscheduled fallback. Empty state already exists for null nextMove. (7) Right Now card: time-range div marginBottom 10→0; new mono 9px sub-label 'CURRENT BLOCK' (letterSpacing 0.18em, color muted) rendered below with marginTop 3 marginBottom 10. (8) getBlockReasoning rewritten. New shape: each task reason joins focus-label + task-focus + regret + care-context + fit-note. Free-block reason joins focus-label + care-context + flexibility note. Care context computed from babyContext (Daddy on duty / Mommy on duty / joint / onsite). Fit-note explains whether the task focus matches the slot focus, or whether it's a premium slot / dip / best-fit. Routine reasons updated to be slightly more descriptive ('Meal prep · short interruption-tolerant window' etc.). (9) scheduleStatus banner: padding 10→11, fontSize 12→12.5, border 1px→1.5px with bumped color alphas. New mauve mono pill ('✦ Re-analyzed') prefixed when scheduleStatus.reanalyzed === true. setTimeout 4000→6000 across all setScheduleStatus call sites (sed-replaced). Removed the leading ✓/⚠ glyphs from the body text since the pill carries the affordance. (10) exportMondayCsv: on navigator.clipboard.writeText catch, instead of setCopyStatus('failed') with auto-clear, calls setMondayCsvFallback(csv). Also calls setMondayCsvFallback(csv) when navigator.clipboard?.writeText is unavailable. New mondayCsvFallback state. New modal rendered when state truthy: centered dim overlay + paper card with title 'Monday CSV', italic explainer 'Your phone blocked auto-copy. Tap Select all then paste into Monday', readOnly textarea (autoselects on tap), 'Select all & copy' button (calls textarea.select + document.execCommand('copy') as fallback), and Close button. (11) New '+ add task' button rendered in the editorial meta line after the open-blocks link (mauve dotted underline, opens setShowNlInput). Coexists with the mauve + FAB; FAB is fast-access, link is discoverable in page flow. SCOPING: edits scoped to TodayTaskPlanCard header, ⋯ menu render, BNM derivation, Right Now time-range, getBlockReasoning helper at module scope, scheduleStatus banner, exportMondayCsv, new mondayCsvFallback state + modal, left-rail logic, footer legend, row title span + new inline title edit state. Zero changes to C palette, schema, drag handlers, swipe handlers, sub-tabs, modals other than Monday-CSV-fallback, AllTasksView. Build verified clean via esbuild." },
   { version: "2026.05.05bt147", summary: "Drag affordance moved from full row to a dedicated grip handle. (1) Row container (the inner data-drop-key div) had its onTouchStart/Move/End/onMouseDown stripped of all drag handlers — keeps only swipe handlers (handleSwipeStart, handleSwipeMove on swipeStartRef.current truthy, handleSwipeEnd). Drop target detection still works because the row keeps data-drop-key; only the INITIATION moved off it. (2) New ⋮⋮ grip element rendered in the right column of each task row, after the regret button, before the close. Grip is a 14px system-ui ⋮⋮ in rgba(166,139,160,0.55) with padding 6/4/6/6, touchAction none, userSelect none. onTouchStart, onTouchMove (when draggingIdRef truthy), onTouchEnd wired to handleDragStart/Move/End. stopPropagation in onTouchStart/onMouseDown so the row's swipe handlers don't also fire. Cursor 'grab'. Title 'Hold and drag to move'. (3) handleDragStart long-press timer dropped 800→300ms. Comment updated to explain: grip is already an intentional grab, so a long delay just adds friction. Vibrate fallback also dropped 20→15ms (less haptic noise for a more deliberate motion). Movement-cancel threshold (25px) left untouched. (4) Helper text below timeline updated: 'long-press to drag' → 'grab ⋮⋮ to drag'. (5) Build verified clean. SCOPING: changes scoped to handleDragStart timing constant + row onTouchStart/Move/End + new grip element + helper text. Zero changes to drop target logic, swipe handlers, inline-edit handlers, palette, schema, business logic." },
   { version: "2026.05.05bt146", summary: "Big design pass per mockup approval (timeline-density.html + header-redesign.html + focus-quiz.html). Two builds combined as bt146 since the user requested 'do 145 and 146 first'. (A) TIMELINE — minimal list style: row containers dropped (no card background, no card border), rows separated by single hairline borderBottom (line22 alpha). 2px colored left rail rendered as absolute child inside row's position:relative wrapper, encoding owner (Daddy→C.daddy blue, joint→C.gold, Mommy→C.mommy mauve, routine→rgba(201,187,164,0.55) gray). Row grid columns 78→54px (no ↕ button to make room for), gap 10, padding 9/8/9/12 (left padding 12 to give rail 4px clearance). Time column drops the move ↕ button entirely; remaining content is range + duration. Title block adds a focus dot (8px circle, tap-to-cycle) before the title text. Title fontSize 17→15, line-height 1.2 (tighter), explicit whitespace:nowrap + textOverflow:ellipsis to handle long titles. Routine titles get italic. Sub-context meta line dropped EXCEPT for free blocks ('high-energy — tap to fill' etc). Right column collapsed from avatar+pills stack to a single regret button rendering as colored mono text (no pill background, no border, just R5 in regretColor). isFree drop-target visual: dashed mauve top border + mommy10 bg. Generic drop highlight: mommy0a tint. (B) HEADER — action strip with 3-element trio (stats chip / show-why toggle / + add button) replaced with editorial header: 24px italic Cormorant 'Today' h1 + mono 10px meta line. Meta format: '{N} tasks · {M} routines{ · {K} open ⟶ fill}'. The K-open piece is a dotted-underline gold button that toggles showOpenBlocks. 'Show why' toggle DROPPED entirely (the openRowWhys + showAllWhy state remain in source but no UI surfaces them; reasoning still appears in the edit modal when a task is opened). 'Today's task plan' Section title wrapper had already been dropped in bt140; no change needed there. (C) SECTION DIVIDERS — chunky pill with icon + bgTint + trailing gradient rule replaced with a single line of monospace text in section.color: '— morning —' (lowercase, letter-spacing 0.30em, fontWeight 600, padding 16/4/6). (D) EARLIER-TODAY — dashed pill ('↑ earlier today · 4 items · show') replaced with a tiny mono link '↑ EARLIER (4)' in rgba(124,107,90,0.55), letter-spacing 0.20em, padding 4/4/8. Bidirectional: same minimal style for the 'hide' state ('↓ HIDE EARLIER (4)'). (E) FAB — coral Brain Dump FAB replaced with a mauve '+ Add task' FAB (background C.mommy, same 56×56 / position fixed bottom 88 right 20 / boxShadow). onClick opens setShowNlInput (the existing NL parser). Visibility condition extended to also hide when !showNlInput && !showAddForm (so adding task hides the FAB). (F) BRAIN DUMP — moved from FAB into the ⋯ overflow menu. New menu item between 'Re-analyze schedule' and 'Export to Monday.com': icon '✎', label 'Brain dump', onClick toggles setShowBrainDump(true). All Brain Dump section + modal + drawer state preserved unchanged. (G) ALL TASKS SUB-TAB — new 4th sub-tab in ShiftsView pills array (between 'Mommy's Day' and 'Solène's Day'). Font sizes tightened (11→10, gap 6→4) to fit 4 pills on narrow phones. Renders new AllTasksView component. Component features: search box at top (italic serif placeholder), filter chips (ALL / SCHEDULED / UNSCHEDULED / DRAFT / DONE) with count badges, grouped flat list by status (when filter === all), tap row → opens centered EditTaskModal via new editingTaskFromAll state in ShiftsView. Each row: 54px grid with absolute colored left rail (status-based — green for done, coral for draft, gray for unscheduled, mauve for scheduled), mono time (scheduled time or relative done-date or 'drawer' or '—'), serif title with focus dot before, regret as colored mono text right. DONE filter limited to last 30 days. Sort: scheduled by time asc, done by completedAt desc, others by regret desc then createdAt asc. (H) Build verified clean via esbuild. SCOPING: edits scoped to ShiftsView sub-tab pills + AllTasks render branch, new AllTasksView component, TodayTaskPlanCard header / row / section-divider / earlier-pill / FAB / ⋯ menu. Zero changes to C palette, business logic, task/meeting/routine schema, drag handlers, swipe handlers, inline-edit handlers, Right Now card, Best Next Move countdown, Brain Dump section/modal/drawer, EditTaskModal, NL parser. Lingering bt144 features all preserved (long-press 800ms drag, swipe-to-delete, inline time picker, cycleFocusLevel, cycleRegret, BNM countdown timer, full-screen update modal)." },
   { version: "2026.05.05bt143", summary: "Five fixes per chat. (1) exportMondayCsv rewritten: header = ['Task', 'Scheduled Time']. Body = scheduled tasks (dayTimeline.kind==='task') with fmt12hr time, then unscheduledTasks with empty scheduledTime. Routines + meetings dropped (they're calendar events, not Monday board rows). Per user feedback that only those two columns need to be imported and the others are filled in within Monday. (2) handleDragStart long-press setTimeout 500→800ms. handleDragMove movement-cancel threshold 14→25px. User reported drag still triggering accidentally at 500/14; 800/25 raises the bar for committing a drag intent. Haptic vibrate also bumped 15→20ms. (3) assignTaskTimes algorithm reworked. Removed the focus-match-first filter (b.focusLevel === task.focusLevel before falling back to any fit). New logic: queue sorted by regret DESC then focus DESC (high before low) within same regret. For each task in queue, claim FIRST block that fits by duration — no focus filter. Highest-priority tasks land in earliest blocks, full stop. Reasoning: when partner is on duty, every block is a focus opportunity for the user (no childcare interruption), so the user's intuition is correct that deep work should claim partner-on-duty time regardless of circadian focus level. (4) NL 'Type your day, free-form' header now wrapped in a flex row with a × close button on the right (setShowNlInput(false) + clear nlText). (5) ModalShell signature gains `placement` prop. When placement==='center', the outer flex container uses alignItems:center, padding 20/12, the inner card uses borderRadius:16 (vs '20 20 0 0' bottom-sheet), maxHeight 'calc(100dvh - 40px)', drop shadow '0 24px 64px -16px rgba(0,0,0,0.35)'. Drag handle conditionally rendered only when !isCenter. EditTaskModal call site now passes placement='center'. Other ModalShell users unchanged (Logger, EditBottle, RoutineOverrideSheet, TodaySetupSheet, etc still bottom-sheet by default). SCOPING: exportMondayCsv, handleDragStart/Move, assignTaskTimes, NL form header, ModalShell + EditTaskModal call site. Zero changes to C palette, business logic outside scheduling, task/meeting schema, other tabs. Build verified clean via esbuild. DEFERRED: 'move to' picker re-surface; inline edit (tap time → edit time inline, tap focus → cycle inline, tap regret → cycle inline) — proposed in chat for next build; swipe-to-delete card; best-next-move timer when scheduled; combining on-duty + regret + focus into a single line; bedtime/wake setup; work-vs-home flag; quiz." },
@@ -5342,33 +5347,32 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               display: "flex", flexDirection: "column",
               minWidth: 0, lineHeight: 1.15, gap: 1,
             }}>
+              {/* v05.05bt152 — Brand mark on ONE line per chat:
+                  "Little Ledger for Solène." Was previously split
+                  across two lines (subtitle + brand mark). All inline:
+                  serif italic for the wordmark, muted lowercase "for",
+                  user-tinted "Solène", warm orange period. */}
               <span style={{
                 fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 12, fontStyle: "italic",
-                color: C.muted, fontWeight: 500,
-                letterSpacing: "0.04em",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                opacity: 0.85,
-              }}>Little Ledger</span>
-              <span style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 19, fontStyle: "italic",
-                fontWeight: 500,
-                letterSpacing: "-0.005em",
+                fontStyle: "italic", fontWeight: 500,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 lineHeight: 1.05,
               }}>
                 <span style={{
+                  fontSize: 17, color: C.muted, opacity: 0.85,
+                  letterSpacing: "0.01em",
+                }}>Little Ledger</span>
+                <span style={{
                   color: C.muted, opacity: 0.55,
-                  fontSize: 13, fontWeight: 400, marginRight: 4,
+                  fontSize: 13, fontWeight: 400, margin: "0 5px",
                 }}>for</span>
-                <span style={{ color: userTint }}>Solène</span>
-                <span style={{ color: "#D9956A" /* warm sun orange */ }}>.</span>
+                <span style={{ fontSize: 19, color: userTint }}>Solène</span>
+                <span style={{ fontSize: 19, color: "#D9956A" /* warm sun orange */ }}>.</span>
               </span>
               <span style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 10.5, color: C.ink, fontWeight: 600,
-                letterSpacing: "0.01em", marginTop: 2,
+                letterSpacing: "0.01em", marginTop: 4,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
                 <span style={{ color: C.muted, opacity: 0.75, fontWeight: 500 }}>
@@ -14335,6 +14339,9 @@ function SundayRoutineCard({ C, events, now }) {
 function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
   const [filter, setFilter] = useState("all"); // all | scheduled | unscheduled | draft | done
   const [search, setSearch] = useState("");
+  // v05.05bt152 — Two-tap delete state, scoped to this view only.
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const pendingDeleteTimerRef = useRef(null);
   const userTint = currentUser === "Mommy" ? C.mommy : C.daddy;
 
   const today = new Date(now); today.setHours(0,0,0,0);
@@ -14564,7 +14571,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
                   }} />
                   {t.title}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   {t.regretScore && t._status !== "done" && (
                     <span style={{
                       fontFamily: "'JetBrains Mono', monospace",
@@ -14572,6 +14579,36 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
                       color: fmtRegretColor(t.regretScore),
                     }}>R{t.regretScore}</span>
                   )}
+                  {/* v05.05bt152 — Delete button lives ONLY here, in the
+                      All Tasks view. Two-tap confirm (first turns red,
+                      second deletes). Wider hit target than the timeline. */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (pendingDeleteId === t.id) {
+                        if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+                        setPendingDeleteId(null);
+                        setTasks(prev => prev.filter(x => x.id !== t.id));
+                      } else {
+                        setPendingDeleteId(t.id);
+                        if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+                        pendingDeleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 4000);
+                      }
+                    }}
+                    title={pendingDeleteId === t.id ? "Tap again to confirm" : "Delete this task"}
+                    style={{
+                      background: pendingDeleteId === t.id ? "#B85040" : "transparent",
+                      color: pendingDeleteId === t.id ? "#fff" : "rgba(184, 80, 64, 0.55)",
+                      border: pendingDeleteId === t.id ? "none" : `1px solid rgba(184, 80, 64, 0.2)`,
+                      borderRadius: 5,
+                      padding: pendingDeleteId === t.id ? "4px 9px" : "2px 7px",
+                      fontSize: pendingDeleteId === t.id ? 10 : 13,
+                      fontWeight: 700, lineHeight: 1,
+                      cursor: "pointer", fontFamily: "inherit",
+                      transition: "all 0.15s",
+                    }}>
+                    {pendingDeleteId === t.id ? "delete?" : "×"}
+                  </button>
                 </div>
               </div>
             );
@@ -14650,7 +14687,15 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
     } catch (e) { console.warn("[updateMeeting] sync persist failed", e); }
     return next;
   });
-  const today = meetings.filter(m => new Date(m.start).toDateString() === now.toDateString());
+  // v05.05bt149 — Filter today's meetings to ONLY those owned by the
+  // current user. Daddy's meetings were showing up in Mommy's Schedule
+  // view (and Schedule → Today/Tomorrow Commitments cards). Match the
+  // same filter the dayTimeline already uses.
+  const today = meetings.filter(m => {
+    if (new Date(m.start).toDateString() !== now.toDateString()) return false;
+    const owner = m.parent || currentUser;
+    return owner === currentUser;
+  });
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -14812,7 +14857,10 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           const tomorrowMeetings = (meetings || [])
             .filter(m => {
               const t = new Date(m.start);
-              return t >= tomorrow && t < dayAfter;
+              if (t < tomorrow || t >= dayAfter) return false;
+              // v05.05bt149 — Owner filter, same as today's filter above.
+              const owner = m.parent || currentUser;
+              return owner === currentUser;
             })
             .sort((a, b) => new Date(a.start) - new Date(b.start));
           const tomorrowLabel = tomorrow.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -17961,27 +18009,49 @@ function buildDayTimeline(items, dayStart, dayEnd) {
   const sorted = [...items].sort((a, b) => a.start - b.start);
   const out = [];
   let cursor = dayStart;
+  // v05.05bt149 — Free blocks now chunked into 1-hour pieces per chat
+  // ("let's make open blocks in 1 hr increment so i can see where i
+  // have empty slots"). Aligns chunks to the top of each hour where
+  // possible: e.g. a 9:00–12:30 free span renders as 9–10, 10–11,
+  // 11–12, 12–12:30. Tasks of any length still slot in fine; this is
+  // a visual chunking, not a constraint on scheduler logic.
+  const pushFreeChunks = (from, to) => {
+    let curStart = from.getTime();
+    const endMs = to.getTime();
+    while (curStart < endMs) {
+      // Align next break to the top of the next hour after curStart
+      const d = new Date(curStart);
+      const nextHour = new Date(d);
+      nextHour.setMinutes(0, 0, 0);
+      if (nextHour.getTime() <= curStart) {
+        nextHour.setHours(nextHour.getHours() + 1);
+      }
+      const chunkEnd = Math.min(nextHour.getTime(), endMs);
+      const chunkMin = (chunkEnd - curStart) / 60000;
+      // Only push chunks that are at least 15 minutes (avoid sliver rows)
+      if (chunkMin >= 15) {
+        out.push({
+          kind: "free",
+          start: new Date(curStart),
+          end: new Date(chunkEnd),
+          durationMin: chunkMin,
+        });
+      }
+      curStart = chunkEnd;
+    }
+  };
+
   for (const item of sorted) {
     const gapMin = (item.start - cursor) / 60000;
     if (gapMin >= 30) {
-      out.push({
-        kind: "free",
-        start: new Date(cursor.getTime()),
-        end: new Date(item.start.getTime()),
-        durationMin: gapMin,
-      });
+      pushFreeChunks(cursor, item.start);
     }
     out.push(item);
     if (item.end > cursor) cursor = item.end;
   }
   const tailMin = (dayEnd - cursor) / 60000;
   if (tailMin >= 30) {
-    out.push({
-      kind: "free",
-      start: new Date(cursor.getTime()),
-      end: new Date(dayEnd.getTime()),
-      durationMin: tailMin,
-    });
+    pushFreeChunks(cursor, dayEnd);
   }
   return out;
 }
@@ -18220,14 +18290,21 @@ function getDaySection(hour) {
 // Returns a short italic line explaining the algorithm's choice (or the
 // purpose of a routine). Returns null when no reasoning needed.
 function getBlockReasoning(slot, blockFocus, babyContext, onsite) {
+  // v05.05bt148 — Reasoning rewritten to be SPECIFIC per chat feedback:
+  // "it doesn't say it is because it is a high focus task and daddy is
+  // on duty or something like that … it is too generic." Each reason
+  // now names: who has the baby, what focus level the slot is, and
+  // why the task lands here (regret/focus/fit).
+  const focusLabel = blockFocus === "high" ? "high-focus" : blockFocus === "low" ? "low-focus" : "steady";
+  const careCtx = onsite ? "grandparents have Solène" : babyContext;
   if (slot.kind === "routine") {
     const map = {
-      "am":           "Feed Solène · diaper · get ready",
+      "am":           "Morning routine · feed + diaper + get ready",
       "commute-in":   "Travel time · podcast or call window",
       "commute-out":  "Travel home · decompression",
-      "cook":         "Meal prep window",
-      "workout":      "Post-dinner movement",
-      "solene-bed":   "Both parents engaged with baby",
+      "cook":         "Meal prep · short interruption-tolerant window",
+      "workout":      "Post-dinner movement · low-cog",
+      "solene-bed":   "Both parents with Solène · bedtime routine",
       "shutdown":     "Pre-bed wind down · house close-out",
       "mommy-pm":     "Skincare · decompress before bed",
       "last-pump":    "Pump before overnight session",
@@ -18235,40 +18312,42 @@ function getBlockReasoning(slot, blockFocus, babyContext, onsite) {
     return map[slot.id] || null;
   }
   if (slot.kind === "meeting") {
-    return "Scheduled commitment · time blocked";
+    return `Scheduled commitment · time blocked${careCtx ? " · " + careCtx : ""}`;
   }
   if (slot.kind === "task") {
     const taskFocus = slot.focusLevel || "medium";
-    // Matched focus
-    if (taskFocus === blockFocus) {
-      if (blockFocus === "high") return "Peak focus window matches task profile";
-      if (blockFocus === "low")  return "Low-cognitive window · admin-friendly";
-      return "Steady focus window · suited to this task";
-    }
-    // Premium slot for non-deep work
-    if (blockFocus === "high" && taskFocus !== "high") {
-      return "Premium slot · could move to admin window if needed";
-    }
-    // Deep work in dip
-    if (blockFocus === "low" && taskFocus === "high") {
-      return "Post-lunch slot · focus may dip · consider rescheduling";
-    }
-    return "Best-fit available slot";
+    const taskFocusLabel = taskFocus === "high" ? "deep" : taskFocus === "low" ? "light" : "medium";
+    const regret = slot.regretScore || 3;
+    const careHint = careCtx ? careCtx : null;
+    const fitNote =
+      taskFocus === blockFocus
+        ? "task focus matches this window"
+        : blockFocus === "high" && taskFocus !== "high"
+          ? "premium slot — could move to admin window if needed"
+          : blockFocus === "low" && taskFocus === "high"
+            ? "scheduled in a dip — focus may waver"
+            : "best-fit slot available";
+    const parts = [
+      `${focusLabel} window`,
+      `${taskFocusLabel} task · R${regret}`,
+      careHint,
+      fitNote,
+    ].filter(Boolean);
+    return parts.join(" · ");
   }
   if (slot.kind === "free") {
-    const hour = slot.start.getHours();
-    if (blockFocus === "high" && hour < 12) {
-      return onsite
-        ? "Peak morning focus · no baby duty · ideal for deep work"
-        : `Peak morning focus${babyContext === "Daddy on duty" ? " · partner has baby · uninterrupted" : ""}`;
-    }
-    if (blockFocus === "high" && hour >= 14) {
-      return "Afternoon focus rebound · good for deep work";
-    }
-    if (blockFocus === "low") {
-      return "Post-lunch dip · admin & comms-friendly";
-    }
-    return "Steady focus · flexible block";
+    const parts = [
+      `${focusLabel} window`,
+      careCtx,
+      blockFocus === "high"
+        ? (careCtx && careCtx.includes("Daddy")
+            ? "ideal deep work — uninterrupted"
+            : "good for focus")
+        : blockFocus === "low"
+          ? "admin & comms-friendly"
+          : "flexible block",
+    ].filter(Boolean);
+    return parts.join(" · ");
   }
   return null;
 }
@@ -18611,6 +18690,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // v05.05bt117 — banner after NL commit so user can see what happened
   // ("3 slotted into Your Day, 1 went to Unscheduled (no fit)").
   const [scheduleStatus, setScheduleStatus] = useState(null);
+  // v05.05bt151 — Banner expanded state (per-task placement detail)
+  const [scheduleStatusOpen, setScheduleStatusOpen] = useState(false);
   // v05.05bt121 — Today's Setup sheet toggle
   // v05.05bt133 — Unscheduled collapsed by default. Reveal via small
   // dotted toggle. The page has enough; this section is opt-in.
@@ -18643,6 +18724,33 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     }));
   };
   const [inlineTimeEdit, setInlineTimeEdit] = useState(null); // taskId or null
+  // v05.05bt148 — fallback CSV holder when clipboard write fails
+  const [mondayCsvFallback, setMondayCsvFallback] = useState(null);
+  // v05.05bt148 — Inline title edit. Tap title → input + delete button
+  // inline, no modal needed.
+  const [inlineTitleEdit, setInlineTitleEdit] = useState(null);
+  // v05.05bt150 — Two-tap delete state. First tap on the × button
+  // sets pendingDeleteId; second tap (while pending) actually deletes.
+  // Tapping anywhere else clears it. This replaces the broken
+  // window.confirm + ref-blur dance and the buried-in-edit-mode delete.
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const pendingDeleteTimerRef = useRef(null);
+  const armDelete = (taskId) => {
+    setPendingDeleteId(taskId);
+    if (pendingDeleteTimerRef.current) clearTimeout(pendingDeleteTimerRef.current);
+    pendingDeleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 4000);
+  };
+  // v05.05bt149 — Tracks whether the user just tapped the inline delete
+  // button. The input's onBlur checks this and skips commitInlineTitle
+  // if true, so the title isn't saved-then-the-row-rerenders before the
+  // click event reaches the delete button. Without this, delete looked
+  // like a no-op (the symptom in bt148).
+  const inlineDeleteIntentRef = useRef(false);
+  const commitInlineTitle = (taskId, newTitle) => {
+    const t = (newTitle || "").trim();
+    if (t) setTasks(prev => prev.map(x => x.id === taskId ? { ...x, title: t } : x));
+    setInlineTitleEdit(null);
+  };
   // v05.05bt144 — alternate "move to" affordance for users who don't
   // want to drag. movePickerForTask was kept in state since bt132; now
   // re-surfaced via a small ↕ button next to each task time.
@@ -18749,13 +18857,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       next.add(id);
       return next;
     });
+    // v05.05bt148 — Moved marker now sticks for 60 minutes (was 1.4s).
+    // Per chat: "I cannot tell what just moved." A 1.4s flash is too
+    // short for context-switching. 60 minutes keeps the "· moved" tag
+    // visible long enough for the user to come back and verify.
     setTimeout(() => {
       setRecentlyMovedIds(prev => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
-    }, 1400);
+    }, 60 * 60 * 1000);
   };
 
   const cancelLongPress = () => {
@@ -19154,22 +19266,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // Used by both the explicit Auto-fill button and the NL commit
   // handler so newly-added tasks land directly in Your Day. Doesn't
   // mutate state — caller applies the updates.
+  // v05.05bt151 — assignTaskTimes returns more than time map now. Returns
+  // { updates: {id: 'HH:MM'}, reasons: {id: 'why-it-landed-here-or-why-not'} }
+  // so the schedule-status banner can explain placements and why a task
+  // didn't fit. Algorithm description: greedy regret-priority. Highest
+  // regret first, then highest focus, claim first block big enough.
   const assignTaskTimes = (toAssign, workableBlocks) => {
-    // v05.05bt143 — Algorithm reworked per chat. The old logic tried
-    // to match task.focusLevel === block.focusLevel first, where block
-    // focus came from clock time (e.g., 1-3pm = "low"). Result: when
-    // Dad was on duty in a "low circadian" window, the engine put
-    // LOW-focus admin work there instead of the high-priority deep
-    // work that actually needs partner-on-duty time.
-    //
-    // New logic: partner-on-duty time is by definition the user's
-    // focus opportunity (no childcare interruption). So:
-    //  (1) Sort tasks by regret DESC, then focus DESC (high before low)
-    //  (2) For each task, claim the first block that FITS by duration.
-    //      Highest priority gets earliest pick. Focus-match is broken
-    //      out as a tiebreaker only — never a filter.
-    // This guarantees: highest-regret + highest-focus tasks land in
-    // partner-on-duty windows first, regardless of clock time.
     const blocks = workableBlocks.map(b => ({
       start: new Date(b.start),
       durationMin: b.durationMin,
@@ -19182,8 +19284,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       return (fOrder[a.focusLevel] || 1) - (fOrder[b.focusLevel] || 1);
     });
     const updates = {};
+    const reasons = {};
     for (const task of queue) {
-      // First-fit by capacity. Highest priority claims earliest block.
       const block = blocks.find(b =>
         b.durationMin - b.usedMin >= task.effortMin
       );
@@ -19193,40 +19295,46 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         const mm = String(startTs.getMinutes()).padStart(2, "0");
         updates[task.id] = `${hh}:${mm}`;
         block.usedMin += task.effortMin;
+        const ap = startTs.getHours() < 12 ? "a" : "p";
+        const h12 = ((startTs.getHours() + 11) % 12) + 1;
+        const clockStr = startTs.getMinutes() === 0 ? `${h12}${ap}` : `${h12}:${String(startTs.getMinutes()).padStart(2,"0")}${ap}`;
+        reasons[task.id] = `→ ${clockStr} · ${block.focusLevel}-focus window · ${task.focusLevel || "medium"} task · R${task.regretScore}`;
+      } else {
+        // Diagnose why it didn't fit
+        const longest = blocks.reduce((max, b) => Math.max(max, b.durationMin - b.usedMin), 0);
+        if (longest < task.effortMin) {
+          reasons[task.id] = `no block ≥ ${task.effortMin}m (longest free: ${longest}m). Try shortening effort or freeing a routine.`;
+        } else {
+          reasons[task.id] = `higher-regret tasks took all blocks of ${task.effortMin}m+`;
+        }
       }
     }
-    return updates;
+    return { updates, reasons };
   };
 
   const getWorkableBlocks = () => {
-    // v05.05bt117 — DROPPED the b.end > now filter. Per user feedback:
-    // when planning at end of day for tomorrow (or just adding tasks
-    // late in the day), the "future only" check excluded every block
-    // and auto-schedule failed silently. Now we slot tasks into ANY
-    // block of today regardless of clock time. User can manually edit
-    // any task whose time has already passed.
-    return onsite
-      ? dayTimeline
-          .filter(s => s.kind === "free")
-          .map(s => ({
-            start: new Date(s.start),
-            end: new Date(s.end),
-            durationMin: s.durationMin,
-            focusLevel: getBlockFocusLevel(s.start),
-          }))
-      : availableBlocks
-          .map(b => ({
-            start: new Date(b.start),
-            end: new Date(b.end),
-            durationMin: b.durationMin,
-            focusLevel: b.focusLevel,
-          }));
+    // v05.05bt152 — Use ALL free dayTimeline blocks per chat ("i am
+    // confused why some slots are open and yet there are tasks that
+    // were unscheduled"). Previously, in WFH mode, only partner shifts
+    // counted as workable, so visible "+ Open" rows during the user's
+    // own baby shift were NOT slot-able for tasks. The mismatch was
+    // confusing. Now: any open block on the timeline can hold a task,
+    // regardless of who's on duty. The on-duty parent is communicated
+    // via the left rail color so the user knows the context, but it's
+    // no longer a hard filter.
+    return dayTimeline
+      .filter(s => s.kind === "free")
+      .map(s => ({
+        start: new Date(s.start),
+        end: new Date(s.end),
+        durationMin: s.durationMin,
+        focusLevel: getBlockFocusLevel(s.start),
+      }));
   };
 
   const commitNlPending = () => {
     if (!nlPending || nlPending.length === 0) return;
     const baseTs = Date.now();
-    // v05.05bt116 — resolve focus "auto" → infer from title
     let newTasks = nlPending.map((p, i) => ({
       id: `task_${baseTs}_${i}_${Math.random().toString(36).slice(2, 5)}`,
       title: p.title,
@@ -19238,14 +19346,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       createdAt: new Date().toISOString(),
       completedAt: null,
     }));
-    // v05.05bt116 — auto-schedule any without a time so they land
-    // directly in Your Day per user request
     const toAssign = newTasks.filter(t => !t.scheduledTime);
     let slottedCount = newTasks.filter(t => t.scheduledTime).length;
     let unscheduledCount = 0;
+    let placementReasons = {};
     if (toAssign.length > 0) {
       const workable = getWorkableBlocks();
-      const updates = assignTaskTimes(toAssign, workable);
+      const result = assignTaskTimes(toAssign, workable);
+      const updates = result.updates;
+      placementReasons = result.reasons;
       newTasks = newTasks.map(t => updates[t.id] ? { ...t, scheduledTime: updates[t.id] } : t);
       slottedCount += Object.keys(updates).length;
       unscheduledCount = toAssign.length - Object.keys(updates).length;
@@ -19254,27 +19363,34 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     setNlText("");
     setNlPending(null);
     setShowNlInput(false);
-    // v05.05bt117 — surface fit results so user knows whether tasks
-    // made it into the table or fell to the unscheduled pile.
+    // v05.05bt151 — Capture items + reasons so the banner can show
+    // per-task placement detail when expanded.
     setScheduleStatus({
       slotted: slottedCount,
       unscheduled: unscheduledCount,
       total: newTasks.length,
+      items: newTasks.map(t => ({
+        id: t.id, title: t.title, scheduled: !!t.scheduledTime,
+        reason: placementReasons[t.id] || (t.scheduledTime ? "manual time set on entry" : null),
+      })),
+      algorithm: "greedy regret-priority",
     });
-    setTimeout(() => setScheduleStatus(null), 4000);
+    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
   };
 
   const autoSchedule = () => {
     const workable = getWorkableBlocks();
     if (workable.length === 0 || unscheduledTasks.length === 0) return;
-    const updates = assignTaskTimes(unscheduledTasks, workable);
+    const { updates, reasons } = assignTaskTimes(unscheduledTasks, workable);
     if (Object.keys(updates).length === 0) {
       setScheduleStatus({
         slotted: 0,
         unscheduled: unscheduledTasks.length,
         total: unscheduledTasks.length,
+        items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: reasons[t.id] })),
+        algorithm: "greedy regret-priority",
       });
-      setTimeout(() => setScheduleStatus(null), 4000);
+      setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
       return;
     }
     setTasks(prev => prev.map(t =>
@@ -19284,8 +19400,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       slotted: Object.keys(updates).length,
       unscheduled: unscheduledTasks.length - Object.keys(updates).length,
       total: unscheduledTasks.length,
+      items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
+      algorithm: "greedy regret-priority",
     });
-    setTimeout(() => setScheduleStatus(null), 4000);
+    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
   };
 
   // v05.05bt142 — Re-analyze: unschedule every open task, then re-run
@@ -19295,17 +19413,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const reanalyze = () => {
     const open = myTasks.filter(t => !t.completedAt);
     if (open.length === 0) return;
-    // Strip scheduledTime for the open set so getWorkableBlocks /
-    // assignTaskTimes treat the day as a blank canvas around routines
-    // and meetings.
     const openStripped = open.map(t => ({ ...t, scheduledTime: null }));
     const workable = getWorkableBlocks();
     if (workable.length === 0) {
-      setScheduleStatus({ slotted: 0, unscheduled: open.length, total: open.length, reanalyzed: true });
-      setTimeout(() => setScheduleStatus(null), 4000);
+      setScheduleStatus({
+        slotted: 0,
+        unscheduled: open.length,
+        total: open.length,
+        reanalyzed: true,
+        items: open.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: "no free blocks today — fully booked" })),
+        algorithm: "greedy regret-priority",
+      });
+      setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
       return;
     }
-    const updates = assignTaskTimes(openStripped, workable);
+    const { updates, reasons } = assignTaskTimes(openStripped, workable);
     const openIds = new Set(open.map(t => t.id));
     setTasks(prev => prev.map(t => {
       if (!openIds.has(t.id)) return t;
@@ -19316,50 +19438,46 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       unscheduled: open.length - Object.keys(updates).length,
       total: open.length,
       reanalyzed: true,
+      items: open.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
+      algorithm: "greedy regret-priority",
     });
-    setTimeout(() => setScheduleStatus(null), 4000);
+    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
   };
 
-  // v05.05bt143 — Monday.com CSV export simplified per chat. Only the
-  // first two columns (Task, Scheduled Time) are needed; the rest of
-  // the board has its own columns Mommy fills in directly. Also: only
-  // export tasks (not routines/meetings — those live in the calendar,
-  // not on the Monday board).
+  // v05.05bt150 — Monday export rewritten per chat. CSV with two
+  // columns was pasting into Monday as a single cell (Monday's paste
+  // handler didn't parse the commas — likely opening a wrapping issue
+  // with quoted fields). Switching to PLAIN TEXT: one task per line
+  // in the format `Task title [Scheduled Time]`. Mommy can paste the
+  // whole block into Monday's first column and the time is right there
+  // to copy-paste into the time column afterwards.
   const exportMondayCsv = () => {
     const fmt12hr = d => {
       const h = d.getHours(), m = d.getMinutes();
       const h12 = ((h + 11) % 12) + 1;
       return `${h12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
     };
-
-    const header = ["Task", "Scheduled Time"];
-    const rows = [header];
-
+    const lines = [];
     // Scheduled tasks first (from timeline), then unscheduled pile.
     for (const slot of dayTimeline) {
       if (slot.kind !== "task") continue;
-      rows.push([slot.title, fmt12hr(slot.start)]);
+      lines.push(`${slot.title} [${fmt12hr(slot.start)}]`);
     }
     for (const t of unscheduledTasks) {
       if (t.completedAt) continue;
-      rows.push([t.title, ""]);
+      lines.push(`${t.title} [unscheduled]`);
     }
-
-    const csv = rows.map(r => r.map(c => {
-      const s = String(c || "");
-      return s.includes(",") || s.includes('"') || s.includes("\n")
-        ? `"${s.replace(/"/g, '""')}"`
-        : s;
-    }).join(",")).join("\n");
+    const text = lines.join("\n");
 
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(csv).then(() => {
-        setCopyStatus("Monday CSV copied");
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyStatus("Monday list copied");
         setTimeout(() => setCopyStatus(null), 2500);
       }).catch(() => {
-        setCopyStatus("failed");
-        setTimeout(() => setCopyStatus(null), 2500);
+        setMondayCsvFallback(text);
       });
+    } else {
+      setMondayCsvFallback(text);
     }
   };
 
@@ -19479,65 +19597,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         background: C.paper, borderRadius: 12, padding: 16,
         border: `1px solid ${C.line}15`,
       }}>
-        {/* v05.05bt140 — Header simplified. The "N adjustments from
-            base" meta + Today's Ledger h1 + DAY VIEW pill all dropped
-            in earlier builds. Only the ⋯ overflow menu remains, and
-            it floats minimally in the top-right of the card. */}
-        <div style={{
-          display: "flex", justifyContent: "flex-end", alignItems: "flex-start",
-          marginBottom: 12,
-        }}>
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowActionsMenu(s => !s)}
-              style={{
-                background: "transparent",
-                color: C.muted,
-                border: `1px solid ${C.line}33`,
-                borderRadius: 8, padding: "6px 10px",
-                fontSize: 14, fontWeight: 600, cursor: "pointer",
-                fontFamily: "inherit", lineHeight: 1,
-              }}
-              title="More actions">
-              ⋯
-            </button>
-            {showActionsMenu && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 4px)", right: 0,
-                background: "#FBF5E9",
-                border: `1px solid ${C.line}55`,
-                borderRadius: 10, padding: 4, minWidth: 200,
-                boxShadow: "0 8px 24px -8px rgba(61, 49, 40, 0.18)",
-                zIndex: 10,
-              }}>
-                {[
-                  { icon: "⚙", label: "Today's setup", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
-                  { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
-                  // v05.05bt146 — Brain dump moved from FAB into menu
-                  { icon: "✎", label: "Brain dump", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
-                  { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
-                ].map(item => (
-                  <button key={item.label}
-                    onClick={item.onClick}
-                    disabled={item.disabled}
-                    style={{
-                      width: "100%", display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 12px",
-                      background: "transparent",
-                      border: "none", borderRadius: 6,
-                      cursor: item.disabled ? "not-allowed" : "pointer",
-                      opacity: item.disabled ? 0.4 : 1,
-                      fontFamily: "inherit", fontSize: 13,
-                      color: C.ink, textAlign: "left",
-                    }}>
-                    <span style={{ color: C.gold, width: 16, textAlign: "center" }}>{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            </div>
-        </div>
+        {/* v05.05bt148 — Standalone ⋯ row dropped per chat. ⋯ now lives
+            inline with the "Today" header below (next to the title). */}
 
         {/* v05.05bt140 — Standalone "Add a task or jot" pill removed.
             The + add affordance now lives in the action strip just
@@ -19939,7 +20000,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               <div style={{
                 display: "flex", alignItems: "baseline", gap: 12,
                 borderBottom: `1px solid ${C.line}22`,
-                paddingBottom: 10, marginBottom: 12,
+                paddingBottom: 6, marginBottom: 6,
               }}>
                 <span style={{
                   fontFamily: "'Cormorant Garamond', serif",
@@ -19947,14 +20008,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   fontSize: 20, color: C.ink,
                   letterSpacing: "-0.01em",
                 }}>
-                  Open Blocks
-                </span>
-                <span style={{
-                  fontSize: 9, color: "#7C6B5A", letterSpacing: "0.26em",
-                  textTransform: "uppercase", fontWeight: 700,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>
-                  Suggestions
+                  Open blocks
                 </span>
                 <button
                   onClick={() => setShowOpenBlocks(false)}
@@ -19968,6 +20022,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   }}>
                   hide
                 </button>
+              </div>
+              {/* v05.05bt149 — Intro copy explaining what this panel
+                  does. Per chat: "the open blocks suggestions is still
+                  not intuitive to me what this doing and where i should
+                  intervene." */}
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 12.5,
+                color: "#7C6B5A", lineHeight: 1.45,
+                marginBottom: 12,
+              }}>
+                These are <strong style={{ fontStyle: "normal", color: C.ink }}>your free windows today</strong> — gaps between routines and meetings. Tap any block to fill it with a task, or accept the suggestion the engine picked from your queue.
               </div>
               {blockMatches.slice(0, 4).map((b, i) => (
                 <div key={i} style={{
@@ -20190,8 +20256,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
           // Best next move — top unfinished scheduled task at/after now, or
           // top unscheduled task by regret
           const upcomingScheduled = scheduledTasks.find(t => !t.completedAt && t.end > now);
-          const topUnscheduled = unscheduledTasks[0]; // already sorted by regret
-          const nextMove = upcomingScheduled || topUnscheduled;
+          // v05.05bt148 — BNM now ALWAYS the next scheduled task per chat
+          // ("how come Best Next Move is not the same as the schedule?").
+          // Was: upcomingScheduled || topUnscheduled[0]. Now: scheduled-only.
+          // If nothing's scheduled, the empty-state copy invites the user
+          // to schedule something rather than showing an off-schedule pick.
+          const nextMove = upcomingScheduled;
 
           const tag = getBlockTag(currentSlot);
           const ownerForCurrentColor = onsite ? C.gold : (mommyShift ? C.mommy : daddyShift ? C.daddy : C.muted);
@@ -20284,14 +20354,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   RIGHT NOW
                 </div>
 
-                {/* Time range — mauve. v05.05bt131 — sized down for the
-                    narrower split column. */}
+                {/* v05.05bt152 — Right Now now shows WHAT'S happening,
+                    not just a naked time range. Per chat: "i still dont
+                    know what the right now current block is supposed to
+                    tell us". Title of the current slot leads, time is
+                    secondary. Free → italic "Open block · 10–11a"
+                    Routine → "Cooking · 12–1p", Task → "{task} · 9–10a",
+                    Meeting → "{meeting} · 2–3p". */}
                 <div style={{
                   fontFamily: "'Cormorant Garamond', serif",
-                  fontWeight: 500, fontSize: 20,
-                  color: C.mommy,
-                  lineHeight: 1.0, marginBottom: 10,
-                  letterSpacing: "-0.01em",
+                  fontWeight: 500, fontSize: 18,
+                  fontStyle: currentSlot.kind === "free" || currentSlot.kind === "routine" ? "italic" : "normal",
+                  color: currentSlot.kind === "free" ? C.gold : C.mommy,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.005em",
+                  marginBottom: 3,
+                  overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {currentSlot.kind === "free" ? "Open block" : currentSlot.title}
+                </div>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10.5, color: "#7C6B5A",
+                  fontWeight: 600, letterSpacing: "0.02em",
+                  marginBottom: 10,
                 }}>
                   {fmtTimeShort(currentSlot.start)}–{fmtTimeShort(currentSlot.end)}
                 </div>
@@ -20448,12 +20535,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     const end = new Date(start.getTime() + (nextMove.effortMin || 30) * 60000);
                     const diffStartMin = Math.round((start - now) / 60000);
                     const diffEndMin = Math.round((end - now) / 60000);
-                    let label, color;
+                    // v05.05bt152 — Three regimes for the BNM time pill,
+                    // per chat ("the next move starts in 5 hours??"):
+                    //   urgent  ( <90m to start ) → red/gold pill, prominent
+                    //   soon    ( 90m – 3h )     → mono mauve, calm
+                    //   distant ( >3h )          → italic muted "quiet stretch"
+                    //   ongoing                  → green "Xm left"
+                    //   past                     → coral "ran over"
+                    // For distant + unscheduled tasks waiting, the
+                    // copy invites filling the gap.
+                    let label, color, style = "pill";
                     if (diffStartMin > 0) {
-                      label = diffStartMin >= 60
-                        ? `starts in ${fmtDurationHM(diffStartMin)}`
-                        : `starts in ${diffStartMin}m`;
-                      color = C.gold;
+                      const hasUnscheduled = unscheduledTasks && unscheduledTasks.length > 0;
+                      if (diffStartMin <= 90) {
+                        label = `starts in ${diffStartMin >= 60 ? fmtDurationHM(diffStartMin) : diffStartMin + "m"}`;
+                        color = C.gold;
+                      } else if (diffStartMin <= 180) {
+                        label = `at ${fmtTimeShort(start)}`;
+                        color = C.mommy;
+                        style = "flat";
+                      } else {
+                        label = hasUnscheduled
+                          ? `${fmtDurationHM(diffStartMin)} until next task — slot something?`
+                          : `Quiet till ${fmtTimeShort(start)} (${fmtDurationHM(diffStartMin)})`;
+                        color = "#7C6B5A";
+                        style = "flat";
+                      }
                     } else if (diffEndMin > 0) {
                       label = diffEndMin >= 60
                         ? `${fmtDurationHM(diffEndMin)} left`
@@ -20462,6 +20569,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     } else {
                       label = `ran over by ${Math.abs(diffEndMin)}m`;
                       color = "#B85040";
+                    }
+                    if (style === "flat") {
+                      return (
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontStyle: "italic", fontSize: 12,
+                          color, marginBottom: 8, lineHeight: 1.4,
+                        }}>{label}</div>
+                      );
                     }
                     return (
                       <div style={{
@@ -20561,26 +20677,130 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         {scheduleStatus && (
           <div style={{
             background: scheduleStatus.slotted === scheduleStatus.total
-              ? "rgba(123, 155, 110, 0.08)" // sage = all slotted
+              ? "rgba(123, 155, 110, 0.12)"
               : scheduleStatus.slotted > 0
-                ? `${C.gold}10` // gold = partial
-                : "rgba(193, 141, 122, 0.08)", // coral = none fit
-            border: `1px solid ${scheduleStatus.slotted === scheduleStatus.total
-              ? "rgba(123, 155, 110, 0.3)"
+                ? `${C.gold}18`
+                : "rgba(193, 141, 122, 0.12)",
+            border: `1.5px solid ${scheduleStatus.slotted === scheduleStatus.total
+              ? "rgba(123, 155, 110, 0.45)"
               : scheduleStatus.slotted > 0
-                ? C.gold + "3a"
-                : "rgba(193, 141, 122, 0.3)"}`,
-            borderRadius: 10, padding: "10px 14px", marginBottom: 14,
-            fontSize: 12, color: C.ink, lineHeight: 1.5,
+                ? C.gold + "55"
+                : "rgba(193, 141, 122, 0.5)"}`,
+            borderRadius: 10, padding: "11px 14px", marginBottom: 14,
+            fontSize: 12.5, color: C.ink, lineHeight: 1.45,
             fontFamily: "'Cormorant Garamond', serif",
             fontStyle: "italic",
           }}>
+            {scheduleStatus.reanalyzed && (
+              <span style={{
+                display: "inline-block",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontStyle: "normal", fontSize: 9,
+                letterSpacing: "0.22em", textTransform: "uppercase",
+                color: C.mommy, fontWeight: 700,
+                marginRight: 8,
+                background: `${C.mommy}15`,
+                padding: "2px 8px", borderRadius: 999,
+              }}>
+                ✦ Re-analyzed
+              </span>
+            )}
             {scheduleStatus.slotted === scheduleStatus.total ? (
-              <>✓ All <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.slotted}</strong> task{scheduleStatus.total !== 1 ? "s" : ""} slotted into Your Day.</>
+              <>
+                All <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.slotted}</strong> task{scheduleStatus.total !== 1 ? "s" : ""} fit into your day.{" "}
+                {scheduleStatus.items && (
+                  <button onClick={() => setScheduleStatusOpen(o => !o)} style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontFamily: "inherit", fontStyle: "italic", fontSize: 12,
+                    color: C.mommy, cursor: "pointer",
+                    borderBottom: `1px dotted ${C.mommy}`,
+                  }}>{scheduleStatusOpen ? "hide details" : "show details"}</button>
+                )}
+              </>
             ) : scheduleStatus.slotted > 0 ? (
-              <>✓ <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.slotted}</strong> slotted · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.unscheduled}</strong> didn't fit (no block big enough — see Unscheduled pile).</>
+              <>
+                <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.slotted}</strong> slotted ·{" "}
+                <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.unscheduled}</strong> didn't fit.{" "}
+                {scheduleStatus.items && (
+                  <button onClick={() => setScheduleStatusOpen(o => !o)} style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontFamily: "inherit", fontStyle: "italic", fontSize: 12,
+                    color: C.mommy, cursor: "pointer",
+                    borderBottom: `1px dotted ${C.mommy}`,
+                  }}>{scheduleStatusOpen ? "hide why" : "show why"}</button>
+                )}
+              </>
             ) : (
-              <>⚠ <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.unscheduled}</strong> task{scheduleStatus.unscheduled !== 1 ? "s" : ""} didn't fit — your day is fully booked. Check Unscheduled pile or shorten effort estimates.</>
+              <>
+                ⚠ <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{scheduleStatus.unscheduled}</strong> task{scheduleStatus.unscheduled !== 1 ? "s" : ""} didn't fit.{" "}
+                {scheduleStatus.items && (
+                  <button onClick={() => setScheduleStatusOpen(o => !o)} style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontFamily: "inherit", fontStyle: "italic", fontSize: 12,
+                    color: C.mommy, cursor: "pointer",
+                    borderBottom: `1px dotted ${C.mommy}`,
+                  }}>{scheduleStatusOpen ? "hide why" : "show why"}</button>
+                )}
+              </>
+            )}
+            {/* v05.05bt151 — Expandable detail: algorithm name + per-task
+                reason. Shows where each task landed and why anything
+                that didn't fit was left out. */}
+            {scheduleStatus.items && scheduleStatusOpen && (
+              <div style={{
+                marginTop: 10, paddingTop: 10,
+                borderTop: `1px solid ${C.line}55`,
+                fontStyle: "normal", fontSize: 11.5, lineHeight: 1.55,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.22em",
+                  textTransform: "uppercase", fontWeight: 700,
+                  color: C.muted, marginBottom: 6,
+                }}>
+                  Algorithm · {scheduleStatus.algorithm || "greedy regret-priority"}
+                </div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 11.5, color: "#7C6B5A",
+                  marginBottom: 10, lineHeight: 1.5,
+                }}>
+                  Highest-regret task first. If two tasks have the same regret, the higher-focus one goes first. Each task claims the earliest free block big enough to hold it. Block focus level is informational, not a filter — partner-on-duty time is treated as your focus opportunity regardless of clock.
+                </div>
+                <div style={{
+                  display: "flex", flexDirection: "column", gap: 5,
+                }}>
+                  {scheduleStatus.items.map(item => (
+                    <div key={item.id} style={{
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr",
+                      gap: 8, alignItems: "flex-start",
+                    }}>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11, fontWeight: 700,
+                        color: item.scheduled ? "#7B9B6E" : "#B85040",
+                        flexShrink: 0,
+                        width: 18, textAlign: "center", lineHeight: 1.4,
+                      }}>{item.scheduled ? "✓" : "×"}</span>
+                      <div>
+                        <span style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 13, color: C.ink, fontWeight: 500,
+                        }}>{item.title}</span>
+                        {item.reason && (
+                          <span style={{
+                            display: "block",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, color: "#7C6B5A",
+                            lineHeight: 1.45, marginTop: 2,
+                          }}>{item.reason}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -20596,13 +20816,65 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               const routineCount = dayTimeline.filter(s => s.kind === "routine").length;
               return (
                 <div style={{ marginBottom: 14, padding: "0 4px" }}>
-                  <h1 style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontWeight: 500,
-                    fontSize: 24, color: C.ink,
-                    margin: 0, lineHeight: 1.05,
-                    letterSpacing: "-0.015em",
-                  }}>Today</h1>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <h1 style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontWeight: 500,
+                      fontSize: 24, color: C.ink,
+                      margin: 0, lineHeight: 1.05,
+                      letterSpacing: "-0.015em",
+                    }}>Today</h1>
+                    {/* v05.05bt148 — ⋯ menu moved inline with the
+                        Today heading. Always visible, never in an
+                        awkward floating corner. */}
+                    <div style={{ position: "relative" }}>
+                      <button
+                        onClick={() => setShowActionsMenu(s => !s)}
+                        style={{
+                          background: "transparent",
+                          color: C.muted,
+                          border: `1px solid ${C.line}33`,
+                          borderRadius: 8, padding: "5px 10px",
+                          fontSize: 14, fontWeight: 600, cursor: "pointer",
+                          fontFamily: "inherit", lineHeight: 1,
+                        }}
+                        title="More actions">⋯</button>
+                      {showActionsMenu && (
+                        <div style={{
+                          position: "absolute", top: "calc(100% + 4px)", right: 0,
+                          background: "#FBF5E9",
+                          border: `1px solid ${C.line}55`,
+                          borderRadius: 10, padding: 4, minWidth: 200,
+                          boxShadow: "0 8px 24px -8px rgba(61, 49, 40, 0.18)",
+                          zIndex: 10,
+                        }}>
+                          {[
+                            { icon: "⚙", label: "Today's setup", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
+                            { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
+                            { icon: "✎", label: "Brain dump", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
+                            { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
+                          ].map(item => (
+                            <button key={item.label}
+                              onClick={item.onClick}
+                              disabled={item.disabled}
+                              style={{
+                                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                                padding: "10px 12px",
+                                background: "transparent",
+                                border: "none", borderRadius: 6,
+                                cursor: item.disabled ? "not-allowed" : "pointer",
+                                opacity: item.disabled ? 0.4 : 1,
+                                fontFamily: "inherit", fontSize: 13,
+                                color: C.ink, textAlign: "left",
+                              }}>
+                              <span style={{ color: C.gold, width: 16, textAlign: "center" }}>{item.icon}</span>
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div style={{
                     marginTop: 3,
                     fontFamily: "'JetBrains Mono', monospace",
@@ -20628,6 +20900,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         </button>
                       </>
                     )}
+                    {/* v05.05bt148 — Secondary discoverable add-task
+                        affordance per chat. Same as the FAB but
+                        always visible in the page flow. */}
+                    {" · "}
+                    <button
+                      onClick={() => setShowNlInput(true)}
+                      style={{
+                        background: "transparent", border: "none",
+                        padding: 0, color: C.mommy,
+                        fontFamily: "inherit", fontSize: "inherit",
+                        fontWeight: 700, cursor: "pointer",
+                        letterSpacing: "inherit",
+                        borderBottom: `1px dotted ${C.mommy}`,
+                        paddingBottom: 1,
+                      }}>+ add task</button>
                   </div>
                 </div>
               );
@@ -20845,17 +21132,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                             title="Delete this task">DELETE</button>
                         </div>
                       )}
-                      {/* v05.05bt146 — Colored left rail. 2px tall hairline,
-                          inset 6px top/bottom. Color encodes on-duty parent:
-                          mauve = Mommy, blue = Daddy, gold = joint, gray = routine.
-                          Matches the avatar circle in Right Now card so no
-                          legend is needed. */}
+                      {/* v05.05bt148/149 — Colored left rail.
+                          Tasks: solid rail.
+                          Free blocks: faded rail + the row gets a
+                            subtle background tint so it visually
+                            separates from solid routines/tasks.
+                          Routines: gray rail (no person owns it).
+                          Color encodes on-duty parent. */}
                       <div style={{
                         position: "absolute",
                         left: 0, top: 6, bottom: 6, width: 2,
                         borderRadius: 1,
                         background:
-                          isFree ? "transparent"
+                          isFree ? (owner === "Daddy" ? `${C.daddy}88` : owner === "joint" ? `${C.gold}88` : owner === "Mommy" ? `${C.mommy}88` : `${C.line}66`)
                           : isTask ? (owner === "Daddy" ? C.daddy : owner === "joint" ? C.gold : C.mommy)
                           : "rgba(201,187,164,0.55)",
                         zIndex: 1,
@@ -20869,15 +21158,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       display: "grid",
                       gridTemplateColumns: "54px 1fr auto",
                       gap: 10, padding: "9px 8px 9px 12px",
-                      // v05.05bt146 — Card containers dropped. Rows separated
-                      // by single hairline borderBottom. Visual emphasis comes
-                      // from the left rail (above) + focus dot + regret color.
+                      // v05.05bt149 — Free blocks get a soft gold tint
+                      // background so they visually pop from routines
+                      // (which sit on transparent paper). Solid solid
+                      // routines vs tinted dashed free = quick scan.
                       background:
                         isDropTarget && isFree ? `${C.mommy}10`
                         : isDropTarget ? `${C.mommy}0a`
                         : justMoved ? `${C.gold}1c`
+                        : isFree ? `${C.gold}08`
                         : "transparent",
-                      borderBottom: `1px solid ${isDropTarget ? C.mommy + "50" : C.line + "22"}`,
+                      borderBottom: `1px ${isFree ? "dashed" : "solid"} ${isDropTarget ? C.mommy + "50" : isFree ? C.gold + "22" : C.line + "22"}`,
                       borderTop: isDropTarget && isFree ? `1px dashed ${C.mommy}` : "none",
                       alignItems: "center",
                       cursor: isBeingDragged ? "grabbing" : (isFree ? "pointer" : (isTask && !slot.completedAt ? "grab" : "default")),
@@ -21008,9 +21299,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                                 }} />
                             );
                           })()}
+                          {isTask && !slot.completedAt && inlineTitleEdit === slot.id ? (
+                            <input
+                              type="text"
+                              defaultValue={slot.title}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                              onBlur={(e) => commitInlineTitle(slot.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitInlineTitle(slot.id, e.target.value);
+                                if (e.key === "Escape") setInlineTitleEdit(null);
+                              }}
+                              style={{
+                                flex: 1, minWidth: 0,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 15, fontWeight: 500,
+                                color: C.ink,
+                                border: `1.5px solid ${C.mommy}`,
+                                borderRadius: 6, padding: "3px 8px",
+                                background: "#FBF5E9",
+                                letterSpacing: "-0.005em",
+                              }}
+                            />
+                          ) : (
                           <span
                             onClick={(isTask && !slot.completedAt)
-                              ? (e) => { e.stopPropagation(); setEditingTask(slot); }
+                              ? (e) => { e.stopPropagation(); setInlineTitleEdit(slot.id); }
                               : isRoutine
                                 ? (e) => { e.stopPropagation(); setEditingRoutine(slot); }
                                 : undefined}
@@ -21031,40 +21345,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                           }}
-                          title={(isTask && !slot.completedAt) ? "Tap to edit" : isRoutine ? "Tap to adjust today" : null}>
-                            {isFree ? "Open Block" : slot.title}
+                          title={(isTask && !slot.completedAt) ? "Tap to edit name" : isRoutine ? "Tap to adjust today" : null}>
+                            {isFree ? (
+                              <span style={{ color: C.gold, fontWeight: 500 }}>
+                                + Open · tap to fill
+                              </span>
+                            ) : slot.title}
+                            {isTask && recentlyMovedIds.has(slot.id) && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9, color: C.gold,
+                                fontWeight: 700, marginLeft: 6,
+                                letterSpacing: "0.08em",
+                              }}>· moved</span>
+                            )}
                             {isRoutine && slot.overridden && (
                               <span style={{ fontSize: 8.5, color: C.gold, marginLeft: 6, letterSpacing: "0.12em", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
                                 ADJ
                               </span>
                             )}
                           </span>
+                          )}
                         </div>
-                        {/* Sub-context — v05.05bt146: kept ONLY for free
-                            blocks (the "tap to fill" affordance). All
-                            other rows drop the meta line; their
-                            context lives in the left rail color + the
-                            edit modal. */}
-                        {isFree && (
-                          <div style={{
-                            fontSize: 10, color: C.muted,
-                            marginTop: 2, lineHeight: 1.35,
-                            fontStyle: "italic",
-                            fontFamily: "'Cormorant Garamond', serif",
-                          }}>
-                            {blockFocus === "high" ? "high-energy" :
-                             blockFocus === "low"  ? "low-focus" :
-                                                     "steady-focus"}
-                            {" — tap to fill"}
-                          </div>
-                        )}
+                        {/* v05.05bt149 — Sub-context dropped from free
+                            blocks since the title now reads "+ Open ·
+                            tap to fill" (clear affordance, no need for
+                            a second line). The focus-level info still
+                            lives in the why-here panel when a task is
+                            placed in this slot. */}
                       </div>
 
-                      {/* v05.05bt147 — Right column: regret as colored
-                          mono text + a dedicated DRAG GRIP. Drag only
-                          activates from the grip (not from tapping the
-                          row itself). Solves the "accidentally drag
-                          while reading" problem. */}
+                      {/* v05.05bt152 — Persistent × delete REMOVED from
+                            timeline rows per chat (too easy to mis-tap).
+                            Delete now lives in the All Tasks sub-tab
+                            only, where it has space + isn't competing
+                            with quick-edit affordances. Right column
+                            here just shows regret + drag grip. */}
                       <div style={{
                         display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
@@ -21112,12 +21428,65 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 return rows;
               })()}
             </div>
+            {/* v05.05bt148/152 — Legend per chat. Persistent footer
+                explaining the left-rail colors AND the focus dot colors. */}
+            <div style={{
+              marginTop: 14, padding: "10px 12px",
+              background: `${C.line}10`,
+              borderRadius: 8,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, color: "#7C6B5A",
+              letterSpacing: "0.08em",
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "6px 14px",
+                justifyContent: "center", alignItems: "center",
+              }}>
+                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>RAILS</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 10, height: 2, background: C.mommy, borderRadius: 1 }} />
+                  <span>Mommy</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 10, height: 2, background: C.daddy, borderRadius: 1 }} />
+                  <span>Daddy</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 10, height: 2, background: C.gold, borderRadius: 1 }} />
+                  <span>Joint</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 10, height: 2, background: "rgba(201,187,164,0.6)", borderRadius: 1 }} />
+                  <span>Routine</span>
+                </span>
+              </div>
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "6px 14px",
+                justifyContent: "center", alignItems: "center",
+                borderTop: `1px solid ${C.line}33`, paddingTop: 6,
+              }}>
+                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>FOCUS DOT</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.mommy }} />
+                  <span>Deep</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold }} />
+                  <span>Medium</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
+                  <span>Light</span>
+                </span>
+              </div>
+            </div>
             <div style={{
               fontFamily: "'Cormorant Garamond', serif",
               fontSize: 11, color: "rgba(124,107,90,0.6)",
-              marginTop: 14, fontStyle: "italic", textAlign: "center",
+              marginTop: 8, fontStyle: "italic", textAlign: "center",
             }}>
-              Tap time, focus, or regret to edit · grab ⋮⋮ to drag · swipe ← to delete.
+              Tap title/time/focus/regret to edit · grab ⋮⋮ to drag · delete from All Tasks.
             </div>
           </div>
         )}
@@ -21468,6 +21837,104 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         }}
         title="Add a task"
         aria-label="Add task">+</button>
+      )}
+
+      {/* v05.05bt148 — Monday CSV manual-copy fallback. When the
+          clipboard API fails (common on iOS Safari after menu nav),
+          show the CSV in a selectable textarea with a Select-all
+          helper button so the user can manually copy/paste. */}
+      {mondayCsvFallback && (
+        <div
+          onClick={() => setMondayCsvFallback(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(61, 49, 40, 0.4)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+          }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.paper, color: C.ink,
+              borderRadius: 14, padding: "20px 18px",
+              maxWidth: 480, width: "100%",
+              border: `1px solid ${C.line}55`,
+              boxShadow: "0 24px 64px -16px rgba(0,0,0,0.35)",
+            }}>
+            <div style={{
+              display: "flex", alignItems: "baseline", justifyContent: "space-between",
+              marginBottom: 8,
+            }}>
+              <h2 style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontWeight: 500,
+                fontSize: 20, color: C.ink, margin: 0,
+              }}>Monday CSV</h2>
+              <button onClick={() => setMondayCsvFallback(null)}
+                style={{
+                  background: "transparent", border: "none",
+                  color: C.muted, fontSize: 18, cursor: "pointer",
+                  padding: 4, lineHeight: 1,
+                }}>×</button>
+            </div>
+            <div style={{
+              fontSize: 12, color: "#7C6B5A", marginBottom: 10,
+              lineHeight: 1.5,
+              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+            }}>
+              Your phone blocked auto-copy. Tap "Select all", then copy and paste into Monday.
+            </div>
+            <textarea
+              readOnly
+              value={mondayCsvFallback}
+              onClick={(e) => e.target.select()}
+              style={{
+                width: "100%", height: 160,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, lineHeight: 1.4,
+                padding: "10px 12px",
+                border: `1px solid ${C.line}55`,
+                borderRadius: 8,
+                background: "#FBF5E9",
+                color: C.ink,
+                resize: "vertical",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                onClick={(e) => {
+                  const ta = e.currentTarget.parentElement.previousElementSibling;
+                  ta.select();
+                  ta.setSelectionRange(0, 99999);
+                  try {
+                    document.execCommand("copy");
+                    setCopyStatus("CSV copied");
+                    setTimeout(() => setCopyStatus(null), 2500);
+                    setMondayCsvFallback(null);
+                  } catch {
+                    // Stay open; user can manually copy after Select All
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  background: C.mommy, color: "#fff", border: "none",
+                  borderRadius: 8, padding: "10px",
+                  fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+                  cursor: "pointer", letterSpacing: "0.04em",
+                }}>Select all & copy</button>
+              <button
+                onClick={() => setMondayCsvFallback(null)}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.line}55`,
+                  borderRadius: 8, padding: "10px 14px",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 13,
+                  color: "#7C6B5A", cursor: "pointer",
+                }}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showBrainDump && (
@@ -22011,8 +22478,6 @@ function SplitTaskModal({ C, task, onClose, onApply }) {
 // under a "▸ Advanced" toggle for power users — defaults work fine for
 // most cases (parser-detected effort, no specific time, auto focus).
 function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
   const regretMeta = {
     1: { label: "Tomorrow's fine", color: C.muted },
     2: { label: "Prefer today", color: C.muted },
@@ -22029,63 +22494,81 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
   };
 
   const selectStyle = {
-    padding: "6px 8px",
-    border: `1px solid ${C.line}33`, borderRadius: 6,
-    fontSize: 12, background: C.bg, color: C.ink,
-    fontFamily: "inherit", cursor: "pointer",
+    padding: "6px 6px",
+    border: `1px solid ${C.line}55`, borderRadius: 6,
+    fontSize: 11, background: "#FBF5E9", color: C.ink,
+    fontFamily: "'JetBrains Mono', monospace", cursor: "pointer",
     appearance: "auto",
+    minWidth: 0,
   };
 
   return (
-    <ModalShell C={C} onClose={onCancel} title={`Review ${pending.length} task${pending.length !== 1 ? "s" : ""}`}>
-      {/* Regret legend — always visible so user doesn't have to remember */}
+    <ModalShell C={C} onClose={onCancel} title={`Review ${pending.length} task${pending.length !== 1 ? "s" : ""}`} placement="center">
+      {/* v05.05bt151 — Compact legend explaining what each control does.
+          Was a "Priority scale" callout; now also covers focus + effort
+          so the user knows what they're setting in one line. */}
       <div style={{
-        background: `${C.gold}08`,
-        border: `1px solid ${C.gold}22`,
+        background: `${C.line}10`,
+        border: `1px solid ${C.line}30`,
         borderRadius: 8, padding: "8px 10px",
-        fontSize: 10, color: C.ink, lineHeight: 1.5,
+        fontSize: 10, color: "#7C6B5A", lineHeight: 1.5,
         marginBottom: 12,
+        fontFamily: "'Cormorant Garamond', serif",
+        fontStyle: "italic",
       }}>
-        <strong style={{ letterSpacing: "0.1em", textTransform: "uppercase", fontSize: 9, color: C.muted }}>
-          Priority scale
-        </strong>
-        <div style={{ marginTop: 2 }}>
-          <span style={{ color: C.muted }}>1</span> tomorrow's fine ·{" "}
-          <span style={{ color: C.gold }}>3</span> slightly behind ·{" "}
-          <span style={{ color: "#A04848" }}>5</span> cannot push
-        </div>
+        Each row: title · effort · focus · priority. <strong style={{ color: C.gold, fontStyle: "normal" }}>1</strong> = tomorrow's fine · <strong style={{ color: C.gold, fontStyle: "normal" }}>3</strong> = slightly behind · <strong style={{ color: "#A04848", fontStyle: "normal" }}>5</strong> = cannot push.
       </div>
 
-      {/* Slim task rows — title + regret + remove */}
+      {/* v05.05bt151 — Single-line per task: title input + effort select +
+          focus select + regret select + × delete. All inline, no advanced
+          toggle. Title takes most of the room; the three selects are
+          fixed-width and compact. */}
       {pending.map((p, idx) => (
         <div key={idx} style={{
-          display: "flex", gap: 6, marginBottom: 6, alignItems: "center",
+          display: "grid",
+          gridTemplateColumns: "1fr auto auto auto auto",
+          gap: 4, marginBottom: 6, alignItems: "center",
         }}>
-          <span style={{
-            fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
-            minWidth: 14, textAlign: "right",
-          }}>{idx + 1}</span>
           <input
             type="text"
             value={p.title}
             onChange={e => update(idx, { title: e.target.value })}
             style={{
-              flex: 1,
               padding: "8px 10px",
               border: `1px solid ${C.line}33`,
               borderRadius: 6,
               fontSize: 13, background: C.bg, color: C.ink,
-              fontFamily: "inherit",
+              fontFamily: "'Cormorant Garamond', serif",
               minWidth: 0,
             }}
+            placeholder={`Task ${idx + 1}`}
           />
+          <select
+            value={p.effortMin}
+            onChange={e => update(idx, { effortMin: Number(e.target.value) })}
+            style={{ ...selectStyle, width: 56 }}
+            title="Effort">
+            {[15, 30, 45, 60, 90, 120].map(m => (
+              <option key={m} value={m}>{m < 60 ? `${m}m` : `${m / 60}h`}</option>
+            ))}
+          </select>
+          <select
+            value={p.focusLevel || "auto"}
+            onChange={e => update(idx, { focusLevel: e.target.value })}
+            style={{ ...selectStyle, width: 64 }}
+            title="Focus">
+            <option value="auto">auto</option>
+            <option value="high">deep</option>
+            <option value="medium">med</option>
+            <option value="low">light</option>
+          </select>
           <select
             value={p.regretScore}
             onChange={e => update(idx, { regretScore: Number(e.target.value) })}
             style={{
               ...selectStyle,
               borderLeft: `3px solid ${regretMeta[p.regretScore].color}`,
-              fontWeight: 700, width: 50, textAlign: "center",
+              fontWeight: 700, width: 42, textAlign: "center",
             }}
             title={regretMeta[p.regretScore].label}>
             <option value={1}>1</option>
@@ -22097,69 +22580,9 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
           <button onClick={() => remove(idx)} style={{
             background: "transparent", border: "none", padding: 4,
             color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1,
-          }} title="Remove">×</button>
+          }} title="Remove this row">×</button>
         </div>
       ))}
-
-      {/* Advanced — effort / time / focus per task. Defaults: parser-detected
-          effort, no specific time, auto focus. Most people don't need this. */}
-      <button
-        onClick={() => setShowAdvanced(s => !s)}
-        style={{
-          background: "transparent", border: "none", padding: "6px 0",
-          color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-          marginTop: 4,
-        }}>
-        {showAdvanced ? "▼" : "▸"} Advanced · per-task effort, time, focus
-      </button>
-      {showAdvanced && (
-        <div style={{ background: `${C.line}05`, borderRadius: 8, padding: 8, marginTop: 4 }}>
-          {pending.map((p, idx) => (
-            <div key={idx} style={{
-              marginBottom: 8, paddingBottom: 8,
-              borderBottom: idx < pending.length - 1 ? `1px solid ${C.line}15` : "none",
-            }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>
-                #{idx + 1} · {p.title.slice(0, 40)}{p.title.length > 40 ? "…" : ""}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
-                <select
-                  value={p.effortMin}
-                  onChange={e => update(idx, { effortMin: Number(e.target.value) })}
-                  style={{ ...selectStyle, width: "100%" }}
-                  title="Effort">
-                  {[15, 30, 45, 60, 90, 120].map(m => (
-                    <option key={m} value={m}>{m < 60 ? `${m}m` : `${m / 60}h`}</option>
-                  ))}
-                </select>
-                <input
-                  type="time"
-                  value={p.scheduledTime || ""}
-                  onChange={e => update(idx, { scheduledTime: e.target.value || null })}
-                  style={{
-                    padding: "6px 8px",
-                    border: `1px solid ${C.line}33`, borderRadius: 6,
-                    fontSize: 11, background: C.bg, color: C.ink,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    width: "100%",
-                  }}
-                  title="Specific time (else auto-slot)"
-                />
-                <select
-                  value={p.focusLevel}
-                  onChange={e => update(idx, { focusLevel: e.target.value })}
-                  style={{ ...selectStyle, width: "100%" }}
-                  title="Focus">
-                  <option value="auto">auto</option>
-                  <option value="high">high</option>
-                  <option value="medium">medium</option>
-                  <option value="low">low</option>
-                </select>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <button onClick={onCommit} disabled={pending.length === 0} style={{
