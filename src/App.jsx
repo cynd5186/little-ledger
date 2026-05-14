@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt160";
+const APP_VERSION = "2026.05.05bt161";
 const APP_BUILD_NOTES = [
-  "NEXT-DAY PLANNING per chat. New TODAY ↔ TOMORROW pill toggle in the Mommy's Day header next to the date heading. Tap TOMORROW to flip the entire timeline forward 24h: tomorrow's routines, tomorrow's meetings, tomorrow's bedtime cascade (wake/sleep settings persist across days, so they auto-apply). Tasks added while TOMORROW is selected get tagged with tomorrow's date and are scoped to that day. They auto-roll into Today the next morning — no migration step needed; the date check just naturally matches the new today. Live UI (Right Now + Best Next Move) is hidden in tomorrow view since it's about live state, not planning. A dashed mauve banner replaces it: 'Planning tomorrow · Wednesday May 15. Tasks added here are tagged for that day.' Existing tasks with no scheduledDate (everything created before this build) stay visible in today's view as legacy/any-day items.",
+  "FIX: free-form textbox now commits in one tap. The 'Add all' button used to open a Review modal as a second step — easy to dismiss or miss entirely, which is why tasks didn't seem to populate. Now: tap the button (labeled 'Add + slot N tasks') and tasks are added immediately with sensible defaults (priority 3, auto-inferred focus). Fine-tune each task by tapping its regret/focus dots on the timeline or opening edit. A small italic link 'set priority + focus before adding' is available below the button if you want to set priority/focus first.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt161", summary: "NL fast-path commit. (1) commitNlPending refactored to accept an optional `pendingOverride` argument; falls back to nlPending state when called with no args (preserving the existing NlReviewModal commit path). (2) addFromNl rewritten: parses nlText, builds pending list with defaults (regretScore 3, focusLevel 'auto'), then calls commitNlPending(pending) directly. No more setNlPending step, no more modal interruption. (3) New reviewBeforeAdding helper: parses + sets nlPending (opens NlReviewModal) for users who want to adjust priority/focus per-task before commit. (4) NL form button label updated from 'Add all' to 'Add + slot N tasks' (matches the review-modal button copy so user knows what's happening). (5) Below the button, a small italic dotted-underline link 'set priority + focus before adding' appears when there are parsed tasks. Tap → opens the review modal. SCOPING: edits scoped to commitNlPending signature, addFromNl rewrite + new reviewBeforeAdding handler, button label + review-first link in NL form. Zero changes to scheduler algorithm, task schema, NlReviewModal component itself (still rendered when nlPending is set), or any other flow. Existing menu Re-analyze still only re-shuffles existing tasks (not pending NL text) — but that's now less confusing since the NL button name is explicit and clicking it commits in one step. Build verified clean via esbuild." },
   { version: "2026.05.05bt160", summary: "NEXT-DAY PLANNING. (1) Module-level helpers: isoDate(d) returns local-time YYYY-MM-DD (NOT UTC, since users think in local time). getReferenceDate(now, dayView) returns Date at 00:00 local on today or tomorrow based on dayView. (2) Task schema gains optional scheduledDate field (YYYY-MM-DD). Legacy tasks have no field → treated as today's. (3) TodayTaskPlanCard new state: dayView (\"today\" | \"tomorrow\"), referenceDate (useMemo from now + dayView), referenceISO (isoDate of referenceDate), isTomorrow (boolean). (4) myTasks filter extended: in tomorrow view, only t.scheduledDate === referenceISO; in today view, !t.scheduledDate || t.scheduledDate === referenceISO. Legacy tasks remain visible in today view. (5) scheduledTasks enrichment anchored off referenceDate instead of `new Date(now).setHours(0)`. (6) dayTimeline useMemo: `const today = referenceDate` (was new Date(now).setHours(0)); todayKey from isoDate(today); routines via getRoutineSlotsForToday(currentUser, onsite, today, ...); meeting filter compares to today.toDateString(); bedtime cascade applied to referenceDate (wake/sleep settings persistent, so they auto-apply to tomorrow). Deps array adds referenceDate. (7) computeFreshWorkableBlocks: same anchor swap. (8) addTask + commitNlPending: new tasks tagged scheduledDate: referenceISO. (9) Header h1 dynamic: \"Today\" or \"Tomorrow\". (10) New toggle pill inside header flex group: 2-button inline-flex with mauve-filled active state. fontFamily Inter, fontSize 9.5, fontWeight 700, letterSpacing 0.18em. Buttons \"TODAY\" / \"TOMORROW\". (11) Right Now + Best Next Move card hidden when isTomorrow; replaced with a small italic dashed-border banner identifying the selected date and explaining what tomorrow-tagged tasks do. SCOPING: TodayTaskPlanCard touch sites are state additions + filter updates + header render + tomorrow-banner conditional. computeFreshWorkableBlocks + dayTimeline are the only scheduler-path changes. Zero changes to C palette, scheduler algorithm, focus colors, drag handlers, AllTasksView. KNOWN LIMITATIONS: cooking/workout toggles in TodaySetupSheet still key off `now`, so opening Setup in tomorrow view edits today's setup record (not tomorrow's). User can wait until tomorrow's actual day to flip those. Tomorrow view doesn't yet render predicted-nap blocks (those derive from today's recent sleep events). Open-blocks panel does respect referenceDate via computeFreshWorkableBlocks. Build verified clean via esbuild." },
   { version: "2026.05.05bt159", summary: "Three changes per chat. (1) BEDTIME CASCADE. Two new module-level helpers. applyBedtimeCascade(routines, lightsOutDate, today): if lightsOut is null returns routines untouched; otherwise iterates, DROPS last-pump entry entirely, re-anchors shutdown to end at lightsOut (start = lightsOut - 30m, dur 30m, overridden flag), re-anchors mommy-pm to end at shutdown.start (start = lightsOut - 60m, dur 30m, overridden flag). Leaves solene-bed, workout, cook, am, commute-in/out untouched — user can resolve conflicts via the existing daily toggles. computeLightsOut(wakeTime, sleepHrs, today): parses HH:MM wake, subtracts sleepHrs, wraps to today's evening, returns Date or null if outside [18,23] hours. Both dayTimeline useMemo and computeFreshWorkableBlocks updated: compute lightsOut + cascade routines + push a separate 15-min 'Lights out · in bed' routine starting AT lightsOut (NOT ending — the cascade has shutdown ending at lightsOut already, and the bedtime row marks the moment of being-in-bed). The visual bedtime routine ID === 'bedtime' is special-cased in the timeline title render: fontSize 17 (vs default 15), fontWeight 700, color C.mommy (mauve), fontStyle normal (not italic), letterSpacing 0.01em. (2) BANNER PERSISTENCE. sed-removed all 5 instances of setTimeout(...setScheduleStatus(null)...12000). Banner render gains position:relative and an absolute-positioned × close button (top:4 right:6, font-size:16, color C.muted) that calls setScheduleStatus(null) + setScheduleStatusOpen(false). User must dismiss manually. (3) AUTO-EXPAND UNSCHEDULED. commitNlPending: after building scheduleStatus, if unscheduled > 0, calls setShowUnscheduled(true). addTask (structured form): if finalNewTask.scheduledTime is null, calls setShowUnscheduled(true). SCOPING: edits scoped to module-level cascade helpers, dayTimeline + computeFreshWorkableBlocks build, timeline title render special-case, banner render + setTimeout removals, two commit-path setShowUnscheduled calls. Zero changes to C palette, scheduler algorithm itself, focus colors, drag handlers, AllTasksView. Build verified clean via esbuild. DEFERRED to bt160: NEXT-DAY PLANNING (scheduledDate field, tomorrow-view UX)." },
   { version: "2026.05.05bt158", summary: "Two changes per chat. (1) SPLIT WIRING. blockMatches useMemo extended: when no task fits, computes the smallest unscheduled candidate and if its effortMin > block.durationMin AND effortMin ≥ 45, stores blockingTaskId. Otherwise blockingTaskId stays null. Both open-block panel renders (partner-away nap/pump branch + main blockMatches branch) updated: their emptyReason render now conditionally appends an italic dotted-underline 'split it?' button when b.blockingTaskId is set. onClick calls setSplittingTask with the blocker — wires into the existing SplitTaskModal which already handles chunk preview, edit, and applyChunks. The split modal renders chunks as separate tasks inheriting regret + focus from the original; this lets one or more chunks fit the original blocking block. (2) BEDTIME ROUTINE. TodaySetupSheet: new 'Sleep target' section between Mode and 'Today I'm doing'. Two side-by-side fields: wake time (HTML time input, default '06:30'), sleep need select (6, 6.5, 7, 7.5, 8, 8.5, 9 hours). update() now carries wakeTime + sleepHrs through every patch alongside cookingToday/workoutToday, so the persistent fields survive daily toggles. Below the fields, an italic Cormorant computed line shows the derived bedtime ('↳ Lights out by 10:30p to hit your wake target'). dayTimeline useMemo + computeFreshWorkableBlocks: both inject a synthesized 'bedtime' routine slot when wakeTime is set AND computed bedHour falls in [18, 23]. The slot is 30 min ending at bedtime, kind: 'routine', id: 'bedtime', title: 'Lights out'. Renders on the timeline like any other routine (gold rail, italic serif title); scheduler treats it as occupied time so tasks don't slot on top. Wake/sleep settings cloud-sync via the existing solene:todaySetup key — no new persistence wiring needed. SCOPING: edits scoped to blockMatches comp, two open-block render branches, TodaySetupSheet field rendering + update(), dayTimeline + computeFreshWorkableBlocks bedtime injection. Zero changes to schema (todaySetup gains two optional fields with backward-compat fallbacks), C palette, drag handlers, focus colors, scheduler algorithm itself. Build verified clean via esbuild." },
@@ -19502,13 +19503,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     if (!finalNewTask.scheduledTime) setShowUnscheduled(true);
   };
 
+  // v05.05bt161 — Fast-path commit. Previously opened a Review modal
+  // requiring a second confirmation click — user reported "i fill out
+  // the tasks on the open free form textbox and hit reanalyze, i still
+  // do not see it populate". Root cause was that "Add all" went to the
+  // Review modal which she dismissed without clicking the modal commit.
+  // Now: "Add all" commits directly with sensible defaults (regret 3,
+  // auto focus inference). User can fine-tune any task post-commit by
+  // tapping the regret/focus dots or opening EditTaskModal.
   const addFromNl = () => {
+    const parsed = parseNaturalLanguageTasks(nlText);
+    if (parsed.length === 0) return;
+    const pending = parsed.map(p => ({
+      ...p,
+      regretScore: 3,
+      focusLevel: "auto",
+    }));
+    commitNlPending(pending);
+  };
+
+  // v05.05bt161 — Opt-in "review before adding" link. Sets nlPending
+  // which opens the existing NlReviewModal. Same defaults as fast-path
+  // but the user gets to adjust regret/focus per task before commit.
+  const reviewBeforeAdding = () => {
     const parsed = parseNaturalLanguageTasks(nlText);
     if (parsed.length === 0) return;
     setNlPending(parsed.map(p => ({
       ...p,
       regretScore: 3,
-      focusLevel: "auto", // v05.05bt116 — algorithm-determined by default
+      focusLevel: "auto",
     })));
   };
 
@@ -19678,10 +19701,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       }));
   };
 
-  const commitNlPending = () => {
-    if (!nlPending || nlPending.length === 0) return;
+  // v05.05bt161 — Optional pending argument. When called without args
+  // (from NlReviewModal commit button), reads from `nlPending` state.
+  // When called WITH an explicit pending array (from the fast-path
+  // "Add all" button), uses that directly so we don't need to wait for
+  // setNlPending to flush before committing. Fixes the user's confusion
+  // about "Add all" not appearing to do anything (she didn't realize
+  // there was a separate Review modal commit step).
+  const commitNlPending = (pendingOverride) => {
+    const pending = pendingOverride || nlPending;
+    if (!pending || pending.length === 0) return;
     const baseTs = Date.now();
-    let newTasks = nlPending.map((p, i) => ({
+    let newTasks = pending.map((p, i) => ({
       id: `task_${baseTs}_${i}_${Math.random().toString(36).slice(2, 5)}`,
       title: p.title,
       effortMin: p.effortMin,
@@ -20094,8 +20125,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 fontFamily: "inherit",
                 letterSpacing: "0.04em",
               }}>
-              Add all
+              {(() => {
+                const n = parseNaturalLanguageTasks(nlText).length;
+                if (n === 0) return "Add + slot tasks";
+                return `Add + slot ${n} task${n === 1 ? "" : "s"}`;
+              })()}
             </button>
+            {/* v05.05bt161 — opt-in "review first" link. Most cases
+                don't need the review step — defaults (regret 3 + auto
+                focus inference) work fine and per-task tweaks can
+                happen on the timeline after. The link is for power
+                users who want to set priority/focus before scheduling. */}
+            {nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 && (
+              <div style={{ textAlign: "center", marginTop: 8 }}>
+                <button
+                  onClick={reviewBeforeAdding}
+                  style={{
+                    background: "transparent", border: "none", padding: 0,
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 11.5,
+                    color: "#7C6B5A", cursor: "pointer",
+                    borderBottom: `1px dotted ${C.line}66`,
+                  }}>
+                  set priority + focus before adding
+                </button>
+              </div>
+            )}
             <div style={{
               display: "flex", justifyContent: "space-between",
               alignItems: "center", marginTop: 10,
