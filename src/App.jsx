@@ -15,11 +15,19 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt152";
+const APP_VERSION = "2026.05.05bt160";
 const APP_BUILD_NOTES = [
-  "Six fixes per chat. (1) DELETE button removed from timeline rows (too easy to mis-tap). Delete now lives ONLY in the All Tasks sub-tab — same two-tap confirm pattern but in a less crowded view where you go specifically to clean up. (2) FOCUS LEGEND added below the rail legend at the bottom of Mommy's Day. Deep / Medium / Light dots are now explained in the same place as the rail colors. (3) BANNER 'Little Ledger for Solène.' on ONE line. Was split across two lines for layout reasons — fixed. (4) WORKABLE BLOCKS unified with visible open blocks: the scheduler now uses every '+ Open' row on the timeline, not just partner shifts. Resolves the confusion of seeing open slots while tasks remained unscheduled. (5) RIGHT NOW card now leads with what's actually happening (slot title in serif: 'Open block', 'Cooking', '{task title}') with the time underneath in mono. No more naked '10–11a · CURRENT BLOCK' that didn't tell you anything. (6) BEST NEXT MOVE countdown reframed by distance: <90min → urgent gold pill, 90min–3h → calm 'at 2:30p' line, >3h → italic 'Quiet till 5p (5h)' or 'Got 5h until next task — slot something?' if you have unscheduled work pending. The scary '5h 17m' pill is gone for distant tasks.",
+  "NEXT-DAY PLANNING per chat. New TODAY ↔ TOMORROW pill toggle in the Mommy's Day header next to the date heading. Tap TOMORROW to flip the entire timeline forward 24h: tomorrow's routines, tomorrow's meetings, tomorrow's bedtime cascade (wake/sleep settings persist across days, so they auto-apply). Tasks added while TOMORROW is selected get tagged with tomorrow's date and are scoped to that day. They auto-roll into Today the next morning — no migration step needed; the date check just naturally matches the new today. Live UI (Right Now + Best Next Move) is hidden in tomorrow view since it's about live state, not planning. A dashed mauve banner replaces it: 'Planning tomorrow · Wednesday May 15. Tasks added here are tagged for that day.' Existing tasks with no scheduledDate (everything created before this build) stay visible in today's view as legacy/any-day items.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt160", summary: "NEXT-DAY PLANNING. (1) Module-level helpers: isoDate(d) returns local-time YYYY-MM-DD (NOT UTC, since users think in local time). getReferenceDate(now, dayView) returns Date at 00:00 local on today or tomorrow based on dayView. (2) Task schema gains optional scheduledDate field (YYYY-MM-DD). Legacy tasks have no field → treated as today's. (3) TodayTaskPlanCard new state: dayView (\"today\" | \"tomorrow\"), referenceDate (useMemo from now + dayView), referenceISO (isoDate of referenceDate), isTomorrow (boolean). (4) myTasks filter extended: in tomorrow view, only t.scheduledDate === referenceISO; in today view, !t.scheduledDate || t.scheduledDate === referenceISO. Legacy tasks remain visible in today view. (5) scheduledTasks enrichment anchored off referenceDate instead of `new Date(now).setHours(0)`. (6) dayTimeline useMemo: `const today = referenceDate` (was new Date(now).setHours(0)); todayKey from isoDate(today); routines via getRoutineSlotsForToday(currentUser, onsite, today, ...); meeting filter compares to today.toDateString(); bedtime cascade applied to referenceDate (wake/sleep settings persistent, so they auto-apply to tomorrow). Deps array adds referenceDate. (7) computeFreshWorkableBlocks: same anchor swap. (8) addTask + commitNlPending: new tasks tagged scheduledDate: referenceISO. (9) Header h1 dynamic: \"Today\" or \"Tomorrow\". (10) New toggle pill inside header flex group: 2-button inline-flex with mauve-filled active state. fontFamily Inter, fontSize 9.5, fontWeight 700, letterSpacing 0.18em. Buttons \"TODAY\" / \"TOMORROW\". (11) Right Now + Best Next Move card hidden when isTomorrow; replaced with a small italic dashed-border banner identifying the selected date and explaining what tomorrow-tagged tasks do. SCOPING: TodayTaskPlanCard touch sites are state additions + filter updates + header render + tomorrow-banner conditional. computeFreshWorkableBlocks + dayTimeline are the only scheduler-path changes. Zero changes to C palette, scheduler algorithm, focus colors, drag handlers, AllTasksView. KNOWN LIMITATIONS: cooking/workout toggles in TodaySetupSheet still key off `now`, so opening Setup in tomorrow view edits today's setup record (not tomorrow's). User can wait until tomorrow's actual day to flip those. Tomorrow view doesn't yet render predicted-nap blocks (those derive from today's recent sleep events). Open-blocks panel does respect referenceDate via computeFreshWorkableBlocks. Build verified clean via esbuild." },
+  { version: "2026.05.05bt159", summary: "Three changes per chat. (1) BEDTIME CASCADE. Two new module-level helpers. applyBedtimeCascade(routines, lightsOutDate, today): if lightsOut is null returns routines untouched; otherwise iterates, DROPS last-pump entry entirely, re-anchors shutdown to end at lightsOut (start = lightsOut - 30m, dur 30m, overridden flag), re-anchors mommy-pm to end at shutdown.start (start = lightsOut - 60m, dur 30m, overridden flag). Leaves solene-bed, workout, cook, am, commute-in/out untouched — user can resolve conflicts via the existing daily toggles. computeLightsOut(wakeTime, sleepHrs, today): parses HH:MM wake, subtracts sleepHrs, wraps to today's evening, returns Date or null if outside [18,23] hours. Both dayTimeline useMemo and computeFreshWorkableBlocks updated: compute lightsOut + cascade routines + push a separate 15-min 'Lights out · in bed' routine starting AT lightsOut (NOT ending — the cascade has shutdown ending at lightsOut already, and the bedtime row marks the moment of being-in-bed). The visual bedtime routine ID === 'bedtime' is special-cased in the timeline title render: fontSize 17 (vs default 15), fontWeight 700, color C.mommy (mauve), fontStyle normal (not italic), letterSpacing 0.01em. (2) BANNER PERSISTENCE. sed-removed all 5 instances of setTimeout(...setScheduleStatus(null)...12000). Banner render gains position:relative and an absolute-positioned × close button (top:4 right:6, font-size:16, color C.muted) that calls setScheduleStatus(null) + setScheduleStatusOpen(false). User must dismiss manually. (3) AUTO-EXPAND UNSCHEDULED. commitNlPending: after building scheduleStatus, if unscheduled > 0, calls setShowUnscheduled(true). addTask (structured form): if finalNewTask.scheduledTime is null, calls setShowUnscheduled(true). SCOPING: edits scoped to module-level cascade helpers, dayTimeline + computeFreshWorkableBlocks build, timeline title render special-case, banner render + setTimeout removals, two commit-path setShowUnscheduled calls. Zero changes to C palette, scheduler algorithm itself, focus colors, drag handlers, AllTasksView. Build verified clean via esbuild. DEFERRED to bt160: NEXT-DAY PLANNING (scheduledDate field, tomorrow-view UX)." },
+  { version: "2026.05.05bt158", summary: "Two changes per chat. (1) SPLIT WIRING. blockMatches useMemo extended: when no task fits, computes the smallest unscheduled candidate and if its effortMin > block.durationMin AND effortMin ≥ 45, stores blockingTaskId. Otherwise blockingTaskId stays null. Both open-block panel renders (partner-away nap/pump branch + main blockMatches branch) updated: their emptyReason render now conditionally appends an italic dotted-underline 'split it?' button when b.blockingTaskId is set. onClick calls setSplittingTask with the blocker — wires into the existing SplitTaskModal which already handles chunk preview, edit, and applyChunks. The split modal renders chunks as separate tasks inheriting regret + focus from the original; this lets one or more chunks fit the original blocking block. (2) BEDTIME ROUTINE. TodaySetupSheet: new 'Sleep target' section between Mode and 'Today I'm doing'. Two side-by-side fields: wake time (HTML time input, default '06:30'), sleep need select (6, 6.5, 7, 7.5, 8, 8.5, 9 hours). update() now carries wakeTime + sleepHrs through every patch alongside cookingToday/workoutToday, so the persistent fields survive daily toggles. Below the fields, an italic Cormorant computed line shows the derived bedtime ('↳ Lights out by 10:30p to hit your wake target'). dayTimeline useMemo + computeFreshWorkableBlocks: both inject a synthesized 'bedtime' routine slot when wakeTime is set AND computed bedHour falls in [18, 23]. The slot is 30 min ending at bedtime, kind: 'routine', id: 'bedtime', title: 'Lights out'. Renders on the timeline like any other routine (gold rail, italic serif title); scheduler treats it as occupied time so tasks don't slot on top. Wake/sleep settings cloud-sync via the existing solene:todaySetup key — no new persistence wiring needed. SCOPING: edits scoped to blockMatches comp, two open-block render branches, TodaySetupSheet field rendering + update(), dayTimeline + computeFreshWorkableBlocks bedtime injection. Zero changes to schema (todaySetup gains two optional fields with backward-compat fallbacks), C palette, drag handlers, focus colors, scheduler algorithm itself. Build verified clean via esbuild." },
+  { version: "2026.05.05bt157", summary: "Work/Personal tiebreaker. (1) New WORK_KEYWORDS and PERSONAL_KEYWORDS arrays at module scope. Work list tuned to biopharma scientist context (lab, lcms, hplc, lims, sop, ehs, assay, experiment, manuscript, etc.) + generic work signals (meeting, jira, slack, agenda, 1:1, standup, okr, deploy, ship, etc.). Personal list covers domestic + family (groceries, cook, laundry, doctor, family, baby, diaper, solène, etc.). New inferCategory(title) returns 'work' | 'personal' | null. Order: work check first, personal second, null fallthrough. (2) New categoryRank(cat) helper returns 0 (work), 1 (unset), 2 (personal). Smaller rank = earlier in scheduler queue = earlier block claim. Since blocks fill morning→evening, work tasks naturally land in morning/afternoon and personal in evening. (3) assignTaskTimes sort comparator extended: regret desc > focus desc > category rank asc. (4) Task schema gains optional `category` field. (5) commitNlPending: new tasks get `category: p.category || inferCategory(p.title)`. addTask: `category: inferCategory(draftTitle.trim())`. (6) EditTaskModal: new `category` state defaulting to task.category || ''. Picker rendered between Focus and Schedule-at sections — 3 buttons (Auto / Work / Personal). Work pill #8B7AA8 lavender, Personal pill #D9956A warm orange (both NOT mauve/daddy/gold/coral/sage so they don't conflict with existing semantics). 10px italic explainer below: 'Work tasks claim morning blocks; personal tasks fall to evening when there's a tie on priority + focus.' submit() now passes `category: category || null` into the onSave payload. saveEdit's spread copies it through. (7) No timeline visual indicator added per chat ('not sure i want to add another indicator because that gets to be too much'). Category is hidden state that only manifests as scheduler tiebreaker behavior. SCOPING: edits scoped to module-level keyword/helper additions, assignTaskTimes sort, task creation paths (commitNlPending + addTask), EditTaskModal. Zero changes to C palette, focus colors, rail colors, drag/swipe, AllTasksView (could surface category there in a future build if useful). Existing tasks have category undefined → categoryRank(undefined) = 1 (neutral). Build verified clean via esbuild." },
+  { version: "2026.05.05bt156", summary: "Five changes per chat. (1) RIGHT NOW + BEST NEXT MOVE eyebrows now have italic Cormorant 10.5px subtitles below, marginTop: 2, marginBottom: 8. Subtitle text: 'what's happening now' and 'your next scheduled task' respectively. Added to both BNM render branches (has-task and no-task empty state). (2) computeFreshWorkableBlocks(pinnedTasks) helper added at TodayTaskPlanCard scope. Builds a fresh dayTimeline locally from routines (getRoutineSlotsForToday with current setup overrides) + today's owner-filtered meetings + the pinnedTasks as slot objects (computed from scheduledTime + effortMin). Returns the free gaps mapped to workable-block shape. Used by reanalyze (pinned = completed tasks only), commitNlPending (pinned = completed + newly-pinned-by-user), and addTask (pinned = completed + new-with-manual-time). Replaces direct getWorkableBlocks() calls in these three sites. The plain getWorkableBlocks remains for autoSchedule which doesn't strip. (3) ShiftsView 'today' constant: dropped the owner filter restored the simple toDateString check. tomorrowMeetings filter inside the IIFE: dropped the owner check. dayTimeline meeting filter inside TodayTaskPlanCard (bt141) is unchanged — still owner-filtered. Net effect: Shifts sub-tab → all parents, Mommy's Day sub-tab → just Mommy. (4) Focus dot: outer button wraps inner span. Button width/height 18, padding 0, transparent bg. Inner span width/height 9, borderRadius 50%, bg = FOCUS_COLOR[fl]. The visible dot is the same size (slightly bigger 9px vs 8px) but the tap target is 4× larger. (5) blockMatches useMemo extended to compute emptyReason. When no task fits: if no unscheduled candidates → 'no unscheduled tasks waiting'; else if smallest effort > block durationMin → 'smallest unscheduled task needs Xm, this block is only Ym'; else → 'all fitting tasks already claimed earlier slots'. Both open-blocks panels (predicted-nap/wearable-pump in the partner-away branch + the main blockMatches panel) updated to display emptyReason in the no-suggested branch. SCOPING: edits scoped to TodayTaskPlanCard top-level state/helpers + the three scheduling functions + ShiftsView meeting filters + two open-block render branches + Right Now card render. Zero changes to C palette, schema, drag handlers, swipe handlers, normalizeFocus mapping. Build verified clean via esbuild." },
+  { version: "2026.05.05bt155", summary: "(1) AUTO-REANALYZE: commitNlPending + addTask rewritten to strip scheduledTime from ALL existing open tasks (except those just-pinned with manual times), combine with new tasks, and run assignTaskTimes over the full set. The same logic the manual Re-analyze button uses. Banner gets reanalyzed:true so the ✦ Re-analyzed pill prefixes the status. Existing tasks with manual edits via the inline time picker WILL lose their placement on next add — same behavior as the manual Re-analyze button which the user said she was using anyway. (2) FOCUS BINARY: new module-level normalizeFocus(level) helper accepting deep|shallow|high|medium|low|undefined and returning deep|shallow. high→deep, low→shallow, medium/undefined/auto→deep (default for active focus work). New FOCUS_COLOR map: deep=#B85040 terracotta, shallow=#7B9B6E sage. New FOCUS_LABEL map: deep=Deep, shallow=Light. inferFocusLevel rewritten to return deep|shallow based on keyword match. getBlockFocusLevel + getFocusForHour rewritten: 9-12 + 15-18 → deep, everything else → shallow. cycleFocusLevel toggles deep↔shallow (was 3-way cycle). getBlockTag, getBlockIcon, getBlockReasoning, assignTaskTimes (fOrder + reason text), blockMatches comparator, EditTaskModal picker (3→2 buttons), structured-form draftFocus picker (3→2 buttons), NlReviewModal select (4→3 options: auto/deep/light), AllTasksView fmtFocusColor, BNM focus meta, unscheduled-pile focusColor, timeline focus dot, footer focus legend (Deep · intense focus / Light · easy/admin) — all updated to read via normalizeFocus + FOCUS_COLOR + FOCUS_LABEL. Old labels (HIGH/MEDIUM/LOW, DEEP FOCUS/STEADY FOCUS/ADMIN, mauve/gold/muted) replaced everywhere. Migration is read-time only; existing stored values aren't rewritten in localStorage, so old data renders correctly without a data migration step. SCOPING: ~25 touch sites across module-scope helpers + TodayTaskPlanCard + AllTasksView + EditTaskModal + NlReviewModal. Zero changes to C palette, task schema (focusLevel field still string), drag/swipe handlers, sub-tabs, regret colors, banner shell. Build verified clean via esbuild." },
+  { version: "2026.05.05bt154", summary: "Zoom media queries retuned. Old: 900/1200/1600px width-only triggers. Problem: iPhone Pro Max landscape is 932px wide and would have hit the 900px breakpoint, shrinking content on a phone screen. New: every zoom rule gated on @media (hover: hover) and (pointer: fine) — only mouse/trackpad devices trigger zoom. Touch devices (phones, tablets) always render at 1.0 regardless of viewport. Four tiers now: 760px (small laptop or narrow PWA window) → 1.20, 1100px (typical browser window on MBP 14\") → 1.35, 1500px (full-screen on either MBP at default scaling) → 1.45, 1900px (external monitor or 'More Space' display setting) → 1.55. Scoped to FontImports CSS string. No other edits." },
+  { version: "2026.05.05bt153", summary: "Two additions per chat. (1) New regret legend row in the footer legend, below the focus-dot row. Same layout pattern: small 'PRIORITY' label + four inline-flex swatch rows (R1–2 muted, R3 gold, R4 #C18D7A, R5 #A04848). Each swatch is a colored Rn label + a faded short description. Colors match regretColors map used in cycleRegret and the EditTaskModal SegControl so the legend is the canonical reference. (2) CSS zoom-based responsive scaling added to FontImports global style block. Three breakpoints: min-width 900px → zoom 1.15, 1200px → 1.30, 1600px → 1.45. Mobile (default) stays at 1.0. Chose CSS zoom over font-size-on-root because the app uses inline px values throughout, so root-rem scaling would have required touching hundreds of fontSize declarations. zoom is supported in Chromium, Safari/WebKit, and Firefox 126+ (March 2024). Body is the zoom target (not html or .app-root) so fixed-position overlays inherit consistently. Build verified clean via esbuild. SCOPING: edits scoped to legend footer (one new row) + FontImports CSS string (4 new lines). Zero changes to schema, components, business logic." },
   { version: "2026.05.05bt152", summary: "Six changes per chat. (1) Persistent × delete button removed from timeline rows (the right-column render in TodayTaskPlanCard). Right column now contains only regret + drag grip. Helper text below timeline updated to 'delete from All Tasks'. (2) AllTasksView: new pendingDeleteId state + pendingDeleteTimerRef. Right column of each row gets a × button with same two-tap pattern (first tap red-pill 'delete?', second tap deletes via setTasks(prev => prev.filter)). (3) FOCUS legend added in a second flex row inside the legend footer, divided by a hairline top border. Three swatches: 6px circles in C.mommy/C.gold/C.muted with 'Deep / Medium / Light' labels. (4) Banner brand mark: was a column-flex with three spans ('Little Ledger' / 'for Solène.' / mono meta row). Merged the first two: single span with inline 'Little Ledger' (17px muted) + 'for' (13px muted opacity 0.55) + 'Solène' (19px userTint) + '.' (19px warm orange). Single line, whitespace:nowrap, ellipsis. Mono meta row marginTop bumped 2→4 to compensate for the lost line. (5) getWorkableBlocks rewritten. Was: onsite branch used dayTimeline free blocks, WFH branch used availableBlocks (partner shifts only). Now: unconditional dayTimeline.filter(s => s.kind === 'free').map(...). Resolves the visible-open-vs-scheduler-blind mismatch. (6) Right Now: time-range div replaced. Was 20px Cormorant mauve serif of fmtTimeShort range + 9px mono 'CURRENT BLOCK' sub-label. Now: 18px Cormorant serif of slot title (italic for free/routine, plain for task/meeting; gold color for free, mauve for everything else) + 10.5px mono time-range underneath. Title overflow-ellipsis on narrow screens. (7) BNM countdown: new branching logic based on diffStartMin. ≤90min → existing gold pill ('starts in 17m', pulse at ≤5min). 90–180min → 'flat' style mono mauve 'at 2:30p'. >180min → italic Cormorant muted '{Xh}m until next task — slot something?' if unscheduledTasks.length > 0, else 'Quiet till {time} ({Xh})'. Negative diffStart with diffEnd > 0 → green 'Xm left' pill (unchanged). Negative both → coral 'ran over by Xm' (unchanged). Style enum {pill, flat} routes to inline-flex pill render OR plain div render. SCOPING: edits scoped to timeline right-column render, AllTasksView row state + render, legend footer, banner brand spans, getWorkableBlocks helper, Right Now slot-title vs time render, BNM countdown IIFE. Zero changes to C palette, schema, drag/swipe handlers, modals, sub-tabs, scheduling algorithm itself (just the workable set it operates over). Build verified clean via esbuild." },
   { version: "2026.05.05bt151", summary: "Three changes per chat. (1) NlReviewModal redesigned. ModalShell now passed placement='center' (was bottom-sheet). Per-task row consolidated: grid 1fr/auto/auto/auto/auto = title-input + effort-select + focus-select + regret-select + × button. All on one line. selectStyle tightened (padding 6/6, fontSize 11, JetBrains Mono). Focus options renamed for compactness (high→deep, medium→med, low→light, plus auto). Effort same options (15/30/45/60/90/120). Removed showAdvanced state + dropdown toggle + the separate 3-column 'Advanced' grid (it was duplicating what's now inline). Header legend tightened to a single italic line explaining the controls. Title font in input switched to Cormorant Garamond serif to match the rest of the app. (2) assignTaskTimes now returns { updates, reasons } instead of just updates. For each task: if placed, reason = '→ {time} · {block-focus}-focus window · {task-focus} task · R{regret}'. If not placed: 'no block ≥ {effortMin}m (longest free: {longest}m)' or 'higher-regret tasks took all blocks of {effortMin}m+'. (3) commitNlPending, autoSchedule, reanalyze all updated to consume the new shape. setScheduleStatus payload extended with items[] (per-task {id, title, scheduled, reason}) and algorithm name. (4) Schedule banner: each summary line ('All N fit', 'M slotted · K didn't fit', 'N didn't fit') now ends with a 'show details' / 'show why' / 'hide why' italic dotted-underline button (new scheduleStatusOpen state). When expanded, banner reveals: mono uppercase algorithm name + italic Cormorant paragraph explanation of the algorithm + per-task list (green ✓ / red × icon, title in serif, mono reason below). Banner timeout extended 6000→12000ms to give time to read. Timeout also clears scheduleStatusOpen. (5) Build verified clean via esbuild. SCOPING: edits scoped to assignTaskTimes return shape, commitNlPending/autoSchedule/reanalyze status payload, schedule banner render + new open state, NlReviewModal component. Zero changes to C palette, schema, drag handlers, swipe handlers, AllTasksView, other modals." },
   { version: "2026.05.05bt150", summary: "Two targeted fixes per chat. (1) DELETE: bt148/149 attempts (modal × inside inline edit + ref-based blur suppression) were unreliable on iOS. Replaced with a persistent × button rendered in the right column of every uncompleted task row, between the regret button and the drag grip. New pendingDeleteId state + pendingDeleteTimerRef + armDelete(taskId) helper. First tap calls armDelete (state set, 4s timeout queued to clear). Second tap (while state === slot.id) clears the timer, clears state, and calls deleteTask. Visual: at rest, × shown as a small 13px char in muted coral (rgba 184,80,64,0.6) with a hairline border (alpha 0.25). When armed, the button expands to a filled red pill with white 'delete?' text. The inline-edit × inside the title input was removed entirely (now just a text input, Escape to cancel, Enter/blur to save). inlineDeleteIntentRef still defined but unused (vestigial — left in place to keep the diff small; can be removed in a follow-up). (2) MONDAY EXPORT: exportMondayCsv rewritten. Removed the header row + CSV escaping. New format: one line per task, `${task.title} [${fmt12hr(task.start)}]`, or `${task.title} [unscheduled]` for the pile. Lines joined with newlines. clipboard.writeText fallback path preserved (sets mondayCsvFallback for the modal). setCopyStatus message changed from 'Monday CSV copied' to 'Monday list copied'. Function name unchanged (exportMondayCsv) to avoid disrupting the menu wiring. (3) Helper text below timeline updated: 'swipe ← to delete' replaced with 'tap × twice to delete'. (4) Build verified clean via esbuild. SCOPING: edits scoped to title inline-edit render (× dropped from inside), right-column render (new × button rendered), pendingDeleteId state + helper, exportMondayCsv body, footer helper. Zero changes to C palette, schema, drag handlers, swipe handlers, AllTasksView, other modals. Swipe-to-delete still functional (handlers unchanged) — × is just a more discoverable alternative." },
@@ -8852,6 +8860,27 @@ function FontImports() {
         -webkit-text-size-adjust: 100%;
       }
       html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+      /* v05.05bt154 — Responsive scaling retuned for Cyndell's
+         hardware setup per chat: iPhone Pro Max + MBP 14" (husband)
+         + MBP 16" (Cyndell). Goals: phone stays 1x, laptop feels
+         desktop-sized. Strategy: gate all zoom on (hover:hover) +
+         (pointer:fine) so touch devices never zoom regardless of
+         viewport (an iPhone Pro Max in landscape is 932px wide,
+         which would have hit the old 900px breakpoint and shrunk
+         everything on the phone). Tiers cover the realistic
+         browser-window widths on each Mac at default scaling. */
+      @media (hover: hover) and (pointer: fine) and (min-width: 760px) {
+        body { zoom: 1.20; }
+      }
+      @media (hover: hover) and (pointer: fine) and (min-width: 1100px) {
+        body { zoom: 1.35; }
+      }
+      @media (hover: hover) and (pointer: fine) and (min-width: 1500px) {
+        body { zoom: 1.45; }
+      }
+      @media (hover: hover) and (pointer: fine) and (min-width: 1900px) {
+        body { zoom: 1.55; }
+      }
       @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes pulse-soft { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -14411,7 +14440,8 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
   ];
 
   const fmtRegretColor = (n) => n >= 5 ? "#A04848" : n === 4 ? "#C18D7A" : n === 3 ? C.gold : C.muted;
-  const fmtFocusColor = (f) => f === "high" ? C.mommy : f === "low" ? C.muted : C.gold;
+  // v05.05bt155 — binary focus
+  const fmtFocusColor = (f) => FOCUS_COLOR[normalizeFocus(f)];
   const fmtScheduled = (t) => {
     if (!t.scheduledTime) return "—";
     const [h, m] = t.scheduledTime.split(":").map(Number);
@@ -14567,7 +14597,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
                   <span style={{
                     display: "inline-block", width: 6, height: 6,
                     borderRadius: "50%", marginRight: 7, verticalAlign: "middle",
-                    background: fmtFocusColor(t.focusLevel || "medium"),
+                    background: fmtFocusColor(t.focusLevel),
                   }} />
                   {t.title}
                 </div>
@@ -14687,15 +14717,18 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
     } catch (e) { console.warn("[updateMeeting] sync persist failed", e); }
     return next;
   });
-  // v05.05bt149 — Filter today's meetings to ONLY those owned by the
-  // current user. Daddy's meetings were showing up in Mommy's Schedule
-  // view (and Schedule → Today/Tomorrow Commitments cards). Match the
-  // same filter the dayTimeline already uses.
-  const today = meetings.filter(m => {
-    if (new Date(m.start).toDateString() !== now.toDateString()) return false;
-    const owner = m.parent || currentUser;
-    return owner === currentUser;
-  });
+  // v05.05bt156 — Meeting filter scope clarified per chat:
+  //   - "Shifts" sub-tab (Day Plan section) wants to see BOTH parents'
+  //     meetings since shift coverage is a household-level view.
+  //   - "Mommy's Day" sub-tab (TodayTaskPlanCard) wants ONLY Mommy's
+  //     meetings — Daddy's meetings don't block Mommy's calendar.
+  // This `today` constant feeds the Day Plan card (Shifts sub-tab) so
+  // we DROP the owner filter here. The dayTimeline filter inside
+  // TodayTaskPlanCard already filters by owner (bt141) — that path is
+  // unchanged.
+  const today = meetings.filter(m =>
+    new Date(m.start).toDateString() === now.toDateString()
+  );
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -14857,10 +14890,9 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           const tomorrowMeetings = (meetings || [])
             .filter(m => {
               const t = new Date(m.start);
-              if (t < tomorrow || t >= dayAfter) return false;
-              // v05.05bt149 — Owner filter, same as today's filter above.
-              const owner = m.parent || currentUser;
-              return owner === currentUser;
+              return t >= tomorrow && t < dayAfter;
+              // v05.05bt156 — Shifts view = household coverage view,
+              // includes both parents' meetings.
             })
             .sort((a, b) => new Date(a.start) - new Date(b.start));
           const tomorrowLabel = tomorrow.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
@@ -17789,17 +17821,16 @@ function DailyBurnHistoryCard({ C, events, now }) {
 //   3-6p:   high (second wind)
 //   6-8p:   medium (winding down)
 //   8p+:    low (evening fatigue)
+// v05.05bt155 — Block focus is now binary too. Morning + late-afternoon
+// circadian peaks are "deep" windows (good for focus work). Post-lunch
+// dip + evening + overnight are "shallow" (admin/comms-friendly).
 function getFocusForHour(h) {
-  if (h >= 9 && h < 12) return "high";
-  if (h >= 15 && h < 18) return "high";
-  if (h >= 13 && h < 15) return "low";
-  if (h >= 20 || h < 7) return "low";
-  return "medium";
+  if (h >= 9 && h < 12) return "deep";
+  if (h >= 15 && h < 18) return "deep";
+  return "shallow";
 }
 
 // Pick the dominant focus level of a block by sampling its start hour.
-// Could weight by duration across hours but for typical 30-90 min
-// blocks the start-hour dominates.
 function getBlockFocusLevel(start) {
   const h = start.getHours();
   return getFocusForHour(h);
@@ -17986,8 +18017,6 @@ function getRoutineSlotsForToday(currentUser, onsite, now, routineOverrides) {
   return DEFAULT_MOMMY_ROUTINES
     .filter(r => !r.onsiteOnly || onsite)
     .map(r => {
-      // v05.05bt134 — Apply per-day routine override if present.
-      // Override shape: { [routineId]: { time: "HH:MM", durationMin: N } }
       const o = ovr[r.id] || {};
       const timeStr = o.time || r.time;
       const [h, m] = timeStr.split(":").map(Number);
@@ -17999,6 +18028,77 @@ function getRoutineSlotsForToday(currentUser, onsite, now, routineOverrides) {
       return { ...r, start, end, durationMin: durMin, overridden: !!(o.time || o.durationMin) };
     })
     .sort((a, b) => a.start - b.start);
+}
+
+// v05.05bt159 — Bedtime cascade. When the user sets a wake-time target,
+// the PM routine stack must end by the derived lights-out time —
+// otherwise mommy-pm runs at 22:30 even when the user said "I want to
+// be asleep at 9pm" (the bug she hit). This helper:
+//   - Drops `last-pump` entirely (user said ignore overnight pumping)
+//   - Re-anchors `shutdown` to end at lightsOut (starts 30m before)
+//   - Re-anchors `mommy-pm` to end at shutdown.start (60m before lightsOut)
+//   - Leaves solene-bed and workout alone (user manages those via the
+//     daily setup toggles; can be revisited if conflicts persist)
+// lightsOutDate is a Date object representing the moment of lights out
+// on `today`. Returns a NEW routines array; doesn't mutate input.
+function applyBedtimeCascade(routines, lightsOutDate, today) {
+  if (!lightsOutDate) return routines;
+  const out = [];
+  for (const r of routines) {
+    if (r.id === "last-pump") continue; // dropped per user
+    if (r.id === "shutdown") {
+      const end = new Date(lightsOutDate);
+      const start = new Date(end.getTime() - 30 * 60000);
+      out.push({ ...r, start, end, durationMin: 30, overridden: true });
+      continue;
+    }
+    if (r.id === "mommy-pm") {
+      const end = new Date(lightsOutDate.getTime() - 30 * 60000); // ends where shutdown begins
+      const start = new Date(end.getTime() - 30 * 60000);
+      out.push({ ...r, start, end, durationMin: 30, overridden: true });
+      continue;
+    }
+    out.push(r);
+  }
+  return out;
+}
+
+// Compute lights-out Date from a wakeTime ("HH:MM") + sleepHrs number.
+// Returns Date on today's calendar day, or null if wakeTime not set
+// or the resulting bedtime falls outside reasonable evening hours.
+function computeLightsOut(wakeTime, sleepHrs, today) {
+  if (!wakeTime) return null;
+  const [wh, wm] = wakeTime.split(":").map(Number);
+  const wakeMins = wh * 60 + (wm || 0);
+  const bedMinsRaw = wakeMins - (sleepHrs || 8) * 60;
+  const bedMins = ((bedMinsRaw % (24 * 60)) + 24 * 60) % (24 * 60);
+  const bedHour = Math.floor(bedMins / 60);
+  const bedMinute = bedMins % 60;
+  if (bedHour < 18 || bedHour > 23) return null;
+  const d = new Date(today);
+  d.setHours(bedHour, bedMinute, 0, 0);
+  return d;
+}
+
+// v05.05bt160 — Next-day planning support.
+// Local-time ISO date "YYYY-MM-DD" (NOT UTC, since the user thinks in
+// local time). Used as task.scheduledDate to tag tasks to a specific
+// calendar day.
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+// Returns the reference Date for the selected dayView. "today" returns
+// today at 00:00 local; "tomorrow" returns today + 1 day at 00:00 local.
+// All time-window calculations downstream (routines, meetings, bedtime,
+// timeline render) should anchor off the reference date instead of `now`.
+function getReferenceDate(now, dayView) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  if (dayView === "tomorrow") d.setDate(d.getDate() + 1);
+  return d;
 }
 
 // v05.05bt113 — interleave routines + scheduled tasks in chronological order
@@ -18219,12 +18319,81 @@ const FOCUS_LOW_KEYWORDS = [
   "pay", "bill", "renew", "pickup", "pick up", "drop off",
 ];
 
+// v05.05bt155 — Focus collapsed from 3 categories (high/medium/low) to
+// 2 (deep/shallow) per chat. The mauve "medium" → gold mapping was
+// confusing (mauve = Mommy's color, gold = neutral). New colors:
+// Deep = terracotta coral (intensity, distinct from parent rails)
+// Shallow = sage green (calm, easy, distinct from regret reds)
+// normalizeFocus accepts legacy values too so existing tasks render.
+function normalizeFocus(level) {
+  if (level === "deep" || level === "high") return "deep";
+  if (level === "shallow" || level === "low") return "shallow";
+  // medium / undefined / "auto" → default to deep (active focus work).
+  // Defaulting to deep ensures unclassified tasks get high-quality slots.
+  return "deep";
+}
+const FOCUS_COLOR = {
+  deep:    "#B85040", // terracotta — "intense"
+  shallow: "#7B9B6E", // sage       — "easy"
+};
+const FOCUS_LABEL = {
+  deep:    "Deep",
+  shallow: "Light",
+};
+
 function inferFocusLevel(title) {
-  if (!title) return "medium";
+  if (!title) return "deep";
   const lower = title.toLowerCase();
-  if (FOCUS_HIGH_KEYWORDS.some(k => lower.includes(k))) return "high";
-  if (FOCUS_LOW_KEYWORDS.some(k => lower.includes(k))) return "low";
-  return "medium";
+  if (FOCUS_HIGH_KEYWORDS.some(k => lower.includes(k))) return "deep";
+  if (FOCUS_LOW_KEYWORDS.some(k => lower.includes(k))) return "shallow";
+  // Unmatched → default to deep (active focus work).
+  return "deep";
+}
+
+// v05.05bt157 — Task category for time-of-day tiebreaking. Hidden by
+// default per chat ("only visible if i want it to be"). Defaults are
+// auto-inferred from the title; user can override in EditTaskModal.
+// When two tasks tie on regret+focus, the sort comparator places
+// "work" tasks earlier in the queue so they claim morning/early-afternoon
+// blocks; "personal" tasks fall to evening blocks naturally.
+//   8am-5pm  → work tasks win
+//   5pm-12am → personal tasks win
+// Keywords tuned for a biopharma/lab science working parent.
+const WORK_KEYWORDS = [
+  "meeting", "report", "presentation", "client", "project", "deadline",
+  "deliverable", "team", "agenda", "slack", "jira", "ticket",
+  "lab", "lcms", "hplc", "ehs", "lims", "sop", "experiment", "assay",
+  "analysis", "analyze", "data", "spec", "architect", "code", "debug",
+  "review", "research", "study", "paper", "manuscript", "draft",
+  "write", "email", "respond", "reply", "send", "1:1", "standup",
+  "okr", "kpi", "ship", "deploy", "release", "audit",
+];
+const PERSONAL_KEYWORDS = [
+  "groceries", "grocery", "cook", "cooking", "dinner", "breakfast",
+  "lunch", "clean", "tidy", "fold", "wash", "laundry", "errands",
+  "doctor", "appointment", "haircut", "dentist", "gift", "pickup",
+  "pick up", "drop off", "family", "dishes", "vacuum", "dust",
+  "organize", "mom", "dad", "friend", "birthday", "anniversary",
+  "daughter", "baby", "diaper", "feed", "bath", "bedtime",
+  "solène", "solene", "stroller", "walk",
+];
+function inferCategory(title) {
+  if (!title) return null;
+  const lower = title.toLowerCase();
+  // Personal keywords first since some overlap (e.g. "review" appears
+  // in work list but "review feed schedule" should still be personal
+  // — though that's a stretch). For typical biopharma tasks, "review"
+  // means work. Order: work-first reflects the usual context.
+  if (WORK_KEYWORDS.some(k => lower.includes(k))) return "work";
+  if (PERSONAL_KEYWORDS.some(k => lower.includes(k))) return "personal";
+  return null; // unclear — no tiebreaker preference
+}
+// Tiebreaker rank: smaller = earlier in queue = earlier block claim.
+//   work → 0 (claims morning blocks)
+//   unset → 1 (neutral)
+//   personal → 2 (claims later blocks, falls into evening)
+function categoryRank(category) {
+  return category === "work" ? 0 : category === "personal" ? 2 : 1;
 }
 
 // v05.05bt119 — scheduler-only visual primitives. Per chat: "let's work
@@ -18248,9 +18417,9 @@ function getBlockTag(slot) {
     return null;
   }
   if (slot.kind === "task") {
-    if (slot.focusLevel === "high") return { label: "DEEP FOCUS", color: "#A68BA0" };
-    if (slot.focusLevel === "low") return { label: "ADMIN", color: "#9C8B7A" };
-    return { label: "STEADY FOCUS", color: "#B8956E" };
+    const f = normalizeFocus(slot.focusLevel);
+    if (f === "deep") return { label: "DEEP", color: FOCUS_COLOR.deep };
+    return { label: "LIGHT", color: FOCUS_COLOR.shallow };
   }
   return null;
 }
@@ -18267,9 +18436,7 @@ function getBlockIcon(slot) {
     return map[slot.id] || "·";
   }
   if (slot.kind === "task") {
-    if (slot.focusLevel === "high") return "◆";
-    if (slot.focusLevel === "low") return "○";
-    return "◇";
+    return normalizeFocus(slot.focusLevel) === "deep" ? "◆" : "◇";
   }
   return "·";
 }
@@ -18290,12 +18457,9 @@ function getDaySection(hour) {
 // Returns a short italic line explaining the algorithm's choice (or the
 // purpose of a routine). Returns null when no reasoning needed.
 function getBlockReasoning(slot, blockFocus, babyContext, onsite) {
-  // v05.05bt148 — Reasoning rewritten to be SPECIFIC per chat feedback:
-  // "it doesn't say it is because it is a high focus task and daddy is
-  // on duty or something like that … it is too generic." Each reason
-  // now names: who has the baby, what focus level the slot is, and
-  // why the task lands here (regret/focus/fit).
-  const focusLabel = blockFocus === "high" ? "high-focus" : blockFocus === "low" ? "low-focus" : "steady";
+  // v05.05bt155 — Reasoning rewritten for binary focus.
+  const bFocus = normalizeFocus(blockFocus);
+  const focusLabel = bFocus === "deep" ? "deep-focus" : "light-focus";
   const careCtx = onsite ? "grandparents have Solène" : babyContext;
   if (slot.kind === "routine") {
     const map = {
@@ -18315,18 +18479,16 @@ function getBlockReasoning(slot, blockFocus, babyContext, onsite) {
     return `Scheduled commitment · time blocked${careCtx ? " · " + careCtx : ""}`;
   }
   if (slot.kind === "task") {
-    const taskFocus = slot.focusLevel || "medium";
-    const taskFocusLabel = taskFocus === "high" ? "deep" : taskFocus === "low" ? "light" : "medium";
+    const taskFocus = normalizeFocus(slot.focusLevel);
+    const taskFocusLabel = taskFocus === "deep" ? "deep" : "light";
     const regret = slot.regretScore || 3;
     const careHint = careCtx ? careCtx : null;
     const fitNote =
-      taskFocus === blockFocus
+      taskFocus === bFocus
         ? "task focus matches this window"
-        : blockFocus === "high" && taskFocus !== "high"
-          ? "premium slot — could move to admin window if needed"
-          : blockFocus === "low" && taskFocus === "high"
-            ? "scheduled in a dip — focus may waver"
-            : "best-fit slot available";
+        : bFocus === "deep" && taskFocus === "shallow"
+          ? "premium slot — could move to a light window if needed"
+          : "scheduled in a light window — focus may waver";
     const parts = [
       `${focusLabel} window`,
       `${taskFocusLabel} task · R${regret}`,
@@ -18339,13 +18501,11 @@ function getBlockReasoning(slot, blockFocus, babyContext, onsite) {
     const parts = [
       `${focusLabel} window`,
       careCtx,
-      blockFocus === "high"
+      bFocus === "deep"
         ? (careCtx && careCtx.includes("Daddy")
             ? "ideal deep work — uninterrupted"
             : "good for focus")
-        : blockFocus === "low"
-          ? "admin & comms-friendly"
-          : "flexible block",
+        : "admin & comms-friendly",
     ].filter(Boolean);
     return parts.join(" · ");
   }
@@ -18672,7 +18832,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
   const [draftRegret, setDraftRegret] = useState(3);
-  const [draftFocus, setDraftFocus] = useState("medium");
+  const [draftFocus, setDraftFocus] = useState("deep");
   // v05.05bt113 — scheduledTime ("HH:MM" string or "" for unscheduled).
   // When set, task appears in the day timeline at that hour; otherwise
   // stays in the unscheduled pile sorted by regret.
@@ -18708,8 +18868,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const cycleFocusLevel = (taskId) => {
     setTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
-      const cur = t.focusLevel || "medium";
-      const next = cur === "high" ? "medium" : cur === "medium" ? "low" : "high";
+      // v05.05bt155 — Binary cycle: deep ↔ shallow.
+      const cur = normalizeFocus(t.focusLevel);
+      const next = cur === "deep" ? "shallow" : "deep";
       return { ...t, focusLevel: next };
     }));
   };
@@ -18822,6 +18983,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // on user toggle. The unscheduled pile already lets the user assign
   // tasks to time slots via the existing time field in EditTaskModal.
   const [showOpenBlocks, setShowOpenBlocks] = useState(false);
+  // v05.05bt160 — Next-day planning. `dayView` controls whether the
+  // card renders today or tomorrow. The toggle pill in the header
+  // switches between them. All date-anchored derivations (timeline,
+  // routines, meetings, bedtime, task filtering) use referenceDate.
+  // referenceISO is the YYYY-MM-DD string used as task.scheduledDate.
+  const [dayView, setDayView] = useState("today"); // "today" | "tomorrow"
+  const referenceDate = useMemo(() => getReferenceDate(now, dayView), [now, dayView]);
+  const referenceISO = isoDate(referenceDate);
+  const isTomorrow = dayView === "tomorrow";
   // v05.05bt128 — Open-block picker: which block (start ms) has its
   // 'pick other' picker expanded. null = no picker open.
   const [pickerForBlock, setPickerForBlock] = useState(null);
@@ -19061,7 +19231,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // v05.05bt113 — per-user task isolation. Tasks created before this
   // build have no ownerName; treat them as Mommy's so existing data
   // doesn't disappear. New tasks get ownerName = currentUser at creation.
-  const myTasks = tasks.filter(t => (t.ownerName || "Mommy") === currentUser);
+  // v05.05bt160 — Date filter for dayView. Today view shows tasks
+  // dated to today OR legacy tasks with no scheduledDate. Tomorrow view
+  // shows only tasks explicitly dated to tomorrow.
+  const myTasks = tasks.filter(t => {
+    if ((t.ownerName || "Mommy") !== currentUser) return false;
+    if (isTomorrow) return t.scheduledDate === referenceISO;
+    // today view: today-dated OR legacy (no date)
+    return !t.scheduledDate || t.scheduledDate === referenceISO;
+  });
 
   // v05.05bt132 — Brain Dump items (moved here so myTasks is in scope).
   const drawerItems = myTasks.filter(t => t.drawer && !t.completedAt);
@@ -19095,8 +19273,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     .filter(t => t.scheduledTime && !t.drawer)
     .map(t => {
       const [h, m] = t.scheduledTime.split(":").map(Number);
-      const today = new Date(now); today.setHours(0, 0, 0, 0);
-      const start = new Date(today);
+      // v05.05bt160 — anchor scheduled tasks to referenceDate so they
+      // render on the correct calendar day in tomorrow view.
+      const start = new Date(referenceDate);
       start.setHours(h, m || 0, 0, 0);
       const end = new Date(start.getTime() + (t.effortMin || 30) * 60000);
       return { ...t, start, end, durationMin: t.effortMin, kind: "task" };
@@ -19107,34 +19286,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     // v05.05bt121 — respect today's setup: skip optional routines the
     // user toggled off (cooking, workout). Today's setup is stale if
     // its date doesn't match today.
-    const today = new Date(now); today.setHours(0, 0, 0, 0);
-    const todayKey = today.toISOString().slice(0, 10);
+    // v05.05bt160 — Anchor off referenceDate (today or tomorrow) so
+    // the timeline renders the correct calendar day.
+    const today = referenceDate;
+    const todayKey = isoDate(today);
     const setupApplies = todaySetup?.date === todayKey;
     const cookOff   = setupApplies && todaySetup.cookingToday === false;
     const workoutOff = setupApplies && todaySetup.workoutToday === false;
 
-    let routines = getRoutineSlotsForToday(currentUser, onsite, now, setupApplies ? todaySetup?.routineOverrides : null);
+    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null);
     routines = routines.filter(r => {
       if (r.id === "cook"    && cookOff)    return false;
       if (r.id === "workout" && workoutOff) return false;
       return true;
     });
 
-    // v05.05bt121 — today's meetings become kind:"meeting" slots so
-    // they're visible in the timeline and naturally split free blocks
-    // v05.05bt141 — Only include meetings that belong to the current
-    // viewer. Previously, both Mommy's and Daddy's meetings appeared
-    // on the Mommy's Day timeline, which is wrong: Daddy's 10am meeting
-    // doesn't block Mommy's calendar. Meetings store the owner as
-    // m.parent (set in InlineCommitmentForm). Fallback to currentUser
-    // if no parent recorded (legacy entries).
     const todayMeetings = (meetings || [])
       .map(m => {
         try {
           const start = new Date(m.start);
           const end = new Date(m.end);
           if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-          if (start.toDateString() !== now.toDateString()) return null;
+          // v05.05bt160 — Match meetings to the reference day, not just now.
+          if (start.toDateString() !== today.toDateString()) return null;
           const owner = m.parent || currentUser;
           if (owner !== currentUser) return null;
           return {
@@ -19150,8 +19324,28 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
 
     const dayStart = new Date(today); dayStart.setHours(7, 0, 0, 0);
     const dayEnd = new Date(today); dayEnd.setHours(23, 30, 0, 0);
-    return buildDayTimeline([...routines, ...todayMeetings, ...scheduledTasks], dayStart, dayEnd);
-  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings]);
+
+    // v05.05bt159 — Bedtime cascade.
+    // v05.05bt160 — Bedtime settings (wakeTime, sleepHrs) are persistent
+    // across days, so they apply to tomorrow's view too.
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today);
+    routines = applyBedtimeCascade(routines, lightsOut, today);
+    const bedtimeRoutines = [];
+    if (lightsOut) {
+      const bedStart = new Date(lightsOut);
+      const bedEnd = new Date(lightsOut.getTime() + 15 * 60000);
+      bedtimeRoutines.push({
+        kind: "routine",
+        id: "bedtime",
+        title: "Lights out · in bed",
+        start: bedStart,
+        end: bedEnd,
+        durationMin: 15,
+      });
+    }
+
+    return buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks], dayStart, dayEnd);
+  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -19217,7 +19411,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       let fit = sortedActive.find(t =>
         !used.has(t.id)
         && t.effortMin <= block.durationMin
-        && (t.focusLevel || "medium") === block.focusLevel
+        && normalizeFocus(t.focusLevel) === normalizeFocus(block.focusLevel)
       );
       if (!fit) {
         fit = sortedActive.find(t =>
@@ -19225,7 +19419,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         );
       }
       if (fit) used.add(fit.id);
-      return { ...block, suggested: fit };
+      // v05.05bt156 — Diagnose why an empty block stayed empty so the
+      // user understands the gap.
+      // v05.05bt158 — If the blocker is too-long-task, expose its id
+      // so the open-block panel can offer to split it.
+      let emptyReason = null;
+      let blockingTaskId = null;
+      if (!fit) {
+        const candidates = sortedActive.filter(t => !used.has(t.id));
+        if (candidates.length === 0) {
+          emptyReason = "no unscheduled tasks waiting";
+        } else {
+          const smallest = candidates.reduce(
+            (min, t) => t.effortMin < min.effortMin ? t : min,
+            candidates[0]
+          );
+          if (smallest.effortMin > block.durationMin) {
+            emptyReason = `smallest unscheduled task needs ${smallest.effortMin}m, this block is only ${block.durationMin}m`;
+            // Only offer split if the task is splittable (≥45m).
+            if (smallest.effortMin >= 45) blockingTaskId = smallest.id;
+          } else {
+            emptyReason = `all fitting tasks already claimed earlier slots`;
+          }
+        }
+      }
+      return { ...block, suggested: fit, emptyReason, blockingTaskId };
     });
   }, [availableBlocks, sortedActive]);
 
@@ -19236,19 +19454,52 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       title: draftTitle.trim(),
       effortMin: Number(draftEffort),
       regretScore: Number(draftRegret),
-      focusLevel: draftFocus,
+      focusLevel: normalizeFocus(draftFocus),
+      // v05.05bt157 — Auto-infer category from title.
+      category: inferCategory(draftTitle.trim()),
+      // v05.05bt160 — Tag the task to the selected day (today/tomorrow).
+      scheduledDate: referenceISO,
       ownerName: currentUser,
       scheduledTime: draftScheduledTime || null,
       createdAt: new Date().toISOString(),
       completedAt: null,
     };
-    setTasks(prev => [...prev, newTask]);
+    // v05.05bt155 — Auto-reanalyze on add, same as commitNlPending.
+    // If the new task has no manual scheduledTime, re-slot the full
+    // open set so it lands in a properly-prioritized spot. If it has
+    // a manual time, just append and re-slot the rest around it.
+    const existingOpen = myTasks.filter(t => !t.completedAt);
+    const unpinnedToSlot = newTask.scheduledTime
+      ? existingOpen.map(t => ({ ...t, scheduledTime: null }))
+      : [...existingOpen.map(t => ({ ...t, scheduledTime: null })), newTask];
+    // v05.05bt156 — Fresh workable: include completed tasks + the new
+    // task IF it has a manual time (so the engine slots around it).
+    const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
+    const pinned = newTask.scheduledTime ? [...completed, newTask] : completed;
+    const workable = computeFreshWorkableBlocks(pinned);
+    const { updates } = assignTaskTimes(unpinnedToSlot, workable);
+
+    const finalNewTask = newTask.scheduledTime
+      ? newTask
+      : { ...newTask, scheduledTime: updates[newTask.id] || null };
+
+    const existingIds = new Set(existingOpen.map(t => t.id));
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (!existingIds.has(t.id)) return t;
+        return { ...t, scheduledTime: updates[t.id] || null };
+      });
+      return [...next, finalNewTask];
+    });
     setDraftTitle("");
     setDraftEffort(30);
     setDraftRegret(3);
-    setDraftFocus("medium");
+    setDraftFocus("deep");
     setDraftScheduledTime("");
     setShowAddForm(false);
+    // v05.05bt159 — Auto-expand unscheduled pile if the new task
+    // couldn't be slotted so the user sees it landed there.
+    if (!finalNewTask.scheduledTime) setShowUnscheduled(true);
   };
 
   const addFromNl = () => {
@@ -19278,10 +19529,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       focusLevel: b.focusLevel,
       usedMin: 0,
     }));
-    const fOrder = { high: 0, medium: 1, low: 2 };
+    const fOrder = { deep: 0, shallow: 1 };
     const queue = [...toAssign].sort((a, b) => {
       if (b.regretScore !== a.regretScore) return b.regretScore - a.regretScore;
-      return (fOrder[a.focusLevel] || 1) - (fOrder[b.focusLevel] || 1);
+      const fa = fOrder[normalizeFocus(a.focusLevel)];
+      const fb = fOrder[normalizeFocus(b.focusLevel)];
+      if (fa !== fb) return fa - fb;
+      // v05.05bt157 — Category tiebreaker. Work first (claims morning
+      // blocks), personal last (falls to evening). Tasks with no
+      // category sit between. This implements the "8am-5pm work wins,
+      // 5pm-12am personal wins" preference naturally via queue order
+      // without prompting the user on every tie.
+      return categoryRank(a.category) - categoryRank(b.category);
     });
     const updates = {};
     const reasons = {};
@@ -19298,7 +19557,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         const ap = startTs.getHours() < 12 ? "a" : "p";
         const h12 = ((startTs.getHours() + 11) % 12) + 1;
         const clockStr = startTs.getMinutes() === 0 ? `${h12}${ap}` : `${h12}:${String(startTs.getMinutes()).padStart(2,"0")}${ap}`;
-        reasons[task.id] = `→ ${clockStr} · ${block.focusLevel}-focus window · ${task.focusLevel || "medium"} task · R${task.regretScore}`;
+        reasons[task.id] = `→ ${clockStr} · ${FOCUS_LABEL[normalizeFocus(block.focusLevel)].toLowerCase()} window · ${FOCUS_LABEL[normalizeFocus(task.focusLevel)].toLowerCase()} task · R${task.regretScore}`;
       } else {
         // Diagnose why it didn't fit
         const longest = blocks.reduce((max, b) => Math.max(max, b.durationMin - b.usedMin), 0);
@@ -19332,6 +19591,93 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       }));
   };
 
+  // v05.05bt156 — Fresh workable-blocks builder for re-scheduling
+  // operations. The plain getWorkableBlocks() reads dayTimeline, which
+  // is computed from CURRENT React state. If we're about to strip
+  // scheduledTime from a set of tasks (reanalyze / auto-reanalyze /
+  // edit-and-replace), state hasn't been written yet, so dayTimeline
+  // still has those tasks taking up slots — meaning the free blocks
+  // are SMALLER than they actually will be after the strip applies.
+  // Symptom: reanalyze appears to delete everything because the
+  // returned workable blocks are too small to hold the tasks back.
+  //
+  // This helper rebuilds the timeline from scratch with a specified
+  // set of pinned tasks (tasks that should occupy their scheduledTime
+  // and reduce free space) and returns the free gaps. Pass only the
+  // tasks you want to TREAT AS PINNED — the rest of the open set is
+  // free to reschedule into the workable blocks.
+  const computeFreshWorkableBlocks = (pinnedTasks) => {
+    // v05.05bt160 — Anchor off referenceDate so workable blocks
+    // reflect today OR tomorrow depending on dayView.
+    const today = referenceDate;
+    const todayKey = isoDate(today);
+    const setupApplies = todaySetup?.date === todayKey;
+    const cookOff = setupApplies && todaySetup?.cookingToday === false;
+    const workoutOff = setupApplies && todaySetup?.workoutToday === false;
+    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null);
+    routines = routines.filter(r => {
+      if (r.id === "cook"    && cookOff)    return false;
+      if (r.id === "workout" && workoutOff) return false;
+      return true;
+    });
+    const todayMeetingsLocal = (meetings || [])
+      .map(m => {
+        try {
+          const start = new Date(m.start);
+          const end = new Date(m.end);
+          if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+          if (start.toDateString() !== today.toDateString()) return null;
+          const owner = m.parent || currentUser;
+          if (owner !== currentUser) return null;
+          return {
+            kind: "meeting", id: m.id,
+            title: m.label || m.title || "Meeting",
+            start, end,
+            durationMin: Math.max(0, (end - start) / 60000),
+          };
+        } catch { return null; }
+      })
+      .filter(Boolean);
+    const pinnedSlots = (pinnedTasks || []).filter(t => t.scheduledTime).map(t => {
+      const [h, mi] = t.scheduledTime.split(":").map(Number);
+      const start = new Date(today); start.setHours(h, mi || 0, 0, 0);
+      const durationMin = t.effortMin || 30;
+      const end = new Date(start.getTime() + durationMin * 60000);
+      return {
+        kind: "task", id: t.id, title: t.title,
+        start, end, durationMin,
+        focusLevel: t.focusLevel, regretScore: t.regretScore,
+        completedAt: t.completedAt,
+      };
+    });
+    const dayStart = new Date(today); dayStart.setHours(7, 0, 0, 0);
+    const dayEnd = new Date(today); dayEnd.setHours(23, 30, 0, 0);
+    // v05.05bt158 — Include the synthesized bedtime routine here too
+    // v05.05bt159 — Apply bedtime cascade so the scheduler sees the
+    // adjusted PM stack (no last-pump, shutdown+mommy-pm shifted to
+    // end at lights-out) and treats lights-out itself as occupied.
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today);
+    const cascaded = applyBedtimeCascade(routines, lightsOut, today);
+    const bedtimeRoutines = [];
+    if (lightsOut) {
+      const bedStart = new Date(lightsOut);
+      const bedEnd = new Date(lightsOut.getTime() + 15 * 60000);
+      bedtimeRoutines.push({
+        kind: "routine", id: "bedtime", title: "Lights out · in bed",
+        start: bedStart, end: bedEnd, durationMin: 15,
+      });
+    }
+    const fresh = buildDayTimeline([...cascaded, ...bedtimeRoutines, ...todayMeetingsLocal, ...pinnedSlots], dayStart, dayEnd);
+    return fresh
+      .filter(s => s.kind === "free")
+      .map(s => ({
+        start: new Date(s.start),
+        end: new Date(s.end),
+        durationMin: s.durationMin,
+        focusLevel: getBlockFocusLevel(s.start),
+      }));
+  };
+
   const commitNlPending = () => {
     if (!nlPending || nlPending.length === 0) return;
     const baseTs = Date.now();
@@ -19340,42 +19686,75 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       title: p.title,
       effortMin: p.effortMin,
       regretScore: p.regretScore,
-      focusLevel: p.focusLevel === "auto" ? inferFocusLevel(p.title) : p.focusLevel,
+      focusLevel: p.focusLevel === "auto" ? inferFocusLevel(p.title) : normalizeFocus(p.focusLevel),
+      // v05.05bt157 — Auto-infer category. User can override later.
+      category: p.category || inferCategory(p.title),
+      // v05.05bt160 — Tag to the selected day (today/tomorrow).
+      scheduledDate: referenceISO,
       ownerName: currentUser,
       scheduledTime: p.scheduledTime || null,
       createdAt: new Date().toISOString(),
       completedAt: null,
     }));
-    const toAssign = newTasks.filter(t => !t.scheduledTime);
-    let slottedCount = newTasks.filter(t => t.scheduledTime).length;
-    let unscheduledCount = 0;
-    let placementReasons = {};
-    if (toAssign.length > 0) {
-      const workable = getWorkableBlocks();
-      const result = assignTaskTimes(toAssign, workable);
-      const updates = result.updates;
-      placementReasons = result.reasons;
-      newTasks = newTasks.map(t => updates[t.id] ? { ...t, scheduledTime: updates[t.id] } : t);
-      slottedCount += Object.keys(updates).length;
-      unscheduledCount = toAssign.length - Object.keys(updates).length;
-    }
-    setTasks(prev => [...prev, ...newTasks]);
+    // v05.05bt155 — Auto-reanalyze the FULL open set per chat ("had to
+    // go to the settings and hit reanalyze schedule once i added").
+    // Existing open tasks with non-pinned scheduledTime get re-slotted
+    // alongside the new ones, so the engine can find a globally better
+    // arrangement (high-regret new task can displace lower-regret older
+    // one to a worse slot, etc.). Tasks with an explicit manual time on
+    // entry (parsed from NL "at 11am" or set in the structured form)
+    // stay pinned. This matches what the manual "Re-analyze" button
+    // does — just automatic on every add now.
+    const existingOpen = myTasks.filter(t => !t.completedAt);
+    const pinnedNew = newTasks.filter(t => t.scheduledTime); // user set a time explicitly
+    const unpinnedToSlot = [
+      ...existingOpen.map(t => ({ ...t, scheduledTime: null })),
+      ...newTasks.filter(t => !t.scheduledTime),
+    ];
+
+    // v05.05bt156 — Fresh workable: include completed tasks + newly
+    // pinned-by-user tasks so the engine slots around them.
+    const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
+    const workable = computeFreshWorkableBlocks([...completed, ...pinnedNew]);
+    const { updates, reasons } = assignTaskTimes(unpinnedToSlot, workable);
+
+    // Apply updates to both existing tasks and new tasks.
+    const updatedNew = newTasks.map(t =>
+      t.scheduledTime ? t : { ...t, scheduledTime: updates[t.id] || null }
+    );
+    const existingIds = new Set(existingOpen.map(t => t.id));
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (!existingIds.has(t.id)) return t;
+        return { ...t, scheduledTime: updates[t.id] || null };
+      });
+      return [...next, ...updatedNew];
+    });
+
     setNlText("");
     setNlPending(null);
     setShowNlInput(false);
-    // v05.05bt151 — Capture items + reasons so the banner can show
-    // per-task placement detail when expanded.
+
+    // Banner reports only on the NEW additions (what just got committed).
+    const slotted = updatedNew.filter(t => t.scheduledTime).length;
+    const unscheduled = updatedNew.length - slotted;
     setScheduleStatus({
-      slotted: slottedCount,
-      unscheduled: unscheduledCount,
-      total: newTasks.length,
-      items: newTasks.map(t => ({
+      slotted, unscheduled,
+      total: updatedNew.length,
+      items: updatedNew.map(t => ({
         id: t.id, title: t.title, scheduled: !!t.scheduledTime,
-        reason: placementReasons[t.id] || (t.scheduledTime ? "manual time set on entry" : null),
+        reason: reasons[t.id] || (t.scheduledTime ? "manual time set on entry" : null),
       })),
       algorithm: "greedy regret-priority",
+      reanalyzed: true, // mark auto-reanalyzed so the badge shows
     });
-    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
+    // v05.05bt159 — Per chat "nothing gets added as well to the task list":
+    // if any new task ended up unscheduled (couldn't be slotted), auto-open
+    // the unscheduled pile so the user sees the entries instead of thinking
+    // they vanished. The pile is collapsed by default; commit success without
+    // this auto-expand makes failures invisible.
+    if (unscheduled > 0) setShowUnscheduled(true);
+    /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
   };
 
   const autoSchedule = () => {
@@ -19390,7 +19769,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: reasons[t.id] })),
         algorithm: "greedy regret-priority",
       });
-      setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
+      /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
       return;
     }
     setTasks(prev => prev.map(t =>
@@ -19403,7 +19782,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
       algorithm: "greedy regret-priority",
     });
-    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
+    /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
   };
 
   // v05.05bt142 — Re-analyze: unschedule every open task, then re-run
@@ -19414,7 +19793,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     const open = myTasks.filter(t => !t.completedAt);
     if (open.length === 0) return;
     const openStripped = open.map(t => ({ ...t, scheduledTime: null }));
-    const workable = getWorkableBlocks();
+    // v05.05bt156 — Compute workable from a FRESH timeline that doesn't
+    // include the open tasks (since we're stripping them). The plain
+    // getWorkableBlocks() reads dayTimeline (current state) which still
+    // has the open tasks taking up slots — making free blocks too small
+    // and tasks fall through. This was the "everything just erased"
+    // bug from chat.
+    const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
+    const workable = computeFreshWorkableBlocks(completed);
     if (workable.length === 0) {
       setScheduleStatus({
         slotted: 0,
@@ -19424,7 +19810,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         items: open.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: "no free blocks today — fully booked" })),
         algorithm: "greedy regret-priority",
       });
-      setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
+      /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
       return;
     }
     const { updates, reasons } = assignTaskTimes(openStripped, workable);
@@ -19441,7 +19827,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       items: open.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
       algorithm: "greedy regret-priority",
     });
-    setTimeout(() => { setScheduleStatus(null); setScheduleStatusOpen(false); }, 12000);
+    /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
   };
 
   // v05.05bt150 — Monday export rewritten per chat. CSV with two
@@ -19546,7 +19932,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         title: c.title.trim(),
         effortMin: Number(c.effortMin),
         regretScore: original.regretScore, // inherit
-        focusLevel: original.focusLevel || "medium",
+        focusLevel: normalizeFocus(original.focusLevel),
         createdAt: new Date().toISOString(),
         completedAt: null,
         chunkOf: original.id, // breadcrumb (optional, not displayed)
@@ -19790,13 +20176,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               color: "#7C6B5A", fontWeight: 700, marginBottom: 6,
               fontFamily: "'JetBrains Mono', monospace",
             }}>
-              Focus needed
+              Focus
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6, marginBottom: 12 }}>
               {[
-                { v: "high", l: "High · deep", color: C.daddy },
-                { v: "medium", l: "Medium", color: C.gold },
-                { v: "low", l: "Low · admin", color: C.muted },
+                { v: "deep",    l: "Deep · intense", color: FOCUS_COLOR.deep },
+                { v: "shallow", l: "Light · easy",   color: FOCUS_COLOR.shallow },
               ].map(opt => (
                 <button
                   key={opt.v}
@@ -19947,11 +20332,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                           {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
                         </div>
                         <div style={{
-                          fontSize: 9, color: b.focusLevel === "high" ? C.mommy
-                            : b.focusLevel === "low" ? C.muted : C.gold,
+                          fontSize: 9, color: FOCUS_COLOR[normalizeFocus(b.focusLevel)],
                           letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700,
                         }}>
-                          {b.focusLevel} focus
+                          {FOCUS_LABEL[normalizeFocus(b.focusLevel)]} focus
                         </div>
                       </div>
                       <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
@@ -19970,8 +20354,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                           )}
                         </div>
                       ) : (
-                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4 }}>
-                          No open task fits. Use for rest, or a smaller task.
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4, lineHeight: 1.4 }}>
+                          {b.emptyReason || "No open task fits. Use for rest, or a smaller task."}
+                          {b.blockingTaskId && (() => {
+                            const blocker = sortedActive.find(t => t.id === b.blockingTaskId);
+                            if (!blocker) return null;
+                            return (
+                              <>
+                                {" "}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSplittingTask(blocker); }}
+                                  style={{
+                                    background: "transparent", border: "none",
+                                    padding: 0, color: C.mommy,
+                                    fontFamily: "inherit", fontStyle: "italic",
+                                    fontSize: 11, cursor: "pointer",
+                                    borderBottom: `1px dotted ${C.mommy}`,
+                                  }}
+                                  title={`Split "${blocker.title}" into smaller chunks`}>
+                                  split it?
+                                </button>
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -20050,12 +20455,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
                     </div>
                     <div style={{
-                      fontSize: 8.5, color: b.focusLevel === "high" ? C.mommy
-                        : b.focusLevel === "low" ? "#7C6B5A" : C.gold,
+                      fontSize: 8.5, color: FOCUS_COLOR[normalizeFocus(b.focusLevel)],
                       letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700,
                       fontFamily: "'JetBrains Mono', monospace",
                     }}>
-                      {b.focusLevel} focus
+                      {FOCUS_LABEL[normalizeFocus(b.focusLevel)]} focus
                     </div>
                   </div>
                   <div style={{
@@ -20091,10 +20495,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   ) : (
                     <div style={{
                       fontFamily: "'Cormorant Garamond', serif",
-                      fontSize: 13, color: "#7C6B5A",
-                      fontStyle: "italic", marginTop: 6,
+                      fontSize: 12.5, color: "#7C6B5A",
+                      fontStyle: "italic", marginTop: 6, lineHeight: 1.45,
                     }}>
-                      No open task fits this block. Pick one manually below.
+                      {b.emptyReason || "No open task fits this block. Pick one manually below."}
+                      {b.blockingTaskId && (() => {
+                        const blocker = sortedActive.find(t => t.id === b.blockingTaskId);
+                        if (!blocker) return null;
+                        return (
+                          <>
+                            {" "}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSplittingTask(blocker); }}
+                              style={{
+                                background: "transparent", border: "none",
+                                padding: 0, color: C.mommy,
+                                fontFamily: "inherit", fontStyle: "italic",
+                                fontSize: 12.5, cursor: "pointer",
+                                borderBottom: `1px dotted ${C.mommy}`,
+                              }}
+                              title={`Split "${blocker.title}" into smaller chunks`}>
+                              split it?
+                            </button>
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -20227,8 +20652,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
             with regret + focus. Free rows show the gap duration. */}
         {/* v05.05bt119 — RIGHT NOW card. Shows current block, who's on
             duty, time until handoff, and the highest-priority unfinished
-            task as a "best next move" suggestion. */}
-        {currentUser === "Mommy" && (() => {
+            task as a "best next move" suggestion.
+            v05.05bt160 — Hidden in tomorrow view since "right now" and
+            "best next move" only make sense for live today data. Tomorrow
+            view shows a small italic header instead so the user knows
+            they're in planning mode. */}
+        {currentUser === "Mommy" && isTomorrow && (
+          <div style={{
+            background: `${C.mommy}0c`,
+            border: `1px dashed ${C.mommy}55`,
+            borderRadius: 12,
+            padding: "12px 14px", marginBottom: 16,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 14,
+            color: "#7C6B5A", lineHeight: 1.45,
+          }}>
+            <strong style={{ fontStyle: "normal", color: C.mommy }}>Planning tomorrow.</strong>{" "}
+            Tasks added here are tagged for {referenceDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}. They'll roll into Today automatically when the day flips.
+          </div>
+        )}
+        {currentUser === "Mommy" && !isTomorrow && (() => {
           const currentSlot = dayTimeline.find(s => s.start <= now && now < s.end);
           if (!currentSlot) return null;
 
@@ -20353,6 +20796,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   }} />
                   RIGHT NOW
                 </div>
+                {/* v05.05bt156 — Subtitle clarifying what this half shows. */}
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 10.5,
+                  color: "rgba(124,107,90,0.7)",
+                  lineHeight: 1.25, marginTop: -6, marginBottom: 8,
+                }}>
+                  what's happening now
+                </div>
 
                 {/* v05.05bt152 — Right Now now shows WHAT'S happening,
                     not just a naked time range. Per chat: "i still dont
@@ -20465,8 +20917,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     color: C.mommy,
                     fontFamily: "'Inter', sans-serif",
                     fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
-                    marginBottom: 10,
                   }}>BEST NEXT MOVE</div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 10.5,
+                    color: "rgba(124,107,90,0.7)",
+                    lineHeight: 1.25, marginTop: 2, marginBottom: 8,
+                  }}>
+                    your next scheduled task
+                  </div>
                   <div style={{
                     display: "flex", alignItems: "center", gap: 8,
                     marginBottom: 8,
@@ -20512,11 +20971,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     marginBottom: 8,
                   }}>
                     <span style={{
-                      color: nextMove.focusLevel === "high" ? C.mommy
-                        : nextMove.focusLevel === "low" ? "#7C6B5A"
-                        : C.gold,
+                      color: FOCUS_COLOR[normalizeFocus(nextMove.focusLevel)],
                     }}>
-                      {(nextMove.focusLevel || "medium").toUpperCase()} FOCUS
+                      {FOCUS_LABEL[normalizeFocus(nextMove.focusLevel)].toUpperCase()} FOCUS
                     </span>
                     <span style={{ color: C.muted, margin: "0 4px", fontWeight: 400 }}>·</span>
                     <span style={{ color: C.mommy, letterSpacing: "0.04em" }}>
@@ -20656,8 +21113,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     color: C.mommy,
                     fontFamily: "'Inter', sans-serif",
                     fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
-                    marginBottom: 10,
                   }}>BEST NEXT MOVE</div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 10.5,
+                    color: "rgba(124,107,90,0.7)",
+                    lineHeight: 1.25, marginTop: 2, marginBottom: 8,
+                  }}>
+                    your next scheduled task
+                  </div>
                   <div style={{
                     fontFamily: "'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 13,
@@ -20690,7 +21154,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
             fontSize: 12.5, color: C.ink, lineHeight: 1.45,
             fontFamily: "'Cormorant Garamond', serif",
             fontStyle: "italic",
+            // v05.05bt159 — banner no longer auto-dismisses (user said
+            // 'i wasnt able to see the reasoning for the analysis before
+            // it disappeared'). Adds explicit × close button below.
+            position: "relative",
           }}>
+            {/* × close button — top-right */}
+            <button
+              onClick={() => { setScheduleStatus(null); setScheduleStatusOpen(false); }}
+              aria-label="Dismiss"
+              style={{
+                position: "absolute", top: 4, right: 6,
+                background: "transparent", border: "none",
+                fontSize: 16, lineHeight: 1, color: C.muted,
+                cursor: "pointer", padding: 4,
+                fontFamily: "inherit",
+              }}>×</button>
             {scheduleStatus.reanalyzed && (
               <span style={{
                 display: "inline-block",
@@ -20817,13 +21296,48 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               return (
                 <div style={{ marginBottom: 14, padding: "0 4px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <h1 style={{
-                      fontFamily: "'Cormorant Garamond', serif",
-                      fontStyle: "italic", fontWeight: 500,
-                      fontSize: 24, color: C.ink,
-                      margin: 0, lineHeight: 1.05,
-                      letterSpacing: "-0.015em",
-                    }}>Today</h1>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
+                      <h1 style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontWeight: 500,
+                        fontSize: 24, color: C.ink,
+                        margin: 0, lineHeight: 1.05,
+                        letterSpacing: "-0.015em",
+                      }}>{isTomorrow ? "Tomorrow" : "Today"}</h1>
+                      {/* v05.05bt160 — Day toggle: small pill switch. */}
+                      <div style={{
+                        display: "inline-flex", alignItems: "stretch",
+                        background: `${C.line}15`,
+                        border: `1px solid ${C.line}33`,
+                        borderRadius: 999, padding: 2,
+                        fontFamily: "'Inter', sans-serif",
+                        fontSize: 9.5, fontWeight: 700,
+                        letterSpacing: "0.18em",
+                      }}>
+                        {[
+                          { v: "today", l: "TODAY" },
+                          { v: "tomorrow", l: "TOMORROW" },
+                        ].map(opt => (
+                          <button
+                            key={opt.v}
+                            onClick={() => setDayView(opt.v)}
+                            style={{
+                              background: dayView === opt.v ? C.mommy : "transparent",
+                              color: dayView === opt.v ? "#fff" : C.muted,
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              fontWeight: "inherit",
+                              letterSpacing: "inherit",
+                              fontSize: "inherit",
+                            }}>
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {/* v05.05bt148 — ⋯ menu moved inline with the
                         Today heading. Always visible, never in an
                         awkward floating corner. */}
@@ -21277,26 +21791,34 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                               {slot.completedAt ? "✓" : ""}
                             </button>
                           )}
-                          {/* v05.05bt146 — Focus dot before title.
-                              Tap to cycle focus levels (mauve = deep,
-                              gold = medium, gray = light). */}
+                          {/* v05.05bt155/156 — Focus dot binary: terracotta
+                              (deep) or sage (shallow). 8px visual but
+                              a 14px wide / full-height button as the
+                              hit target so it's easier to tap on touch. */}
                           {isTask && (() => {
-                            const fl = slot.focusLevel || "medium";
-                            const dotColor = fl === "high" ? C.mommy
-                              : fl === "low" ? C.muted
-                              : C.gold;
+                            const fl = normalizeFocus(slot.focusLevel);
+                            const dotColor = FOCUS_COLOR[fl];
                             return (
                               <button
                                 onClick={(e) => { e.stopPropagation(); if (!slot.completedAt) cycleFocusLevel(slot.id); }}
                                 disabled={!!slot.completedAt}
-                                title={slot.completedAt ? null : `${fl} focus · tap to cycle`}
+                                title={slot.completedAt ? null : `${FOCUS_LABEL[fl]} focus · tap to toggle`}
                                 style={{
-                                  width: 8, height: 8, borderRadius: "50%",
-                                  background: dotColor, border: "none",
-                                  flexShrink: 0, padding: 0,
+                                  display: "inline-flex",
+                                  alignItems: "center", justifyContent: "center",
+                                  width: 18, height: 18,
+                                  padding: 0, border: "none",
+                                  background: "transparent",
+                                  flexShrink: 0,
                                   cursor: slot.completedAt ? "default" : "pointer",
                                   opacity: slot.completedAt ? 0.4 : 1,
+                                }}>
+                                <span style={{
+                                  display: "block",
+                                  width: 9, height: 9, borderRadius: "50%",
+                                  background: dotColor,
                                 }} />
+                              </button>
                             );
                           })()}
                           {isTask && !slot.completedAt && inlineTitleEdit === slot.id ? (
@@ -21330,14 +21852,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                                 : undefined}
                             style={{
                             fontFamily: "'Cormorant Garamond', serif",
-                            fontSize: isFree ? 14 : 15,
-                            fontStyle: isFree || isRoutine ? "italic" : "normal",
-                            fontWeight: isRoutine ? 400 : 500,
-                            color: isFree ? "#7C6B5A"
+                            // v05.05bt159 — Bedtime row stands out: bold,
+                            // larger, mauve (the day-ender deserves emphasis).
+                            fontSize: isFree ? 14
+                              : (slot.id === "bedtime") ? 17
+                              : 15,
+                            fontStyle: (slot.id === "bedtime") ? "normal"
+                              : (isFree || isRoutine) ? "italic"
+                              : "normal",
+                            fontWeight: (slot.id === "bedtime") ? 700
+                              : isRoutine ? 400
+                              : 500,
+                            color: (slot.id === "bedtime") ? C.mommy
+                              : isFree ? "#7C6B5A"
                               : isRoutine ? "#6B5F50"
                               : C.ink,
                             lineHeight: 1.2, flex: 1, minWidth: 0,
-                            letterSpacing: "-0.005em",
+                            letterSpacing: (slot.id === "bedtime") ? "0.01em" : "-0.005em",
                             textDecoration: isTask && slot.completedAt ? "line-through" : "none",
                             cursor: ((isTask && !slot.completedAt) || isRoutine) ? "pointer" : "default",
                             textAlign: "left", display: "block",
@@ -21468,16 +21999,39 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               }}>
                 <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>FOCUS DOT</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.mommy }} />
-                  <span>Deep</span>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: FOCUS_COLOR.deep }} />
+                  <span>Deep · intense focus</span>
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.gold }} />
-                  <span>Medium</span>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: FOCUS_COLOR.shallow }} />
+                  <span>Light · easy/admin</span>
                 </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.muted }} />
-                  <span>Light</span>
+              </div>
+              {/* v05.05bt153 — Regret/priority legend per chat. Same
+                  color scale used everywhere (right column on tasks,
+                  Review modal, EditTaskModal). R1-R2 muted, R3 gold,
+                  R4 rose-coral, R5 deep red. */}
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "6px 14px",
+                justifyContent: "center", alignItems: "center",
+                borderTop: `1px solid ${C.line}33`, paddingTop: 6,
+              }}>
+                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>PRIORITY</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: C.muted, fontWeight: 700 }}>R1–2</span>
+                  <span style={{ opacity: 0.7 }}>Tomorrow's fine</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: C.gold, fontWeight: 700 }}>R3</span>
+                  <span style={{ opacity: 0.7 }}>Slightly behind</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: "#C18D7A", fontWeight: 700 }}>R4</span>
+                  <span style={{ opacity: 0.7 }}>Significantly behind</span>
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: "#A04848", fontWeight: 700 }}>R5</span>
+                  <span style={{ opacity: 0.7 }}>Cannot push</span>
                 </span>
               </div>
             </div>
@@ -21682,8 +22236,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               </button>
             </div>
             {unscheduledTasks.map(t => {
-              const focusColor = t.focusLevel === "high" ? C.mommy
-                : t.focusLevel === "low" ? "#7C6B5A" : C.gold;
+              const focusColor = FOCUS_COLOR[normalizeFocus(t.focusLevel)];
               const canSplit = t.effortMin >= 45;
               return (
                 <div key={t.id} style={{
@@ -21714,7 +22267,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   <span style={{
                     width: 8, height: 8, borderRadius: "50%",
                     background: focusColor, flexShrink: 0,
-                  }} title={`${t.focusLevel || "medium"} focus`} />
+                  }} title={`${FOCUS_LABEL[normalizeFocus(t.focusLevel)]} focus`} />
                   {/* Tap on body to edit */}
                   <button
                     onClick={() => setEditingTask(t)}
@@ -22255,7 +22808,11 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete }) {
   const [title, setTitle] = useState(task.title);
   const [effortMin, setEffortMin] = useState(task.effortMin);
   const [regretScore, setRegretScore] = useState(task.regretScore);
-  const [focusLevel, setFocusLevel] = useState(task.focusLevel || "medium");
+  const [focusLevel, setFocusLevel] = useState(normalizeFocus(task.focusLevel));
+  // v05.05bt157 — Category: work | personal | "" (unset). Auto-inferred
+  // on task creation; user can override here. Used as a tiebreaker in
+  // the scheduler (work claims morning blocks, personal falls to evening).
+  const [category, setCategory] = useState(task.category || "");
   // v05.05bt114 — surfaces scheduledTime so user can correct or remove it
   const [scheduledTime, setScheduledTime] = useState(task.scheduledTime || "");
 
@@ -22274,6 +22831,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete }) {
       effortMin: Number(effortMin),
       regretScore: Number(regretScore),
       focusLevel,
+      category: category || null,
       scheduledTime: scheduledTime || null,
     });
   };
@@ -22305,13 +22863,12 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete }) {
         ))}
       </div>
       <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
-        Focus needed
+        Focus
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4, marginBottom: 10 }}>
         {[
-          { v: "high", l: "High · deep", color: C.daddy },
-          { v: "medium", l: "Medium", color: C.gold },
-          { v: "low", l: "Low · admin", color: C.muted },
+          { v: "deep",    l: "Deep · intense focus",  color: FOCUS_COLOR.deep },
+          { v: "shallow", l: "Light · easy/admin",    color: FOCUS_COLOR.shallow },
         ].map(opt => (
           <button key={opt.v} onClick={() => setFocusLevel(opt.v)} style={{
             background: focusLevel === opt.v ? opt.color : C.bg,
@@ -22320,6 +22877,30 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete }) {
             fontSize: 11, cursor: "pointer", fontFamily: "inherit",
           }}>{opt.l}</button>
         ))}
+      </div>
+      {/* v05.05bt157 — Category picker (work / personal / auto). Used
+          as scheduler tiebreaker. Optional — leave empty for no
+          preference. Auto-inferred at creation time but you can correct
+          it here. */}
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+        Category <span style={{ textTransform: "none", letterSpacing: "0", fontWeight: 400, opacity: 0.7 }}>· tiebreaker only</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 10 }}>
+        {[
+          { v: "",         l: "Auto",     color: C.muted },
+          { v: "work",     l: "Work",     color: "#8B7AA8" },
+          { v: "personal", l: "Personal", color: "#D9956A" },
+        ].map(opt => (
+          <button key={opt.v || "auto"} onClick={() => setCategory(opt.v)} style={{
+            background: category === opt.v ? opt.color : C.bg,
+            color: category === opt.v ? "#fff" : C.ink,
+            border: `1px solid ${C.line}33`, borderRadius: 6, padding: "6px 4px",
+            fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+          }}>{opt.l}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginBottom: 12, lineHeight: 1.4 }}>
+        Work tasks claim morning blocks; personal tasks fall to evening when there's a tie on priority + focus.
       </div>
       {/* v05.05bt114 — scheduled time editable from Edit modal */}
       <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
@@ -22558,9 +23139,8 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
             style={{ ...selectStyle, width: 64 }}
             title="Focus">
             <option value="auto">auto</option>
-            <option value="high">deep</option>
-            <option value="medium">med</option>
-            <option value="low">light</option>
+            <option value="deep">deep</option>
+            <option value="shallow">light</option>
           </select>
           <select
             value={p.regretScore}
@@ -22621,12 +23201,22 @@ function TodaySetupSheet({ C, now, onClose, todaySetup, setTodaySetup, onsite, s
   const isToday = todaySetup?.date === todayKey;
   const cookingToday  = isToday ? (todaySetup.cookingToday  ?? true) : true;
   const workoutToday  = isToday ? (todaySetup.workoutToday  ?? true) : true;
+  // v05.05bt158 — Wake time + sleep target. These are PERSISTENT across
+  // days (unlike cooking/workout which reset). When the day rolls over
+  // the date check resets cooking/workout to defaults; wake/sleep we
+  // preserve by carrying them through from the previous day's setup.
+  const wakeTime  = todaySetup?.wakeTime  || "06:30";
+  const sleepHrs  = todaySetup?.sleepHrs  ?? 8;
 
   const update = (patch) => {
     setTodaySetup({
       date: todayKey,
       cookingToday: patch.cookingToday  ?? cookingToday,
       workoutToday: patch.workoutToday  ?? workoutToday,
+      // Carry persistent fields through every update.
+      wakeTime: patch.wakeTime ?? wakeTime,
+      sleepHrs: patch.sleepHrs ?? sleepHrs,
+      routineOverrides: todaySetup?.routineOverrides || {},
     });
   };
 
@@ -22685,6 +23275,85 @@ function TodaySetupSheet({ C, now, onClose, todaySetup, setTodaySetup, onsite, s
         <div style={{ fontSize: 10, color: C.muted, marginTop: 4, fontStyle: "italic" }}>
           {onsite ? "Grandparents have baby · whole day is workable" : "Baby duty applies during your shifts"}
         </div>
+      </div>
+
+      {/* v05.05bt158 — Wake time + sleep target. Persistent settings
+          (not date-scoped). Engine derives bedtime = wake - sleepHrs
+          and adds a "head to bed" routine on the timeline at that time
+          so Mommy can see when she should be in bed to hit her wake
+          target. Per chat: "i would like to put when i need to get up
+          in the morning so that the engine can work backwards as to
+          when i should go to bed". */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 6 }}>
+          Sleep target
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <label style={{
+            background: `${C.line}10`,
+            border: `1px solid ${C.line}22`,
+            borderRadius: 8, padding: "8px 10px",
+            display: "flex", flexDirection: "column", gap: 4,
+          }}>
+            <span style={{ fontSize: 9, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Wake up at
+            </span>
+            <input
+              type="time"
+              value={wakeTime}
+              onChange={e => update({ wakeTime: e.target.value })}
+              style={{
+                background: "transparent", border: "none",
+                padding: 0, fontSize: 16,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: C.ink, fontWeight: 600,
+              }}
+            />
+          </label>
+          <label style={{
+            background: `${C.line}10`,
+            border: `1px solid ${C.line}22`,
+            borderRadius: 8, padding: "8px 10px",
+            display: "flex", flexDirection: "column", gap: 4,
+          }}>
+            <span style={{ fontSize: 9, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Sleep need
+            </span>
+            <select
+              value={sleepHrs}
+              onChange={e => update({ sleepHrs: Number(e.target.value) })}
+              style={{
+                background: "transparent", border: "none",
+                padding: 0, fontSize: 16,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: C.ink, fontWeight: 600,
+                appearance: "auto",
+              }}>
+              {[6, 6.5, 7, 7.5, 8, 8.5, 9].map(h => (
+                <option key={h} value={h}>{h}h</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {(() => {
+          const [wh, wm] = wakeTime.split(":").map(Number);
+          const totalMin = (wh * 60 + wm) - sleepHrs * 60;
+          const bedHour = Math.floor(((totalMin % (24 * 60)) + 24 * 60) % (24 * 60) / 60);
+          const bedMin = (((totalMin % (24 * 60)) + 24 * 60) % (24 * 60)) % 60;
+          const h12 = ((bedHour + 11) % 12) + 1;
+          const ap = bedHour < 12 ? "a" : "p";
+          const bedStr = bedMin === 0 ? `${h12}${ap}` : `${h12}:${String(bedMin).padStart(2,"0")}${ap}`;
+          return (
+            <div style={{
+              fontSize: 11, color: "#7C6B5A",
+              marginTop: 8, fontStyle: "italic",
+              fontFamily: "'Cormorant Garamond', serif",
+              lineHeight: 1.4,
+            }}>
+              ↳ Lights out by <strong style={{ fontStyle: "normal", color: C.ink }}>{bedStr}</strong> to hit your wake target. The bedtime routine will appear in today's timeline.
+            </div>
+          );
+        })()}
       </div>
 
       {/* Today I'm doing */}
