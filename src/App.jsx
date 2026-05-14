@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt161";
+const APP_VERSION = "2026.05.05bt162";
 const APP_BUILD_NOTES = [
-  "FIX: free-form textbox now commits in one tap. The 'Add all' button used to open a Review modal as a second step — easy to dismiss or miss entirely, which is why tasks didn't seem to populate. Now: tap the button (labeled 'Add + slot N tasks') and tasks are added immediately with sensible defaults (priority 3, auto-inferred focus). Fine-tune each task by tapping its regret/focus dots on the timeline or opening edit. A small italic link 'set priority + focus before adding' is available below the button if you want to set priority/focus first.",
+  "Two scheduler fixes per chat. (1) CONTIGUOUS BLOCKS. The 1-hour visual chunking of free time (added in bt149 for readability) was being read by the scheduler as the actual block size — so a 2-hour open window looked like two separate 1-hour blocks and a 2-hour task wouldn't fit. Now the scheduler sees the TRUE contiguous span: two visually-adjacent 1-hour rows are recognized as a single 2-hour window. A 30-min task in a 40-min span has always worked (effortMin ≤ blockDuration); this fixes the inverse: a 2-hour task fitting into a 2-hour contiguous window. (2) PAST-TIME SKIP. When planning today at 4:15p, the scheduler no longer considers time that's already passed. Free spans ending before `now` are dropped; spans straddling `now` are trimmed to start at `now`. Tomorrow view is unaffected (all of tomorrow is future).",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt162", summary: "Scheduler accuracy. (1) New module-level computeFreeSpans(items, dayStart, dayEnd, notBefore) helper. Returns the raw contiguous free windows between items (not chunked into hour rows like buildDayTimeline). Each span is { kind: 'free', start, end, durationMin }. Spans shorter than 15min are dropped. If notBefore is set, spans ending before that time are dropped and spans straddling it are trimmed to start at notBefore. (2) computeFreshWorkableBlocks (the source of truth for scheduler workable blocks) now uses computeFreeSpans instead of filtering buildDayTimeline.filter(kind=='free'). Passes `notBefore = isTomorrow ? null : now` so today view respects current time and tomorrow view sees the whole day. (3) getWorkableBlocks (used by autoSchedule) refactored to delegate to computeFreshWorkableBlocks with all already-scheduled tasks as pinned — gives autoSchedule the same un-chunked + past-time-skip benefits. Visual timeline render still uses buildDayTimeline (chunked 1-hour rows). Open-blocks panel (availableBlocks/blockMatches) was already using partner-shift contiguous blocks, so no change needed there. SCOPING: edits scoped to new computeFreeSpans helper, computeFreshWorkableBlocks return logic, getWorkableBlocks delegation. Zero changes to schema, assignTaskTimes algorithm, focus/category sort, drag handlers, AllTasksView, or render code. Build verified clean via esbuild." },
   { version: "2026.05.05bt161", summary: "NL fast-path commit. (1) commitNlPending refactored to accept an optional `pendingOverride` argument; falls back to nlPending state when called with no args (preserving the existing NlReviewModal commit path). (2) addFromNl rewritten: parses nlText, builds pending list with defaults (regretScore 3, focusLevel 'auto'), then calls commitNlPending(pending) directly. No more setNlPending step, no more modal interruption. (3) New reviewBeforeAdding helper: parses + sets nlPending (opens NlReviewModal) for users who want to adjust priority/focus per-task before commit. (4) NL form button label updated from 'Add all' to 'Add + slot N tasks' (matches the review-modal button copy so user knows what's happening). (5) Below the button, a small italic dotted-underline link 'set priority + focus before adding' appears when there are parsed tasks. Tap → opens the review modal. SCOPING: edits scoped to commitNlPending signature, addFromNl rewrite + new reviewBeforeAdding handler, button label + review-first link in NL form. Zero changes to scheduler algorithm, task schema, NlReviewModal component itself (still rendered when nlPending is set), or any other flow. Existing menu Re-analyze still only re-shuffles existing tasks (not pending NL text) — but that's now less confusing since the NL button name is explicit and clicking it commits in one step. Build verified clean via esbuild." },
   { version: "2026.05.05bt160", summary: "NEXT-DAY PLANNING. (1) Module-level helpers: isoDate(d) returns local-time YYYY-MM-DD (NOT UTC, since users think in local time). getReferenceDate(now, dayView) returns Date at 00:00 local on today or tomorrow based on dayView. (2) Task schema gains optional scheduledDate field (YYYY-MM-DD). Legacy tasks have no field → treated as today's. (3) TodayTaskPlanCard new state: dayView (\"today\" | \"tomorrow\"), referenceDate (useMemo from now + dayView), referenceISO (isoDate of referenceDate), isTomorrow (boolean). (4) myTasks filter extended: in tomorrow view, only t.scheduledDate === referenceISO; in today view, !t.scheduledDate || t.scheduledDate === referenceISO. Legacy tasks remain visible in today view. (5) scheduledTasks enrichment anchored off referenceDate instead of `new Date(now).setHours(0)`. (6) dayTimeline useMemo: `const today = referenceDate` (was new Date(now).setHours(0)); todayKey from isoDate(today); routines via getRoutineSlotsForToday(currentUser, onsite, today, ...); meeting filter compares to today.toDateString(); bedtime cascade applied to referenceDate (wake/sleep settings persistent, so they auto-apply to tomorrow). Deps array adds referenceDate. (7) computeFreshWorkableBlocks: same anchor swap. (8) addTask + commitNlPending: new tasks tagged scheduledDate: referenceISO. (9) Header h1 dynamic: \"Today\" or \"Tomorrow\". (10) New toggle pill inside header flex group: 2-button inline-flex with mauve-filled active state. fontFamily Inter, fontSize 9.5, fontWeight 700, letterSpacing 0.18em. Buttons \"TODAY\" / \"TOMORROW\". (11) Right Now + Best Next Move card hidden when isTomorrow; replaced with a small italic dashed-border banner identifying the selected date and explaining what tomorrow-tagged tasks do. SCOPING: TodayTaskPlanCard touch sites are state additions + filter updates + header render + tomorrow-banner conditional. computeFreshWorkableBlocks + dayTimeline are the only scheduler-path changes. Zero changes to C palette, scheduler algorithm, focus colors, drag handlers, AllTasksView. KNOWN LIMITATIONS: cooking/workout toggles in TodaySetupSheet still key off `now`, so opening Setup in tomorrow view edits today's setup record (not tomorrow's). User can wait until tomorrow's actual day to flip those. Tomorrow view doesn't yet render predicted-nap blocks (those derive from today's recent sleep events). Open-blocks panel does respect referenceDate via computeFreshWorkableBlocks. Build verified clean via esbuild." },
   { version: "2026.05.05bt159", summary: "Three changes per chat. (1) BEDTIME CASCADE. Two new module-level helpers. applyBedtimeCascade(routines, lightsOutDate, today): if lightsOut is null returns routines untouched; otherwise iterates, DROPS last-pump entry entirely, re-anchors shutdown to end at lightsOut (start = lightsOut - 30m, dur 30m, overridden flag), re-anchors mommy-pm to end at shutdown.start (start = lightsOut - 60m, dur 30m, overridden flag). Leaves solene-bed, workout, cook, am, commute-in/out untouched — user can resolve conflicts via the existing daily toggles. computeLightsOut(wakeTime, sleepHrs, today): parses HH:MM wake, subtracts sleepHrs, wraps to today's evening, returns Date or null if outside [18,23] hours. Both dayTimeline useMemo and computeFreshWorkableBlocks updated: compute lightsOut + cascade routines + push a separate 15-min 'Lights out · in bed' routine starting AT lightsOut (NOT ending — the cascade has shutdown ending at lightsOut already, and the bedtime row marks the moment of being-in-bed). The visual bedtime routine ID === 'bedtime' is special-cased in the timeline title render: fontSize 17 (vs default 15), fontWeight 700, color C.mommy (mauve), fontStyle normal (not italic), letterSpacing 0.01em. (2) BANNER PERSISTENCE. sed-removed all 5 instances of setTimeout(...setScheduleStatus(null)...12000). Banner render gains position:relative and an absolute-positioned × close button (top:4 right:6, font-size:16, color C.muted) that calls setScheduleStatus(null) + setScheduleStatusOpen(false). User must dismiss manually. (3) AUTO-EXPAND UNSCHEDULED. commitNlPending: after building scheduleStatus, if unscheduled > 0, calls setShowUnscheduled(true). addTask (structured form): if finalNewTask.scheduledTime is null, calls setShowUnscheduled(true). SCOPING: edits scoped to module-level cascade helpers, dayTimeline + computeFreshWorkableBlocks build, timeline title render special-case, banner render + setTimeout removals, two commit-path setShowUnscheduled calls. Zero changes to C palette, scheduler algorithm itself, focus colors, drag handlers, AllTasksView. Build verified clean via esbuild. DEFERRED to bt160: NEXT-DAY PLANNING (scheduledDate field, tomorrow-view UX)." },
@@ -18102,6 +18103,38 @@ function getReferenceDate(now, dayView) {
   return d;
 }
 
+// v05.05bt162 — Un-chunked free-span computation, used by the scheduler.
+// buildDayTimeline chunks free time into 1-hour visual rows for display,
+// but the scheduler should see CONTIGUOUS spans so it can fit a 2-hour
+// task into what visually looks like two 1-hour rows. This helper
+// returns the raw free windows between items without chunking. Also
+// optionally trims spans to start at `notBefore` so past-time slots
+// aren't considered when planning today.
+function computeFreeSpans(items, dayStart, dayEnd, notBefore) {
+  const sorted = [...items].sort((a, b) => a.start - b.start);
+  const out = [];
+  let cursor = dayStart;
+  const pushSpan = (from, to) => {
+    let s = from;
+    if (notBefore && s < notBefore) s = notBefore;
+    if (s >= to) return;
+    const durationMin = (to - s) / 60000;
+    if (durationMin < 15) return;
+    out.push({
+      kind: "free",
+      start: new Date(s),
+      end: new Date(to),
+      durationMin,
+    });
+  };
+  for (const item of sorted) {
+    if (item.start > cursor) pushSpan(cursor, item.start);
+    if (item.end > cursor) cursor = item.end;
+  }
+  if (cursor < dayEnd) pushSpan(cursor, dayEnd);
+  return out;
+}
+
 // v05.05bt113 — interleave routines + scheduled tasks in chronological order
 // and surface gaps as "free" blocks the user can tap to fill. Gap threshold
 // 30 minutes minimum (smaller gaps just close naturally). Result is an
@@ -19595,23 +19628,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   };
 
   const getWorkableBlocks = () => {
-    // v05.05bt152 — Use ALL free dayTimeline blocks per chat ("i am
-    // confused why some slots are open and yet there are tasks that
-    // were unscheduled"). Previously, in WFH mode, only partner shifts
-    // counted as workable, so visible "+ Open" rows during the user's
-    // own baby shift were NOT slot-able for tasks. The mismatch was
-    // confusing. Now: any open block on the timeline can hold a task,
-    // regardless of who's on duty. The on-duty parent is communicated
-    // via the left rail color so the user knows the context, but it's
-    // no longer a hard filter.
-    return dayTimeline
-      .filter(s => s.kind === "free")
-      .map(s => ({
-        start: new Date(s.start),
-        end: new Date(s.end),
-        durationMin: s.durationMin,
-        focusLevel: getBlockFocusLevel(s.start),
-      }));
+    // v05.05bt162 — Delegate to computeFreshWorkableBlocks so we get
+    // un-chunked contiguous free spans (not the 1-hour visual chunks)
+    // AND past-time trimming. Pass all currently-scheduled tasks as
+    // "pinned" so they stay where they are; the function returns the
+    // remaining truly-contiguous free windows.
+    const allScheduled = myTasks.filter(t => t.scheduledTime);
+    return computeFreshWorkableBlocks(allScheduled);
   };
 
   // v05.05bt156 — Fresh workable-blocks builder for re-scheduling
@@ -19690,15 +19713,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         start: bedStart, end: bedEnd, durationMin: 15,
       });
     }
-    const fresh = buildDayTimeline([...cascaded, ...bedtimeRoutines, ...todayMeetingsLocal, ...pinnedSlots], dayStart, dayEnd);
-    return fresh
-      .filter(s => s.kind === "free")
-      .map(s => ({
-        start: new Date(s.start),
-        end: new Date(s.end),
-        durationMin: s.durationMin,
-        focusLevel: getBlockFocusLevel(s.start),
-      }));
+    // v05.05bt162 — Use computeFreeSpans (un-chunked) instead of
+    // filtering buildDayTimeline (chunked). The 1-hour visual chunking
+    // was preventing the scheduler from fitting a 2-hour task into a
+    // 2-hour contiguous window. Now the scheduler sees the true
+    // contiguous free time.
+    // Also pass `notBefore = now` when planning today, so past-time
+    // slots aren't considered. For tomorrow, no past-time constraint
+    // (referenceDate is tomorrow's start of day; everything is future).
+    const notBefore = isTomorrow ? null : now;
+    const allItems = [...cascaded, ...bedtimeRoutines, ...todayMeetingsLocal, ...pinnedSlots];
+    return computeFreeSpans(allItems, dayStart, dayEnd, notBefore).map(s => ({
+      start: new Date(s.start),
+      end: new Date(s.end),
+      durationMin: s.durationMin,
+      focusLevel: getBlockFocusLevel(s.start),
+    }));
   };
 
   // v05.05bt161 — Optional pending argument. When called without args
