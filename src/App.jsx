@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt255";
+const APP_VERSION = "2026.05.05bt257";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -10225,18 +10225,23 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           Shows the configured step list (editable) as a memory aid for
           whichever parent is doing morning care, especially Daddy on
           weekdays before daycare. */}
-      {morningInfo && (
+      {morningInfo && (() => {
+        // v05.05bt257 — Color match viewer's persona. Per chat: 'recall
+        // only daddy specific items should be that color.' Use Mommy's
+        // mauve when Mommy is viewing, Daddy's blue when Daddy is.
+        const promptColor = currentUser === "Daddy" ? C.daddy : C.mommy;
+        return (
         <div style={{
           marginTop: 14, padding: 12,
-          background: `${C.daddy}10`,
-          border: `1.5px solid ${C.daddy}55`,
+          background: `${promptColor}10`,
+          border: `1.5px solid ${promptColor}55`,
           borderRadius: 10,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-            <Sun size={12} color={C.daddy} />
+            <Sun size={12} color={promptColor} />
             <span style={{
               fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase",
-              color: C.daddy,
+              color: promptColor,
             }}>
               morning check
             </span>
@@ -10244,40 +10249,53 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
             Has Solène had her morning routine?
           </div>
-          {/* Steps list with expand/collapse */}
+          {/* v05.05bt256 — Replaced native <details> with explicit
+              useState toggle. iOS Safari sometimes absorbs nested
+              button clicks inside details, which broke 'Edit steps.' */}
           {Array.isArray(morningInfo.steps) && morningInfo.steps.length > 0 && (
-            <details
-              open={morningExpanded}
-              onToggle={(e) => setMorningExpanded(e.currentTarget.open)}
-              style={{ marginBottom: 10 }}>
-              <summary style={{
-                cursor: "pointer",
-                fontSize: 11, color: C.daddy, fontWeight: 600,
-                letterSpacing: "0.12em", textTransform: "uppercase",
-                marginBottom: 6,
-              }}>
-                {morningExpanded ? "Hide steps" : `Show the ${morningInfo.steps.length} step${morningInfo.steps.length === 1 ? "" : "s"}`}
-              </summary>
-              <ol style={{
-                margin: 0, paddingLeft: 22,
-                fontSize: 13, color: C.ink, lineHeight: 1.6,
-                fontFamily: "'Cormorant Garamond', serif",
-              }}>
-                {morningInfo.steps.map((s, i) => (
-                  <li key={i}>{typeof s === "string" ? s : s.step}</li>
-                ))}
-              </ol>
+            <div style={{ marginBottom: 10 }}>
               <button
-                onClick={onEditMorningSteps}
+                onClick={() => setMorningExpanded(v => !v)}
                 style={{
-                  marginTop: 6, padding: 0,
-                  background: "transparent", border: "none",
-                  color: C.muted, cursor: "pointer",
+                  background: "transparent", border: "none", padding: 0,
+                  cursor: "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
-                  textTransform: "uppercase", textDecoration: "underline",
-                }}>Edit steps</button>
-            </details>
+                  fontSize: 11, color: promptColor, fontWeight: 600,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
+                  marginBottom: 6, textAlign: "left",
+                }}>
+                {morningExpanded ? "Hide steps" : `Show the ${morningInfo.steps.length} step${morningInfo.steps.length === 1 ? "" : "s"}`}
+              </button>
+              {morningExpanded && (
+                <>
+                  <ol style={{
+                    margin: "0 0 6px",
+                    paddingLeft: 18,
+                    fontSize: 13, color: C.ink, lineHeight: 1.6,
+                    fontFamily: "'Cormorant Garamond', serif",
+                    textAlign: "left",
+                    listStylePosition: "outside",
+                  }}>
+                    {morningInfo.steps.map((s, i) => (
+                      <li key={i} style={{ paddingLeft: 4, textAlign: "left" }}>
+                        {typeof s === "string" ? s : s.step}
+                      </li>
+                    ))}
+                  </ol>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEditMorningSteps && onEditMorningSteps(); }}
+                    style={{
+                      marginTop: 4, padding: "2px 0",
+                      background: "transparent", border: "none",
+                      color: C.muted, cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
+                      textTransform: "uppercase", textDecoration: "underline",
+                      textAlign: "left",
+                    }}>Edit steps</button>
+                </>
+              )}
+            </div>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             <button onClick={onMarkMorningDone} style={{
@@ -10288,8 +10306,8 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               <Sun size={11} /> Done
             </button>
             <button onClick={onSnoozeMorning} style={{
-              background: "transparent", color: C.daddy,
-              border: `1px solid ${C.daddy}66`, borderRadius: 8,
+              background: "transparent", color: promptColor,
+              border: `1px solid ${promptColor}66`, borderRadius: 8,
               padding: "8px 6px", fontSize: 11, fontWeight: 600, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}>
@@ -10297,7 +10315,8 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Bedtime check-in — prompts during the 9-11:30pm window to confirm
           whether bath happened tonight. Logs the answer (or a bath_skipped
