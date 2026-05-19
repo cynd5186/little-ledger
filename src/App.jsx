@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt257";
+const APP_VERSION = "2026.05.05bt260";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -2549,28 +2549,55 @@ function SoleneHandoffInner() {
   const [docSummary, setDocSummary] = useState(null); // { generated, html, copyText }
   // Handoff note: { from, to, text, ts, acknowledged }
   const [handoffNote, setHandoffNote] = useState(null);
-  // v05.05bt253 — Configurable morning-routine steps for the 5:30am
+  // v05.05bt253/bt260 — Configurable morning-routine steps for the 5:30am
   // prompt. Per chat: 'Daddy will be the one doing it in weekdays
   // before dropping her off at daycare and he may need help remembering
   // exactly what to do. Since the routine could change as she gets
   // older I don't want to hardcode it here.' Stored under solene key
   // and surfaced via an expandable list inside the prompt.
+  //
+  // v05.05bt260: defaults populated with actual current routine. A
+  // one-time migration replaces the bt253 placeholder defaults when
+  // they match exactly; user-edited values are left alone.
+  const DEFAULT_MORNING_STEPS = [
+    "Change diaper",
+    "Strip clothes off",
+    "Feed",
+    "Upright in chair · 15 min",
+    "Wash · 2 pumps CeraVe on warm-water Aveeno wipe → wipe off last night's oil",
+    "Rinse · new warm-water Aveeno wipe → remove soap",
+    "Argan oil · drops on arms, face, legs · pat, don't rub (heats up)",
+    "Absorb 20 min · meanwhile pack bag + fresh onesie + bib",
+    "Aveeno SPF · rub in fully",
+  ];
+  const PLACEHOLDER_MORNING_STEPS_BT253 = [
+    "Diaper change",
+    "Wipe-down or quick bath",
+    "Dress for the day",
+    "Bottle / morning feed",
+    "Pack daycare bag",
+    "Coat / shoes on",
+  ];
   const [morningRoutineSteps, setMorningRoutineSteps] = useState(() => {
     try {
       const raw = localStorage.getItem("ll:morningRoutineSteps");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // One-time migration from bt253 placeholders to bt260 real routine
+          const migrated = localStorage.getItem("ll:morningRoutineSteps:migratedBt260") === "1";
+          if (!migrated) {
+            const matchesPlaceholder =
+              parsed.length === PLACEHOLDER_MORNING_STEPS_BT253.length &&
+              parsed.every((s, i) => s === PLACEHOLDER_MORNING_STEPS_BT253[i]);
+            try { localStorage.setItem("ll:morningRoutineSteps:migratedBt260", "1"); } catch {}
+            if (matchesPlaceholder) return DEFAULT_MORNING_STEPS;
+          }
+          return parsed;
+        }
       }
     } catch {}
-    return [
-      "Diaper change",
-      "Wipe-down or quick bath",
-      "Dress for the day",
-      "Bottle / morning feed",
-      "Pack daycare bag",
-      "Coat / shoes on",
-    ];
+    return DEFAULT_MORNING_STEPS;
   });
   useEffect(() => {
     try { localStorage.setItem("ll:morningRoutineSteps", JSON.stringify(morningRoutineSteps)); } catch {}
@@ -6138,13 +6165,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             silent: true,
           })}
           morningRoutineSteps={morningRoutineSteps}
+          setMorningRoutineSteps={setMorningRoutineSteps}
           onMarkMorningDone={() => addEvent({ type: "morning_routine_done", silent: true })}
           onSnoozeMorning={() => addEvent({
             type: "morning_routine_snoozed",
             snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
             silent: true,
           })}
-          onEditMorningSteps={() => setShowMorningStepsEditor(true)}
           activePump={activePump}
           onStartPump={(type = "standard") => setActivePump({
             startedAt: new Date().toISOString(),
@@ -9820,7 +9847,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onEditMorningSteps, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -9995,6 +10022,8 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     return { steps: morningRoutineSteps || [] };
   })();
   const [morningExpanded, setMorningExpanded] = useState(false);
+  const [editingMorningSteps, setEditingMorningSteps] = useState(false);
+  const [draftMorningSteps, setDraftMorningSteps] = useState(null);
 
   // v05.05bt35: notification sounds.
   // Trigger short chimes whenever a banner transitions from hidden→visible
@@ -10283,16 +10312,23 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                     ))}
                   </ol>
                   <button
-                    onClick={(e) => { e.stopPropagation(); onEditMorningSteps && onEditMorningSteps(); }}
+                    type="button"
+                    onClick={() => {
+                      setDraftMorningSteps(
+                        (morningRoutineSteps || []).map(s => typeof s === "string" ? s : (s.step || ""))
+                      );
+                      setEditingMorningSteps(true);
+                    }}
                     style={{
-                      marginTop: 4, padding: "2px 0",
-                      background: "transparent", border: "none",
+                      marginTop: 6, padding: "6px 8px",
+                      background: "transparent", border: `1px solid ${C.line}33`,
+                      borderRadius: 6,
                       color: C.muted, cursor: "pointer",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
-                      textTransform: "uppercase", textDecoration: "underline",
+                      fontSize: 10, letterSpacing: "0.12em", fontWeight: 600,
+                      textTransform: "uppercase",
                       textAlign: "left",
-                    }}>Edit steps</button>
+                    }}>✎ Edit steps</button>
                 </>
               )}
             </div>
@@ -10314,6 +10350,122 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               <Clock size={11} /> Snooze 30m
             </button>
           </div>
+
+          {/* v05.05bt259 — Inline step editor. Replaces the broken modal
+              path with a panel rendered directly inside the prompt. */}
+          {editingMorningSteps && Array.isArray(draftMorningSteps) && (
+            <div style={{
+              marginTop: 10, padding: 10,
+              background: C.paper, borderRadius: 8,
+              border: `1px solid ${C.line}55`,
+            }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+                color: promptColor, fontWeight: 700, marginBottom: 8,
+              }}>Edit steps</div>
+              {draftMorningSteps.map((step, idx) => (
+                <div key={idx} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: C.muted, fontWeight: 700, minWidth: 16, textAlign: "right",
+                  }}>{idx + 1}.</span>
+                  <input
+                    type="text"
+                    value={step}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setDraftMorningSteps(prev => prev.map((s, i) => i === idx ? v : s));
+                    }}
+                    placeholder="Step"
+                    style={{
+                      flex: 1, padding: "6px 8px",
+                      background: C.bg, border: `1px solid ${C.line}`,
+                      borderRadius: 4, fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 13, color: C.ink,
+                    }} />
+                  <button
+                    type="button"
+                    onClick={() => setDraftMorningSteps(prev => {
+                      const next = prev.slice();
+                      if (idx > 0) { [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]; }
+                      return next;
+                    })}
+                    disabled={idx === 0}
+                    style={{
+                      padding: "4px 6px", background: "transparent",
+                      color: idx === 0 ? `${C.muted}55` : C.muted,
+                      border: "none", cursor: idx === 0 ? "default" : "pointer",
+                      fontSize: 12, fontFamily: "inherit",
+                    }}>↑</button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftMorningSteps(prev => {
+                      const next = prev.slice();
+                      if (idx < next.length - 1) { [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]; }
+                      return next;
+                    })}
+                    disabled={idx === draftMorningSteps.length - 1}
+                    style={{
+                      padding: "4px 6px", background: "transparent",
+                      color: idx === draftMorningSteps.length - 1 ? `${C.muted}55` : C.muted,
+                      border: "none", cursor: idx === draftMorningSteps.length - 1 ? "default" : "pointer",
+                      fontSize: 12, fontFamily: "inherit",
+                    }}>↓</button>
+                  <button
+                    type="button"
+                    onClick={() => setDraftMorningSteps(prev => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      padding: "4px 6px", background: "transparent",
+                      color: C.accent, border: "none", cursor: "pointer",
+                      fontSize: 14, fontFamily: "inherit",
+                    }}>×</button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setDraftMorningSteps(prev => [...prev, ""])}
+                style={{
+                  width: "100%", padding: "6px 8px", marginTop: 4, marginBottom: 8,
+                  background: "transparent", color: C.gold,
+                  border: `1px dashed ${C.gold}66`, borderRadius: 6,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, letterSpacing: "0.12em", fontWeight: 600,
+                  textTransform: "uppercase", cursor: "pointer",
+                }}>+ Add step</button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => { setEditingMorningSteps(false); setDraftMorningSteps(null); }}
+                  style={{
+                    flex: 1, padding: "8px",
+                    background: "transparent", color: C.muted,
+                    border: `1px solid ${C.line}33`, borderRadius: 6,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, letterSpacing: "0.12em", fontWeight: 600,
+                    textTransform: "uppercase", cursor: "pointer",
+                  }}>Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleaned = (draftMorningSteps || []).map(s => s.trim()).filter(s => s.length > 0);
+                    if (typeof setMorningRoutineSteps === "function") {
+                      setMorningRoutineSteps(cleaned);
+                    }
+                    setEditingMorningSteps(false);
+                    setDraftMorningSteps(null);
+                  }}
+                  style={{
+                    flex: 2, padding: "8px",
+                    background: promptColor, color: "#FDFAF1",
+                    border: "none", borderRadius: 6,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, letterSpacing: "0.12em", fontWeight: 700,
+                    textTransform: "uppercase", cursor: "pointer",
+                  }}>Save</button>
+              </div>
+            </div>
+          )}
         </div>
         );
       })()}
