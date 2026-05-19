@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt262";
+const APP_VERSION = "2026.05.05bt264";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -24114,6 +24114,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return { count, earliest };
   }, [tasks, currentUser, now, todayISO]);
   const [driftDismissed, setDriftDismissed] = useState(false);
+  // v05.05bt264 — Panel-level trade-ideas dismissal. Per chat: 'the whole
+  // panel should be dismissed if user wants to not request trade - it
+  // can pop up again when reanalyze if there's still some valuable trade.'
+  // In-memory state so it resets on re-analyze (and on page refresh,
+  // which is a reasonable 'fresh look').
+  const [tradePanelDismissed, setTradePanelDismissed] = useState(false);
   useEffect(() => { setDriftDismissed(false); }, [todayISO]); // reset daily
   const [brainDumpText, setBrainDumpText] = useState("");
   // v05.05bt133 — drawerItems moved below myTasks declaration to
@@ -25191,6 +25197,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   }, [routineLibrary]);
 
   const reanalyze = () => {
+    // v05.05bt264 — Reset trade-panel dismissal so a freshly-recomputed
+    // schedule can re-surface valuable trades.
+    setTradePanelDismissed(false);
     // v05.05bt175 — Pin-aware reanalyze. Tasks with t.pinned===true
     // keep their scheduledTime (treated as fixed). Everything else
     // gets stripped + re-shuffled. The pinned set is included in the
@@ -26469,6 +26478,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   borderRadius: 10,
                   padding: "12px 14px",
                   marginBottom: 16,
+                  textAlign: "left",
                 }}>
                   {/* v05.05bt195 — Glowing badge moved out of this card
                       and onto the NOW line in the timeline per chat
@@ -26574,7 +26584,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 where Daddy could take baby duty and unlock significant
                 deep focus for the user. Informational for v1 — tap
                 later could pre-fill a swap request. */}
-            {!isTomorrow && currentUser === "Mommy" && tradeSuggestions.length > 0 && (
+            {!isTomorrow && currentUser === "Mommy" && tradeSuggestions.length > 0 && !tradePanelDismissed && (
               <div style={{
                 background: `${C.daddy}0e`,
                 border: `1px dashed ${C.daddy}55`,
@@ -26583,12 +26593,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 marginBottom: 14,
               }}>
                 <div style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.22em",
-                  textTransform: "uppercase",
-                  color: C.daddy, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
                   marginBottom: 6,
-                }}>↔ Trade ideas</div>
+                }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, letterSpacing: "0.22em",
+                    textTransform: "uppercase",
+                    color: C.daddy, fontWeight: 700,
+                  }}>↔ Trade ideas</div>
+                  <button
+                    type="button"
+                    onClick={() => setTradePanelDismissed(true)}
+                    title="Dismiss trade ideas · will reappear on re-analyze if still relevant"
+                    aria-label="Dismiss trade ideas"
+                    style={{
+                      padding: "2px 8px",
+                      background: "transparent",
+                      border: `1px solid ${C.daddy}33`,
+                      borderRadius: 4,
+                      color: C.muted, cursor: "pointer",
+                      fontSize: 14, fontFamily: "inherit",
+                      lineHeight: 1,
+                    }}>×</button>
+                </div>
                 {tradeSuggestions.map((t, i) => {
                   const hours = Math.floor(t.deepMin / 60);
                   const mins = t.deepMin % 60;
@@ -27354,9 +27382,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         fontSize: 8.5, fontWeight: 800,
                                         letterSpacing: "0.12em",
                                         color: C.mommy,
-                                        textTransform: "uppercase",
+                                        textTransform: "none",
                                         verticalAlign: 2,
-                                      }}>💤 NAP · {napOverlap.nap.sampleSize}/7d</span>
+                                      }}>💤 Solène nap · {napOverlap.nap.sampleSize}/7d</span>
                                     );
                                   })()}
                                 </>
