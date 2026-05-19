@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt264";
+const APP_VERSION = "2026.05.05bt265";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -23148,8 +23148,34 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
     setExpandedId(newId);
   };
   const handleSave = () => {
+    // v05.05bt265 — Flush pending draft buffers (bt241 deferred time +
+    // duration commits to blur/Enter). Per chat: 'if I change AM routine
+    // to be 9a, then that should be my first task and everything else
+    // after that.' The auto-reanalyze on routine change was firing, but
+    // the SAVED routine still had the old time because the draft buffer
+    // hadn't committed yet (user tapped Save without blurring the input).
+    // Now we flush any pending drafts straight into the routine before
+    // sorting + persisting.
+    const flushed = routines.map(r => {
+      let updated = r;
+      const dt = draftTime?.[r.id];
+      if (dt !== undefined && /^\d{1,2}:\d{2}$/.test(dt)) {
+        const [h, m] = dt.split(":").map(Number);
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          updated = { ...updated, time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` };
+        }
+      }
+      const dd = draftDuration?.[r.id];
+      if (dd !== undefined) {
+        const n = parseInt(dd, 10);
+        if (!isNaN(n)) {
+          updated = { ...updated, durationMin: Math.max(5, Math.min(240, n)) };
+        }
+      }
+      return updated;
+    });
     // Sort by time before save so the library is stored in chronological order.
-    const sorted = [...routines].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
+    const sorted = [...flushed].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
     onSave(sorted);
   };
   // v05.05bt241 — Per-routine local edit buffers for inputs that need
