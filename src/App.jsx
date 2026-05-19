@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt260";
+const APP_VERSION = "2026.05.05bt262";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -2602,7 +2602,6 @@ function SoleneHandoffInner() {
   useEffect(() => {
     try { localStorage.setItem("ll:morningRoutineSteps", JSON.stringify(morningRoutineSteps)); } catch {}
   }, [morningRoutineSteps]);
-  const [showMorningStepsEditor, setShowMorningStepsEditor] = useState(false);
   const [noteArchive, setNoteArchive] = useState([]);
   const [showHandoffNoteEditor, setShowHandoffNoteEditor] = useState(false);
   const [showNoteArchive, setShowNoteArchive] = useState(false);
@@ -10265,6 +10264,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
           background: `${promptColor}10`,
           border: `1.5px solid ${promptColor}55`,
           borderRadius: 10,
+          textAlign: "left",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <Sun size={12} color={promptColor} />
@@ -10275,7 +10275,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               morning check
             </span>
           </div>
-          <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10, textAlign: "left" }}>
             Has Solène had her morning routine?
           </div>
           {/* v05.05bt256 — Replaced native <details> with explicit
@@ -10286,12 +10286,14 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               <button
                 onClick={() => setMorningExpanded(v => !v)}
                 style={{
+                  display: "block",
                   background: "transparent", border: "none", padding: 0,
                   cursor: "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 11, color: promptColor, fontWeight: 600,
                   letterSpacing: "0.12em", textTransform: "uppercase",
                   marginBottom: 6, textAlign: "left",
+                  marginLeft: 0, marginRight: "auto",
                 }}>
                 {morningExpanded ? "Hide steps" : `Show the ${morningInfo.steps.length} step${morningInfo.steps.length === 1 ? "" : "s"}`}
               </button>
@@ -28675,14 +28677,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           onSave={(rs) => { setRoutineLibrary(rs); setShowRoutineEditor(false); }}
           onReset={() => { setRoutineLibrary(null); setShowRoutineEditor(false); }}
           onClose={() => setShowRoutineEditor(false)}
-        />
-      )}
-      {showMorningStepsEditor && (
-        <MorningStepsEditorModal
-          C={C}
-          initialSteps={morningRoutineSteps}
-          onSave={(steps) => { setMorningRoutineSteps(steps); setShowMorningStepsEditor(false); }}
-          onClose={() => setShowMorningStepsEditor(false)}
         />
       )}
       {showOptimizer && (
