@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt265";
+const APP_VERSION = "2026.05.05bt269";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -3514,19 +3514,29 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     //   • Fall back to lastPump.start + PUMP_INTERVAL_HRS when no plan
     //     exists (initial state, fresh app, plan cleared).
     if (Array.isArray(pumpPlan?.manualSessions) && pumpPlan.manualSessions.length > 0) {
+      // v05.05bt267 — Pick the NEXT-DUE session, not the earliest. Per
+      // chat: 'check pump due time on mommy profile. Seems to be wrong.'
+      // Previously took sorted[0] which is always the first session of
+      // the day; meaning at 3pm it'd still show 7am as next.
       const sorted = [...pumpPlan.manualSessions].sort((a, b) => a - b);
-      const nextH = sorted[0];
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      const date = new Date(today);
-      if (nextH >= 24) {
-        date.setDate(date.getDate() + Math.floor(nextH / 24));
-        const remH = nextH % 24;
+      const today = new Date(now); today.setHours(0, 0, 0, 0);
+      const nowMs = now.getTime();
+      // Allow 30min grace so a "just missed" session still shows as next
+      const graceMs = 30 * 60 * 1000;
+      const buildAt = (frac, dayOffset = 0) => {
+        const date = new Date(today);
+        date.setDate(date.getDate() + dayOffset + Math.floor(frac / 24));
+        const remH = frac % 24;
         date.setHours(Math.floor(remH), Math.round((remH - Math.floor(remH)) * 60), 0, 0);
-      } else {
-        date.setHours(Math.floor(nextH), Math.round((nextH - Math.floor(nextH)) * 60), 0, 0);
+        return date;
+      };
+      // Try today's sessions first — pick first one not yet past (with grace)
+      for (const h of sorted) {
+        const dt = buildAt(h);
+        if (dt.getTime() >= nowMs - graceMs) return dt;
       }
-      return date;
+      // All today's sessions past → next is tomorrow's first
+      return buildAt(sorted[0], 1);
     }
     // Fallback: fixed-interval estimate from last pump
     if (!lastPump) return null;
@@ -6168,6 +6178,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onMarkMorningDone={() => addEvent({ type: "morning_routine_done", silent: true })}
           onSnoozeMorning={() => addEvent({
             type: "morning_routine_snoozed",
+            snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
+            silent: true,
+          })}
+          onMarkThawing={(payload) => addEvent({ type: "breastmilk_thawed", silent: true, ...(payload || {}) })}
+          onSnoozeThaw={() => addEvent({
+            type: "breastmilk_thaw_snoozed",
             snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
             silent: true,
           })}
@@ -9846,7 +9862,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -10023,6 +10039,63 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
   const [morningExpanded, setMorningExpanded] = useState(false);
   const [editingMorningSteps, setEditingMorningSteps] = useState(false);
   const [draftMorningSteps, setDraftMorningSteps] = useState(null);
+
+  // v05.05bt268 — Breastmilk thaw reminder. Per chat: 'reminder
+  // notification - like the meetings one, the bath one, etc to thaw
+  // breastmilk overnight... if dropping off at caregiver at x time.'
+  //
+  // Triggers in the evening (7pm-11pm) if:
+  //   • Mommy persona (Daddy isn't packing the bottle bag overnight)
+  //   • Currently onsite (proxy: she's a working parent likely doing
+  //     handoff again tomorrow)
+  //   • Freezer has ≥1 bag (something to thaw)
+  //   • Fridge oz < a reasonable target (e.g. 8oz for an ~8h drop-off)
+  //   • Hasn't been dismissed/marked-thawed this evening
+  //
+  // Logs a silent `breastmilk_thawed` event so the prompt stops for
+  // tonight once acted on.
+  const thawInfo = (() => {
+    if (currentUser !== "Mommy") return null;
+    const hour = now.getHours();
+    if (hour < 19 || hour >= 23) return null;
+    // v05.05bt269 — Trigger signal: tomorrow is a weekday (Mon-Fri). The
+    // bt268 'onsite' gate was too strict — required user to manually set
+    // onsite mode that day. Most working parents have a weekday handoff
+    // pattern regardless of onsite toggle. Onsite still triggers (covers
+    // weekend onsite days) via an OR.
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDow = tomorrow.getDay(); // 0=Sun, 6=Sat
+    const isWorkdayTomorrow = tomorrowDow >= 1 && tomorrowDow <= 5;
+    if (!isWorkdayTomorrow && !onsite) return null;
+    // Need freezer bags to thaw
+    if (!Array.isArray(freezerItems) || freezerItems.length === 0) return null;
+    // Already enough fridge stock? Use 8oz as a sensible default for ~8h
+    const targetOz = 8;
+    if ((fridgeOz || 0) >= targetOz) return null;
+    // Marked thawing tonight?
+    const todayStart = new Date(now); todayStart.setHours(15, 0, 0, 0);
+    const markedThawing = events.find(e =>
+      e.type === "breastmilk_thawed" && new Date(e.ts) >= todayStart
+    );
+    if (markedThawing) return null;
+    // Snoozed?
+    const snoozes = events
+      .filter(e => e.type === "breastmilk_thaw_snoozed" && new Date(e.ts) >= todayStart)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    if (snoozes[0] && snoozes[0].snoozeUntil && new Date(snoozes[0].snoozeUntil) > now) return null;
+    // Pick bag(s) to thaw: oldest freezer bag first
+    const gap = Math.max(targetOz - (fridgeOz || 0), 0);
+    const sortedBags = [...freezerItems].sort((a, b) => new Date(a.pumpedAt || 0) - new Date(b.pumpedAt || 0));
+    const picks = [];
+    let pickedOz = 0;
+    for (const bag of sortedBags) {
+      if (pickedOz >= gap) break;
+      picks.push(bag);
+      pickedOz += bag.oz || 0;
+    }
+    return { targetOz, gap, picks, pickedOz, currentFridgeOz: fridgeOz || 0 };
+  })();
 
   // v05.05bt35: notification sounds.
   // Trigger short chimes whenever a banner transitions from hidden→visible
@@ -10524,6 +10597,72 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}>
               No bath
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* v05.05bt268 — Breastmilk thaw overnight reminder. */}
+      {thawInfo && (
+        <div style={{
+          marginTop: 14, padding: 12,
+          background: `${C.mommy}10`,
+          border: `1.5px solid ${C.mommy}55`,
+          borderRadius: 10,
+          textAlign: "left",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Milk size={12} color={C.mommy} />
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.mommy,
+            }}>thaw overnight</span>
+          </div>
+          <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 8 }}>
+            Onsite tomorrow → fridge has <strong>{thawInfo.currentFridgeOz}oz</strong>, target ~{thawInfo.targetOz}oz.
+            Move <strong>{thawInfo.pickedOz}oz</strong> from freezer to fridge to thaw overnight.
+          </div>
+          {thawInfo.picks.length > 0 && (
+            <div style={{
+              marginBottom: 10, padding: "6px 8px",
+              background: `${C.gold}10`,
+              border: `1px solid ${C.gold}33`,
+              borderRadius: 6,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, color: C.ink, lineHeight: 1.5,
+            }}>
+              {thawInfo.picks.map((b, i) => {
+                const d = b.pumpedAt ? new Date(b.pumpedAt) : null;
+                const dateStr = d ? `${d.getMonth() + 1}/${d.getDate()}` : "—";
+                return (
+                  <div key={b.id || i}>
+                    <span style={{ fontWeight: 700 }}>{b.oz}oz</span> · pumped {dateStr}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => onMarkThawing && onMarkThawing({ ozQueued: thawInfo.pickedOz, bagIds: thawInfo.picks.map(b => b.id).filter(Boolean) })}
+              style={{
+                background: C.ink, color: C.paper, border: "none",
+                padding: "8px 6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+              }}>
+              <Check size={11} /> Thawing
+            </button>
+            <button
+              type="button"
+              onClick={() => onSnoozeThaw && onSnoozeThaw()}
+              style={{
+                background: "transparent", color: C.mommy,
+                border: `1px solid ${C.mommy}66`, borderRadius: 8,
+                padding: "8px 6px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+              }}>
+              <Clock size={11} /> Snooze 30m
             </button>
           </div>
         </div>
@@ -21113,6 +21252,8 @@ function getBlockTag(slot) {
   if (slot.kind === "meeting") return { label: "MEETING", color: "#8B7AA8" };
   // v05.05bt181 — Predicted feed window during user's solo duty.
   if (slot.kind === "feed-predicted") return { label: "PREDICTED", color: "#B89B7A" };
+  // v05.05bt267 — Pump reminder appears as a small mauve PUMP pill.
+  if (slot.kind === "pump_reminder") return { label: "PUMP", color: "#B55A8E" };
   if (slot.kind === "routine") {
     if (slot.id?.includes("commute")) return { label: "COMMUTE", color: "#9C8B7A" };
     if (slot.id === "workout") return { label: "MOVEMENT", color: "#7B9B6E" };
@@ -24402,7 +24543,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         context: f.context,
       }));
 
-    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks, ...feedPredictions], dayStart, visualDayEnd);
+    // v05.05bt267 — Pump reminders as timeline items. Per chat: 'pump
+    // schedule needs to be placed as reminder inside the task when it's
+    // due.' Convert each manualSessions hour into a 20-min reminder block
+    // so the user sees pumps inline with tasks/routines on the timeline.
+    // Mommy-only. Past pumps still render so user can see what was
+    // scheduled (the past-block dimming applies).
+    const pumpReminders = (currentUser === "Mommy" && Array.isArray(pumpPlan?.manualSessions))
+      ? pumpPlan.manualSessions
+          .filter(h => h >= 0 && h < 36) // sanity
+          .map((h, i) => {
+            const start = new Date(referenceDate);
+            const totalMin = Math.round(h * 60);
+            start.setHours(0, 0, 0, 0);
+            start.setMinutes(totalMin);
+            const end = new Date(start.getTime() + 20 * 60000);
+            return {
+              id: `pump-reminder-${i}`,
+              kind: "pump_reminder",
+              title: "Pump session",
+              start, end,
+              durationMin: 20,
+            };
+          })
+      : [];
+
+    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks, ...feedPredictions, ...pumpReminders], dayStart, visualDayEnd);
     // v05.05bt228 — Visually split free rows at shift boundaries so each
     // visual row has a single owner. Per chat: when a mixed-duty block
     // appears, the timeline should show two rows (one per owner half)
@@ -24447,7 +24613,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       return result;
     };
     return splitFreeAtBoundaries(rawTimeline);
-  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary]);
+  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -26985,6 +27151,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   // duty. Rendered like a soft routine, but italicized and
                   // labeled with sample size so user knows it's a guess.
                   const isFeedPred = slot.kind === "feed-predicted";
+                  // v05.05bt267 — Pump reminder row treatment
+                  const isPumpReminder = slot.kind === "pump_reminder";
                   // v05.05bt226 — Past-time detection. A row's end is before
                   // 'now' → it's in the past. Free blocks that are entirely
                   // past should render as 'closed because the time has
@@ -27289,7 +27457,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             fontWeight: isFree ? 700 : 500,
                             letterSpacing: "0.01em",
                           }}>
-                            {fmtDurationHM(slot.durationMin)}
+                            {(() => {
+                              // v05.05bt266 — Show actual time vs estimate.
+                              // Running: 'running · 12m' so user can see elapsed.
+                              // Completed with actualMin: 'X est · Y actual' + ⚠ for 50%+ overruns.
+                              if (isTask && slot.actualStartedAt && !slot.completedAt) {
+                                const elapsedMin = Math.max(1, Math.round((Date.now() - new Date(slot.actualStartedAt).getTime()) / 60000));
+                                return (
+                                  <span style={{ color: C.accent, fontWeight: 700 }}>
+                                    ⏱ {elapsedMin}m
+                                  </span>
+                                );
+                              }
+                              if (isTask && slot.actualMin && slot.completedAt) {
+                                const est = slot.effortMin || slot.durationMin;
+                                const overran = slot.actualMin > est * 1.5;
+                                return (
+                                  <span>
+                                    {fmtDurationHM(est)} est · <span style={{ color: overran ? C.accent : C.muted, fontWeight: 600 }}>{fmtDurationHM(slot.actualMin)} actual{overran ? " ⚠" : ""}</span>
+                                  </span>
+                                );
+                              }
+                              return fmtDurationHM(slot.durationMin);
+                            })()}
                           </div>
                         )}
                       </div>
@@ -27865,6 +28055,54 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             R{slot.regretScore}
                           </button>
                         )}
+                        {isTask && !slot.completedAt && (() => {
+                          // v05.05bt266 — Real-duration timer (MLP).
+                          // Per chat: tiny play button per task, tap to
+                          // start, tap stop to capture actualMin +
+                          // auto-complete. No popups, no auto-shift —
+                          // just the feedback loop. Phase 2 can add
+                          // popups + similar-task estimation if it
+                          // proves useful.
+                          const running = !!slot.actualStartedAt;
+                          const startedMs = running ? new Date(slot.actualStartedAt).getTime() : null;
+                          const onClickTimer = (e) => {
+                            e.stopPropagation();
+                            if (!running) {
+                              // Start: stamp actualStartedAt
+                              setTasks(prev => prev.map(t =>
+                                t.id === slot.id ? { ...t, actualStartedAt: new Date().toISOString() } : t
+                              ));
+                            } else {
+                              // Stop: compute actualMin + auto-complete
+                              const elapsedMs = Date.now() - startedMs;
+                              const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
+                              setTasks(prev => prev.map(t =>
+                                t.id === slot.id
+                                  ? { ...t, actualMin, actualStartedAt: null, completedAt: new Date().toISOString() }
+                                  : t
+                              ));
+                            }
+                          };
+                          return (
+                            <button
+                              type="button"
+                              onClick={onClickTimer}
+                              title={running ? "Stop timer · captures actual time + completes" : "Start timer"}
+                              aria-label={running ? "Stop task timer" : "Start task timer"}
+                              style={{
+                                padding: "5px 7px",
+                                background: running ? `${C.accent}20` : "transparent",
+                                border: `1px solid ${running ? C.accent : C.mommy}55`,
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                color: running ? C.accent : C.mommy,
+                                fontSize: 11, lineHeight: 1, fontWeight: 700,
+                                fontFamily: "inherit",
+                              }}>
+                              {running ? "■" : "▶"}
+                            </button>
+                          );
+                        })()}
                         {isTask && !slot.completedAt && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingTask(slot); }}
