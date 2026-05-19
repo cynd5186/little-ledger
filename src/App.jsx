@@ -15,11 +15,78 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt166";
+const APP_VERSION = "2026.05.05bt247";
 const APP_BUILD_NOTES = [
-  "REDEMPTION DURATION BUG FIXED. Per chat: 'cashed 1 hour shows as 2 hrs · why section says 8:30-10:30'. Root cause: the shift projector was treating a redemption meeting as a 'whole-shift swap' instead of carving just the redeemed window out of your shift. So a 1-hour redemption inside a multi-hour shift would flip the entire shift to Daddy. Now the projector carves the shift properly: pre-redemption stays Mommy's, the redemption window goes to Daddy, post-redemption returns to Mommy. The carved slice keeps its 'cash-in' kind label so the UI explanation is correct. Bank balance computation was already right (uses the meeting duration directly); only the SHIFT VISUALIZATION was wrong.",
+  "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt228", summary: "Visual split of free rows at shift boundaries. (1) Inside the dayTimeline useMemo, captured buildDayTimeline output as rawTimeline. (2) New post-processing helper splitFreeAtBoundaries(items) walks the timeline: for each item where kind !== 'free' OR start/end missing, passes through unchanged. For each free item, collects shift-boundary timestamps from activeShifts.Mommy + activeShifts.Daddy that fall strictly within [item.start, item.end]. If no internal cuts, passes through unchanged. Otherwise generates one sub-item per [cut[i], cut[i+1]] range. Sub-items with durationMin < 5 are dropped (slivers). (3) useMemo returns splitFreeAtBoundaries(rawTimeline). SCOPING: 1 helper + 1 final return wrap inside the existing dayTimeline useMemo. Zero changes to buildDayTimeline, scheduler, schema, palette, modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt227", summary: "Mixed-duty block sub-line breakdown (dormant after bt228 since each visual row is single-owner now, but kept for edge cases). railSegments refactored to include startMs/endMs. isMixedOwner = railSegments.length > 1. Open-block sub-line IIFE branches on isMixedOwner: when true, computes per-segment effectiveBlockProfile, surfaces breakdown bullets with owner-colored time ranges. Build verified clean via esbuild." },
+  { version: "2026.05.05bt226", summary: "Past-free-block render as closed. (1) Added isPast + isPastFree derivation in row scope: isPast = !isTomorrow && slot.end <= now. isPastFree = isFree && isPast. (2) Free-block onClick handler gated on !isPast. (3) Title block rewrite inside the isFree ternary: past → muted-italic '✕ Closed · time has passed'; not-past → original gold open-label span + nap-badge IIFE. (4) Row cursor + opacity updated for past free rows (0.55 fade)." },
+  { version: "2026.05.05bt225", summary: "Proportional rail render. (1) Added railSegments computation in row render scope (right after owner derivation): slices [slot.start, slot.end] at every shift transition (collected from activeShifts.Mommy + activeShifts.Daddy), determines owner for each sub-slice via midpoint-hour lookup, merges consecutive same-owner segments, returns array of {owner, pct} with pct = (ms / totalMs) * 100. Onsite short-circuits to [{owner:null, pct:100}]; joint routines short-circuit to [{owner:'joint', pct:100}]. (2) Added railColorFor(segOwner) helper that maps owner string to color: Daddy → C.daddy, joint → C.gold, Mommy → C.mommy, null → faded gray (line+66 for free, rgba 201/187/164/0.55 for routine fallback). (3) Replaced the single-color rail div with a flex column container (4px wide, full row height, position:absolute left:0) containing one div per segment with height: `${pct}%` and background: railColorFor(seg.owner). zIndex preserved at 1 so the rail still sits above row background. SCOPING: 1 inline computation block (~50 lines) + 1 small helper + 1 render replacement. Zero changes to scheduler, schema, palette, drag/swipe handlers, modals. Build verified clean via esbuild. NOTES: railSegments runs on every row render, but the computation is O(shifts + cuts) which is tiny (~20 ops per row). For ~20 timeline rows that's ~400 ops per render — negligible. Cross-midnight handling: if a span doesn't cross midnight (which it can't since schedulerDayEnd caps at lights-out), the boundary collection only emits today's shift starts/ends. Joint-shift edge: Mommy 8-10 + Daddy 8:30-10:30 produces segments 8-8:30 Mommy / 8:30-10 joint / 10-10:30 Daddy — correct three-segment rail. Visual continuity across same-owner rows still works since each row's rail spans top:0 bottom:0 and adjacent rows have matching segments at their boundaries." },
+  { version: "2026.05.05bt224", summary: "Block splitting at shift boundaries. ROOT CAUSE: computeFreeSpans returned multi-owner spans because it only subtracted commitments, not shift transitions. refineFocus classified each span by owner-at-start, so a 8:26-9:26 span starting in Daddy territory got Daddy-classified for its full hour even though 8:30+ was Mommy's. (1) Added collectShiftBoundaries() helper inside computeFreshWorkableBlocks: iterates activeShifts.Mommy + activeShifts.Daddy, pushes both start and end of each shift as a minute-of-day integer to a Set (dedupes), returns sorted array. (2) Added splitSpanByBoundaries(span) helper: maps boundary minutes to today-anchored Dates via todayMidnight + bMin*60000, filters to those STRICTLY inside the span (>span.start && <span.end — excludes endpoints to avoid zero-duration slices), sorts ascending, builds [start..cut1], [cut1..cut2], ..., [cutN..end] sub-spans with durationMin = (cut - cursor) / 60000. Returns single-element array if no cuts inside. (3) Return path rewritten: rawSpans = computeFreeSpans(...) → splitSpans = rawSpans.flatMap(s => splitSpanByBoundaries({...s})) → final = splitSpans.filter(s => s.durationMin >= 5).map(s => ({..., focusLevel: refineFocus(start, end)})). Filter at 5min drops cross-boundary slivers that aren't actionable. SCOPING: 2 inline helpers + 1 return-path rewrite, all inside computeFreshWorkableBlocks. Zero changes to computeFreeSpans itself, refineFocus, effectiveBlockProfile, assignTaskTimes, schema, palette, modals. Visual dayTimeline NOT updated since it's a separate path. Build verified clean via esbuild. NOTES: cross-midnight boundaries (e.g., Daddy 22:30-00:30) become two distinct minute values (1350 + 30), both inserted. Spans can't extend into next day since schedulerDayEnd caps at lights-out. Onsite skips owner derivation; boundaries still cut but refineFocus returns baseFocus regardless. Joint-shift edge: Mommy 8-10 + Daddy 8:30-10:30 cuts at 8/8:30/10/10:30 → 8-8:30 Mommy, 8:30-10 joint, 10-10:30 Daddy — correct." },
+  { version: "2026.05.05bt223", summary: "Trade request flow. (1) App state: new tradeRequests array (shared family data), showIncomingTrade (null|request) for push-style modal, showSendTrade (null|window) for sender confirm. (2) Storage: hydrate from solene:tradeRequests on mount; autosave useEffect with hydration guard; cloud-key setter registered in cloudKeySetters for cross-device sync. (3) Helpers at App scope: sendTradeRequest(window) — builds {id, from: currentUser, to: partner, date: today YYYY-MM-DD, startHr/endHr from window.start|end / 60, deepMin, status: 'pending', createdAt, respondedAt: null}, pushes to tradeRequests. respondToTradeRequest(id, resolution) — looks up request, dispatches on resolution: 'shift' creates a 'covering' meeting on req.to's calendar via setMeetings (kind:'covering', tradeRequestId link, HH:MM start/end derived from fractional hours), sets status='accepted_shift'; 'bank' adds timeBank transaction (kind:'owed', from:req.to, to:req.from, mins:Math.round(req.deepMin), reason: 'Trade accepted: Xh coverage banked for later'), sets status='accepted_bank'; 'declined' just sets status. All paths set respondedAt. (4) Auto-open useEffect: deps [tradeRequests, currentUser, hydrated, showIncomingTrade]. Finds first tradeRequest where r.to===currentUser && r.status==='pending'; sets showIncomingTrade with 500ms delay. Excludes Caregiver persona. (5) New module-level SendTradeRequestModal({C, window, partner, onClose, onSend}) — bottom-sheet with eyebrow, window summary card (daddy-blue tinted), italic explanation of partner's options, Cancel + Send to {partner} buttons. (6) New module-level IncomingTradeRequestModal({C, request, onResolve, partnerColor}) — centered modal (NOT bottom-sheet, requires direct action; zIndex 200). Eyebrow + 'X is asking for coverage' headline + window+reason card + 3 stacked action buttons. (7) Both modals mounted at App render level before HandoffPromptModal. (8) Prop threading: ShiftsView + TodayTaskPlanCard signatures gain tradeRequests + openSendTrade props. (9) Trade-ideas card render in TodayTaskPlanCard: each row converted from plain div to button. existing lookup: filter tradeRequests for matching date + from===currentUser + startHr/endHr within ±0.1h tolerance. Status label derived per status branch. isClickable = !existing || existing.status==='declined'. (bt223a added defensive guards on tradeRequest paths; bt223b fixed setShowSendTrade not in ShiftsView scope — ShiftsView's internal mount now forwards openSendTrade prop instead of referencing App-scoped setter directly.) Build verified clean via esbuild." },
+  { version: "2026.05.05bt222", summary: "Handoff snooze + chore classifier + focus emoji. (1) HANDOFF: useEffect that triggers setShowHandoffPrompt(true) on duty change now reads ll:handoffPromptSnoozeUntil from localStorage; if now.getTime() < snoozeUntil, skip the trigger. Otherwise show prompt as before. Modal mount: existingText hardcoded to '' (was reading from handoffNote when from===currentUser). onClose AND onSkip both setItem snoozeUntil = now + 6h (21600000ms). onSubmit also clears the prompt (existing behavior). (2) CHORE: new module-level CHORE_KEYWORDS array (~20 entries) inserted after FOCUS_LOW_KEYWORDS. inferFocusLevel updated to check chores BEFORE high keywords: if (CHORE_KEYWORDS.some(k => lower.includes(k))) return 'shallow' inserted as first match condition. So 'deep clean kitchen' → 'shallow' (clean matched, deep ignored), 'review groceries list' → 'shallow' (groceries matched, review ignored). Existing FOCUS_LOW_KEYWORDS unchanged (still has 'clean' for unqualified cases). (3) FOCUS EMOJI: scheduled task row — removed the existing 9px colored dot button between checkbox and title (was lines 25341-25370). Comment placeholder left explaining the move. NEW emoji button inserted in the right-side meta cluster IMMEDIATELY before the R{regret} button: glyph = '🧠' if focus===deep else '🍃', 13px, padding 2px, cycleFocusLevel onClick. Title attribute preserved. Unscheduled task row: replaced the colored dot span with an emoji span using the same glyph logic, 14px fontSize, title attribute preserved. Removed the now-unused focusColor variable derivation at line 26051 implicitly (it's still computed but harmless). SCOPING: 3 unrelated surface tweaks, all minimal. Zero changes to scheduler logic, schema, palette, normalizeFocus. Build verified clean via esbuild. DEFERRED to bt223: trade-idea click flow with Daddy approval + auto shift adjust or time-bank credit." },
+  { version: "2026.05.05bt221", summary: "Self-duty default respects focusProfile. ROOT CAUSE: effectiveBlockProfile self-duty default branch (when owner===currentUser, no postMeeting, no feed overlap, no nap overlap, no post-feed) hardcoded focusLevel:'shallow' on line 18923. The reasons array even acknowledged the override: 'isDeepHour ? `${timeStr} would be peak — duty caps deep work here`'. So a user-declared peak hour got DOWNGRADED to shallow just because the user was solo on duty. Result: the user's focus profile was effectively ignored whenever Solène was awake (i.e., most of the day). The downstream bt220 alignment scoring was correct but received uniformly-shallow blocks across the day, so chronological ordering won. FIX: changed focusLevel to baseFocus (which already reads from focusProfile.deepHours via getBlockFocusLevel). careLabel + sourceNote + reasons now branch on baseFocus: deep → 'your peak · solo duty (defend if you can)' + 'your declared peak · solo duty' + 'your quiz marks this as a peak hour — protect it'; shallow → existing 'interruptible · you're on' + 'your duty · interruptible' + 'you're on solo duty, Solène is awake (no nap predicted)'. timeReason still appended, wakeReason still cited. UNCHANGED branches that legitimately force shallow: postMeeting (concrete brain-recovery state), predicted-feed overlap ≥10m (active feeding can't share time), post-feed 30m window (Solène demanding attention realistic). UNCHANGED branches that force deep: predicted-nap overlap ≥30m (uninterrupted window). Low-energy day cap (via _applyLowEnergyCap) still wraps the result and downgrades deep→shallow when user marked low energy. Build verified clean via esbuild. NOTE: this also subtly improves the runway-card aggregation since deepNapMin/deepPartnerMin/etc are computed from the same effectiveBlockProfile output — declared peaks during solo duty now bucket into the deep totals correctly." },
+  { version: "2026.05.05bt220", summary: "Focus-aware scheduler block selection. ROOT CAUSE: in assignTaskTimes, the block-find loop was a simple early-return on first fit — for (const b of blocks) { if (remainingFromEffective >= task.effortMin) { foundBlock = b; foundStart = effectiveStart; break; } }. This ignored b.focusLevel entirely; the first chronologically-available block of any focus type won. So deep tasks routinely landed in shallow blocks earlier in the day even though deep blocks later were empty. (1) Rewrote the block-find as a best-score iteration: maintains bestScore (init -1), iterates all blocks computing alignment score, picks highest. (2) Score map: taskFocus === blockFocus → 100, taskFocus === 'shallow' && blockFocus === 'deep' → 5 (shallow-in-deep is wasteful, used only as fallback), taskFocus === 'deep' && blockFocus === 'shallow' → 1 (deep-in-shallow is last resort, but better than dropping the task entirely). (3) Tie-breaker: same score → earliest effectiveStart wins (preserves prior chronological bias within same alignment tier). (4) Both task.focusLevel and b.focusLevel run through normalizeFocus so 'high'/'medium'/'low'/undefined task fields normalize to deep|shallow. SCOPING: 1 inner loop rewrite in assignTaskTimes. Zero changes to queue sort (still regret-then-focus-then-category), sequenceConstraint logic, chunk-splitting (bt209), pin handling (bt175/210), updates/reasons output shape. b.focusLevel was already populated by computeFreshWorkableBlocks via refineFocus(effectiveBlockProfile(...)) — that pipeline includes focusProfile, predictedNaps, predictedFeeds, partner/joint coverage, post-meeting decay, low-energy cap. So scoring picks up the FULLY refined focus level per block, not just the literature default. Build verified clean via esbuild. Note: a future build could weight blocks by 'us time' / pumping cadence collisions too, but for now alignment is the missing primary signal." },
+  { version: "2026.05.05bt219", summary: "Dedicated CaregiverView. (1) New module-level CaregiverView({C, now, events, lastFeed, predictedFeeds, predictedNaps, babyStats, addEvent}) component inserted before NowView. ~270 lines. (2) Internal computations: minutesSince, fmtAgo, fmtIn, fmtClock, fmtHour helpers. lastSleepDown/lastSleepUp from events filter. isAwake derived from comparing timestamps. lastDiaper similarly. medianFeedGapMin from feed/breastfeed event gaps within 60-360min range over last 7 days. typicalOz from recent feed.oz events (last 20). medianDiaperGapMin from diaper events. topFeedHours from hour-bucket frequency analysis. nextFeed/nextNap pulled from predictedFeeds[0]/predictedNaps[0]. overdueByMin compares time-since-last-feed to median gap. overdueForNapMin compares awake-for-min to babyStats.avgWakeWindowMin. (3) Three cards rendered: 'Right now' (sage-bordered, isAwake/asleep status, 2-col last-fed + last-diaper grid, conditional 'what's coming' section with overdue/next-feed/next-nap rows), 'Solène's typical day' (paper-bordered, 3-row grid of FEEDS/NAPS/DIAPERS metrics with graceful degradation), 'If you have a moment' (4-button 2×2 quick-log grid). (4) Quick-log buttons use 2-tap confirmation pattern (first tap stages, second commits). logFeed adds feed event with oz=typicalOz||4, source='caregiver-quick'. logDiaper adds diaper event. logSleep adds sleep_up or sleep_down. All tagged with ownerName='Caregiver'. Cancel button below grid when staged. (5) App routing wrapped: when currentUser === 'Caregiver', renders <CaregiverView /> in place of the entire tab-routed content (which is now inside a React Fragment shown only for parents). Tab bar AND CentralLogButton both gated with !=='Caregiver'. (6) Removed: the bt214 inline Caregiver hero card inside NowView (lines 11864-12020, ~157 lines) since the dedicated view supersedes it. SCOPING: 1 large new component, 1 App-level routing branch, 2 conditional gates on tab bar + log button, 1 large block deletion. Zero schema changes, zero new state. Build verified clean via esbuild. NOTES: relies on existing predictedFeeds, predictedNaps, babyStats useMemo'd in App scope and passed through. CaregiverView gets its own props (not via NowView), so no NowView signature change needed. Caregiver-logged events tagged ownerName='Caregiver' for future cross-persona filter support; harmless for current code paths." },
+  { version: "2026.05.05bt218", summary: "Optimizer math: routine + meeting collisions. (1) computeDayShapes signature gains meetings + now params. (2) New routineBlockers array built from same source as getRoutineSlotsForToday (library or default), filtered by !r.disabled && (!r.onsiteOnly || onsite), each routine yields [startHr, endHr] fractional interval where endHr = startHr + (onsiteDurationMin if onsite else durationMin) / 60. (3) New meetingBlockers from meetings prop: filter to m.date === todayYMD AND (m.parent === currentUser || !m.parent) — covers her meetings plus untagged ones. (4) allBlockers = routineBlockers + meetingBlockers. (5) Inside the (W,B) loop, deepPeakH computation rewritten: for each deep hour h, derive effStart/effEnd by clipping [h, h+1] to [W, B], compute effSpan in minutes, sum blocked minutes via interval overlap with allBlockers, accumulate deepUnblockedMin += max(0, effSpan - blockedMin). Final deepPeakH = deepUnblockedMin / 60 (fractional). (6) Sort comparator deep tiebreaker tolerance loosened from exact equality to 0.25h (since values are now fractional). (7) Characterization thresholds adjusted: 'Us-time forward' requires +0.1h margin; 'Deep-work protected' requires +0.4h margin (was strict >). 'Wins' include unblocked-peak-focus phrasing when at/near max. (8) New fmtDeep helper formats fractional hours at 30-min resolution: <0.1 → '—', 0.5 → '30m', 1.5 → '1h 30m'. Output label uses fmtDeep instead of integer. (9) Intro copy updated to mention 'subtract routine and meeting collisions, what you see is what you actually get'. (10) ScheduleOptimizerModal signature gains meetings + now; App mount of modal passes both through. SCOPING: 1 signature change, 1 blocker-build block, 1 inner-loop rewrite (deepPeakH math), 1 new format helper, 1 sort tolerance tweak, 1 char-threshold tweak, 1 modal sig + mount pass. Zero schema changes, zero new state. Build verified clean via esbuild. NOTES: only currentUser's meetings considered — Daddy's meetings invisible to her optimizer (correct). Cross-midnight routines not handled (none exist in DEFAULT_MOMMY_ROUTINES). Pumping cadence still NOT validated against shape — deferred to a future build; pumps mostly fit naturally within the active period so this is rarely binding." },
+  { version: "2026.05.05bt217", summary: "Rename Daddy time → Us time across optimizer. (1) computeDayShapes: variable rename daddyTimeH → usTimeH (declaration + 8 usages: sort comparator, characterization comparisons, tradeoff wins/losses, output object property, raw downstream field). meetsDaddyMin → meetsUsMin (declaration + pool filter). Shape label 'Couple-time forward' → 'Us-time forward'. Tradeoff phrasing 'X couple time' → 'X us time'. Output field daddyLabel → usLabel. (2) ScheduleOptimizerModal: column header 'Daddy' → 'Us', value reference s.daddyLabel → s.usLabel. Intro copy updated to clarify 'us time' = post-Solène-bedtime window. Header comment updated. (3) Header doc comment in computeDayShapes updated with priority list (us time replaces Daddy time) + new paragraph explaining the rename rationale. SCOPING: pure semantic rename. Zero algorithm change. Zero schema change. Build verified clean via esbuild." },
+  { version: "2026.05.05bt216", summary: "Schedule optimizer. (1) New module-level computeDayShapes({focusProfile, routineLibrary, currentUser, onsite}) helper inserted before getMaxBlockMin. Algorithm: enumerate wake [5.5..7.5 step 0.5] × bed [21.5..23.5 step 0.5] (25 candidates). For each: compute sleepH = 24 - (B - W), filter sleepH < 6, filter activeH < 12. Compute daddyTimeH = max(0, B - solBedHr) where solBedHr derives from routineLibrary's solene-bed routine (or 21.0 default). workoutFits = (B >= 20.5). deepPeakH = count of focusProfile.deepHours that fall within [W, B). meetsDaddyMin flag = daddyTimeH >= 1. Filter pool to meetsDaddyMin (relax to all valid if pool empty). Sort lexicographically: daddyTimeH (with 0.25 tolerance) > workoutFits > deepPeakH > sleepH. Pick top 3 DISTINCT via Math.abs(p.wake-s.wake)<0.5 && Math.abs(p.bed-s.bed)<0.5 dedup. Characterize each pick: 'Couple-time forward' if max daddyTime, 'Sleep-protected' if max sleep, 'Deep-work protected' if max deep, 'Workout-protected' if only one with workout fit, else 'Balanced shape'. Tradeoff sentence built from wins vs losses comparison. Format helpers fmtT (12h) and fmtH (Xh Ym) inline. Returns array of {name, wakeLabel, bedLabel, sleepLabel, daddyLabel, deepLabel, workoutFits, tradeoff, wake, bed, sleepH, daddyTimeH, deepPeakH}. (2) New module-level ScheduleOptimizerModal({C, focusProfile, routineLibrary, currentUser, onsite, onClose, onApply}) component inserted between RoutineLibraryEditor and TodayTaskPlanCard. Bottom-sheet modal, computes shapes inline, renders per-shape card with eyebrow (✦ Recommended / Alternative), name, wake→bed line, 4-column metric grid (Sleep/Daddy/Workout/Deep), italic tradeoff, optional 'Set today's wake + bed' apply button. Footer italic gold-bordered card with sleep-science note. (3) App state: new showOptimizer + setShowOptimizer alongside showRoutineEditor. (4) Prop threading: ShiftsView signature + TodayTaskPlanCard signature gain showOptimizer + setShowOptimizer. App mounts pass them through. (5) ⋯ menu in TodayTaskPlanCard gains '✦ Optimize today's shape' item between Routines and Re-analyze. (6) Modal mount in App: after RoutineLibraryEditor mount block. onApply patches todaySetup with date, wakeTarget (HH:MM string), and lightsOutTarget (HH:MM) — the existing bedtime cascade reads lightsOutTarget. SCOPING: 1 module helper (~120 lines), 1 modal component (~150 lines), 1 state pair, 1 menu item, 1 modal mount, 4 prop threading touches (ShiftsView sig, TodayTaskPlanCard sig, ShiftsView mount, TodayTaskPlanCard mount). Zero changes to scheduler, schema, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt215", summary: "Hotfix + freezer in fridge tile. (1) PREVIEW CRASH ROOT CAUSE: bt214 added a useEffect at line ~2395 (right after `const [tab, setTab] = useState('now')`) with deps array [currentUser, tab]. But currentUser isn't declared until line 2612. Reading `currentUser` to populate the deps array each render hit JavaScript const TDZ → ReferenceError → component crash → blank preview. esbuild allowed the build because it doesn't track TDZ at compile time; the failure was runtime. FIX: removed the original useEffect and re-inserted the SAME logic right after `setShowProfileSwitcher` is declared (line ~2624, after the currentUser+setCurrentUser block). Behavior unchanged; positioning fixed. (2) FRIDGE-TILE FREEZER OPTION: UseBottleModal signature gains onMoveToFreezer prop. UseBottleModal mount in NowView passes onMoveToFreezer={(id) => setInventory(prev => prev.map(b => b.id === id ? {...b, location:'freezer', frozenAt: new Date()} : b))}. In the single-bottle action grid (RT and fridge locations), new 'To freezer' button rendered with daddy-blue outline; gridTemplateColumns adapted: RT now has 4 cols (Edit, To fridge, To freezer, Discard), fridge has 3 (Edit, To freezer, Discard), freezer keeps 2 (Edit, Discard). In the bulk-action grid: cols adapted similarly — RT has 3 (→fridge bulk, →freezer bulk, discard bulk), fridge has 2 (→freezer bulk, discard bulk), freezer keeps 1 (discard bulk). New bulkConfirm === 'freezer' branch with two-tap confirmation pattern matching the existing 'move' (to fridge) pattern. SCOPING: 1 useEffect move, 1 modal mount prop addition, 1 modal signature change, 2 button additions in modal body. Zero changes to inventory data shape (frozenAt field already supported per bt213), liveInventory math, or any other surface. Build verified clean via esbuild." },
+  { version: "2026.05.05bt214", summary: "Caregiver persona. (1) currentUser state hydration extended to accept 'Caregiver' as a valid stored value (alongside Mommy / Daddy). Default still Mommy. (2) ProfileSwitcherModal: persona iteration array changed from ['Mommy', 'Daddy'] to ['Mommy', 'Daddy', 'Caregiver']. Color map extended: Caregiver = '#7B9B6E' sage green. Subtitle for Caregiver tile = 'for grandparents or a sitter' (rather than the standard switch-to-X copy). Initial letter avatar uses 'C'. (3) App-level userTint logic: ternary extended to map Caregiver → sage. Affects the global wash tint, top gradient, and any downstream code referencing userTint. (4) App render: new banner inserted between PaperGrain and the rest of content — full-width sage strip with mono caps text '✦ Caregiver mode · helping with Solène · tap to switch'. Tap fires setShowProfileSwitcher(true) so they can switch out. Only renders when currentUser === 'Caregiver'. Position relative z-index 2 sits above the gradient washes. (5) TabBar: new isCaregiver derived bool. viewerColor logic extended: sage for caregiver, otherwise existing Mommy/Daddy fork. New tabs array branches: Caregiver gets 3 tabs (Now, Journal, Milk) without spacer; others get the existing 6-tab + spacer layout. (6) App: new useEffect on [currentUser, tab] forces setTab('now') if a Caregiver lands on a non-allowed tab (handles the case of persona persistence sticking the user on Schedule then switching to Caregiver). (7) NowView: large IIFE inserted after InMeetingBanner block, gated on currentUser === 'Caregiver'. Renders a sage-bordered card titled '✦ Solène's quick state' with: parent status line (computed from shifts + onsite), then a 2x2 grid of last-fed (oz + fmtAgo), last-sleep (down/up label + fmtAgo), last-diaper (fmtAgo), bottles-ready (totalSafeOz + RT/fridge breakdown). Footer italic hint: 'Use the big LOG button below to record feeds, sleeps, or diapers.' Computes lastSleep + lastDiaper inline from events filter. Local fmtAgo helper converts minute diffs to '5m ago' / '2h 15m ago' format. SCOPING: 1 state hydration tweak, 1 modal array, 1 tab routing effect, 1 TabBar logic branch, 1 banner JSX, 1 NowView hero card. Zero changes to scheduler, schema, cloud sync semantics. Build verified clean via esbuild. KNOWN LIMITATIONS: (a) most chrome elements with viewerColor = Daddy?C.daddy:C.mommy ternaries fall through to mommy color in Caregiver mode — could be updated for full sage-everywhere fidelity in a follow-up. (b) Single-Caregiver only; multi-named-caregivers (Grandma vs Sitter) deferred. (c) Caregiver tagged events use ownerName: 'Caregiver' which is harmless for shared data but unused for per-user filters. (d) Bottle pick logic for caregivers same as parents — no 'use oldest bottle first' caregiver-specific guidance yet." },
+  { version: "2026.05.05bt213", summary: "Move inventory to freezer. (1) New moveToFreezer(id) helper at App scope alongside moveToFridge. setInventory functional updater maps over inventory; when item.id matches, returns {...i, location: 'freezer', frozenAt: new Date()}. The frozenAt field anchors the freezer clock to the moment of freezing rather than the pump time. (2) Hydration extended: inv.map at line 2814 now also revives frozenAt as Date when present, via conditional spread `...(x.frozenAt ? { frozenAt: new Date(x.frozenAt) } : {})`. Cloud-poll setter at line 3008 mirrors the same. Legacy bottles without frozenAt unaffected. (3) liveInventory useMemo updated: new clockAnchor variable picks frozenAt for freezer-located bottles when present, else pumpedAt. ageHrs computed from clockAnchor. Industry semantics: fridge bottle moved to freezer resets its 6-month window to start at the move. Fresh-frozen bottles still use pumpedAt (their pump time IS their freeze time effectively). (4) InventoryView signature gains moveToFreezer prop; App-level <InventoryView> pass updated. Both InventoryRow callsites (valid + expired sections) pass onMoveToFreezer={() => moveToFreezer(item.id)}. (5) InventoryRow signature gains onMoveToFreezer. Derived state extended: isFreezer/isFridge booleans, locLabel ('RT'|'FRIDGE'|'FREEZER'), locBg/locFg map per location (RT=accent, freezer=daddy-blue, fridge=ink). Location pill now correctly displays for freezer bottles (previously they'd hit the fall-through 'FRIDGE' label). New button rendered when !isFreezer && onMoveToFreezer prop is passed: '→ freezer' styled as Daddy-blue outline, sits alongside the existing '→ fridge' button. Existing isRT && onMoveToFridge guard extended to also check truthy onMoveToFridge so expired-section omission still works. SCOPING: 1 new App helper, 1 cloud-setter touch, 1 hydration touch, 1 useMemo extension, 1 InventoryView prop, 2 InventoryRow callsites, 1 component refactor (~20 line delta). Zero changes to scheduler, schema migration, or any other surface. Build verified clean via esbuild. Note: UseBottleModal (FeedForm bottle picker) still uses moveToFridge only — moving from there is for 'taking out of RT' urgency, not freezer escalation. Could be extended in a future build." },
+  { version: "2026.05.05bt212", summary: "Editable routine library. (1) getRoutineSlotsForToday signature gains routineLibrary 5th param. Source picks from library when !== null/undefined; falls back to DEFAULT_MOMMY_ROUTINES otherwise. Empty array is explicit 'zero routines' state. New .filter(r => !r.disabled) added before onsiteOnly filter so users can hide routines without deleting them. (2) Module-level RoutineLibraryEditor component (~210 lines) inserted between RoutineOverrideSheet and TodayTaskPlanCard. Bottom-sheet modal, full-width up to 520px, paddingBottom safe-area-inset. State: routines (array, deep-copied from initialLibrary or defaults), expandedId. updateRoutine/deleteRoutine/addRoutine helpers manipulate the array. Each routine renders as a collapsed row (time, title, duration, ▼/▲ chevron). Expanded view: title input, time input (type=time), duration input (type=number 5-240 step=5), 4 flag buttons (optional, joint, onsiteOnly, disabled) styled as toggleable mono caps pills, delete button (coral outlined). Footer: + Add routine (dashed gold outline), Reset to defaults (muted), Cancel (ink outline), Save routines (mauve filled, flex 2). handleSave sorts by time string before calling onSave. (3) App-level state: routineLibrary (initial null), showRoutineEditor (initial false). Hydration in mount-time async block: storage.get('solene:routines_{userKey}') → setRoutineLibrary if Array. Autosave useEffect on [routineLibrary, hydrated, currentUser]. User-switch useEffect extended to read routines key for new user. (4) Prop threading: TodayTaskPlanCard signature gains routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor. ShiftsView signature same. App-level <ShiftsView> and <TodayTaskPlanCard> pass all four. (5) ⋯ menu in TodayTaskPlanCard render gains '↻ Routines · edit defaults' item between Focus Profile and Re-analyze. setShowRoutineEditor(true) opens. (6) Modal mount in App render: after FocusQuizModal block, conditional <RoutineLibraryEditor> with initialLibrary, defaults=DEFAULT_MOMMY_ROUTINES, onSave (saves to state + closes), onReset (nulls library + closes), onClose. (7) Two call sites of getRoutineSlotsForToday (dayTimeline + computeFreshWorkableBlocks) pass routineLibrary as 5th arg via sed-bulk update. SCOPING: 1 module helper signature change, 1 new component, 1 App state pair, 1 prop threading chain (App → ShiftsView → TodayTaskPlanCard), 1 menu item, 1 modal mount, 2 call-site updates. Zero changes to scheduler algorithm, task schema, palette, RoutineOverrideSheet (per-day overrides still work as layers on top of library). Build verified clean via esbuild. KNOWN: Daddy still gets [] from getRoutineSlotsForToday (currentUser !== 'Mommy' guard); his library state is hydrated but unused. Future build could remove the Mommy-only guard so Daddy can also have routines." },
+  { version: "2026.05.05bt211", summary: "Trade suggestions. (1) New module-level computeTradeSuggestions({activeShifts, focusProfile, now, currentUser, onsite, maxResults}) helper inserted after getMaxBlockMin. Parses HH:MM shift times into minutes-since-midnight. Builds mySolo = myShifts minus partnerShifts overlap (flatMap interval subtraction). Reads deepHours from focusProfile.deepHours, falls back to [9,10,11,15,16,17] literature default. Reads dipHours similarly (defaults []). For each solo window: clamps to >= now, requires ≥30m span, sums minutes overlapping (deepHours AND NOT dipHours) per-hour bucket. Requires deepMin ≥ 45 to qualify. Sorts candidates by deepMin desc, returns top maxResults with {start, end, deepMin, label} where label is formatted 'Xa-Yp'. Returns [] when onsite (grandparents have baby; no trade need). (2) New tradeSuggestions useMemo in TodayTaskPlanCard, deps [activeShifts, focusProfile, now, currentUser, onsite]. (3) New JSX block inserted in render after the runway-card IIFE closes, before the drift banner. Gated on !isTomorrow && currentUser === 'Mommy' && tradeSuggestions.length > 0. Dashed daddy-blue card with eyebrow '↔ TRADE IDEAS', per-candidate row showing 'time-range — Daddy covers → Xh Ym of deep focus unlocked', plus a small italic footer noting Daddy is off-duty in these windows. SCOPING: 1 module helper, 1 useMemo, 1 JSX block. Zero changes to scheduler, schema, palette, swap mechanism. Card is informational only in v1. Build verified clean via esbuild." },
+  { version: "2026.05.05bt210", summary: "Reanalyze: release past-time pins. (1) New isPastTime(timeStr) helper inside reanalyze, parses HH:MM into a Date at referenceDate's calendar day and compares to now.getTime(). (2) pinnedOpen filter extended: requires t.pinned AND t.scheduledTime AND !isPastTime(t.scheduledTime). (3) unpinned filter mirrors the inverse so past-pinned tasks fall through to the re-slot path. (4) New releasedPastPinIds Set tracking which IDs had their pin released. (5) unpinnedStripped now also clears the pinned flag for released-pin tasks: pinned: releasedPastPinIds.has(t.id) ? false : t.pinned. So next reanalyze won't honor a pin to the newly-assigned time that the user never set. (6) scheduleStatus payload extended with releasedPinCount: releasedPastPinIds.size on both the empty-workable early-return and the normal-completion paths. (7) Banner JSX: new conditional block above the splits notice — when releasedPinCount > 0 (and not splitOnly), shows a small muted ↻ 'Past pins released · N pin(s) pointed at a time that's already passed — re-slotted into future blocks.' SCOPING: 1 helper closure, 4 filter changes, 1 new state Set, 2 banner payload additions, 1 JSX block. Zero changes to scheduler algorithm, workable computation (notBefore already correct), schema. Build verified clean via esbuild. Note: same logic could be applied to autoSchedule and saveEdit-triggered splits, but those don't operate on pinned tasks in the same way — reanalyze is the only path that explicitly retains pins across re-shuffles, so it's the only path that needed the release. Completed past tasks already pass through harmlessly (notBefore filter handles them in computeFreeSpans)." },
+  { version: "2026.05.05bt209", summary: "Chunk size adapts to actual workable block availability. (1) New module-level getMaxBlockMin(workable) helper returning max(15, ...workable.map(b => b.durationMin)) with fallback 60 when empty. Inserted right after splitLongTask. (2) splitLongTask cap now clamped to Math.max(15, maxChunkMin) so a 15m floor is enforced even if caller passes 0. (3) addTask handler reorganized: compute workable BEFORE splitting, derive maxBlockMin from it, splitLongTask(newTask, maxBlockMin). The early-pinned-chunks path simplified since splitLongTask short-circuits pinned tasks anyway. (4) commitNlPending: same reorg — compute existingScheduledOpen + completed + pinnedRaw + workable + maxBlockMin first, then the for-loop expands rawNewTasks via splitLongTask(t, maxBlockMin) with splitNotices tracking. (5) reanalyze: workable computed before the expand-loop, maxBlockMin derived, splitLongTask(t, maxBlockMin) per unpinnedStripped task. (6) autoSchedule: maxBlockMin derived from getWorkableBlocks() return, splitLongTask(t, maxBlockMin) per unscheduledTasks. (7) saveEdit: post-patch setTimeout splitter now computes workable from prev state inside the setTasks callback (filter to current user's completed + pinned, call computeFreshWorkableBlocks in try/catch), then splitLongTask(t, maxBlockMin). Threshold check loosened: split if effort > maxBlockMin (was > 60). SCOPING: 1 new helper, 1 splitLongTask floor-clamp, 5 handler reorganizations. Zero changes to assignTaskTimes algorithm, schema, palette. Build verified clean via esbuild. KNOWN: when maxBlockMin is small (15m) and several large tasks need splitting, the resulting many-tiny-chunks may not all fit — those go to the unscheduled pile. Acceptable v1 since the scheduler still maxes what fits." },
+  { version: "2026.05.05bt208", summary: "Unify earlier-pill rule across all slot kinds. (1) earlierCount filter: dropped the 's.kind !== \"free\"' clause so the count includes free blocks too. (2) Inside forEach: dropped the dedicated free-past early return (slot.kind === 'free' && slot.end < now && !showEarlier → return). (3) Earlier-pill drop check changed from (!showEarlier && slot.kind !== 'free' && slot.end < earlierCutoff) to (!showEarlier && slot.end < earlierCutoff) — covers all slot kinds. The trim-current-free-block check (the 15-min minimum for a partial free block straddling now) is preserved unchanged. SCOPING: 2 conditional simplifications. Zero changes to scheduler, schema, palette, animation. Build verified clean via esbuild." },
+  { version: "2026.05.05bt207", summary: "NOW slider position fix — anchor BEFORE early returns. (1) Pulled the NOW line render JSX + owner-color derivation into a renderNowLine(anchorKey) closure defined before dayTimeline.forEach. (2) New NOW line trigger placed at the very TOP of the forEach body, before the past-free-drop / trim-current-free-block / past-non-free-drop / section-divider blocks. Condition: !nowLineInserted AND (slot.start <= now < slot.end OR slot.start >= now). Sets nowLineInserted = true, calls renderNowLine(i). (3) Removed the old in-loop NOW line block that ran after the section divider. (4) Removed the nextAfterNowIdx computation — no longer needed because the new condition handles both 'contains now' and 'first slot after now' in a single check that doesn't depend on currentSlotIdx. (5) Post-loop fallback simplified to just call renderNowLine('tail') when !nowLineInserted, instead of duplicating the owner derivation block. SCOPING: 1 helper extraction, 1 trigger move (~10 lines from old position to top), 2 dedup deletions (~70 + ~50 lines combined). Zero changes to animation keyframes, palette, scheduler, schema. Build verified clean via esbuild. Note: 'currentSlotIdx' constant is still computed earlier in the IIFE (for other uses); only the NOW-line dependence on it was removed." },
+  { version: "2026.05.05bt206", summary: "Auto-split coverage extended to ALL scheduling paths + banner confirmation. (1) reanalyze: walk unpinnedStripped through splitLongTask, build expanded[] array, track splitNotices for originals where chunks.length > 1. assignTaskTimes(expanded, workable). setTasks rewritten: filter prev to drop all unpinned originals, build finalNew from expanded chunks preserving original metadata (regret, focus, category, ownerName, etc.) plus chunk overrides (effortMin, sequenceId, sequenceIndex, sequenceTotal, id), set scheduledTime from updates. scheduleStatus now passes splits: splitNotices. (2) autoSchedule: same pattern — expand unscheduledTasks via splitLongTask, schedule expanded, setTasks removes originals (originalIds Set) and inserts chunks with assigned times. scheduleStatus passes splits. (3) saveEdit: after the patch setTasks call, schedule a setTimeout(0) follow-up setTasks that checks the post-patch task — if effortMin > 60 and not scheduledTime and not sequenceId, run splitLongTask, remove the original, insert chunks. Surface a splitOnly: true scheduleStatus payload with algorithm: 'split-on-edit' so the banner shows the auto-split confirmation message. (4) commitNlPending: existing splitLongTask for-loop now also accumulates splitNotices. scheduleStatus passes splits: splitNotices. (5) Banner JSX extended: top-level conditional branches on scheduleStatus.splitOnly — if true, shows the gold ✦ Auto-split badge + per-split 'title split into 60m + 30m so it fits' lines + 'Tap Reanalyze to slot the parts' muted hint. Else: the existing reanalyzed/slotted/unscheduled markup with a NEW splits section appended below — gold mono pill + 'title → 60m + 30m' for single-split, '{N} long tasks chunked into 60m blocks' for multi-split. SCOPING: 4 handler rewrites (reanalyze, autoSchedule, saveEdit, commitNlPending status payload), 1 banner JSX extension. splitLongTask helper unchanged. assignTaskTimes algorithm unchanged. Schema unchanged (sequenceId already optional from bt171). Build verified clean via esbuild. KNOWN: tasks pinned to a time and tasks in a user-defined 'then' chain pass through splitLongTask untouched (short-circuit branches in helper)." },
+  { version: "2026.05.05bt205", summary: "Volume-aware feed predictions + pre-existing type-filter bug fix. (1) predictFeedWindows type filter: e.type === 'bottle' || 'solid_food' → e.type === 'feed' || 'breastfeed' || 'solid_food'. Feeds in this app are 'feed'-type events with optional oz; bottle type was a leftover from a different schema assumption. Predictor was returning [] silently before. (2) Each feedEv entry now also captures oz: typeof e.oz === 'number' && isFinite && >0 ? e.oz : null. (3) New pairs[] array built by walking consecutive feeds within 30min-8h band; records (prevOz, gapMin) for each pair with known prevOz. (4) New ozBucket(oz) → 'small'|'med'|'large'|'unknown' (thresholds 3 / 4.5). New medianGapFor(oz) → median gap from pairs in same bucket; falls back to overall median if bucket <2 samples. (5) Time-of-day buckets enriched with typicalOz (median of ozs in bucket, null if none). Context string extended with '· typical X.Xoz' when known. (6) NEW volume-anchored projection: take latest feedEv with known oz, look up medianGapFor(lastFeed.oz), compute projStart = lastFeed.ts + gap, projEnd = +15min, push to out if future AND no time-of-day window within ±30min already covers it. Context: 'next feed · last was X.Xoz (bucket), typical gap Nm'. fromVolume:true flag distinguishes. (7) dayTimeline feedPredictions .map() now propagates typicalOz, fromVolume, context onto the slot so the row render can display them. (8) Timeline row title group: after the stretch badge, new conditional inline span — if isFeedPred and (typicalOz != null or fromVolume), render gold mono '· typical X.Xoz' or '· after X.Xoz feed' with title={slot.context} as hover tooltip. SCOPING: 1 module helper rewrite, 1 map field extension, 1 JSX inline render. Zero changes to scheduler algorithm itself, palette, schema, modals. computeFreshWorkableBlocks feed-blocker insertion (line 21830) unchanged because blockers don't need volume context. Build verified clean via esbuild." },
+  { version: "2026.05.05bt204", summary: "Auto-split long tasks. (1) New module-level splitLongTask(task, maxChunkMin=60) helper inserted before parseNaturalLanguageTasks. Returns [task] unchanged if effort ≤ maxChunkMin OR task.sequenceId set OR task.scheduledTime set. Otherwise: while-loops effort into 60m+remainder chunks, generates seqId via `split-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`, returns chunks.map with id = task.id for first chunk and `${task.id}_p${i}` for rest, effortMin=chunk size, sequenceId=seqId, sequenceIndex=i, sequenceTotal=chunks.length. Title unchanged (bt171 → N/M badge already renders for sequenced tasks). (2) addTask: newTaskChunks = splitLongTask(newTask, 60) before scheduling. Pinned filter, workable build, and assignTaskTimes call all updated to iterate the chunks array. finalChunks resolves each chunk's scheduledTime from updates map. setTasks(prev => [...prev, ...finalChunks]). Unscheduled-pile auto-expand triggers if ANY chunk failed to slot. (3) commitNlPending: rawNewTasks (formerly newTasks) mapped from pending; then for-loop expands each raw task via splitLongTask into the new newTasks array, which the existing scheduler pipeline consumes unchanged. Chunks already pinned or in a user-defined sequence pass through untouched. SCOPING: 1 module helper, 2 handler call-site rewrites. Zero changes to assignTaskTimes algorithm (it already honors sequenceConstraint from bt171), schema, palette, NL parser. Build verified clean via esbuild. KNOWN LIMITATIONS: not retroactive on existing unscheduled long tasks (could add a backfill in Reanalyze); preview modal shows chunks as separate rows with sequence badge but no explicit 'this is a split' callout (badge → N/M is the visual cue)." },
+  { version: "2026.05.05bt203", summary: "NlReviewModal commit button silent-failure. (1) Button JSX changed from `onClick={onCommit}` to `onClick={() => onCommit()}` so React doesn't pass the SyntheticEvent as the first arg. (2) commitNlPending: `const pending = pendingOverride || nlPending` → `const pending = Array.isArray(pendingOverride) ? pendingOverride : nlPending`. This defends against any caller mistakenly wiring onClick directly. Comment block added explaining the bug + fix so the next person reading the code sees it. Bug was lurking since bt161 (commitNlPending refactored to accept optional pendingOverride for fast-path). The fast-path callers (addFromNl, etc.) all pass arrays explicitly so they were unaffected — only the NlReviewModal direct-wire commit path tripped it. SCOPING: 1 JSX onClick change, 1 line-of-logic change in commitNlPending. Zero changes to scheduler, schema, palette, modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt202", summary: "NOW line gap + post-bedtime fallback. (1) Before dayTimeline.forEach: new locals nowLineInserted=false + nextAfterNowIdx=dayTimeline.findIndex(s => s.start > now). (2) Inside forEach: replaced `if (i === currentSlotIdx)` with `isNowAnchorSlot = i === currentSlotIdx || (!nowLineInserted && currentSlotIdx === -1 && i === nextAfterNowIdx)`; when true, sets nowLineInserted=true then renders the pulse (same JSX as bt198, owner-color derivation, both className references). (3) After forEach return rows: new conditional block — if (!nowLineInserted && !isTomorrow && dayTimeline.length > 0), recompute owner color/label/time and push a 'nowline-tail' pulse with same JSX shape, margin '20px 14px 18px' so it sits clearly at the timeline foot. SCOPING: 2 locals, 1 condition extension, 1 fallback push block. Zero changes to scheduler, schema, palette, animation keyframes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt201", summary: "Structured Add task form: defensive addTask + clear disabled label. (1) addTask handler: scheduling block (compute completed/existingScheduledOpen, pinnedItems, computeFreshWorkableBlocks, optional assignTaskTimes, finalNewTask resolution) wrapped in try/catch. On exception: console.error logs, finalNewTask falls back to newTask with scheduledTime preserved as-is. The unconditional setTasks/clear-drafts/setShowAddForm(false) block now ALWAYS runs after the try/catch, so an exception can't strand the user with an open form and no committed task. Auto-expand unscheduled still fires if no scheduledTime resolved. (2) 'Add to plan' button: when disabled (!draftTitle.trim()), label switches to 'Type a title first ↑' and color goes muted (line+55 bg, muted text). When enabled, mauve + white as before. Single line change to the button text expression. SCOPING: 1 try/catch wrap, 1 conditional label. Zero changes to scheduler internals, schema, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt200", summary: "Stretch goal tier. (1) Task schema gains optional stretchGoal boolean (default false). Existing tasks default to undefined → falsy → treated as non-stretch. (2) EditTaskModal: new useState stretchGoal initialized from task.stretchGoal. Submit payload extended with stretchGoal: !!stretchGoal. UI: full-width pill button below the recurring hint (or recurring section). Inactive style transparent + line border + circle ○; active style gold-tint bg + 1.5px gold border + ✦ glyph + 'Stretch goal — slots if room' label. Symmetric to the pin toggle pattern. (3) assignTaskTimes sort comparator extended with a stretch-first tiebreak: sa = a.stretchGoal ? 1 : 0; if (sa !== sb) return sa - sb. Stretch tasks sort AFTER all non-stretch regardless of regret. Sequence + focus + category tiebreaks preserved within each tier. (4) Timeline row title group: after the ↻ recurring badge, conditional ✦ STRETCH inline mono caps tag in gold (fontSize 8.5 letter-spacing 0.12em fontWeight 800) with title='Stretch goal — slots if room' tooltip. SCOPING: 1 schema field, 1 modal state + submit + UI, 1 sort comparator line, 1 row render insert. Zero changes to palette, reasoning logic, recurring logic. Build verified clean via esbuild." },
+  { version: "2026.05.05bt199", summary: "NL recurring detection. (1) parseOneNlTask body: new recurringRule local (default null), 4 regex branches run BEFORE time/duration parsing so rule phrases don't pollute downstream matchers. Patterns: /\\bevery\\s+day\\b|\\bdaily\\b|\\beach\\s+day\\b/ → daily; /\\bevery\\s+weekday\\b|\\bon\\s+weekdays\\b/ → daily (with note about strict-M-F approximation); /\\bevery\\s+(mon|tues|wednes|thurs|fri|satur|sun)day\\b|\\beach\\s+\\1\\b|\\bweekly\\s+on\\s+\\1\\b/ → weekly; /\\bevery\\s+week\\b|\\bweekly\\b|\\beach\\s+week\\b/ → weekly. Each branch strips the matched phrase from title via .replace + trim. Return object extended with recurringRule. (2) commitNlPending task build map: scheduledTime line followed by new recurringRule: p.recurringRule || null so the parsed value flows into the task schema. (3) NL preview render (parseNaturalLanguageTasks-driven preview chips in showNlInput panel): conditional mauve pill shown after duration when p.recurringRule is set — fontSize 9 weight 800 letter-spacing 0.08em uppercase '↻ {recurringRule}'. SCOPING: 1 parser extension, 1 task-build line, 1 preview-render line. Zero changes to schema (recurringRule already exists from bt196), scheduler, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt198", summary: "NOW line breathing pulse. (1) Two new @keyframes added to the global style tag block (alongside log-glow): nl-now-pill-pulse animates box-shadow from rest (2/6/12/22 stack) to peak (2/12/26/46 stack) keeping the inset highlight+shadow constant; nl-now-line-pulse animates box-shadow from rest (12/24/44 stack) to peak (20/44/84 stack). Both 2.4s ease-in-out infinite via .nl-now-pill-pulse and .nl-now-line-pulse classes. Both reference var(--nl-color) for owner-adaptive color. (2) NOW-line JSX in TodayTaskPlanCard: className='nl-now-line-pulse' on outer div, className='nl-now-pill-pulse' on both spans. Inline style.--nl-color set on all three to current owner _color. Static box-shadow declarations removed from inline styles (keyframes own them now). Border-top, padding, font, background, color, position all unchanged from bt197. SCOPING: 1 keyframes block addition (~32 lines), 3 className/style hoist edits in one JSX block. Zero changes to scheduler, schema, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt197", summary: "NOW line filled+glowy treatment (option C dialed up). Both pills (label left, time right) and the horizontal 1.5px line updated. Pill: background → solid _color (was C.bg cream), text color → #FDFAF1 (was _color), border removed (was 1px _color), padding 3/9 and 3/7 (was 2/7 and 2/6), font weight 800/700 (was 700/600), top offset -10/-9 (was -9/-7). Pill boxShadow stacked: 0 2px 10px -2px _color (drop), 0 0 20px -2px _color (halo), 0 0 36px -6px _color (diffuse), inset 0 1px 0 rgba(255,255,255,0.28) (top highlight), inset 0 -1px 0 rgba(0,0,0,0.10) (bottom edge). Line boxShadow: 0 0 16px -2px _color (tight), 0 0 36px -8px _color (med), 0 0 64px -16px _color (far bloom). _color derivation (currentUser + activeShifts + onsite) unchanged from bt195. SCOPING: 1 JSX block inside dayTimeline.forEach. Zero other changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt196", summary: "Recurring tasks: schema + UI + auto-create on completion + timeline badge. (1) Schema: tasks gain optional recurringRule field (null | 'daily' | 'weekly') and recurringParentId (tracks the originating task id through the chain). Existing tasks default to null — no migration needed. (2) toggleComplete handler (bt195 prep) refined: when transitioning incomplete → complete AND target.recurringRule is set, append a new task to state with id=generated, scheduledDate advanced by 1 day (daily) or 7 days (weekly) parsed from baseDateStr (scheduledDate fallback to today as YYYY-MM-DD slice), completedAt=null, createdAt=nowIso, recurringParentId carried forward (or set to target.id if first generation). All other fields including scheduledTime carry over so a daily 9am task repeats at 9am. (3) EditTaskModal additions: new useState recurringRule (init from task.recurringRule || null). Submit payload extended with recurringRule: recurringRule || null. UI block below the pin toggle: REPEAT eyebrow + 3-col grid of buttons [Once=null, Daily, Weekly] in same chip style as effort/focus, mauve fill when active, line-color border otherwise. Below the grid, italic Cormorant hint: 'A new copy will appear tomorrow...' (daily) or 'next {weekday}...' (weekly, weekday derived from task.scheduledDate or new Date()). (4) Timeline row inline badge: after the existing 📌 pin badge, conditional ↻ d or ↻ w in mauve fontSize 10 weight 700 with title='Repeats daily/weekly'. SCOPING: 1 handler extension, 1 modal state + submit + UI block, 1 row render insert. Zero changes to scheduler, palette. Brain-dump NL parser unchanged (deferred). Build verified clean via esbuild." },
+  { version: "2026.05.05bt195", summary: "Now-line owner-color + glow; runway badge removed. (1) Inside the timeline forEach loop's currentSlotIdx insertion (where the gold NOW line was rendered), derivation block added: _slotHour from now's hour+minute/60, _findShift(parent) closure over activeShifts that finds a shift containing _slotHour, _m=_findShift('Mommy'), _d=_findShift('Daddy'). Branching: onsite → gold + 'NOW · GRANDPARENTS'; both shifts → gold + 'NOW · TOGETHER'; user's own shift → owner-color + 'NOW · YOUR DUTY'; only Mommy → mauve + 'NOW · MOMMY DUTY'; only Daddy → daddy + 'NOW · DADDY DUTY'. JSX updated: borderTop color → _color, added boxShadow `0 0 12px -2px ${_color}, 0 0 24px -8px ${_color}` for the glow, NOW pill color/border → _color with boxShadow halo, time text → _color. (2) Runway card return: the glowing pill (bt194 insertion) deleted, comment marks the move. The pre-return derivation block for _curOwner/_whoColor/_whoPhrase/_fmtT/_findShift in the runway IIFE is also removed since nothing in the card uses it anymore. SCOPING: 2 isolated changes in TodayTaskPlanCard. Zero changes to scheduler, schema, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt194", summary: "Three fixes. (1) Show-earlier bug. Inside dayTimeline.forEach the unconditional past-free-block drop (`if (slot.kind === 'free' && slot.end < now) return;`) was rendering past free blocks invisible even when showEarlier=true. Now: condition extended with `&& !showEarlier` so when expanded, past free blocks render too. Trim-current-free-block logic (the straddling-now case) untouched. (2) Date sub-line removed for non-tomorrow view. The bt167 mono uppercase date sub-line ('SAT, MAY 16') wrapped in `{isTomorrow && (...)}` so it only renders when planning tomorrow; for today, top banner suffices. (3) Glowing badge relocation. Removed the bt192 badge JSX from the heading IIFE (replaced with a relocation comment). Inside the runway IIFE return, before the 'Today's runway' eyebrow, added: (a) derivation block computing _curOwner via activeShifts at-current-hour lookup + onsite check + currentUser tie-breaker, _whoPhrase + _whoColor mapped per owner (Mommy=mauve 'you have Solène', Daddy=daddy 'Daddy has Solène — your time', joint=gold 'together with Solène', onsite=gold 'Solène with grandparents'), local _fmtT helper for time format; (b) JSX for the pill — same mono caps style (inline-flex, 4/10 padding, _whoColor14 bg, _whoColor55 border, 999 radius, boxShadow glow) — with 6×6 owner-color dot, ink time, mid-dot, caps phrase. Mounts as the first element inside the runway card; runway forecast follows directly below. SCOPING: 1 line condition change for the bug, 1 conditional wrapper for the sub-line, 1 deletion + 1 insertion for the badge move. Zero changes to scheduler, schema, palette. Build verified clean via esbuild." },
+  { version: "2026.05.05bt193", summary: "Two surfaces. (1) Nap badge: inside the isFree branch of the row title render, after '+ Open · tap to fill', new IIFE computes the best predictedNap overlap (filter sampleSize >=4, compute overlap minutes, pick max). If overlap >= 30 min, renders a mauve pill: 'mommy1a bg, mommy55 border, mono 8.5px weight 800 letter-spacing 0.12em, '💤 NAP · X/7d' caps. (2) Why-here expander: new expandedReasonTaskId state (taskId | null) in TodayTaskPlanCard. Inside the row title group (immediately after the ADJ routine badge), conditionally render a 'why here' / 'hide' italic-cormorant 11px dotted-underline button for isTask && !completedAt. onClick toggles expandedReasonTaskId between slot.id and null. After the title-block closing div, conditionally render a reasoning panel when expandedReasonTaskId === slot.id: calls _applyLowEnergyCap(effectiveBlockProfile(...)) to get the profile, renders WHY THIS SLOT mono eyebrow + Cormorant 11.5 reasons list (focus-colored bullet, ink text) + a focus-match line that explains task-focus vs slot-focus alignment (sage check when matched, coral cross when deep-task in shallow-slot) + a high-regret note (if regretScore >= 4). All reasoning data is derived live from the same effectiveBlockProfile helper the free blocks use — no separate logic. SCOPING: 2 isolated inserts in row render, 1 state addition. Zero changes to scheduler, schema, palette, modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt192", summary: "Three layout changes. (1) Runway-first reorder. Python-driven swap of two adjacent JSX blocks inside the TodayTaskPlanCard render: bt181 drift banner block (lines 22700-22740 pre-swap) was placed BEFORE the bt172 runway IIFE (lines 22741-22936); swapped to runway-first then drift. Verified via boundary line checks and esbuild. No behavioral changes; pure render-order swap. (2) Context box → glowing badge. The bt167 'one-line context' div (italic Cormorant 14px, 10/14 padding, gold-tinted bg with owner-colored left border, multi-line with whoHasPhrase + stats sub-line) replaced with a mono pill: inline-flex 6px gap, 4/10/4/8 padding, ${whoColor}14 bg, 1px ${whoColor}55 border, 999 radius, mono caps 9.5px weight 700 letter-spacing 0.14em, boxShadow with double-layer 0 0 12px -2px glow. Inner contents: 6×6 owner-color dot (boxShadow 0 0 6px for the 'glow' effect) + time in ink + caps whoHasPhrase. isTomorrow branch shows 'PLANNING TOMORROW' simple. Stats (slotted/unscheduled/lights-out) removed — runway card already surfaces these. (3) 'What fits here?' suggestion strip. Inside the free-block sub-line IIFE (after the reasons.map block), new IIFE: filter tasks where ownerName === currentUser && !completedAt && !scheduledTime && effortMin <= slot.durationMin; sort by (a) focus-level match desc, (b) regretScore desc, (c) effortMin asc; pick top candidate. If candidates.length > 0, render a dashed gold strip: ✦ FITS label + button-wrapped task title + duration + SLOT button. Tap title OR SLOT button → setTasks patch t.scheduledTime to the slot.start as HH:MM. e.stopPropagation prevents the wrapping row's onClick. If no candidates, returns null (no strip). SCOPING: 3 isolated edits in TodayTaskPlanCard render. Zero changes to scheduler, schema, palette, modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt191", summary: "Add-task FAB removed. The mauve circular '+' button (bottom: 88, right: 20, 56×56, fixed) wrapped in the inline-modal-state hide conditions has been deleted from TodayTaskPlanCard's render. Replaced with a comment explaining the removal and the alternate task-add entry points (free-block tap, ⋯ menu brain dump, structured add form). Zero state changes — setShowNlInput is still called from free-block onClick (bt168) and from the brain-dump menu item. Visual effect: only the central LOG button remains floating in the bottom area. Build verified clean via esbuild." },
+  { version: "2026.05.05bt190", summary: "Four UX fixes per screenshot feedback. (1) Free-block duration: removed `!isFree` gate on the duration sub-line in the time column. Shows for all kinds when durationMin > 0; styled in gold (fontWeight 700) for free, muted for others — gold-tints draw the eye to fillable slots. (2) Rail width: 7 → 4. Row left-padding 16 → 12 since the rail is thinner. (3) Modal bottom padding global bump: 4 standalone bottom-sheet components (EnergyCheckInModal, FocusQuizModal, TimeEditPopover [still defined but no longer mounted], PreviewBeforeCommitModal) updated from `calc(40px + env(safe-area-inset-bottom))` to `calc(96px + env(safe-area-inset-bottom))`. ModalShell's `calc(28px + env(...))` also bumped to `calc(96px + env(...))`. The 96px clears the iOS Safari tab bar height + breathing room. (4) Inline time/duration edit: new InlineTimeEditPanel component (NOT a modal, no useScrim) rendered as a row directly below the row being edited. Body: time-type input (100px wide) + 'for' italic separator + preset chip grid [15,30,45,60,90,120] + custom number input + 'Runs Xa–Yp' preview + Cancel/Save mono buttons. State local to component (start, duration). On Save, calls parent's onSave with {scheduledTime, effortMin} patch, clears inlineTimeEdit. In the timeline row-render loop, after each rows.push() of the regular row, conditionally rows.push(<InlineTimeEditPanel/>) if isTask && !completedAt && inlineTimeEdit === slot.id. TimeEditPopover modal-render gate removed from the App-level mount section (component definition retained but unused). SCOPING: 1 style condition, 2 number changes, 1 sed across 5 lines, 1 new component, 1 conditional push, 1 deletion. Zero changes to scheduler, schema, palette, other modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt189", summary: "Preview-before-commit modal. (1) New module-level parsePreviewCommand(text, previewTasks) helper. Lowercases input, finds tasks by exact/partial-match (case-insensitive), supports DELETE/REMOVE/DROP/SKIP, UNSCHEDULE/DEFER, MOVE TO TIME-OF-DAY (morning=09:00 / afternoon=13:00 / evening=18:00 / night=20:00), MOVE TO SPECIFIC TIME (parses 1-2 digit hour + optional minutes + optional am/pm, biases ambiguous 1-7 to PM), and SWAP A and/with/& B. Returns {success, newTasks, message}. (2) New PreviewBeforeCommitModal component: useScrim; bottom-sheet pattern (safe-area-inset-bottom padding, maxHeight + overflow); shows scheduled tasks sorted by time in mauve-bordered cards with title + duration + reason; unscheduled tasks in coral dashed cards under 'Couldn't fit' header; free-text input with Try button + stubbed AI button + result hint line; Cancel / Lock-in buttons. (3) commitNlPending modified: instead of setTasks(prev => [...prev, ...updatedNew]), set previewState({tasks, reasons}). Skip-preview shortcut: if length === 1 and task has explicit scheduledTime, commit directly (no preview). (4) New previewState useState in TodayTaskPlanCard (null | {tasks, reasons}). (5) Modal render gate in the standalone-modal section: onLockIn does setTasks append + setScheduleStatus banner build + auto-open unscheduled pile + clear previewState. onCancel just clears. onCommandApply calls parsePreviewCommand and on success updates previewState.tasks. (6) Scrim-bump useEffect now includes previewState so CentralLogButton hides while modal is open. SCOPING: 1 new module helper, 1 new component, 1 useState, 1 modal-render block, 1 useEffect dep extension, 1 commitNlPending branch change. Zero changes to scheduler, schema, palette, other modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt188", summary: "Boundary line + time-edit popover. (1) Row style: replaced single borderBottom with borderTop + borderRight + borderBottom each computed from owner color at +33 alpha (Mommy mauve, Daddy slate, joint gold, fallback line+1a). Drop-target overrides preserved (top dashed mauve when isDropTarget && isFree; bottom mauve+50 when isDropTarget). marginBottom 3 added for inter-row gap. borderRadius `0 4px 4px 0` so the right side rounds while the left edge stays flush against the rail. Resolved an inadvertent duplicate borderTop key from the merge. (2) New TimeEditPopover component: useScrim, bottom-sheet pattern (full inset overlay, flex-end alignment, paddingBottom calc(40 + env(safe-area-inset-bottom)), maxHeight calc(100dvh - 40px), overflowY auto). Body: start time (type=time controlled input), duration (3-col grid of [15,30,45,60,90,120] preset chips + custom number input below), end-time preview line, Cancel/Save buttons. fmtDuration helper handles minute-to-Xh Ym formatting. fmtTime helper for the runs-X-to-Y line. (3) Inline time edit input REMOVED from row render; replaced with the unconditional time-text div that still calls setInlineTimeEdit(slot.id) on click. (4) New TimeEditPopover render gate in TodayTaskPlanCard's modal-render section: when inlineTimeEdit is set, find matching task by id, render popover with onSave that maps setTasks with patch ({scheduledTime, effortMin}). (5) The inline-modal useEffect bumped: now also fires for inlineTimeEdit so CentralLogButton hides while editing time. SCOPING: 1 new component, 1 new modal-mount block, ~10 lines of style changes on row, 1 useEffect dep update. Zero changes to scheduler, schema (existing fields), palette. Build verified clean via esbuild (had 1 duplicate-key warning that was fixed before ship)." },
+  { version: "2026.05.05bt187", summary: "Owner-dot removal + rail width bump. (1) Inside the time-column branch of the row render (the non-edit-mode `else` arm), removed the inline-block 7px circle span that rendered the owner color next to the time text. Removed the display:flex + alignItems + gap:6 + the surrounding wrapping that supported it. Time text now renders plain. (2) Rail style: width 3 → 7. Removed alpha suffix `cc` from the isFree and onsite-fallback branches so all owner colors render at full opacity. Task branch unchanged (was already fully opaque). (3) Row grid padding: '9px 8px 9px 12px' → '9px 8px 9px 16px' to give the wider rail 5px breathing room before content. SCOPING: 1 element removal, 3 string-literal changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt186b", summary: "Safe-area padding on standalone bottom-sheet modals. (1) EnergyCheckInModal inner card: added `paddingBottom: 'calc(96px + env(safe-area-inset-bottom))'` to override the base `padding: '16px 18px 24px'` shorthand. Also added `maxHeight: 'calc(100dvh - 40px)'` + `overflowY: 'auto'` so the content scrolls if it ever overflows. (2) FocusQuizModal inner card: same paddingBottom override added; maxHeight was already in place at 'calc(100dvh - 24px)'. (3) ModalShell already had `calc(28px + env(safe-area-inset-bottom, 0px))` from bt56 so it's unaffected. SCOPING: 2 inline style additions. Build verified clean via esbuild." },
+  { version: "2026.05.05bt186a", summary: "TDZ hotfix on bt186. Moved the bt186 inline-modal useEffect from line ~20013 (before state decls) to line ~20322 (after all referenced state declarations). Same effect body and dependency array; only the position changed. Build verified clean via esbuild." },
+  { version: "2026.05.05bt186", summary: "Modal-scrim infrastructure. (1) New module-level _modalCount counter + _modalListeners Set + _bumpModalCount(delta). (2) New useScrim() hook calls _bumpModalCount(+1) on mount, -1 on unmount via useEffect cleanup. (3) New useModalOpen() hook subscribes to _modalListeners and re-renders when the count crosses zero. (4) CentralLogButton calls useModalOpen() at the top and returns null when truthy — no FAB rendered while any modal is open. (5) ModalShell calls useScrim() at top so every modal that goes through this wrapper auto-registers (covers commitment forms, log pickers, family code, etc.). (6) FocusQuizModal, EnergyCheckInModal each call useScrim(). (7) Inline modal toggles inside TodayTaskPlanCard (showBrainDump, showSetup, showNlInput, showAddForm, editingTask, editingRoutine, splittingTask, movePickerForTask, showActionsMenu) registered via a useEffect that bumps the count whenever any are truthy. (8) App-level showLogger gets its own useEffect bump for the same reason. SCOPING: 1 new module-level helper block + 1 ModalShell line + 2 modal-component lines + 1 useEffect in TodayTaskPlanCard + 1 useEffect in App. Zero changes to palette, scheduler, modal internals, or other surfaces. Build verified clean via esbuild." },
+  { version: "2026.05.05bt185", summary: "Meeting diagnostic + dayTimeline filter robustness. (1) Inserted a new mini-diagnostic line under the runway-card stretches count: filters today's meetings inline using isoDate match + parent/currentUser check + isTimeBankRedemption skip; sums durations via end - start. Renders '<N> meetings booked · <fmtHM> total' only when N > 0. Italic Cormorant 12px, mono N + duration. (2) dayTimeline's todayMeetings filter switched from `start.toDateString() !== today.toDateString()` to `isoDate(start) !== isoDate(today)`. Same semantic but uses the existing isoDate helper for consistency with how dates are compared elsewhere in the codebase. Behavior preserved; reduces fragility on locale edge cases. SCOPING: 1 inline insertion in runway card, 1 line change in dayTimeline filter. Zero changes to scheduler, schema, modals, or anywhere else. Build verified clean via esbuild." },
+  { version: "2026.05.05bt184", summary: "Readability + personal data. (1) New computeBabyStats(events, now) module-level helper. Filters events to last 7 days, type === sleep_up || sleep_down. Sorts chronologically. Walks pairs: sleep_up → next sleep_down (within 4h) = wake window minutes; sleep_down → next sleep_up (within 4h, daytime 6a-8p) = nap duration. Filters outliers (<10min, >240min). Returns { avgWakeWindowMin (median), wakeWindowSample, avgNapDurationMin (median), napDurationSample }. (2) effectiveBlockProfile signature gains 11th param babyStats. Self-duty default branch wakeReason: babyStats.avgWakeWindowMin ? `Solène's recent wake windows average ${X} min...` : 'wake-window data not enough yet...'. (3) All reason strings tightened — same factual content but shorter sentences. (4) Open-block sub-line render: removed fontStyle:italic + opacity:0.85 + color:C.muted from reasons block; now Cormorant 11.5px (was 10.5), regular weight, C.ink color, full opacity. Bullets bumped to font-weight 700 + 85% opacity in focus color. (5) New babyStats useMemo in TodayTaskPlanCard. 3 call sites of effectiveBlockProfile updated to pass babyStats as 11th arg. SCOPING: 1 new helper, 1 new useMemo, 1 reason rewrite, 1 styling change, 3 call sites. Zero scheduler logic changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt183", summary: "Causal explanations in effectiveBlockProfile.reasons. Rewrote every reason string to explain the algorithmic logic: (1) timeReason now distinguishes quiz-defined peaks ('falls in YOUR quiz-defined peak hours — you marked this time as sharp') from literature defaults ('in the standard cognitive peak 9a-noon / 3-6p · literature default since you haven't taken the quiz') and quiz-defined dips ('in your declared energy dips — deep work unlikely to land here'); also handles 'not in your declared peaks' case. (2) meetingReason explains the actual decay value from the quiz ('a meeting ended within the last 30 min — your quiz says you need that long to bounce back, so this slot is treated as light'). (3) Onsite branch: 'Solène is at grandparents' today — you're free of care duty'. (4) Joint branch: 'you and your partner are both on duty here — care can be tagged-team'. (5) Partner branch: '${owner} has Solène during this block — she isn't your responsibility, no interruptions expected'. (6) Self + feed: cites concrete sample count + likelihood percentage + why it's not work-amenable ('feeding takes both hands and attention'). (7) Self + nap: same with predicted duration and why it's uninterrupted. (8) Self + post-feed: cites the actual feed time + content-window heuristic. (9) Self default: walks through care reality ('you're on solo baby duty here — Solène is awake (no nap predicted in this window)' + wake-window science 'wake windows for her age average ~90 min · expect 2-3 attention demands in any 1h block'). (10) Low-energy cap: explains the user-driven nature ('your morning check-in marked today low — capping deep windows so you don't push yourself into work you can't sustain'). SCOPING: 1 helper rewrite (effectiveBlockProfile reasons + _applyLowEnergyCap reasons). Zero structural changes elsewhere. Build verified clean via esbuild. NEXT: preview-before-commit modal (per chat: 'should have the app show a preview of what the proposed schedule is and another option with clear explanation as to why')." },
+  { version: "2026.05.05bt182", summary: "Reasoning chain in open-block sub-line. (1) effectiveBlockProfile rebuilt: each branch now populates a `reasons` array as part of its return. Onsite/joint/partner branches → 2 reasons (coverage + time-of-day). Self-duty: feed-overlap → 3 reasons (predicted-feed detail + occupied + time); nap-overlap → 3 reasons (nap detail + uninterrupted + time); post-feed → 3 reasons (calm-play + Solène-content + time); default → 2 reasons (interruptible + time-with-context). Post-meeting branch appends 'post-meeting buffer (light)'. timeStr formatted via local fmtH helper. timeFactor uses focusProfile.deepHours if present (says 'peak hour (your quiz)' / 'off-peak hour'), else literature defaults. Default self-duty branch swaps to 'X · would be peak otherwise' when isPeakHour true (acknowledges the lost potential). (2) _applyLowEnergyCap appends 'low-energy day · capped to light (from your morning check-in)' to reasons when capping. (3) Open-block sub-line renderer rebuilt: line 1 'DEEP/LIGHT · careLabel' (focus label now in uppercase mono caps for emphasis); below that, each reason renders as its own row with a small dot bullet in focus color + italic text in muted Cormorant 10.5px. Lays out vertically so each factor is independently readable. (4) Cleaned up an editorial duplicate-function corpse left over from the bt181 _applyLowEnergyCap insertion. SCOPING: 1 helper rewrite (effectiveBlockProfile), 1 sub-line render rewrite, 1 cleanup. Zero changes to scheduler, schema, palette, other components. Build verified clean via esbuild." },
+  { version: "2026.05.05bt181", summary: "Feed-blocker + energy check-in + drift detection. (1) FEED BLOCKERS. computeFreshWorkableBlocks: feedBlockers array built by filtering predictedFeeds (≥4 sample) where this user is solo owner during the feed's hour. Mapped to {start, end, kind:'feed-predicted', title, parent}. Concatenated into allItems passed to computeFreeSpans. dayTimeline useMemo: same filter applied to inject feedPredictions into buildDayTimeline items. getBlockTag + getBlockIcon gain 'feed-predicted' branches ('PREDICTED' label / '◉' icon). isFeedPred flag added in row render scope. (2) ENERGY CHECK-IN. New EnergyCheckInModal component (bottom sheet, 5 number buttons, labels). New dailyEnergy state at App scope (per-user per-day, shape {date, rating, ts}). Hydrate + autosave under solene:dailyEnergy_{Mommy|Daddy} key, with user-switch swap effect. Threaded App → ShiftsView → TodayTaskPlanCard. todayISO useMemo + auto-open useEffect that fires setShowEnergyCheckIn(true) after 800ms if !dailyEnergy || dailyEnergy.date !== todayISO. lowEnergy boolean derived (rating ≤ 2 today). New module-level _applyLowEnergyCap helper wraps effectiveBlockProfile result: if lowEnergy && profile.focusLevel==='deep', returns shallow + appended careLabel. Wrapped at all 3 call sites (scheduler refineFocus, runway aggregation, open-block sub-line). (3) DRIFT. driftStatus useMemo computes count of open my-tasks whose scheduledTime + effortMin + 15min < now. driftDismissed state, resets daily via useEffect on todayISO. Banner inserted above runway card: coral background + border, ↳ DRIFT label, count + status text, RE-SLOT button calling reanalyze(), × dismisses. SCOPING: 1 new modal component, 1 new state + persistence at App, 3 prop threading sites, 1 new helper, 3 wrapped call sites, 2 dayTimeline injections (visual + scheduler), 1 useMemo, 1 banner. Zero changes to scheduler algorithm itself (assignTaskTimes), task schema, drag handlers. Build verified clean via esbuild. KNOWN: lowEnergy not surfaced in runway card itself yet (only in sub-lines); deferred." },
+  { version: "2026.05.05bt180", summary: "Feed-window awareness. (1) New module-level predictFeedWindows(events, now) helper, mirrors predictNapWindows: filters bottle + solid_food events from last 7 days, uses event.durationMin if present (defaults 15 for bottle, 20 for solid_food), buckets by 30-min start-time slot, requires ≥3 occurrences per bucket, returns [{start, end, durationMin, kind:'feed', context:'predicted feed · n=X/7d', sampleSize}]. (2) effectiveBlockProfile signature gains predictedFeeds (9th param). Self-duty branch logic updated: after postMeeting gate, check feed overlap ≥10 min → return shallow + careLabel 'active feeding · predicted · X/7d'. Then existing nap overlap ≥30 min → deep. Then NEW post-feed check: if block.start within 30 min of a predicted feed's end → return shallow + 'calm-play pocket · post-feed · X/7d'. Then default. (3) New predictedFeeds useMemo in TodayTaskPlanCard: predictFeedWindows(events, now). (4) Three call sites of effectiveBlockProfile (refineFocus inside computeFreshWorkableBlocks, runway aggregation, open-block sub-line) all pass predictedFeeds as 9th arg. SCOPING: 1 new module helper, 1 new useMemo, 4 call-site arg additions, 1 self-duty branch extension. Zero changes to scheduler algorithm, schema, drag handlers, modals, palette. Build verified clean via esbuild. KNOWN LIMITATION: feed windows are flagged informationally but the scheduler still treats them as available 'shallow' time — won't autoblock task placement. A future build could insert feed predictions as their own dayTimeline events so they fully reserve time." },
+  { version: "2026.05.05bt179a", summary: "Owner dot relocation. Removed the standalone dot div above the time text. Inserted a small inline-block span (7px circle, color-matched) as the first child inside the time-range div, with display:flex + gap:6 on the container so the dot sits left of the time horizontally. Edit-mode time input branch unchanged (no dot there). SCOPING: 1 element move. Build verified clean via esbuild." },
+  { version: "2026.05.05bt179", summary: "Owner dot in time column. (1) Removed shift-divider block from bt178. (2) Inserted a 7px circle div above the time text in the time column. background: owner-matched (C.mommy/daddy/gold/muted). marginBottom 4 separates from time number. Renders only when owner truthy (no dot on onsite rows where owner is null). SCOPING: 1 small element addition + 1 removal. Zero changes elsewhere. Build verified clean via esbuild." },
+  { version: "2026.05.05bt178", summary: "Section-divider rows by owner. (1) Removed M/D letter glyph block from time column (bt177). (2) Removed rowTint variable + background prop on row container (bt177). (3) Inside dayTimeline.forEach loop, before each row push: compute prevOwner by walking back through prior non-skipped slots (skips past-time free rows that get filtered out of render). Compute ownerChanged = owner !== prevOwner. When ownerChanged && owner truthy: scan forward to find the shift's end-time (last consecutive slot with same owner). Push a divider row with owner label ('MOMMY ON DUTY' / 'DADDY ON DUTY' / 'BOTH ON DUTY' / 'GRANDPARENTS'), local fmtH helper for compact time format ('12p–4p'), flex layout: 1.5px owner-colored borderTop line | mono caps label with subtle owner-tinted background pill | 1.5px owner-colored borderTop line. 20px top margin, 10px bottom. SCOPING: 1 new tracker computation + 1 conditional row insertion + 1 small inline helper. Zero changes to palette, rail logic, schema, scheduler. Build verified clean via esbuild." },
+  { version: "2026.05.05bt177", summary: "Row ownership indicators. (1) rowTint variable computed at row-iteration scope: `${C.mommy}16` for Mommy, `${C.daddy}16` for Daddy, `${C.gold}12` for joint, transparent for onsite/null. Applied as `background: rowTint` on the outer row container (the existing relative-positioned wrapper). 9% alpha is intentionally subtle for single rows but compounds across multiple same-owner rows into a clear color band. Doesn't interfere with the rail (which sits on top via absolute positioning) or task/free row interiors. (2) New owner letter glyph block prepended inside the time column div. Conditionally renders when owner truthy. JetBrains Mono 9px, weight 800, letterSpacing 0.06em, marginBottom 1, lineHeight 1, opacity 0.95. Color matches owner: C.mommy/daddy/gold/muted. Label: 'M' / 'D' / 'M+D' / empty for onsite. SCOPING: 1 variable + 1 background insertion + 1 conditional render inside time column. Zero changes to palette, scheduler, schema, rail logic itself. Build verified clean via esbuild." },
+  { version: "2026.05.05bt176a", summary: "Two corrections. (1) Palette reverted: C.day.mommy/daddy/dawn.mommy/daddy back to #9C7B96 + #6286B0; dusk/night back to #BFA0BC + #8FA8C4. (2) Rail style in the TodayTaskPlanCard timeline render: width 2 → 3, free-row alpha aa → cc. Task rows stay fully opaque (no alpha suffix). Underlying palette unchanged so no ripple effect on other surfaces. Build verified clean via esbuild." },
+  { version: "2026.05.05bt176", summary: "Three fixes. (1) FocusQuizModal rewritten as a one-question-at-a-time wizard. New `step` state (0-4). STEPS array of 5 objects each with {title, sub, render, canAdvance, hint}. Progress dots row above the question (5 thin bars, filled by C.gold up to current step). Header shows 'FOCUS PROFILE · N of 5' in the eyebrow. Sub-line uses italic Cormorant 13px for explanatory copy. Footer: Back/Cancel button (transparent outline, flex 1) + Next/Save button (mauve filled, flex 2). On Q1, Back becomes 'Cancel' and exits. On last step, Next becomes 'Save profile'. Clear button only renders on step 0 if profile already exists. Single source of truth for state across steps; selections persist when navigating back. (2) Q1 copy reframed: title 'When would you be sharpest if nothing was in the way?' sub 'Forget your shifts and meetings — just biology'. Captures chronotype peak; the runway card already shows the intersection with actual availability. (3) Palette contrast bump: in C constants `day`+`dawn`, mommy #9C7B96 → #B55A8E, daddy #6286B0 → #2E5E9C. In `dusk`+`night`, mommy #BFA0BC → #E08AB8, daddy #8FA8C4 → #6AAEE0. Now visibly distinct at the 2px rail width. SCOPING: 1 component rewrite (FocusQuizModal, ~210 lines), 1 palette block (8 hex values). Zero changes to scheduler, schema, drag handlers, AllTasksView. Build verified clean via esbuild." },
+  { version: "2026.05.05bt175", summary: "Protect-scheduled-from-reanalyze + sticky pin. (1) Task schema gains optional `pinned` boolean (default false). (2) addTask rewritten: no longer strips existing scheduled open tasks. Builds a pinned-items set (completed + existingScheduled + (newTask if has time)), computes workable, and slots ONLY the new task if it has no manual time. Existing tasks untouched in setTasks. (3) commitNlPending rewritten same pattern: existingScheduledOpen always retained as pinned. Only newTasks without scheduledTime get slotted. setTasks just appends; existing tasks stay. Banner.reanalyzed flag flipped false since this is no longer a global reshuffle. (4) reanalyze rewritten for pin-awareness: open = filter !completedAt; pinnedOpen = open.filter(t.pinned && t.scheduledTime); unpinned = the rest; computeFreshWorkableBlocks([...completed, ...pinnedOpen]) — engine schedules AROUND pins; assignTaskTimes(unpinnedStripped, workable). setTasks only updates unpinned ids. Banner gains pinnedCount field. (5) EditTaskModal: new `pinned` state, defaults from task.pinned. New toggle button under scheduledTime input. Disabled when scheduledTime is empty (can't pin without a time). Pinned style: gold-tinted background + 1.5px gold border + 📌 + 'Pinned — won't move on Reanalyze' label. Unpinned style: transparent + line-color border + ○ + 'Pin to this time' label. (6) Submit payload now includes pinned (gated on !!scheduledTime so we never persist a pinned-with-no-time state). saveEdit uses spread so the field flows through. (7) Timeline row: new 📌 inline-badge in row title (after sequence badge, before ADJUSTED) when slot.pinned. Tooltip 'Pinned · won't move on Reanalyze'. SCOPING: 2 handler rewrites (addTask, commitNlPending), 1 handler refactor (reanalyze), EditTaskModal state + render, 1 row render insertion. Zero changes to scheduler algorithm itself (assignTaskTimes), C palette, drag handlers, AllTasksView. Migration: existing tasks have pinned undefined → treated as false. Build verified clean via esbuild." },
+  { version: "2026.05.05bt174a", summary: "Hotfix. ShiftsView signature gains focusProfile + setFocusProfile props. App-level <ShiftsView ...> invocation passes both. No other code changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt174", summary: "Focus quiz + meeting after-effect buffer. (1) MODULE-LEVEL HELPERS. getFocusForHour(h, focusProfile) — when profile.deepHours array present, returns 'deep' if h in deepHours AND not in dipHours, else 'shallow'. Falls back to 9-12/15-18 = deep literature default when profile null. getBlockFocusLevel(start, focusProfile) wraps it. (2) effectiveBlockProfile gains 2 new params: focusProfile + recentMeetings. Logic extended: pre-compute circadian via getBlockFocusLevel with profile. Then check meetingDecayMin from profile; if any meeting's end is within decay-window before blockStart, mark postMeeting=true and downgrade baseFocus to 'shallow'. All four owner branches (onsite, joint, partner, self) read baseFocus + append ' · post-meeting buffer' to careLabel when applicable. Self-duty branch checks postMeeting BEFORE nap-overlap so post-meeting always wins (your brain is recovering regardless of nap). (3) STATE. New App-level focusProfile state, hydrated from solene:focusProfile_{Mommy|Daddy} per-user key. Autosave effect writes back on change. User-switch effect re-reads the matching profile when currentUser changes. (4) FocusQuizModal component (new, ~210 lines) inserted before ParentAwayModal. Five-question bottom-sheet: 3 multi-select chip rows for deep/dip/light hour buckets (each 2-hour block in TIME_BLOCKS), single-select for meeting-decay (0/15/30/60), single-select for protect-instinct (morning/evening/varies/whenever). Save button disabled until at least one deep block picked. Clear button reverts to defaults. Output written to focusProfile via onSave; shape includes completedAt timestamp. (5) WIRING. TodayTaskPlanCard signature gains focusProfile + setFocusProfile. App-level invocation passes both. ⋯ menu gains 'Focus profile · take quiz' / '...retake' item between Today's setup and Re-analyze. New showFocusQuiz state + render. (6) THREAD THROUGH. New meetingsForBuffer useMemo in TodayTaskPlanCard: filters meetings to today + owner-matched, returns [{start, end, date}]. Three call sites of effectiveBlockProfile updated to pass focusProfile + meetingsForBuffer: open-block sub-line render, runway card aggregation, computeFreshWorkableBlocks refineFocus. SCOPING: edits scoped to 2 module helpers, FocusQuizModal new component, App state + persistence, TodayTaskPlanCard signature/state/render. Zero changes to scheduler algorithm itself (assignTaskTimes), task schema, drag handlers, AllTasksView. Existing users with no profile get literature defaults; nothing breaks. Build verified clean via esbuild." },
+  { version: "2026.05.05bt173", summary: "Nap-aware focus. (1) New module-level effectiveBlockProfile(blockStart, blockEnd, owner, currentUser, predictedNaps, onsite) helper. Returns { focusLevel, careLabel, sourceNote }. Logic: onsite → circadian + 'grandparents'; owner=joint → circadian + 'tag-team'; owner is partner → circadian + 'uninterrupted'; owner is currentUser → check predicted-nap overlap, ≥ 30 min overlap → DEEP + 'nap predicted (n=X/7d)', else SHALLOW + 'interruptible'. (2) New predictedNaps useMemo in TodayTaskPlanCard: predictNapWindows(events, now). Deps [events, now]. (3) Open-block sub-line render branch (free rows in the timeline) rewritten to call effectiveBlockProfile and render its focusLevel + careLabel inline. Same italic Cormorant 11px styling. (4) Runway card aggregation rebuilt: for each futureFree slot, derive owner via inline slotOwner helper, then bucket minutes into deepPartnerMin / deepNapMin / deepJointMin / deepOnsiteMin / lightMin based on profile.focusLevel + owner. New deepExplainer string built by joining non-zero buckets with ' + '. Rendered as new italic sub-line under the totals: '↳ deep: 2h partner shift + 1h 30m nap predicted'. (5) computeFreshWorkableBlocks: focusLevel for each returned free block now goes through effectiveBlockProfile via a local refineFocus helper. Owner inlined per span using activeShifts lookup. Effect: scheduler now sees deep windows during your solo shift if a predicted nap overlaps, so deep tasks land there instead of being pushed to partner-shift slots. SCOPING: 1 new module helper, 1 new useMemo, 3 render/scheduler sites updated. Zero changes to predictNapWindows itself, scheduler algorithm (assignTaskTimes), schema, drag handlers, modals. Build verified clean via esbuild. KNOWN: predicted-nap rendering as a distinct timeline row (vs annotation on free row) deferred; per-task placement-reasoning popup deferred." },
+  { version: "2026.05.05bt172", summary: "Three changes. (1) BT75 EFFECT WEAKENED. The auto-end takeover useEffect (App scope, line ~5059) changed its age threshold from 30 seconds to 8 hours. Effect still fires when baseOnDuty.parent === takeover.coveringParent AND age >= threshold AND no other guards trip; but the threshold is now generous enough that real manual tag-ins are never auto-cleared. Only debris (stuck takeovers from sync bugs / prior builds) gets cleaned. Reason text in the time-bank transaction updated to 'Impromptu takeover (auto-ended · debris cleanup)' from 'auto-ended at shift boundary'. (2) TODAY'S RUNWAY CARD. New IIFE inserted in TodayTaskPlanCard render below the one-line context, above the timeline. Computes futureFree from dayTimeline.filter(kind=='free' && end>now) with start trimmed at now and durations <15min dropped. Sums deepMin + lightMin via normalizeFocus + sums total task effort via myTasks.filter(!completedAt).reduce. Renders an editorial card: mono gold eyebrow 'TODAY'S RUNWAY', then Cormorant body: 'Xh Ym deep · Xh Ym light' with mono numbers in FOCUS_COLOR.deep/.shallow, italic 'N stretches ≥ 1h' under it, then a divider and a fit-status line: 'Xh Ym of tasks added · ↳ comfortably fits' (sage if taskMin <= totalFree) / 'a tight fit' (gold if 0 < overcommit <= 30) / 'Xh Ym won't fit' (coral if overcommit > 30). Hidden in tomorrow view. (3) OPEN BLOCK FOCUS HINT. In the row-render IIFE inside the timeline, replaced the placeholder comment 'bt149 sub-context dropped' with a new conditional sub-line for isFree rows. Renders a small italic Cormorant 11px line under the '+ Open · tap to fill' title containing: focus label (in FOCUS_COLOR, non-italic, weight 600) + careHint based on owner ('uninterrupted · Daddy has Solène' / 'interruptible · you're on' / 'tag-team window' / 'uninterrupted · grandparents' for onsite). Tasks + routines unchanged. SCOPING: 1 effect change in App, 2 inserts in TodayTaskPlanCard render. Zero changes to scheduler algorithm, schema, drag/swipe handlers, AllTasksView, modals, or any other surface. Build verified clean via esbuild." },
+  { version: "2026.05.05bt171", summary: "Sequence (ordered dependency) feature. (1) PARSER. parseNaturalLanguageTasks updated: after primary comma/semicolon/newline/ellipsis split + optional verb-split fallback, each resulting segment is run through SEQ_DELIM regex (/\\s+then\\s+|\\s*→\\s*|\\s*->\\s*/i). If the segment splits into 2+ sub-tasks, each gets sequenceId (random string with date prefix), sequenceIndex (0-based), sequenceTotal (count of chain). Otherwise unchanged. (2) SCHEMA. Tasks gain optional sequenceId, sequenceIndex, sequenceTotal fields. (3) commitNlPending: carries the three new fields onto the persisted task. (4) SCHEDULER. assignTaskTimes rebuilt to honor sequence: (a) groupRegret map computed up front — max regret across all members of each sequenceId, so the chain sorts as a single priority class. (b) Queue sort: regret desc (group regret used for sequenced tasks), then if same sequenceId by sequenceIndex asc, else normal focus/category tiebreak. (c) Block-find loop replaced with explicit constraint-aware version: for each task, compute minStart (= sequenceConstraint[sequenceId] if set), then walk blocks computing effectiveStart = max(blockNextAvail, minStart). Picks the first block where (blockEnd - effectiveStart) >= effortMin. (d) On assignment, block.usedMin advances to ((effectiveStart - block.start)/60000 + effortMin) — this may 'skip' pre-gap minutes which become unreachable in that block (acceptable v1 tradeoff; future could split blocks). (e) sequenceConstraint[seqId] updated to (effectiveStart + effortMin) after each placement. (f) Reason text appended with ' · step N/M' for sequenced tasks. (g) On fail, sequence-specific message: 'sequence step N: no block ≥ Xm after prior step ended.' (5) RENDER. Timeline row title gets a new inline mono badge ('→ N/M' in C.mommy at 67% alpha) right after the moved-tag if slot.sequenceId && slot.sequenceTotal. (6) scheduledTasks projection unchanged — already spreads ...t so seq fields flow into the slot naturally. SCOPING: module-level parser, scheduler in TodayTaskPlanCard, commit handler, one render insertion. Zero changes to C palette, schema migrations (fields are optional and undefined-tolerant), drag/swipe handlers, AllTasksView, modals. Build verified clean via esbuild. KNOWN LIMITATIONS: (a) pre-gap waste in blocks where sequence forces a skip; (b) no UI to add/edit a sequence on existing tasks (currently only via NL syntax at create time); (c) reanalyze keeps existing sequenceId values so order is preserved; (d) split-task feature doesn't propagate sequence." },
+  { version: "2026.05.05bt170", summary: "NL parser fixes for 'and'. (1) parseNaturalLanguageTasks primary split regex changed from /[,;\\n\\u0001]|\\band\\b/i to /[,;\\n\\u0001]/. Drops 'and' as a task delimiter. Ellipsis variant normalization unchanged. (2) aggressiveVerbSplit CONNECTORS set extended: + 'and', 'plus', '&'. Now if a NL_TASK_VERB appears preceded by 'and' (as in 'review docs and prep'), the verb position is skipped — phrase continuation, not task boundary. SCOPING: 2 small changes in module-level helpers. Zero changes to schema, scheduler, render, or any other code path. Build verified clean via esbuild." },
+  { version: "2026.05.05bt169", summary: "Free-block visual trim in the timeline render loop. Inside the dayTimeline.forEach inside TodayTaskPlanCard's main IIFE: after the early-return for fully-past free slots (slot.end < now), added a new branch that detects a free slot straddling now (slot.start < now < slot.end). When detected, replaces the slot with a shallow copy whose .start is `now` and .durationMin recomputed from (slot.end - now). Drops the slot entirely if the trimmed duration falls below the 15-min minimum threshold (consistent with computeFreeSpans). Only applies to free slots; tasks/routines/meetings render at their actual times. Net effect: visual free-block durations match scheduler workable spans exactly. The 'no block ≥ Nm' reason text (from bt151 in assignTaskTimes) was already in place and accurate; this build closes the perception gap, not the math gap. SCOPING: 11 lines inserted inside the render loop. Zero changes to scheduler, schema, computeFreeSpans, computeFreshWorkableBlocks. Build verified clean via esbuild." },
+  { version: "2026.05.05bt168", summary: "One-line change to the free-block onClick handler in the timeline render. Was: setShowAddForm(true). Now: setShowNlInput(true) + setShowAddForm(false). Block start time + rounded duration are still pre-staged into draftScheduledTime/draftEffort so they propagate if the user opts into structured entry. NL input gains the same context implicitly via the existing referenceISO + auto-reanalyze pipeline. Build verified clean via esbuild." },
+  { version: "2026.05.05bt167", summary: "MOMMY'S DAY REDESIGN · phase 1 of 2. (1) Footer legend block (the RAILS/FOCUS/PRIORITY swatches + edit-tip line, ~80 lines) deleted entirely. Replaced with empty comment. (2) New editorial header block: heading h1 + Today/Tomorrow toggle pill + ⋯ menu unchanged in structure. Added a date sub-line (mono 10px uppercase, weekday + month + day). NEW one-line context box below: italic Cormorant 14px, left-border colored by current on-duty parent (computed on-the-fly from activeShifts), background C.gold 0d alpha. Content: mono time + ' · ' + who-has-Solène phrase ('Daddy has Solène — your time' / 'you have Solène' / 'together with Solène' / 'Solène with grandparents'). Stats sub-line below in 12px muted italic: 'X slotted · Y unscheduled · lights out HHmm'. Replaces N tasks·M routines·K open mono meta + the '+ add task' inline link + the K-open dotted-underline toggle. (3) isTomorrow banner (dashed mauve 'Planning tomorrow' standalone) deleted; tomorrow text now lives inside the same context box. (4) 'show right-now & next-move' link deleted along with the Right Now / Best Next Move card IIFE entirely (~462 lines removed). showRightNow state remains dead but harmless. (5) Open-blocks panel IIFE deleted entirely (~356 lines, including partner-away nap/pump branch + regular blockMatches panel). showOpenBlocks state remains dead but harmless. (6) Per-row rail render switched from `top:6 bottom:6 width:2 borderRadius:1` to `top:0 bottom:0 width:2` (no border-radius) so adjacent same-owner rows visually form a single continuous bar — the key visual concept of the mockup. Rail alpha bumped from 88 to aa (67%) on routines + free blocks for stronger 'who has baby' signal while tasks still pop on solid color. (7) NEW backlog footer link below the timeline when unscheduled count > 0. Quiet italic Cormorant 12.5 in C.line10-tinted pill, with mono count badge + 'see All Tasks ↗' affordance (informational; user navigates via existing sub-tab pills above). SCOPING: all edits inside TodayTaskPlanCard render branch. Zero changes to scheduler logic, drag/swipe handlers, modals, AllTasksView, App state, sub-tab structure, schema. Build verified clean via esbuild. Net file shrinkage: ~860 lines removed, ~170 added. DEFERRED to bt168: row body simplification (drop status circle / focus button / drag grip — replace with row-detail bottom sheet on tap), unified add-task bottom sheet (NL primary + opt-in advanced), open-block tap → 3-option sheet (new task / pick unscheduled / block out), handoff pills between shift transitions, day-section divider polish." },
   { version: "2026.05.05bt166", summary: "Redemption shift-carving fix. (1) Inside the main projection loop (App, around line 3984), removed isRedemption from the isOrdinary guard. Was `const isOrdinary = !isTakeover && !isRepayment && !isRedemption;`. The comment claimed redemptions came pre-carved from shiftsWithSplits upstream, but shiftsWithSplits only carves completed `takeover` events — not redemption meetings. Result: a redemption meeting was treated as a 'whole-shift block' and the projector did a full shift swap instead of carving. (2) Now `const isOrdinary = !isTakeover && !isRepayment;`. Redemptions go through the canCarve path: pre / covered / post slices, only the covered slice swaps to the other parent. (3) Carved swap entry kind tag also updated to track isRedemption so the UI labels the slice correctly ('cash-in' vs 'commitment'). Only the FIRST carved swap location (line ~4049, today projection) was updated; second carved-swap path (tomorrow projection, line ~4685) wasn't updated this build but should follow soon for consistency. SCOPING: 2-line logic change + a kind-string change in one swap push. Zero changes to time-bank transaction logic, balance computation, RedeemModal, dayTimeline render, scheduler. Build verified clean via esbuild." },
   { version: "2026.05.05bt165", summary: "Time-bank redeem bugfixes. (1) New isTimeBankRedemption(m) helper at module scope. Returns true iff (m.label || m.title || '').toLowerCase().startsWith('time bank:'). (2) dayTimeline meeting filter + computeFreshWorkableBlocks meeting filter: both add `if (isTimeBankRedemption(m)) return null` AFTER the owner check, so a redemption meeting for the current user is excluded from blocking items. buildDayTimeline naturally produces a free span in that window; computeFreeSpans similarly. The user can now slot tasks into the redeemed window via auto-reanalyze or manual scheduling. Time-bank meetings are still persisted (so the bank balance computation, which reads transactions, is unaffected — the meeting just doesn't appear on the timeline as a blocker). (3) RedeemModal signature gains currentlyOnShift (boolean). Initial whenChoice now `currentlyOnShift ? 'now' : 'pick'`. Added warning row below the SegControl when !currentlyOnShift && whenChoice === 'now': italic coral 11px text with ⚠ prefix. (4) App-level RedeemModal call site passes `currentlyOnShift={baseOnDuty?.parent === currentUser}` via BankView prop-drilling. BankView signature updated. SCOPING: module-level helper added, two meeting filter sites in TodayTaskPlanCard, RedeemModal signature + initial state + warning, BankView signature + prop forwarding, App-level BankView render adds currentlyOnShift prop. Zero changes to time-bank transaction logic, balance computation, scheduler algorithm, drag handlers. Build verified clean via esbuild." },
   { version: "2026.05.05bt164", summary: "Structured task form (showAddForm branch in TodayTaskPlanCard) rebuilt with collapsed default. (1) New showFormAdvanced useState (default false). (2) Top section: title input (unchanged styling). (3) Effort chips: tightened from gap 4 padding 8/2 fontSize 10.5 to gap 3 padding 6/0 fontSize 10. Label changed from 'Effort' uppercase mono to 'How long' shorter mono with letterSpacing 0.22em (was 0.26em). Custom number-input row REMOVED from default — moved into advanced section. (4) Regret 1-5: tightened similarly. Label combined with active-state label inline ('Priority · Slightly behind if not'); the standalone regretLabel paragraph below the chips removed. (5) NEW Save + more ▾ row: Save button takes flex:1, 'more ▾' / 'less ▴' toggle is a transparent 11px Cormorant italic button (#7C6B5A) that flips showFormAdvanced. (6) Advanced section (rendered only when showFormAdvanced): dashed top border separator, custom number input for arbitrary effort (5-480 step 5), focus picker (2-col deep/shallow), lock-to-time input + 'leave blank → scheduler picks the best slot' helper. (7) Free-write / Cancel row at the bottom unchanged. Existing handlers (addTask, draftTitle, draftEffort, draftRegret, draftFocus, draftScheduledTime) untouched — just reorganized which UI surfaces them. SCOPING: all edits inside the showAddForm branch render. Zero changes to addTask handler, scheduler, schema, NL flow, or any other surface. Build verified clean via esbuild." },
@@ -2434,6 +2501,14 @@ function SoleneHandoffInner() {
   // can't race with the migration.
   const initialSyncDoneRef = useRef(false);
   const [showLogger, setShowLogger] = useState(false);
+  // v05.05bt186 — Bump modal count for App-level showLogger so the FAB
+  // hides while the Logger sheet is open.
+  useEffect(() => {
+    if (showLogger) {
+      _bumpModalCount(1);
+      return () => _bumpModalCount(-1);
+    }
+  }, [showLogger]);
   // Deep-link flag: when set, ShiftsView auto-opens the TimeBank modal on
   // mount/tab-switch and clears the flag. Used by the LOG sheet pills so
   // gift/payback is reachable from anywhere without hoisting the modal.
@@ -2507,6 +2582,29 @@ function SoleneHandoffInner() {
   // suggested while partner is unavailable. Does NOT affect time bank —
   // business trips are acknowledged reality, not coverage debt.
   const [parentAway, setParentAway] = useState(null);
+  // v05.05bt174 — Per-user focus profile from the Focus Quiz.
+  // Shape: { deepHours: number[], lightHours: number[], dipHours: number[],
+  //   protect: 'morning'|'evening'|'varies'|'whenever', meetingDecayMin: number,
+  //   completedAt: ISO string } or null if not yet taken.
+  // Stored per user: solene:focusProfile_Mommy / solene:focusProfile_Daddy.
+  // When present, overrides the hardcoded 9-12/3-6 deep mapping in
+  // getFocusForHour. When absent, app falls back to literature defaults.
+  const [focusProfile, setFocusProfile] = useState(null);
+  // v05.05bt212 — User-editable routine library, per-user. Shape:
+  // array of { id, title, time, durationMin, onsiteDurationMin?,
+  // onsiteOnly?, optional?, joint?, disabled?, kind:'routine' }
+  // matching DEFAULT_MOMMY_ROUTINES. When null/empty, falls back to
+  // the default. Stored per user: solene:routines_Mommy / solene:routines_Daddy.
+  const [routineLibrary, setRoutineLibrary] = useState(null);
+  const [showRoutineEditor, setShowRoutineEditor] = useState(false);
+  // v05.05bt216 — Schedule optimizer modal.
+  const [showOptimizer, setShowOptimizer] = useState(false);
+  // v05.05bt181 — Per-day energy check-in. Shape:
+  //   { date: 'YYYY-MM-DD', rating: 1-5, ts: ISO }
+  // Captured on first open of the day. Influences scheduler: rating
+  // ≤ 2 caps deep windows to shallow (low-energy day, don't push hard
+  // tasks). Stored per user.
+  const [dailyEnergy, setDailyEnergy] = useState(null);
   // v05.05bt101 — track inventory IDs that were just removed locally
   // (drained via feed log, manually deleted, or emptyLocation bulk).
   // Cloud poll setter rejects any incoming inventory that would re-add
@@ -2520,6 +2618,14 @@ function SoleneHandoffInner() {
   const [showHandoffPrompt, setShowHandoffPrompt] = useState(false);
   // Time Bank: { balance: number (minutes; positive = Mommy owes Daddy), transactions: [{id, ts, from, to, mins, reason, kind: 'owed'|'gift'|'paid'}] }
   const [timeBank, setTimeBank] = useState({ balance: 0, transactions: [] });
+  // v05.05bt223 — Trade requests. Shape per entry:
+  //   { id, from, to, date (YYYY-MM-DD), startHr, endHr (fractional hours),
+  //     deepMin, status: 'pending'|'accepted_shift'|'accepted_bank'|'declined'|'expired',
+  //     createdAt, respondedAt, respondedBy }
+  // Shared family data (cloud-synced like meetings), not per-user.
+  const [tradeRequests, setTradeRequests] = useState([]);
+  const [showIncomingTrade, setShowIncomingTrade] = useState(null);
+  const [showSendTrade, setShowSendTrade] = useState(null); // candidate window from a trade idea
   // Daily content cache: { date: 'YYYY-MM-DD', french: {...}, verse: {...} }
   const [dailyContent, setDailyContent] = useState({});
   const [loadingDaily, setLoadingDaily] = useState(false);
@@ -2531,7 +2637,8 @@ function SoleneHandoffInner() {
   const [currentUser, setCurrentUserState] = useState(() => {
     try {
       const stored = localStorage.getItem("ll:devicePersona");
-      if (stored === "Mommy" || stored === "Daddy") return stored;
+      // v05.05bt214 — Caregiver added as a valid persona.
+      if (stored === "Mommy" || stored === "Daddy" || stored === "Caregiver") return stored;
     } catch {}
     return "Mommy";
   });
@@ -2541,6 +2648,15 @@ function SoleneHandoffInner() {
     try { localStorage.setItem("ll:devicePersona", next); } catch {}
   };
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
+  // v05.05bt214a — Caregiver persona can only access Now / Journal / Milk.
+  // Bounce them to Now if they land on a parent-only tab (e.g., persona
+  // persisted but tab state persisted from prior session). MUST live AFTER
+  // currentUser is declared — putting it earlier hits TDZ on every render.
+  useEffect(() => {
+    if (currentUser === "Caregiver" && !["now", "log", "inventory"].includes(tab)) {
+      setTab("now");
+    }
+  }, [currentUser, tab]);
 
   // v05.05bt16: time-travel for demoing time-dependent UI (bedtime banner,
   // wake-check, day-plan now-line, etc.). Stored as an offset in ms applied
@@ -2711,15 +2827,37 @@ function SoleneHandoffInner() {
       const tk = await storage.get("solene:takeover");
       const tasksFromStorage = await storage.get("solene:tasks");
       if (Array.isArray(tasksFromStorage)) setTasks(tasksFromStorage);
+      // v05.05bt223 — hydrate trade requests (shared family data)
+      const trFromStorage = await storage.get("solene:tradeRequests");
+      if (Array.isArray(trFromStorage)) setTradeRequests(trFromStorage);
       const parentAwayFromStorage = await storage.get("solene:parentAway");
       if (parentAwayFromStorage) setParentAway(parentAwayFromStorage);
+      // v05.05bt174 — per-user focus profile hydration. Read both keys
+      // but only apply the one matching currentUser (or Mommy default).
+      const cuStored = await storage.get("solene:currentUser");
+      const userKey = (cuStored === "Daddy" ? "Daddy" : "Mommy");
+      const fpFromStorage = await storage.get(`solene:focusProfile_${userKey}`);
+      if (fpFromStorage && typeof fpFromStorage === "object") setFocusProfile(fpFromStorage);
+      // v05.05bt212 — hydrate per-user routine library.
+      const rlFromStorage = await storage.get(`solene:routines_${userKey}`);
+      if (rlFromStorage && Array.isArray(rlFromStorage)) setRoutineLibrary(rlFromStorage);
+      // v05.05bt181 — hydrate today's energy (per-user, per-day).
+      const energyFromStorage = await storage.get(`solene:dailyEnergy_${userKey}`);
+      if (energyFromStorage && typeof energyFromStorage === "object") setDailyEnergy(energyFromStorage);
       const hn = await storage.get("solene:handoffNote");
       const na = await storage.get("solene:noteArchive");
       const tb = await storage.get("solene:timeBank");
       const dc = await storage.get("solene:dailyContent");
       const cu = await storage.get("solene:currentUser");
       if (e) setEvents(e.map(x => ({ ...x, ts: new Date(x.ts) })));
-      if (inv) setInventory(inv.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) })));
+      if (inv) setInventory(inv.map(x => ({
+        ...x,
+        pumpedAt: new Date(x.pumpedAt),
+        // v05.05bt213 — also revive frozenAt when present so the freezer
+        // clock math (BM_FREEZER_HOURS from move-to-freezer time) survives
+        // hydration. Legacy bottles without frozenAt fall back to pumpedAt.
+        ...(x.frozenAt ? { frozenAt: new Date(x.frozenAt) } : {}),
+      })));
       // DATA LOSS DETECTION: if meetings loaded as empty but a backup snapshot
       // has data, surface this in the console + auto-restore from backup.
       // This catches cases where the storage layer wrote zero-state but the
@@ -2906,10 +3044,15 @@ function SoleneHandoffInner() {
           console.warn(`[cloud-poll] refusing inventory regression: cloud=${incoming.length}, local=${prev.length}. Keeping local.`);
           return prev;
         }
-        return incoming.map(x => ({ ...x, pumpedAt: new Date(x.pumpedAt) }));
+        return incoming.map(x => ({
+          ...x,
+          pumpedAt: new Date(x.pumpedAt),
+          ...(x.frozenAt ? { frozenAt: new Date(x.frozenAt) } : {}),
+        }));
       });
     },
     "solene:meetings":        (v) => setMeetings(Array.isArray(v) ? v : []),
+    "solene:tradeRequests":   (v) => setTradeRequests(Array.isArray(v) ? v : []),
     "solene:shifts:v3":       (v) => v && typeof v === "object" && setShifts(v),
     "solene:diaperbag":       (v) => v && setDiaperBag(v),
     "solene:onsite":          (v) => setOnsite(v),
@@ -3094,6 +3237,8 @@ function SoleneHandoffInner() {
     }
   }, [inventory, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:meetings", meetings); }, [meetings, hydrated]);
+  // v05.05bt223 — Trade requests autosave.
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:tradeRequests", tradeRequests); }, [tradeRequests, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:shifts:v3", shifts); }, [shifts, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:diaperbag", diaperBag); }, [diaperBag, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:onsite", onsite); }, [onsite, hydrated]);
@@ -3104,6 +3249,37 @@ function SoleneHandoffInner() {
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:takeover", takeover); }, [takeover, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:tasks", tasks); }, [tasks, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:parentAway", parentAway); }, [parentAway, hydrated]);
+  // v05.05bt174 — focusProfile saved under per-user key.
+  useEffect(() => {
+    if (!hydrated || isWiping()) return;
+    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    storage.set(`solene:focusProfile_${userKey}`, focusProfile);
+  }, [focusProfile, hydrated, currentUser]);
+  // v05.05bt212 — routineLibrary saved per-user.
+  useEffect(() => {
+    if (!hydrated || isWiping()) return;
+    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    storage.set(`solene:routines_${userKey}`, routineLibrary);
+  }, [routineLibrary, hydrated, currentUser]);
+  // When user switches between Mommy/Daddy, swap in the right profile.
+  useEffect(() => {
+    if (!hydrated) return;
+    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    (async () => {
+      const fp = await storage.get(`solene:focusProfile_${userKey}`);
+      setFocusProfile(fp && typeof fp === "object" ? fp : null);
+      const en = await storage.get(`solene:dailyEnergy_${userKey}`);
+      setDailyEnergy(en && typeof en === "object" ? en : null);
+      const rl = await storage.get(`solene:routines_${userKey}`);
+      setRoutineLibrary(Array.isArray(rl) ? rl : null);
+    })();
+  }, [currentUser, hydrated]);
+  // v05.05bt181 — autosave dailyEnergy per user
+  useEffect(() => {
+    if (!hydrated || isWiping()) return;
+    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    storage.set(`solene:dailyEnergy_${userKey}`, dailyEnergy);
+  }, [dailyEnergy, hydrated, currentUser]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:handoffNote", handoffNote); }, [handoffNote, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:noteArchive", noteArchive); }, [noteArchive, hydrated]);
 
@@ -3348,13 +3524,19 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // Inventory math
   const liveInventory = useMemo(() => {
     return inventory.map(item => {
-      const ageHrs = (now - new Date(item.pumpedAt)) / 3600000;
+      // v05.05bt213 — freezer location uses frozenAt as the start of the
+      // freezer clock (industry practice: a fridge bottle moved to
+      // freezer counts its freezer time from the move). Legacy bottles
+      // frozen-from-pump have no frozenAt → fall back to pumpedAt.
+      const isFreezer = item.location === "freezer";
+      const clockAnchor = (isFreezer && item.frozenAt) ? new Date(item.frozenAt) : new Date(item.pumpedAt);
+      const ageHrs = (now - clockAnchor) / 3600000;
       let limit, expired, risky;
       if (item.location === "rt") {
         limit = BM_RT_HOURS;
         expired = ageHrs >= BM_RT_HOURS_HARD;
         risky = ageHrs >= BM_RT_HOURS && ageHrs < BM_RT_HOURS_HARD;
-      } else if (item.location === "freezer") {
+      } else if (isFreezer) {
         limit = BM_FREEZER_HOURS;
         expired = ageHrs >= BM_FREEZER_HOURS;
         risky = false;
@@ -3606,6 +3788,22 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   };
 
   const moveToFridge = (id) => setInventory(prev => prev.map(i => i.id === id ? { ...i, location: "fridge" } : i));
+  // v05.05bt213 — Per chat: 'also need to be able to move fridge
+  // inventory to freezer'. Mirror of moveToFridge but for the
+  // freezer location. Sets pumpedAt freshness clock to NOW so the
+  // 6-month freezer window starts from the move (industry guidance:
+  // milk moved from fridge to freezer counts its freezer time from
+  // the move, not the original pump — fridge bottles are already
+  // older at the cellular level than fresh-frozen).
+  const moveToFreezer = (id) => setInventory(prev => prev.map(i => {
+    if (i.id !== id) return i;
+    // Annotate the move; keep original pumpedAt for traceability but
+    // add a frozenAt so liveInventory math can use it for freezer
+    // expiration. Existing inventory model uses pumpedAt for both
+    // RT and fridge clocks; freezer clock should be from frozenAt
+    // when present, falling back to pumpedAt for legacy bottles.
+    return { ...i, location: "freezer", frozenAt: new Date() };
+  }));
   const removeInventory = (id) => setInventory(prev => prev.filter(i => i.id !== id));
 
   // Bulk import: atomically add many events at once, plus generate inventory
@@ -3678,6 +3876,108 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         balance: computeTimeBankBalance(newTransactions),
         transactions: newTransactions,
       });
+    }
+  };
+
+  // v05.05bt223 — Trade request helpers.
+  // sendTradeRequest creates a 'pending' request from currentUser to partner.
+  // window: { startHr, endHr (fractional hours since midnight), deepMin }
+  const sendTradeRequest = (window) => {
+    const toDate = new Date(now);
+    const dateStr = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, "0")}-${String(toDate.getDate()).padStart(2, "0")}`;
+    const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+    const req = {
+      id: `trade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      from: currentUser,
+      to: partner,
+      date: dateStr,
+      startHr: window.start / 60,
+      endHr: window.end / 60,
+      deepMin: window.deepMin,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      respondedAt: null,
+    };
+    setTradeRequests(prev => [...prev, req]);
+  };
+
+  // respondToTradeRequest handles the 3 acceptance paths:
+  //   'shift'    → creates a meeting on partner's calendar marking them
+  //                as covering for the window (visible in Mommy's planner
+  //                as a 'partner covering' commitment)
+  //   'bank'     → adds a timeBank 'owed' transaction from partner to
+  //                requester (requester can redeem this credit later)
+  //   'declined' → just updates status to 'declined'
+  const respondToTradeRequest = (id, resolution) => {
+    const req = tradeRequests.find(r => r.id === id);
+    if (!req || req.status !== "pending") return;
+    const respondedAt = new Date().toISOString();
+    if (resolution === "shift") {
+      // Create a coverage meeting on the covering parent's (req.to) calendar
+      const sh = Math.floor(req.startHr);
+      const sm = Math.round((req.startHr - sh) * 60);
+      const eh = Math.floor(req.endHr);
+      const em = Math.round((req.endHr - eh) * 60);
+      const startStr = `${String(sh).padStart(2, "0")}:${String(sm).padStart(2, "0")}`;
+      const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+      setMeetings(prev => [...prev, {
+        id: `cover-${req.id}`,
+        parent: req.to,
+        title: `Covering ${req.from}`,
+        date: req.date,
+        start: startStr,
+        end: endStr,
+        kind: "covering",
+        tradeRequestId: req.id,
+      }]);
+      setTradeRequests(prev => prev.map(r => r.id === id
+        ? { ...r, status: "accepted_shift", respondedAt }
+        : r));
+    } else if (resolution === "bank") {
+      // v05.05bt224 — Bank means Daddy covers the shift AND logs that
+      // {requester} now owes him the equivalent time. Per Little
+      // Ledger convention (line 400): balance > 0 means Mommy owes Daddy.
+      // So this creates BOTH a coverage meeting (Daddy actually covers
+      // the window) AND a time-bank 'owed' tx with from=covering parent,
+      // to=requester, which increments balance toward the covering parent.
+      const sh = Math.floor(req.startHr);
+      const sm = Math.round((req.startHr - sh) * 60);
+      const eh = Math.floor(req.endHr);
+      const em = Math.round((req.endHr - eh) * 60);
+      const startStr = `${String(sh).padStart(2, "0")}:${String(sm).padStart(2, "0")}`;
+      const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+      setMeetings(prev => [...prev, {
+        id: `cover-${req.id}`,
+        parent: req.to,
+        title: `Covering ${req.from} (banked)`,
+        date: req.date,
+        start: startStr,
+        end: endStr,
+        kind: "covering",
+        tradeRequestId: req.id,
+        banked: true,
+      }]);
+      const mins = Math.round(req.deepMin);
+      setTimeBank(prev => {
+        const tx = {
+          id: `bank-trade-${req.id}`,
+          kind: "owed",
+          from: req.to,    // covering parent → owed direction
+          to: req.from,    // requester → debtor
+          mins,
+          ts: respondedAt,
+          reason: `Banked trade coverage · ${req.from} owes ${req.to} ${Math.round(mins / 60 * 10) / 10}h`,
+        };
+        const transactions = [...(prev.transactions || []), tx];
+        return { balance: computeTimeBankBalance(transactions), transactions };
+      });
+      setTradeRequests(prev => prev.map(r => r.id === id
+        ? { ...r, status: "accepted_bank", respondedAt }
+        : r));
+    } else if (resolution === "declined") {
+      setTradeRequests(prev => prev.map(r => r.id === id
+        ? { ...r, status: "declined", respondedAt }
+        : r));
     }
   };
   const updateEvent = (id, updated) => {
@@ -5019,6 +5319,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
   // Detect handoff: when on-duty parent changes from previous tick, prompt off-going parent for a note
   // Only fires if the current device's user is the off-going parent
+  // v05.05bt222 — Snooze: don't auto-prompt more than once per 6h
+  // window. Tracked in localStorage so it survives reload. Per chat
+  // ('handoff notes sometimes keeps popping up and I don't like how
+  // it is prefilled') — also no longer prefills with the stale prior
+  // handoff text (see existingText={"" } below at mount).
   useEffect(() => {
     if (!hydrated) return;
     const prev = prevOnDutyRef.current;
@@ -5028,11 +5333,69 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         (now - new Date(handoffNote.ts)) / 60000 < 5;
       // Only prompt if the current user is the one who just went OFF duty
       if (!hasFreshNote && prev === currentUser) {
-        setShowHandoffPrompt(true);
+        // Snooze check: skip if prompt was shown in the last 6 hours
+        let snoozeUntil = 0;
+        try {
+          const raw = localStorage.getItem("ll:handoffPromptSnoozeUntil");
+          if (raw) snoozeUntil = parseInt(raw, 10) || 0;
+        } catch {}
+        if (now.getTime() < snoozeUntil) {
+          // Snoozed — don't prompt
+        } else {
+          setShowHandoffPrompt(true);
+        }
       }
     }
     prevOnDutyRef.current = onDuty.parent;
   }, [onDuty.parent, hydrated, currentUser]);
+
+  // v05.05bt223 — Auto-open incoming trade request modal.
+  // Push-style behavior per chat: when there's a pending trade request
+  // addressed to the current user, the modal pops on next open and
+  // requires explicit action (accept-as-shift / accept-as-bank / decline)
+  // to dismiss. Caregiver persona excluded.
+  // v05.05bt243 — Auto-expire past trade requests. Per chat: 'Trade
+  // request expiry / auto-decline on past windows.' When the requested
+  // window's start time has passed, flip status to 'expired' so it
+  // stops showing as pending in either inbox. Runs whenever the
+  // requests change or time passes (now updates every minute).
+  useEffect(() => {
+    if (!hydrated) return;
+    const nowMs = now.getTime();
+    const needsExpire = tradeRequests.some(r =>
+      r && r.status === "pending" && r.date && typeof r.startHr === "number" && (() => {
+        const [y, mo, d] = r.date.split("-").map(Number);
+        const startMs = new Date(y, mo - 1, d, Math.floor(r.startHr), Math.round((r.startHr % 1) * 60)).getTime();
+        return startMs < nowMs;
+      })()
+    );
+    if (!needsExpire) return;
+    setTradeRequests(prev => prev.map(r => {
+      if (!r || r.status !== "pending" || !r.date || typeof r.startHr !== "number") return r;
+      const [y, mo, d] = r.date.split("-").map(Number);
+      const startMs = new Date(y, mo - 1, d, Math.floor(r.startHr), Math.round((r.startHr % 1) * 60)).getTime();
+      if (startMs < nowMs) {
+        return { ...r, status: "expired", expiredAt: new Date().toISOString() };
+      }
+      return r;
+    }));
+  }, [tradeRequests, now, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (currentUser === "Caregiver") return;
+    if (showIncomingTrade) return;
+    const pendingForMe = tradeRequests.find(r =>
+      r && typeof r === "object" &&
+      r.to === currentUser && r.status === "pending" &&
+      typeof r.startHr === "number" && typeof r.endHr === "number"
+    );
+    if (pendingForMe) {
+      // Small delay to let the page settle before pushing the modal.
+      const t = setTimeout(() => setShowIncomingTrade(pendingForMe), 500);
+      return () => clearTimeout(t);
+    }
+  }, [tradeRequests, currentUser, hydrated, showIncomingTrade]);
 
   // v05.05bt35 — Auto-end takeover at shift boundary.
   // When the covering parent's own scheduled shift starts (i.e. baseOnDuty
@@ -5051,20 +5414,29 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // sat there indefinitely with the banner stuck on. Including `now`
   // means the effect re-checks every 15s tick and fires as soon as the
   // 30s guard releases. Same logic, just polls.
+  // v05.05bt172 — Per chat: "tag in is not sticking...it goes away after
+  // a minute even if I tag daddy in." Root cause: this effect was
+  // auto-ending the takeover when baseOnDuty naturally crossed onto the
+  // covering parent's scheduled shift. So if Mommy tagged Daddy in at
+  // 4:55p and Daddy's shift was 5p, at 5p the effect fired and the
+  // tag-in vanished after ~30s. Originally added in bt75 to handle the
+  // bt86 auto-takeover system's edge cases. bt86 was removed in bt94, so
+  // the only path to creating a takeover is now an explicit user tap —
+  // and explicit taps shouldn't auto-end at routine shift boundaries.
+  // Now: only auto-end true DEBRIS — takeovers older than 8 hours.
+  // Real takeovers resolve in under an hour; 8h is generous and only
+  // catches values stuck from sync bugs / prior builds. The user ends
+  // takeovers explicitly via the banner's "I'm done" / "Take back".
   useEffect(() => {
     if (!hydrated) return;
     if (!takeover) return;
     if (baseOnDuty.parent !== takeover.coveringParent) return;
-    // Edge case guard: don't auto-end immediately on the same tick the
-    // takeover was created (e.g. user tagged in DURING the covering
-    // parent's already-active shift, which shouldn't happen but be safe).
     const ageMs = Date.now() - new Date(takeover.startedAt).getTime();
-    if (ageMs < 30 * 1000) return;
+    const EIGHT_HOURS = 8 * 60 * 60 * 1000;
+    if (ageMs < EIGHT_HOURS) return;
 
     const startMs = new Date(takeover.startedAt).getTime();
     const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
-    // v05.05bt97: record what we're clearing so cloud setter can reject
-    // a stale poll trying to bring it back.
     autoEndedTakeoverRef.current = {
       startedAt: takeover.startedAt,
       clearedAt: Date.now(),
@@ -5080,7 +5452,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         from: takeover.coveringParent,
         to: takeover.originalParent,
         mins,
-        reason: "Impromptu takeover (auto-ended at shift boundary)",
+        reason: "Impromptu takeover (auto-ended · debris cleanup)",
       },
     ];
     setTimeBank({
@@ -5126,7 +5498,9 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     );
   }
 
-  const userTint = currentUser === "Mommy" ? C.mommy : C.daddy;
+  // v05.05bt214 — Caregiver persona gets a sage-green visual identity
+  // to clearly differentiate from Mommy (mauve) and Daddy (blue).
+  const userTint = currentUser === "Caregiver" ? "#7B9B6E" : (currentUser === "Mommy" ? C.mommy : C.daddy);
 
   return (
     <div style={{
@@ -5167,6 +5541,32 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       }} />
       <FontImports />
       <PaperGrain mode={mode} />
+
+      {/* v05.05bt214 — Caregiver-mode banner. A persistent strip at the
+          top of the app so a grandparent or sitter always knows the
+          context they're operating in. Tap to switch out of caregiver
+          mode (e.g., when a parent picks the device back up). */}
+      {currentUser === "Caregiver" && (
+        <button onClick={() => setShowProfileSwitcher(true)} style={{
+          width: "100%",
+          background: "#7B9B6E",
+          color: "#FDFAF1",
+          border: "none",
+          padding: "8px 14px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10,
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          fontWeight: 700,
+          textAlign: "center",
+          position: "relative",
+          zIndex: 2,
+          cursor: "pointer",
+          boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
+        }}>
+          ✦ Caregiver mode · helping with Solène · tap to switch
+        </button>
+      )}
 
       {/* Update-available banner — appears when a newer JS bundle is
           deployed than the one currently running. Tap to reload with
@@ -5467,7 +5867,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       <header style={{ display: "none" }} />
 
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "0 18px", position: "relative", zIndex: 2 }}>
-        {tab === "now" && (
+        {tab === "now" && currentUser !== "Caregiver" && (
         <>
         {/* Pending gifts pip — only renders when current user has gifts
             waiting to be redeemed. Sits above the OnDutyCard as a small
@@ -5781,6 +6181,19 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         </>
         )}
 
+        {/* v05.05bt219 — Caregiver gets a dedicated single-screen view.
+            No tabs, no parent chrome — just Solène's typical day,
+            what's likely happening now, and one-tap quick log. */}
+        {currentUser === "Caregiver" ? (
+          <CaregiverView
+            C={C} now={now}
+            events={events}
+            lastFeed={lastFeed}
+            addEvent={addEvent}
+            removeEvent={removeEvent}
+          />
+        ) : (
+          <>
         {tab === "now" && (
           <NowView
             C={C} mode={mode} now={now}
@@ -5845,6 +6258,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             parentAway={parentAway} setParentAway={setParentAway}
             pumpPlan={pumpPlan}
             todaySetup={todaySetup} setTodaySetup={setTodaySetup}
+            focusProfile={focusProfile} setFocusProfile={setFocusProfile}
+            dailyEnergy={dailyEnergy} setDailyEnergy={setDailyEnergy}
+            routineLibrary={routineLibrary} setRoutineLibrary={setRoutineLibrary}
+            showRoutineEditor={showRoutineEditor} setShowRoutineEditor={setShowRoutineEditor}
+            showOptimizer={showOptimizer} setShowOptimizer={setShowOptimizer}
+            tradeRequests={tradeRequests} openSendTrade={setShowSendTrade}
           />
         )}
         {tab === "bank" && (
@@ -5865,6 +6284,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             events={events}
             currentUser={currentUser}
             moveToFridge={moveToFridge}
+            moveToFreezer={moveToFreezer}
             removeInventory={removeInventory}
             emptyLocation={(loc) => setInventory(prev => prev.filter(i => i.location !== loc))}
             editBottle={(bottleId) => setEditingBottleId(bottleId)}
@@ -5886,12 +6306,18 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             docSummary={docSummary} setDocSummary={setDocSummary}
             currentUser={currentUser} />
         )}
+        </>
+        )}
       </main>
 
-      {/* Central LOG button */}
-      <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} currentUser={currentUser} />
+      {/* Central LOG button — hidden in caregiver mode (they use the in-card buttons) */}
+      {currentUser !== "Caregiver" && (
+        <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} currentUser={currentUser} />
+      )}
 
-      <TabBar C={C} tab={tab} setTab={setTab} currentUser={currentUser} />
+      {currentUser !== "Caregiver" && (
+        <TabBar C={C} tab={tab} setTab={setTab} currentUser={currentUser} />
+      )}
 
       {showLogger && (
         <LogPickerSheet
@@ -6017,13 +6443,41 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       )}
 
       {/* Soft prompt at handoff */}
+      {/* v05.05bt223 — Send trade request modal (Mommy taps a Trade Idea row). */}
+      {showSendTrade && (
+        <SendTradeRequestModal
+          C={C}
+          window={showSendTrade}
+          partner={currentUser === "Mommy" ? "Daddy" : "Mommy"}
+          onClose={() => setShowSendTrade(null)}
+          onSend={(w) => sendTradeRequest(w)}
+        />
+      )}
+      {/* v05.05bt223 — Push-style incoming request modal (Daddy on next open). */}
+      {showIncomingTrade && (
+        <IncomingTradeRequestModal
+          C={C}
+          request={showIncomingTrade}
+          partnerColor={showIncomingTrade.from === "Mommy" ? C.mommy : C.daddy}
+          onResolve={(id, resolution) => {
+            respondToTradeRequest(id, resolution);
+            setShowIncomingTrade(null);
+          }}
+        />
+      )}
       {showHandoffPrompt && (
         <HandoffPromptModal
           C={C}
           fromParent={currentUser}
           toParent={currentUser === "Mommy" ? "Daddy" : "Mommy"}
-          existingText={handoffNote && handoffNote.from === currentUser ? handoffNote.text : ""}
-          onClose={() => setShowHandoffPrompt(false)}
+          existingText=""
+          onClose={() => {
+            // v05.05bt222 — Snooze 6h on dismiss so it doesn't re-pop.
+            try {
+              localStorage.setItem("ll:handoffPromptSnoozeUntil", String(now.getTime() + 6 * 3600000));
+            } catch {}
+            setShowHandoffPrompt(false);
+          }}
           onSubmit={(text) => {
             const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
             setNoteWithArchive({
@@ -6035,7 +6489,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             });
             setShowHandoffPrompt(false);
           }}
-          onSkip={() => setShowHandoffPrompt(false)}
+          onSkip={() => {
+            // v05.05bt222 — Skip also snoozes for 6h.
+            try {
+              localStorage.setItem("ll:handoffPromptSnoozeUntil", String(now.getTime() + 6 * 3600000));
+            } catch {}
+            setShowHandoffPrompt(false);
+          }}
         />
       )}
 
@@ -6855,6 +7315,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onMoveToFridge={(bottleId) => {
             setInventory(prev => prev.map(b => b.id === bottleId ? { ...b, location: "fridge" } : b));
           }}
+          onMoveToFreezer={(bottleId) => {
+            // v05.05bt215 — Mirror of onMoveToFridge for the fridge-tile
+            // picker. Sets frozenAt to NOW so the freezer expiration
+            // clock counts from the move, not the original pump.
+            setInventory(prev => prev.map(b => b.id === bottleId ? { ...b, location: "freezer", frozenAt: new Date() } : b));
+          }}
           onDiscardBottle={(bottleId) => {
             setInventory(prev => prev.filter(b => b.id !== bottleId));
             setBottlePickerLoc(null);
@@ -6923,7 +7389,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   );
 }
 
-function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onDiscardBottle, onEditBottle, onAddBottle, onLogAnyway }) {
+function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onMoveToFreezer, onDiscardBottle, onEditBottle, onAddBottle, onLogAnyway }) {
   // Sort: oldest first within location (use-up order)
   const sorted = [...inventory].sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
   // Single-bottle mode (default) is for feeding — pick one bottle, log a feed.
@@ -7186,7 +7652,7 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
 
               {/* Per-bottle micro-actions (edit/move/discard) — only when selected */}
               {selected && (
-                <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8, marginTop: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr 1fr 1fr" : (location === "fridge" ? "1fr 1fr 1fr" : "1fr 1fr"), gap: 8, marginTop: 12 }}>
                   <button onClick={() => onEditBottle(selectedId)} style={{
                     background: "transparent", color: C.muted,
                     border: `1px dashed ${C.line}33`, borderRadius: 8,
@@ -7202,6 +7668,20 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       padding: "8px 12px", fontSize: 11, cursor: "pointer",
                     }}>
                       To fridge
+                    </button>
+                  )}
+                  {/* v05.05bt215 — Move-to-freezer for the fridge & RT
+                      tiles. RT bottles can skip fridge and go straight
+                      to freezer (e.g., a fresh pump you're stashing for
+                      later use). Fridge bottles can be moved to freezer
+                      when not going to be used in time. */}
+                  {(location === "rt" || location === "fridge") && onMoveToFreezer && (
+                    <button onClick={() => { onMoveToFreezer(selectedId); onClose(); }} style={{
+                      background: "transparent", color: C.daddy,
+                      border: `1px dashed ${C.daddy}55`, borderRadius: 8,
+                      padding: "8px 12px", fontSize: 11, cursor: "pointer",
+                    }}>
+                      To freezer
                     </button>
                   )}
                   <button
@@ -7407,8 +7887,16 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                 </button>
               )}
 
-              {/* Bulk action bar — only enabled when something is selected */}
-              <div style={{ display: "grid", gridTemplateColumns: location === "rt" ? "1fr 1fr" : "1fr", gap: 8 }}>
+              {/* Bulk action bar — only enabled when something is selected.
+                  v05.05bt215 — grid columns adapt: RT has 3 (→fridge, →freezer, discard),
+                  fridge has 2 (→freezer, discard), freezer has 1 (discard only). */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: location === "rt"
+                  ? "1fr 1fr 1fr"
+                  : (location === "fridge" ? "1fr 1fr" : "1fr"),
+                gap: 8,
+              }}>
                 {location === "rt" && (
                   <button
                     disabled={multiCount === 0}
@@ -7433,7 +7921,34 @@ function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToF
                       fontFamily: "inherit",
                       opacity: multiCount === 0 ? 0.5 : 1,
                     }}>
-                    {bulkConfirm === "move" ? `Sure? Move ${multiCount}` : `Move ${multiCount > 0 ? multiCount : ""} to fridge`.trim()}
+                    {bulkConfirm === "move" ? `Sure? ${multiCount}` : `→ fridge${multiCount > 0 ? ` (${multiCount})` : ""}`}
+                  </button>
+                )}
+                {(location === "rt" || location === "fridge") && onMoveToFreezer && (
+                  <button
+                    disabled={multiCount === 0}
+                    onClick={() => {
+                      if (multiCount === 0) return;
+                      if (bulkConfirm === "freezer") {
+                        Array.from(multiSelected).forEach(id => onMoveToFreezer(id));
+                        setMultiSelected(new Set());
+                        setBulkConfirm(null);
+                        onClose();
+                      } else {
+                        setBulkConfirm("freezer");
+                      }
+                    }}
+                    style={{
+                      background: bulkConfirm === "freezer" ? C.daddy : (multiCount === 0 ? C.bg : "transparent"),
+                      color: bulkConfirm === "freezer" ? "#fff" : (multiCount === 0 ? C.muted : C.daddy),
+                      border: bulkConfirm === "freezer" ? "none" : `1.5px solid ${multiCount === 0 ? C.line + "22" : C.daddy + "55"}`,
+                      borderRadius: 10, padding: "10px 12px",
+                      fontSize: 12, fontWeight: 600,
+                      cursor: multiCount === 0 ? "default" : "pointer",
+                      fontFamily: "inherit",
+                      opacity: multiCount === 0 ? 0.5 : 1,
+                    }}>
+                    {bulkConfirm === "freezer" ? `Sure? ${multiCount}` : `→ freezer${multiCount > 0 ? ` (${multiCount})` : ""}`}
                   </button>
                 )}
                 <button
@@ -8146,9 +8661,15 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
         Switching only affects what's tagged as <strong style={{ color: C.ink }}>"yours"</strong> — handoff notes you receive, your duty timer, and which calendar gets new commitments by default. The shared data (Solène's logs, shifts, time bank) stays the same.
       </div>
       <div style={{ display: "grid", gap: 10 }}>
-        {["Mommy", "Daddy"].map(p => {
-          const color = p === "Mommy" ? C.mommy : C.daddy;
+        {/* v05.05bt214 — Per chat reminder list ('caregiver / persona
+            switch view'). Caregiver persona added as a third option,
+            for when grandparents or a sitter has Solène. Caregiver
+            mode gets a stripped tab bar (Now/Journal/Milk only) — no
+            Schedule, no Time Bank, no parent-focused screens. */}
+        {["Mommy", "Daddy", "Caregiver"].map(p => {
+          const color = p === "Mommy" ? C.mommy : p === "Daddy" ? C.daddy : "#7B9B6E"; // sage for caregiver
           const isCurrent = p === currentUser;
+          const subtitle = p === "Caregiver" ? "for grandparents or a sitter" : isCurrent ? "Current view" : `Switch to ${p}'s view`;
           return (
             <button key={p} onClick={() => onSelect(p)} style={{
               background: isCurrent ? color : C.bg,
@@ -8169,7 +8690,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
                   {p}
                 </div>
                 <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
-                  {isCurrent ? "Current view" : `Switch to ${p}'s view`}
+                  {isCurrent && p !== "Caregiver" ? "Current view" : subtitle}
                 </div>
               </div>
               {isCurrent && <Check size={18} />}
@@ -8925,10 +9446,50 @@ function FontImports() {
           transform: translate(-50%, 0) translateZ(0) scale(1.05);
         }
       }
+      /* v05.05bt198 — NOW-line breathing pulse. Per chat ('might be
+         TOO glowy and need pulsing/breathing'). Two keyframes:
+         pill-pulse for the label+time pills, line-pulse for the
+         horizontal 1.5px line glow. Both consume --nl-color set
+         inline so the keyframe adapts to current on-duty owner
+         color (mauve/slate/gold). 2.4s ease-in-out infinite. */
+      @keyframes nl-now-pill-pulse {
+        0%, 100% {
+          box-shadow:
+            0 2px 6px -2px var(--nl-color, rgba(0,0,0,0.4)),
+            0 0 12px -2px var(--nl-color, rgba(0,0,0,0.5)),
+            0 0 22px -8px var(--nl-color, rgba(0,0,0,0.35)),
+            inset 0 1px 0 rgba(255,255,255,0.28),
+            inset 0 -1px 0 rgba(0,0,0,0.10);
+        }
+        50% {
+          box-shadow:
+            0 2px 12px -2px var(--nl-color, rgba(0,0,0,0.55)),
+            0 0 26px -2px var(--nl-color, rgba(0,0,0,0.7)),
+            0 0 46px -6px var(--nl-color, rgba(0,0,0,0.45)),
+            inset 0 1px 0 rgba(255,255,255,0.28),
+            inset 0 -1px 0 rgba(0,0,0,0.10);
+        }
+      }
+      @keyframes nl-now-line-pulse {
+        0%, 100% {
+          box-shadow:
+            0 0 12px -2px var(--nl-color, rgba(0,0,0,0.5)),
+            0 0 24px -8px var(--nl-color, rgba(0,0,0,0.35)),
+            0 0 44px -18px var(--nl-color, rgba(0,0,0,0.2));
+        }
+        50% {
+          box-shadow:
+            0 0 20px -2px var(--nl-color, rgba(0,0,0,0.7)),
+            0 0 44px -8px var(--nl-color, rgba(0,0,0,0.55)),
+            0 0 84px -16px var(--nl-color, rgba(0,0,0,0.35));
+        }
+      }
       .fade-up { animation: fadeUp 0.5s ease-out both; }
       .pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
       .slide-up { animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
       .log-glow { animation: log-glow 2.2s ease-in-out infinite; }
+      .nl-now-pill-pulse { animation: nl-now-pill-pulse 2.4s ease-in-out infinite; }
+      .nl-now-line-pulse { animation: nl-now-line-pulse 2.4s ease-in-out infinite; }
     `}</style>
   );
 }
@@ -11011,6 +11572,467 @@ function AutoSwapBanner({ C, swaps, currentUser, onDispute }) {
   );
 }
 
+// v05.05bt219 — Dedicated caregiver view. Replaces the bt214 hero
+// card that was injected into NowView. Per chat: caregivers (her
+// parents, busy with other grandkids) need ONE simple screen
+// showing Solène's typical day, what's likely happening now,
+// and what's coming. No journal, no milk, no parent shifts. Quick
+// log is optional (3 big buttons, no quantities) since they may not
+// have time to log meticulously.
+// v05.05bt230 — CaregiverView: just Solène's typical daily schedule
+// based on the last week, as a tap-to-confirm checklist. Per chat:
+// caregivers don't need on-duty info, prediction breakdowns, or any
+// of the parent chrome. They want a simple list — 'usually she's
+// awake around 7am · feeds at 10am · 4oz' — with checkboxes so they
+// can mark when each thing happens. Each check logs the actual time
+// to the events log so the parents see what happened in their journal.
+function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
+  const evs = Array.isArray(events) ? events : [];
+  const sage = "#7B9B6E";
+  const accent = C.accent;
+
+  // ── Time formatting ───────────────────────────────────────────────
+  const fmtTime = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const h12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+  };
+  const fmtAgo = (date) => {
+    if (!date) return "—";
+    const m = Math.floor((now - new Date(date)) / 60000);
+    if (m < 0) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r > 0 ? `${h}h ${r}m ago` : `${h}h ago`;
+  };
+
+  // ── Today bounds ──────────────────────────────────────────────────
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const todayMid = todayStart.getTime();
+
+  // ── Awake / asleep status ─────────────────────────────────────────
+  const lastSleepDown = evs
+    .filter(e => e.type === "sleep_down")
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  const lastSleepUp = evs
+    .filter(e => e.type === "sleep_up")
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  const isAwake = !lastSleepDown || (lastSleepUp && new Date(lastSleepUp.ts) > new Date(lastSleepDown.ts));
+
+  // ── Build typical daily schedule from last 7 days ─────────────────
+  // For each event type, bucket by 2-hour windows. A bucket with ≥2
+  // occurrences across the last week becomes a predicted item with
+  // median time + median oz (where applicable).
+  const sevenDaysAgo = now.getTime() - 7 * 86400000;
+  const recent = evs.filter(e => {
+    const t = new Date(e.ts).getTime();
+    return t >= sevenDaysAgo && !e.silent;
+  });
+
+  const buildBuckets = (typePred) => {
+    const items = recent.filter(typePred);
+    const groups = {};
+    for (const e of items) {
+      const d = new Date(e.ts);
+      const bucket = Math.floor(d.getHours() / 2) * 2;
+      if (!groups[bucket]) groups[bucket] = [];
+      groups[bucket].push(e);
+    }
+    const out = [];
+    for (const [key, group] of Object.entries(groups)) {
+      // v05.05bt232 — Threshold lowered from 2 → 1 so the schedule
+      // shows the entire day even if some events only happened once
+      // in the last week. Per chat: 'should include the ENTIRE day
+      // even if time has passed.' A single occurrence is still a
+      // valid prediction for the caregiver to anticipate.
+      if (group.length < 1) continue;
+      const times = group.map(e => {
+        const d = new Date(e.ts);
+        return d.getHours() * 60 + d.getMinutes();
+      }).sort((a, b) => a - b);
+      const medianMin = times[Math.floor(times.length / 2)];
+      const ozs = group.map(e => e.oz).filter(o => typeof o === "number");
+      ozs.sort((a, b) => a - b);
+      const medianOz = ozs.length > 0 ? ozs[Math.floor(ozs.length / 2)] : null;
+      out.push({
+        bucketHour: Number(key),
+        medianMin,
+        medianOz,
+        count: group.length,
+      });
+    }
+    return out;
+  };
+
+  const feedBuckets = buildBuckets(e => e.type === "feed" || e.type === "breastfeed");
+  const napBuckets = buildBuckets(e => e.type === "sleep_down" && new Date(e.ts).getHours() >= 6 && new Date(e.ts).getHours() < 20);
+  const wakeBuckets = buildBuckets(e => e.type === "sleep_up" && new Date(e.ts).getHours() >= 5 && new Date(e.ts).getHours() < 11);
+  const bedBuckets = buildBuckets(e => e.type === "sleep_down" && new Date(e.ts).getHours() >= 19);
+  const diaperBuckets = buildBuckets(e => e.type === "diaper");
+
+  // v05.05bt233 — Age-based day skeleton. Per chat: caregiver needs
+  // to see the ENTIRE day, even if data is sparse. Buckets alone leave
+  // gaps when an event-type wasn't logged enough in the past week.
+  // The skeleton fills in age-appropriate defaults so the schedule
+  // always covers morning → bedtime; data-derived buckets override
+  // the defaults when they match a time window.
+  //
+  // For Solène (~4 months), the typical day is:
+  //   - Wake 6:30–7am
+  //   - Feed every 3h: 7, 10, 1, 4, 7
+  //   - Three naps: ~9, ~12:30, ~3:30
+  //   - Bedtime ~7:30pm
+  //   - Diaper changes ~every 2.5h
+  const DAY_SKELETON = [
+    { hr: 6.5,  kind: "wake",    label: "Wake up",              actType: "sleep_up" },
+    { hr: 7,    kind: "diaper",  label: "Diaper change",        actType: "diaper" },
+    { hr: 7,    kind: "feed",    label: "Feed ~4oz",            actType: "feed", defaultOz: 4 },
+    { hr: 9,    kind: "nap",     label: "Morning nap (down)",   actType: "sleep_down" },
+    { hr: 10.5, kind: "wake",    label: "Wake from nap",        actType: "sleep_up" },
+    { hr: 10.5, kind: "diaper",  label: "Diaper change",        actType: "diaper" },
+    { hr: 11,   kind: "feed",    label: "Feed ~4oz",            actType: "feed", defaultOz: 4 },
+    { hr: 12.5, kind: "nap",     label: "Midday nap (down)",    actType: "sleep_down" },
+    { hr: 14,   kind: "wake",    label: "Wake from nap",        actType: "sleep_up" },
+    { hr: 14,   kind: "feed",    label: "Feed ~4oz",            actType: "feed", defaultOz: 4 },
+    { hr: 15.5, kind: "nap",     label: "Afternoon nap (down)", actType: "sleep_down" },
+    { hr: 16.5, kind: "wake",    label: "Wake from nap",        actType: "sleep_up" },
+    { hr: 16.5, kind: "diaper",  label: "Diaper change",        actType: "diaper" },
+    { hr: 17,   kind: "feed",    label: "Feed ~4oz",            actType: "feed", defaultOz: 4 },
+    { hr: 18.5, kind: "feed",    label: "Bedtime feed ~5oz",    actType: "feed", defaultOz: 5 },
+    { hr: 19,   kind: "bedtime", label: "Bedtime",              actType: "sleep_down" },
+  ];
+
+  // Try to override each skeleton slot with a data-derived bucket
+  // when one exists in the same 2-hour window. Returns the final
+  // schedule sorted chronologically.
+  const overlayBucket = (skel, buckets) => {
+    const targetBucket = Math.floor(skel.hr / 2) * 2;
+    const match = buckets.find(b => Math.abs(b.bucketHour - targetBucket) <= 2);
+    if (match) {
+      return {
+        ...skel,
+        medianMin: match.medianMin,
+        medianOz: match.medianOz ?? skel.defaultOz,
+        label: skel.kind === "feed"
+          ? `Feed${(match.medianOz || skel.defaultOz) ? ` ~${match.medianOz || skel.defaultOz}oz` : ""}`
+          : skel.label,
+        fromData: true,
+      };
+    }
+    return {
+      ...skel,
+      medianMin: skel.hr * 60,
+      medianOz: skel.defaultOz,
+      fromData: false,
+    };
+  };
+
+  const schedule = DAY_SKELETON.map(skel => {
+    if (skel.kind === "feed") return overlayBucket(skel, feedBuckets);
+    if (skel.kind === "nap") return overlayBucket(skel, napBuckets);
+    if (skel.kind === "wake") return overlayBucket(skel, wakeBuckets);
+    if (skel.kind === "bedtime") return overlayBucket(skel, bedBuckets);
+    if (skel.kind === "diaper") return overlayBucket(skel, diaperBuckets);
+    return null;
+  }).filter(Boolean).sort((a, b) => a.medianMin - b.medianMin);
+
+  // For each scheduled item, check if a matching event was logged today.
+  // v05.05bt243 — rowId must include the typical hour, not just kind+medianMin.
+  // Bug per chat: 'when I confirm nap for the first instance it incorrectly
+  // confirms all other naps.' Root cause: rowIdFor returned `${kind}-${medianMin}`
+  // but the day skeleton has 3 nap rows all with kind='nap'. When medianMin
+  // was undefined (early data) or coincidentally equal, the IDs collided
+  // and logging one nap matched all three.
+  const rowIdFor = (item) => `${item.kind}-${item.hr}-${item.medianMin ?? "x"}`;
+  const checkDone = (item) => {
+    const id = rowIdFor(item);
+    return evs.find(e => {
+      const t = new Date(e.ts).getTime();
+      if (t < todayMid || t > now.getTime()) return false;
+      return e.caregiverRowId === id;
+    }) || null;
+  };
+
+  // ── Quick-log: diaper (no predicted time) ─────────────────────────
+  const lastDiaper = evs
+    .filter(e => e.type === "diaper")
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  // v05.05bt232 — Running tally for today so caregiver gets visible
+  // feedback every tap.
+  const diapersTodayCount = evs
+    .filter(e => e.type === "diaper" && new Date(e.ts).getTime() >= todayMid)
+    .length;
+
+  const [confirmId, setConfirmId] = useState(null);
+  // v05.05bt247 — Optimistic UI for tap responsiveness. Per chat: 'laggy
+  // response and barely does it register.' Root cause: addEvent in App
+  // scope is expensive — it triggers prediction-accuracy computation,
+  // auto-wake inference, and a full re-render with many useMemos
+  // recomputing. On mobile Safari, the synchronous chain can take
+  // 100-300ms before the row visually crosses out.
+  //
+  // Fix: a local pending Map keyed by rowId. Tap → INSTANT visual
+  // (cross-out or uncross), state update fires in background. Once
+  // events catches up, checkDone falls back to source of truth.
+  const [pending, setPending] = useState(() => new Map()); // rowId → 'log' | 'undo'
+  const setPendingFor = (rowId, action) => {
+    setPending(prev => {
+      const next = new Map(prev);
+      next.set(rowId, action);
+      return next;
+    });
+  };
+  const clearPendingFor = (rowId) => {
+    setPending(prev => {
+      if (!prev.has(rowId)) return prev;
+      const next = new Map(prev);
+      next.delete(rowId);
+      return next;
+    });
+  };
+
+  const logItem = (item) => {
+    const ozVal = item.actType === "feed" && item.medianOz ? item.medianOz : undefined;
+    const ev = {
+      type: item.actType,
+      ts: new Date(),
+      ownerName: "Caregiver",
+      caregiverRowId: rowIdFor(item),
+    };
+    if (ozVal !== undefined) ev.oz = ozVal;
+    addEvent(ev);
+    setConfirmId(null);
+  };
+
+  const logDiaper = () => {
+    addEvent({ type: "diaper", ts: new Date(), ownerName: "Caregiver" });
+    setConfirmId(null);
+  };
+
+  // Empty-state guard: if no schedule could be built, show a message.
+  const hasSchedule = schedule.length > 0;
+
+  return (
+    <div style={{ padding: "14px 14px 100px", maxWidth: 640, margin: "0 auto" }}>
+      {/* ── Tiny status line ──────────────────────────────────────── */}
+      <div style={{
+        background: "#FBF5E9",
+        border: `1.5px solid ${sage}55`,
+        borderLeft: `5px solid ${sage}`,
+        borderRadius: 14,
+        padding: "12px 14px",
+        marginBottom: 14,
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: sage, fontWeight: 700,
+          marginBottom: 6,
+        }}>✦ Right now</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 15, lineHeight: 1.5, color: C.ink,
+        }}>
+          Solène is{" "}
+          <span style={{ fontWeight: 600 }}>{isAwake ? "awake" : "asleep"}</span>
+          {lastFeed && (
+            <>
+              {" "}· last fed{" "}
+              <span style={{ fontStyle: "italic" }}>{fmtAgo(lastFeed.ts)}</span>
+              {lastFeed.oz && (
+                <span style={{ color: C.muted }}> ({lastFeed.oz}oz)</span>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Today's schedule checklist ─────────────────────────────── */}
+      <div style={{
+        background: C.paper,
+        border: `1px solid ${C.line}`,
+        borderRadius: 14,
+        padding: "16px 14px 12px",
+        marginBottom: 14,
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: C.gold, fontWeight: 700,
+          marginBottom: 4,
+        }}>Solène's typical day</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12.5, color: C.muted,
+          marginBottom: 12, lineHeight: 1.5,
+        }}>Based on the last week. Tap a row when it happens — Mommy & Daddy see it logged.</div>
+
+        {!hasSchedule ? (
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 13.5, color: C.muted,
+            padding: "8px 0",
+          }}>
+            Not enough data yet to predict her schedule. Use the diaper button below or check back later.
+          </div>
+        ) : (
+          <div>
+            {schedule.map((item, i) => {
+              const rowId = `${item.kind}-${item.hr}`;
+              const eventDone = checkDone(item);
+              const pendingAction = pending.get(rowId);
+              // v05.05bt247 — Effective done state:
+              //   - if pendingAction is 'log' → show done (even before event lands)
+              //   - if pendingAction is 'undo' → show not-done (even if event lingers)
+              //   - else → fall back to events (source of truth)
+              const done = pendingAction === "log"
+                ? (eventDone || { ts: new Date(), _optimistic: true })
+                : pendingAction === "undo"
+                  ? null
+                  : eventDone;
+              // Clear pending once events catches up to match
+              if (pendingAction === "log" && eventDone) {
+                // Run after this render
+                setTimeout(() => clearPendingFor(rowId), 0);
+              } else if (pendingAction === "undo" && !eventDone) {
+                setTimeout(() => clearPendingFor(rowId), 0);
+              }
+              const onRowTap = () => {
+                if (done) {
+                  // Optimistic uncross
+                  setPendingFor(rowId, "undo");
+                  if (eventDone && eventDone.id && removeEvent) {
+                    removeEvent(eventDone.id);
+                  }
+                } else {
+                  // Optimistic cross-out
+                  setPendingFor(rowId, "log");
+                  logItem(item);
+                }
+              };
+              return (
+                <button
+                  key={rowId}
+                  onClick={onRowTap}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "14px 6px",
+                    width: "100%",
+                    textAlign: "left",
+                    borderTop: i === 0 ? "none" : `1px solid ${C.line}33`,
+                    borderLeft: "none", borderRight: "none", borderBottom: "none",
+                    opacity: done ? 0.55 : 1,
+                    background: done ? `${sage}10` : "transparent",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    color: "inherit",
+                    transition: "background 0.12s, opacity 0.12s",
+                    WebkitTapHighlightColor: `${sage}33`,
+                    // v05.05bt247 — Prevent iOS 300ms tap delay
+                    touchAction: "manipulation",
+                  }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, fontWeight: 700,
+                    color: done ? sage : C.muted, minWidth: 44,
+                    textDecoration: done ? "line-through" : "none",
+                  }}>{fmtTime(item.medianMin)}</span>
+                  <span style={{ flex: 1, display: "block" }}>
+                    <span style={{
+                      display: "block",
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 15, fontWeight: 500,
+                      color: done ? C.muted : C.ink,
+                      textDecoration: done ? "line-through" : "none",
+                    }}>{item.label}</span>
+                    {done && !done._optimistic && (
+                      <span style={{
+                        display: "block",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, color: sage, fontWeight: 700,
+                        marginTop: 2, letterSpacing: "0.05em",
+                      }}>✓ Done at {fmtTime(new Date(done.ts).getHours() * 60 + new Date(done.ts).getMinutes())} · tap to undo</span>
+                    )}
+                    {done && done._optimistic && (
+                      <span style={{
+                        display: "block",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, color: sage, fontWeight: 700,
+                        marginTop: 2, letterSpacing: "0.05em",
+                      }}>✓ Just now · tap to undo</span>
+                    )}
+                  </span>
+                  <span style={{
+                    fontSize: done ? 22 : 16,
+                    color: done ? sage : C.muted,
+                    fontWeight: 700,
+                    lineHeight: 1, minWidth: 30, textAlign: "center",
+                  }}>{done ? "✓" : "○"}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* v05.05bt232 — Diaper counter. Running tally of diapers
+          logged today so caregiver knows the tap registered. Single-
+          tap to log. Counter increments visibly with each tap. */}
+      <div style={{
+        background: C.bg,
+        border: `1px solid ${C.line}`,
+        borderRadius: 14,
+        padding: "14px",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 10,
+        }}>
+          <div>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.22em",
+              textTransform: "uppercase", color: C.muted, fontWeight: 700,
+              marginBottom: 3,
+            }}>Diapers today</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 22, color: C.ink, fontWeight: 600,
+              lineHeight: 1.1,
+            }}>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 28, fontWeight: 700, color: sage,
+                marginRight: 6,
+              }}>{diapersTodayCount}</span>
+              logged
+              {lastDiaper && diapersTodayCount > 0 && (
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 12, color: C.muted, fontStyle: "italic",
+                  marginTop: 2, lineHeight: 1.3, fontWeight: 400,
+                }}>last {fmtAgo(lastDiaper.ts)}</div>
+              )}
+            </div>
+          </div>
+          <button onClick={logDiaper} style={{
+            padding: "14px 18px",
+            background: sage, color: "#fff",
+            border: "none", borderRadius: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, letterSpacing: "0.18em", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+            minWidth: 110,
+          }}>+1 diaper</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, inventory, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, shifts, baseShifts, swaps, meetings, todayCalories, lastBath, lastSkincare, todayDailyContent, loadingDaily, currentUser, myActiveCommitment, onEndCommitmentEarly, onOpenCommitmentLog, onDispute, onsite, onStartOnsite, onUpdateEta, onArrivedHome }) {
   const [rhythmFilter, setRhythmFilter] = useState("all");
   const [verseExpanded, setVerseExpanded] = useState(false);
@@ -11065,6 +12087,7 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
           onEndEarly={() => onEndCommitmentEarly(myActiveCommitment.id)}
         />
       )}
+
 
       {/* Tomorrow's commitments reminder lives at App level now, alongside
           the gift pip. See the App-level pip block above the OnDutyCard. */}
@@ -14678,7 +15701,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
 }
 
 
-function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan, todaySetup, setTodaySetup }) {
+function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
   const [showAdd, setShowAdd] = useState(false);
   // v05.05bt133 — Schedule tab now split into three sub-views:
   // 'today' = Today's Ledger card (working parent OS),
@@ -14794,6 +15817,12 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           onsite={onsite} setOnsite={setOnsite}
           todaySetup={todaySetup} setTodaySetup={setTodaySetup}
           meetings={meetings} setMeetings={setMeetings}
+          focusProfile={focusProfile} setFocusProfile={setFocusProfile}
+          dailyEnergy={dailyEnergy} setDailyEnergy={setDailyEnergy}
+          routineLibrary={routineLibrary} setRoutineLibrary={setRoutineLibrary}
+          showRoutineEditor={showRoutineEditor} setShowRoutineEditor={setShowRoutineEditor}
+          showOptimizer={showOptimizer} setShowOptimizer={setShowOptimizer}
+            tradeRequests={tradeRequests} openSendTrade={openSendTrade}
         />
       )}
 
@@ -17146,6 +18175,263 @@ function AddMeetingModal({ C, onClose, onSubmit, currentUser }) {
 // left, today's oz + status emoji + cal burned + two snatch-back targets
 // on right. No collapse toggle. No 7-day strip. No floor warning footer.
 // Maintenance is a tiny tappable pill at the bottom.
+// v05.05bt235 — Pump schedule planner. Per chat: 'add something to
+// help dictate pump schedule. For example I may have to be somewhere
+// for a longer period of time and can't pump but want to keep up with
+// my supply. Or I need to be somewhere at a certain time and still
+// want to keep my cadence.'
+//
+// One unified flow: enter a window when you can't pump. App derives
+// your typical cadence from recent pumps, then suggests:
+//   • a boost session right before the window (fully empty)
+//   • a session right after the window (catch up)
+//   • optional power-pump that evening if the gap is long enough
+//     to dent supply (>1 missed session)
+//
+// Lactation science (KellyMom, ABM, Medela):
+//   • Going >4h between drains during an established supply day
+//     reduces total daily output by ~10-15%
+//   • A 5+h gap = 1 effective missed session; suggest power pump
+//     same day to recover supply
+//   • Pumping ~30min before a known long gap fully empties and
+//     gives the most extension before fullness pain
+function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
+  const [winStart, setWinStart] = useState("");
+  const [winEnd, setWinEnd] = useState("");
+
+  // Typical cadence in minutes — derived from gaps between recent pumps.
+  const typicalCadenceMin = (() => {
+    const pumps = (events || [])
+      .filter(e => e.type === "pump" && !e.silent)
+      .sort((a, b) => new Date(a.ts) - new Date(b.ts))
+      .slice(-15);
+    const gaps = [];
+    for (let i = 1; i < pumps.length; i++) {
+      const dt = (new Date(pumps[i].ts) - new Date(pumps[i - 1].ts)) / 60000;
+      if (dt > 60 && dt < 360) gaps.push(dt);
+    }
+    if (gaps.length === 0) return 180; // fallback: 3h
+    gaps.sort((a, b) => a - b);
+    return Math.round(gaps[Math.floor(gaps.length / 2)]);
+  })();
+
+  const cadenceLabel = (() => {
+    const h = Math.floor(typicalCadenceMin / 60);
+    const m = typicalCadenceMin % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  })();
+
+  // Parse HH:MM strings to today's Date objects.
+  const parseTime = (str) => {
+    if (!str || !/^\d{1,2}:\d{2}$/.test(str)) return null;
+    const [hh, mm] = str.split(":").map(Number);
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+    const d = new Date(now);
+    d.setHours(hh, mm, 0, 0);
+    return d;
+  };
+
+  const winStartDate = parseTime(winStart);
+  const winEndDate = parseTime(winEnd);
+  const valid = winStartDate && winEndDate && winEndDate > winStartDate;
+
+  // Compute plan when window is valid.
+  const plan = (() => {
+    if (!valid) return null;
+    const gapMin = (winEndDate - winStartDate) / 60000;
+    const boostBefore = new Date(winStartDate.getTime() - 30 * 60000);
+    const afterCatch = new Date(winEndDate.getTime() + 15 * 60000);
+    const missedSessions = Math.max(0, Math.floor(gapMin / typicalCadenceMin) - 1);
+    const needsPowerPump = missedSessions >= 1 || gapMin >= 300;
+    const supplyImpactOz = missedSessions === 0 ? 0 : Math.round(missedSessions * 3.5);
+    return {
+      gapMin,
+      boostBefore,
+      afterCatch,
+      missedSessions,
+      needsPowerPump,
+      supplyImpactOz,
+    };
+  })();
+
+  const fmtT = (d) => {
+    if (!d) return "—";
+    const h = d.getHours();
+    const m = d.getMinutes();
+    const h12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+  };
+  const fmtGap = (min) => {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h === 0) return `${m}m`;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
+  const inputStyle = {
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 14, padding: "8px 10px",
+    border: `1px solid ${C.line}`,
+    borderRadius: 6,
+    background: C.bg, color: C.ink,
+    width: 80, textAlign: "center",
+  };
+
+  return (
+    <div style={{
+      background: C.paper,
+      border: `1px solid ${C.line}`,
+      borderRadius: 14,
+      padding: "16px 14px",
+      marginTop: 14,
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10, letterSpacing: "0.22em",
+        textTransform: "uppercase", color: C.gold, fontWeight: 700,
+        marginBottom: 4,
+      }}>⚙ Plan around a window</div>
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontStyle: "italic", fontSize: 12.5, color: C.muted,
+        marginBottom: 12, lineHeight: 1.5,
+      }}>
+        Have a meeting, appointment, or stretch where you can't pump? Tell us when, and we'll suggest a plan that keeps your supply steady.
+      </div>
+
+      {/* Cadence indicator */}
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10, color: C.muted, marginBottom: 10,
+      }}>
+        Your typical cadence: <span style={{ color: C.ink, fontWeight: 700 }}>{cadenceLabel}</span>
+      </div>
+
+      {/* Window inputs */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        marginBottom: 14, flexWrap: "wrap",
+      }}>
+        <span style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 14, color: C.ink,
+        }}>I'll be away from</span>
+        <input type="time" value={winStart} onChange={(e) => setWinStart(e.target.value)} style={inputStyle} />
+        <span style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 14, color: C.ink,
+        }}>to</span>
+        <input type="time" value={winEnd} onChange={(e) => setWinEnd(e.target.value)} style={inputStyle} />
+      </div>
+
+      {!valid && (winStart || winEnd) && (
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12, color: C.accent,
+        }}>Set a start and end time (end must be after start).</div>
+      )}
+
+      {plan && (
+        <div style={{
+          background: `${C.gold}10`,
+          border: `1px solid ${C.gold}40`,
+          borderRadius: 10,
+          padding: "12px 14px",
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: C.gold, fontWeight: 700,
+            marginBottom: 8,
+          }}>Suggested plan · {fmtGap(plan.gapMin)} gap</div>
+
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+            }}>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 700,
+                color: C.mommy, minWidth: 50,
+              }}>{fmtT(plan.boostBefore)}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 14, color: C.ink, fontWeight: 500,
+                }}>Boost session (25 min)</div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                  marginTop: 1, lineHeight: 1.3,
+                }}>Empty fully 30 min before the gap — extends comfort time and protects supply.</div>
+              </div>
+            </div>
+
+            <div style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+            }}>
+              <span style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 700,
+                color: C.mommy, minWidth: 50,
+              }}>{fmtT(plan.afterCatch)}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 14, color: C.ink, fontWeight: 500,
+                }}>Catch-up session (20-25 min)</div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                  marginTop: 1, lineHeight: 1.3,
+                }}>Empty as soon as you're back — fullness signals oversupply to your body, not undersupply.</div>
+              </div>
+            </div>
+
+            {plan.needsPowerPump && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: 8,
+                marginTop: 4, paddingTop: 8,
+                borderTop: `1px dashed ${C.line}`,
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, fontWeight: 700,
+                  color: C.accent, minWidth: 50,
+                }}>~9pm</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 14, color: C.ink, fontWeight: 500,
+                  }}>Power pump (60 min)</div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                    marginTop: 1, lineHeight: 1.3,
+                  }}>20m / 10m rest / 10m / 10m rest / 10m. The gap is long enough ({plan.missedSessions} missed session{plan.missedSessions !== 1 ? "s" : ""}) that a recovery session helps prevent a 10-15% supply dip.</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{
+            marginTop: 10, paddingTop: 8,
+            borderTop: `1px dashed ${C.line}`,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 12.5, color: C.muted, lineHeight: 1.45,
+          }}>
+            <span style={{ color: C.ink, fontWeight: 600 }}>Estimated milk impact:</span>{" "}
+            {plan.missedSessions === 0
+              ? "minimal — the boost + catch-up cover the window."
+              : `~${plan.supplyImpactOz}oz lower than a normal day. Consider supplementing from the freezer if Solène needs that volume.`}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PumpGoalsCard({ C, events, now, mommyMaintenanceCal, setMommyMaintenanceCal }) {
   const [editingMaintenance, setEditingMaintenance] = useState(false);
   const [maintenanceDraft, setMaintenanceDraft] = useState(String(mommyMaintenanceCal));
@@ -17855,16 +19141,329 @@ function DailyBurnHistoryCard({ C, events, now }) {
 // v05.05bt155 — Block focus is now binary too. Morning + late-afternoon
 // circadian peaks are "deep" windows (good for focus work). Post-lunch
 // dip + evening + overnight are "shallow" (admin/comms-friendly).
-function getFocusForHour(h) {
+// v05.05bt174 — When a focusProfile is provided (from the focus quiz),
+// use the user's personal deep/light/dip pattern instead of literature
+// defaults (9-12 + 3-6 = deep). Profile shape:
+//   deepHours: number[] (hours of day flagged as deep work peaks)
+//   dipHours:  number[] (energy dip hours; overrides deep)
+//   lightHours: number[] (best-for-admin; informational, not currently
+//     used by classification — admin tasks already prefer non-deep)
+// Falls back to defaults when profile is null/incomplete.
+function getFocusForHour(h, focusProfile) {
+  if (focusProfile && Array.isArray(focusProfile.deepHours)) {
+    // Dip hours always win — even if user listed an hour as deep AND
+    // dip, the dip is the real signal (rare but possible).
+    if (Array.isArray(focusProfile.dipHours) && focusProfile.dipHours.includes(h)) return "shallow";
+    if (focusProfile.deepHours.includes(h)) return "deep";
+    return "shallow";
+  }
   if (h >= 9 && h < 12) return "deep";
   if (h >= 15 && h < 18) return "deep";
   return "shallow";
 }
 
 // Pick the dominant focus level of a block by sampling its start hour.
-function getBlockFocusLevel(start) {
+function getBlockFocusLevel(start, focusProfile) {
   const h = start.getHours();
-  return getFocusForHour(h);
+  return getFocusForHour(h, focusProfile);
+}
+
+// v05.05bt173 — Effective focus level for a block, combining circadian
+// time-of-day signal with baby-state context. Per chat: "recall the
+// beauty of this algorithm is it considers what the baby is doing and
+// doesnt call it a dead zone for work."
+//
+// Rules:
+//   • If onsite (grandparents have baby): circadian focus, uninterrupted.
+//   • If owner is the current user's PARTNER: circadian focus, uninterrupted.
+//   • If owner is JOINT (both parents on): circadian focus, tag-team.
+//   • If owner is CURRENT USER (solo duty): check predicted-nap overlap.
+//     - Overlap ≥ 30 min with a predicted nap: focus is DEEP, "nap predicted".
+//     - No nap overlap: focus is LIGHT (interruptible), regardless of circadian.
+//
+// Returns { focusLevel: 'deep'|'shallow', careLabel: string|null,
+//           sourceNote: string } — sourceNote is a short explainer for
+// the runway card breakdown ("circadian peak" / "nap predicted n=5/7d" /
+// "your duty · interruptible" / etc.)
+// v05.05bt184 — Personal baby stats from rolling 7-day data. Per chat:
+// 'wake windows are x according to research but we should be using Solène
+// personal data'. Returns { avgWakeWindowMin, avgNapDurationMin } based
+// on Solène's actual recent rhythm, or null defaults when insufficient data.
+function computeBabyStats(events, now) {
+  const cutoff = new Date(now.getTime() - 7 * 86400000);
+  const log = (events || [])
+    .filter(e => !e.silent && (e.type === "sleep_up" || e.type === "sleep_down"))
+    .map(e => ({ type: e.type, ts: new Date(e.ts) }))
+    .filter(e => e.ts >= cutoff && e.ts <= now)
+    .sort((a, b) => a.ts - b.ts);
+
+  // Wake windows: sleep_up → next sleep_down within 4 hours = daytime
+  // wake window. Excludes overnight transitions.
+  const wakeWindows = [];
+  for (let i = 0; i < log.length - 1; i++) {
+    if (log[i].type !== "sleep_up") continue;
+    const next = log[i + 1];
+    if (next.type !== "sleep_down") continue;
+    const minutes = (next.ts - log[i].ts) / 60000;
+    if (minutes < 10 || minutes > 240) continue; // filter outliers
+    wakeWindows.push(minutes);
+  }
+
+  // Nap durations: sleep_down → next sleep_up within 4 hours, daytime
+  // (between 6a and 8p).
+  const napDurations = [];
+  for (let i = 0; i < log.length - 1; i++) {
+    if (log[i].type !== "sleep_down") continue;
+    const next = log[i + 1];
+    if (next.type !== "sleep_up") continue;
+    const h = log[i].ts.getHours();
+    if (h < 6 || h >= 20) continue; // exclude night sleep
+    const minutes = (next.ts - log[i].ts) / 60000;
+    if (minutes < 15 || minutes > 240) continue;
+    napDurations.push(minutes);
+  }
+
+  const median = (arr) => {
+    if (arr.length === 0) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+
+  return {
+    avgWakeWindowMin: median(wakeWindows),
+    wakeWindowSample: wakeWindows.length,
+    avgNapDurationMin: median(napDurations),
+    napDurationSample: napDurations.length,
+  };
+}
+
+function effectiveBlockProfile(blockStart, blockEnd, owner, currentUser, predictedNaps, onsite, focusProfile, recentMeetings, predictedFeeds, lowEnergy, babyStats) {
+  const circadian = getBlockFocusLevel(blockStart, focusProfile);
+  // v05.05bt174 — Meeting after-effect buffer.
+  const decay = (focusProfile && typeof focusProfile.meetingDecayMin === "number")
+    ? focusProfile.meetingDecayMin
+    : 0;
+  let postMeeting = false;
+  if (decay > 0 && Array.isArray(recentMeetings)) {
+    const blockStartMs = blockStart.getTime();
+    for (const m of recentMeetings) {
+      if (!m || !m.end) continue;
+      const endMs = m.end.getTime();
+      if (endMs <= blockStartMs && (blockStartMs - endMs) <= decay * 60000) {
+        postMeeting = true;
+        break;
+      }
+    }
+  }
+  const baseFocus = postMeeting ? "shallow" : circadian;
+
+  // v05.05bt182 — Per chat: 'is that the only reason why it's deep
+  // work amenable?'. The careLabel only mentioned ONE factor (who's
+  // covering). Now build a full reason chain that explains every
+  // contributing piece: who's covering, time-of-day, baby state,
+  // meeting recovery, energy. Rendered as a comma-separated list in
+  // the open-block sub-line.
+  const fmtH = (d) => {
+    const h = d.getHours(), m = d.getMinutes();
+    const h12 = ((h + 11) % 12) + 1;
+    const ap = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+  };
+  const timeStr = `${fmtH(blockStart)}–${fmtH(blockEnd)}`;
+  const tHour = blockStart.getHours();
+  // v05.05bt229 — Tighter hasQuiz check: an empty deepHours array
+  // doesn't count as having taken the quiz. Per chat: user reported
+  // seeing 'outside the standard peaks' after taking the quiz; this
+  // closes the edge case where a profile object exists with an empty
+  // array (rare but possible after partial migrations / sync glitches).
+  const hasQuiz = focusProfile
+    && Array.isArray(focusProfile.deepHours)
+    && focusProfile.deepHours.length > 0;
+  const isDeepHour = hasQuiz
+    ? focusProfile.deepHours.includes(tHour) && !(focusProfile.dipHours || []).includes(tHour)
+    : (tHour >= 9 && tHour < 12) || (tHour >= 15 && tHour < 18);
+  const isDipHour = hasQuiz && (focusProfile.dipHours || []).includes(tHour);
+  // v05.05bt184 — Tighter, personalized reason strings. Same causal
+  // logic as bt183 but shorter and punchier.
+  const timeReason = isDipHour
+    ? `${timeStr} — you marked this as a dip hour`
+    : isDeepHour
+    ? hasQuiz
+      ? `${timeStr} — your quiz says this is a peak hour`
+      : `${timeStr} — peak hour (standard default, take the quiz for yours)`
+    : hasQuiz
+      ? `${timeStr} — not in your declared peaks`
+      : `${timeStr} — outside the standard peaks`;
+  const meetingReason = postMeeting
+    ? `meeting just ended — your quiz says you need ${decay} min to recover`
+    : null;
+
+  if (onsite) {
+    const reasons = [
+      "Solène is at grandparents' — no care duty",
+      timeReason,
+    ];
+    if (meetingReason) reasons.push(meetingReason);
+    return {
+      focusLevel: baseFocus,
+      careLabel: "uninterrupted · grandparents" + (postMeeting ? " · post-meeting buffer" : ""),
+      sourceNote: baseFocus === "deep" ? "circadian peak · grandparents" : "circadian off-peak · grandparents",
+      reasons,
+    };
+  }
+  if (owner === "joint") {
+    const reasons = [
+      "both parents on — care can tag-team",
+      timeReason,
+    ];
+    if (meetingReason) reasons.push(meetingReason);
+    return {
+      focusLevel: baseFocus,
+      careLabel: "tag-team window" + (postMeeting ? " · post-meeting buffer" : ""),
+      sourceNote: "joint shift",
+      reasons,
+    };
+  }
+  if (owner && owner !== currentUser) {
+    const reasons = [
+      `${owner} has Solène — no interruptions`,
+      timeReason,
+    ];
+    if (meetingReason) reasons.push(meetingReason);
+    return {
+      focusLevel: baseFocus,
+      careLabel: `uninterrupted · ${owner} has Solène` + (postMeeting ? " · post-meeting buffer" : ""),
+      sourceNote: baseFocus === "deep" ? "circadian peak · partner covers" : "circadian off-peak · partner covers",
+      reasons,
+    };
+  }
+  if (owner === currentUser) {
+    if (postMeeting) {
+      return {
+        focusLevel: "shallow",
+        careLabel: "interruptible · you're on · post-meeting buffer",
+        sourceNote: "post-meeting buffer",
+        reasons: [
+          "you're on solo duty",
+          meetingReason,
+          timeReason,
+        ],
+      };
+    }
+    const feedOverlap = (predictedFeeds || []).reduce((best, feed) => {
+      const overStart = Math.max(blockStart.getTime(), feed.start.getTime());
+      const overEnd = Math.min(blockEnd.getTime(), feed.end.getTime());
+      const overMin = Math.max(0, (overEnd - overStart) / 60000);
+      return overMin > best.overMin ? { overMin, feed } : best;
+    }, { overMin: 0, feed: null });
+    if (feedOverlap.overMin >= 10) {
+      const conf = Math.round((feedOverlap.feed.sampleSize / 7) * 100);
+      return {
+        focusLevel: "shallow",
+        careLabel: `active feeding · predicted · ${feedOverlap.feed.sampleSize}/7d`,
+        sourceNote: `feed window (n=${feedOverlap.feed.sampleSize}/7d)`,
+        reasons: [
+          `Solène ate at this time ${feedOverlap.feed.sampleSize}/7 days (~${conf}% likely)`,
+          "feeding takes hands + attention — no work possible",
+        ],
+      };
+    }
+    const overlap = (predictedNaps || []).reduce((best, nap) => {
+      const overStart = Math.max(blockStart.getTime(), nap.start.getTime());
+      const overEnd = Math.min(blockEnd.getTime(), nap.end.getTime());
+      const overMin = Math.max(0, (overEnd - overStart) / 60000);
+      return overMin > best.overMin ? { overMin, nap } : best;
+    }, { overMin: 0, nap: null });
+    if (overlap.overMin >= 30) {
+      const conf = Math.round((overlap.nap.sampleSize / 7) * 100);
+      return {
+        focusLevel: "deep",
+        careLabel: `nap predicted · ${overlap.nap.sampleSize}/7d · uninterrupted`,
+        sourceNote: `nap predicted (n=${overlap.nap.sampleSize}/7d)`,
+        reasons: [
+          `Solène napped at this time ${overlap.nap.sampleSize}/7 days (~${conf}% likely)`,
+          `predicted ${overlap.nap.durationMin}-min nap → uninterrupted focus`,
+          timeReason,
+        ],
+      };
+    }
+    const postFeed = (predictedFeeds || []).find(feed => {
+      const since = blockStart.getTime() - feed.end.getTime();
+      return since >= 0 && since <= 30 * 60000;
+    });
+    if (postFeed) {
+      return {
+        focusLevel: "shallow",
+        careLabel: `calm-play pocket · post-feed · ${postFeed.sampleSize}/7d`,
+        sourceNote: `post-feed calm window`,
+        reasons: [
+          `right after the ${fmtH(postFeed.start)} feed — Solène usually content`,
+          "light work OK but she may still demand attention",
+        ],
+      };
+    }
+    // Default: solo duty, no nap, no feed, no post-meeting.
+    // v05.05bt221 — Per chat ('I had deep work scheduled in a light slot
+    // when I have free deep slots later in the day; that doesn't make
+    // sense esp when my profile showed I'm not a morning person').
+    // ROOT CAUSE: this branch previously hardcoded focusLevel:'shallow'
+    // even when the user's quiz declared the hour as a deep peak. That
+    // forced solo-duty deep hours to be unusable for deep work and let
+    // the scheduler land deep tasks in earlier shallow slots instead.
+    // FIX: honor baseFocus (which already reads from focusProfile.deepHours).
+    // The interruptibility goes in the careLabel — the user knows her
+    // brain works best at her declared peaks even if Solène is awake;
+    // she can decide to defend that window.
+    // v05.05bt184 — uses Solène's actual median wake window from
+    // last 7 days when available, falls back to age-based default.
+    const wakeMin = babyStats?.avgWakeWindowMin;
+    const wakeReason = wakeMin
+      ? `Solène's recent wake windows average ${Math.round(wakeMin)} min — expect attention demands`
+      : "wake-window data not enough yet — assume she'll need you mid-block";
+    return {
+      focusLevel: baseFocus,
+      careLabel: baseFocus === "deep"
+        ? "your peak · solo duty (defend if you can)"
+        : "interruptible · you're on",
+      sourceNote: baseFocus === "deep"
+        ? "your declared peak · solo duty"
+        : "your duty · interruptible",
+      reasons: [
+        baseFocus === "deep"
+          ? "your quiz marks this as a peak hour — protect it"
+          : "you're on solo duty, Solène is awake (no nap predicted)",
+        wakeReason,
+        timeReason,
+      ],
+    };
+  }
+  return {
+    focusLevel: baseFocus,
+    careLabel: postMeeting ? "post-meeting buffer" : null,
+    sourceNote: baseFocus === "deep" ? "circadian peak" : "circadian off-peak",
+    reasons: [timeReason].concat(meetingReason ? [meetingReason] : []),
+  };
+}
+
+function _applyLowEnergyCap(profile, lowEnergy) {
+  if (!lowEnergy || profile.focusLevel !== "deep") return profile;
+  // v05.05bt242 — Soft cap instead of hard cap. Per chat: 'even if I am
+  // not feeling the best one day it may still NEED to get done regardless
+  // of what I feel.' Previously this hard-converted deep → shallow on low
+  // energy, hiding ALL deep opportunities from the runway. Now we keep
+  // focusLevel='deep' so urgent deep work still has a place to land, but
+  // append the low-energy note to the label so the user knows the day's
+  // baseline is lower. Scheduler still sees deep blocks; user decides
+  // whether to defend them.
+  return {
+    ...profile,
+    careLabel: profile.careLabel ? `${profile.careLabel} · low-energy day` : "low-energy day",
+    sourceNote: `${profile.sourceNote} · low-energy day`,
+    reasons: [
+      ...(profile.reasons || []),
+      "low-energy day — deep stays available but expect it to feel heavy",
+    ],
+  };
 }
 
 // v05.05bt107 — Chunk suggester. Heuristic decomposition based on
@@ -17938,6 +19537,144 @@ function suggestTaskChunks(task) {
 // (6am–8pm start), cluster by 2-hour start-hour bucket. Buckets with ≥3
 // occurrences in the trailing 7 days become predicted nap windows for
 // today (median start hour, median duration). Past windows are filtered.
+// v05.05bt180 — Per chat: 'When I'm "on" do you check the baby schedule as
+// well to see what she's most liked doing'. Existing predictNapWindows
+// covers naps. This helper covers FEEDS (bottle + solid_food) so the
+// algorithm also blocks out predicted feeding windows during your solo
+// duty as 'active feeding · not work time', and surfaces the 30 min
+// after each feed as a calm-play light-work pocket. Same rolling
+// 7-day pattern + 30-min bucketing + ≥3 occurrences threshold.
+function predictFeedWindows(events, now) {
+  // v05.05bt205 — Two changes:
+  //   (a) Pre-existing bug fix: bt180's filter targeted e.type === "bottle"
+  //       but feeds are actually stored as type "feed" / "breastfeed" /
+  //       "solid_food" in this app. So the predictor was reading NO feed
+  //       events. Now correctly matches the real event types.
+  //   (b) Per chat: 'next feed predictions should also consider HOW
+  //       much she ate previously.' We now learn the typical gap-by-
+  //       previous-volume from consecutive feed pairs, then anchor an
+  //       additional "next feed" projection off the LATEST actual feed
+  //       using its oz to look up the right gap. The time-of-day
+  //       buckets still produce the day-shape predictions (so feeds she
+  //       usually has at ~10a, ~1p, ~4p, etc. still surface), but the
+  //       volume-anchored projection adds the "given what just happened"
+  //       projection that adapts to a big or small feed.
+  const cutoff = new Date(now.getTime() - 7 * 86400000);
+  const feedEv = (events || [])
+    .filter(e => (e.type === "feed" || e.type === "breastfeed" || e.type === "solid_food")
+                 && !e.silent
+                 && new Date(e.ts) >= cutoff
+                 && new Date(e.ts) <= now)
+    .map(e => {
+      const ts = new Date(e.ts);
+      const durMin = typeof e.durationMin === "number" && e.durationMin > 0
+        ? e.durationMin
+        : (e.type === "solid_food" ? 20 : 15);
+      const oz = typeof e.oz === "number" && isFinite(e.oz) && e.oz > 0 ? e.oz : null;
+      return {
+        ts,
+        startH: ts.getHours() + ts.getMinutes() / 60,
+        durMin,
+        oz,
+      };
+    })
+    .sort((a, b) => a.ts - b.ts);
+
+  // ---- Volume-aware gap learning ----
+  // Walk consecutive feed pairs within 30min-8h band. For each pair,
+  // bucket the FIRST feed's oz (small <3, med 3-4.5, large ≥4.5) and
+  // record the elapsed minutes until the second feed.
+  const pairs = [];
+  for (let i = 0; i < feedEv.length - 1; i++) {
+    const a = feedEv[i], b = feedEv[i + 1];
+    const gapMin = (b.ts - a.ts) / 60000;
+    if (gapMin < 30 || gapMin > 480) continue;
+    if (a.oz == null) continue;
+    pairs.push({ prevOz: a.oz, gapMin });
+  }
+  const ozBucket = (oz) => oz == null ? "unknown" : oz < 3 ? "small" : oz < 4.5 ? "med" : "large";
+  const medianGapFor = (oz) => {
+    const tag = ozBucket(oz);
+    const matched = pairs.filter(p => ozBucket(p.prevOz) === tag);
+    if (matched.length < 2) {
+      // Fall back to overall median if bucket too sparse.
+      if (pairs.length < 2) return null;
+      const allSorted = pairs.map(p => p.gapMin).sort((a, b) => a - b);
+      return allSorted[Math.floor(allSorted.length / 2)];
+    }
+    const sorted = matched.map(p => p.gapMin).sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+
+  // ---- Time-of-day bucketed prediction (daytime feeds only) ----
+  const dayFeedEv = feedEv.filter(f => f.startH >= 6 && f.startH <= 21);
+  const buckets = {};
+  for (const f of dayFeedEv) {
+    const b = Math.floor(f.startH * 2) / 2; // 0.5-hour buckets
+    if (!buckets[b]) buckets[b] = [];
+    buckets[b].push(f);
+  }
+
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const out = [];
+  for (const items of Object.values(buckets)) {
+    if (items.length < 3) continue;
+    const startHs = items.map(i => i.startH).sort((a, b) => a - b);
+    const durs = items.map(i => i.durMin).sort((a, b) => a - b);
+    const ozs = items.map(i => i.oz).filter(o => o != null).sort((a, b) => a - b);
+    const medStart = startHs[Math.floor(startHs.length / 2)];
+    const medDur = durs[Math.floor(durs.length / 2)];
+    const medOz = ozs.length ? ozs[Math.floor(ozs.length / 2)] : null;
+    const start = new Date(today);
+    start.setHours(Math.floor(medStart), Math.round((medStart % 1) * 60), 0, 0);
+    if (start <= now) continue;
+    const end = new Date(start.getTime() + medDur * 60000);
+    out.push({
+      start, end,
+      durationMin: Math.round(medDur),
+      kind: "feed",
+      context: medOz != null
+        ? `predicted feed · n=${items.length}/7d · typical ${medOz.toFixed(1)}oz`
+        : `predicted feed · n=${items.length}/7d`,
+      sampleSize: items.length,
+      typicalOz: medOz,
+    });
+  }
+
+  // ---- Volume-anchored "next feed from last feed" projection ----
+  // Use the most recent actual feed + its oz to project when she's
+  // likely hungry again, based on her own history's gap-by-volume.
+  const lastFeed = feedEv[feedEv.length - 1];
+  if (lastFeed && lastFeed.oz != null) {
+    const gapMin = medianGapFor(lastFeed.oz);
+    if (gapMin != null) {
+      const projStart = new Date(lastFeed.ts.getTime() + gapMin * 60000);
+      const projEnd = new Date(projStart.getTime() + 15 * 60000);
+      // Only project into the future. If past, the predicted next feed
+      // already happened (or is overdue) — skip.
+      if (projStart > now) {
+        // Skip if a time-of-day window is already within ±30min — no point
+        // surfacing a duplicate row.
+        const dup = out.find(w => Math.abs(w.start.getTime() - projStart.getTime()) < 30 * 60000);
+        if (!dup) {
+          const tag = ozBucket(lastFeed.oz);
+          out.push({
+            start: projStart,
+            end: projEnd,
+            durationMin: 15,
+            kind: "feed",
+            context: `next feed · last was ${lastFeed.oz.toFixed(1)}oz (${tag}), typical gap ${Math.round(gapMin)}m`,
+            sampleSize: pairs.length,
+            typicalOz: lastFeed.oz,
+            fromVolume: true,
+          });
+        }
+      }
+    }
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
 function predictNapWindows(events, now) {
   const cutoff = new Date(now.getTime() - 7 * 86400000);
   const sleepEv = (events || [])
@@ -18041,12 +19778,26 @@ const DEFAULT_MOMMY_ROUTINES = [
   { id: "last-pump",    title: "Last pump · pre-overnight", time: "23:00", durationMin: 30,                    kind: "routine" },
 ];
 
-function getRoutineSlotsForToday(currentUser, onsite, now, routineOverrides) {
+function getRoutineSlotsForToday(currentUser, onsite, now, routineOverrides, routineLibrary) {
   if (currentUser !== "Mommy") return [];
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const ovr = routineOverrides || {};
-  return DEFAULT_MOMMY_ROUTINES
+  // v05.05bt212 — Read from user-editable library when present; fall
+  // back to DEFAULT_MOMMY_ROUTINES only when library is null/undefined.
+  // Explicit empty array means user has zero routines (valid state).
+  const source = (routineLibrary === null || routineLibrary === undefined)
+    ? DEFAULT_MOMMY_ROUTINES
+    : routineLibrary;
+  return source
+    .filter(r => !r.disabled)
     .filter(r => !r.onsiteOnly || onsite)
+    // v05.05bt241 — Days filter. r.days is an optional array of day
+    // numbers (0=Sun ... 6=Sat). Empty/missing = every day.
+    .filter(r => {
+      if (!Array.isArray(r.days) || r.days.length === 0) return true;
+      const dow = today.getDay();
+      return r.days.includes(dow);
+    })
     .map(r => {
       const o = ovr[r.id] || {};
       const timeStr = o.time || r.time;
@@ -18309,6 +20060,9 @@ function aggressiveVerbSplit(text) {
     "to", "the", "a", "an", "for", "with", "from", "of", "on", "in",
     "at", "via", "about", "into", "by", "or", "but", "than", "then",
     "while", "after", "before", "until", "via", "through",
+    // v05.05bt170 — "and"/"plus" now connectors per chat ('"and" should
+    // not be used as a delimiter'). Verb after "and" stays in same task.
+    "and", "plus", "&",
   ]);
   const lower = " " + text.toLowerCase() + " ";
   const positions = new Set();
@@ -18342,32 +20096,440 @@ function aggressiveVerbSplit(text) {
   return segs;
 }
 
+// v05.05bt204 — Auto-split tasks longer than the timeline's max free
+// block (60 min, per bt149's hour-aligned chunking). Per chat: 'if a
+// task is longer than the max block of 1 hr then it should be
+// automatically split. There should be no problem if it's less than
+// an hour.' Returns [task] unchanged if: effort ≤ maxChunkMin, the
+// task already has a sequenceId (user-defined chain), or the task is
+// pinned to a specific time (honor the lock). Otherwise: chunks the
+// effort into 60m blocks + remainder, generates a sequenceId, and
+// returns chunks with sequenceIndex/Total. The bt171 scheduler then
+// honors the sequence constraint so chunks land in order across
+// consecutive free blocks. The bt171 timeline badge (→ N/M) already
+// renders for sequenced tasks, so the split is visible to the user
+// without any extra UI.
+function splitLongTask(task, maxChunkMin = 60) {
+  const effort = Number(task.effortMin || 30);
+  // v05.05bt209 — Honor a 15-min floor on chunk size. The system's
+  // minimum workable block is 15m (computeFreeSpans threshold), and
+  // anything smaller can't be slotted anyway.
+  const cap = Math.max(15, Number(maxChunkMin) || 60);
+  if (effort <= cap) return [task];
+  if (task.sequenceId) return [task];
+  if (task.scheduledTime) return [task];
+
+  const chunks = [];
+  let remaining = effort;
+  while (remaining > 0) {
+    const c = Math.min(cap, remaining);
+    chunks.push(c);
+    remaining -= c;
+  }
+  const seqId = `split-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  return chunks.map((c, i) => ({
+    ...task,
+    id: i === 0 ? task.id : `${task.id}_p${i}`,
+    effortMin: c,
+    sequenceId: seqId,
+    sequenceIndex: i,
+    sequenceTotal: chunks.length,
+  }));
+}
+
+// v05.05bt209 — Helper: given workable blocks, return the longest
+// durationMin. Used by the schedule paths to size chunks to the
+// actual currently-available block ceiling instead of a hardcoded
+// 60m. Falls back to 60 when no blocks (we still want addTask to
+// commit even on a fully-booked day so the task lands unscheduled).
+// v05.05bt216 — Schedule optimizer. Per chat: "if you just woke up at
+// x time and went to bed at t time" optimization with sleep window
+// respected. Lexicographic priorities (her ranking): routines > pump >
+// sleep (≥6h floor) > us time > workout > deep work.
+//
+// Strategy: enumerate a small grid of (wake, bed) pairs, filter to
+// those that satisfy sleep ≥ 6h, then score on the soft priorities
+// (us time after Solène's bedtime, workout window availability,
+// deep-focus hours in peak periods). Return the top 3 distinct shapes.
+//
+// "Us time" = the window between Solène's bedtime and the user's
+// bedtime — when both adults can co-be-awake without a toddler. v05.05bt217
+// renamed from "Daddy time" since the math doesn't actually verify Daddy is
+// awake; it's couple-time aspirational.
+//
+// "Distinct" means: don't return three near-identical options like
+// (6:00, 22:00), (6:00, 22:15), (6:00, 22:30). Spread the picks so
+// the user sees actually different trade-offs.
+function computeDayShapes({ focusProfile, routineLibrary, currentUser, onsite, meetings, now }) {
+  // Wake candidates: 5:30 to 7:30 in 30-min steps. Realistic for a
+  // postpartum parent — even 5:30 is aspirational, 7:30 is on the
+  // recovery end.
+  const wakeCandidates = [5.5, 6.0, 6.5, 7.0, 7.5];
+  // Bed candidates: 21:30 to 23:30. 21:30 is Solène-down-then-sleep,
+  // 23:30 is the previous default.
+  const bedCandidates = [21.5, 22.0, 22.5, 23.0, 23.5];
+  // Solène's bedtime — derive from the routine library if a 'solene-bed'
+  // routine exists, else default to 21:00.
+  const source = (routineLibrary === null || routineLibrary === undefined) ? DEFAULT_MOMMY_ROUTINES : routineLibrary;
+  const solBed = source.find(r => r.id === "solene-bed");
+  const solBedHr = solBed
+    ? (() => { const [h, m] = solBed.time.split(":").map(Number); return h + (m || 0) / 60; })()
+    : 21.0;
+  // v05.05bt239 — Solène's typical wake-up hour for the morning-quiet calc.
+  // Defaults to 6:30am. If a 'solene-wake' routine exists in the library, use that.
+  const solWake = source.find(r => r.id === "solene-wake" || r.id === "wake-solene");
+  const solWakeHr = solWake
+    ? (() => { const [h, m] = solWake.time.split(":").map(Number); return h + (m || 0) / 60; })()
+    : 6.5;
+  // Deep-focus hours: pull from profile, else literature default.
+  const deepHours = (focusProfile && Array.isArray(focusProfile.deepHours) && focusProfile.deepHours.length > 0)
+    ? focusProfile.deepHours
+    : [9, 10, 11, 15, 16, 17];
+
+  // v05.05bt218 — Smarter math. Build blocker intervals so deep-hour
+  // counting subtracts time consumed by routines AND today's meetings.
+  // Each blocker is [startHr, endHr] in hours-since-midnight (fractional).
+  // v05.05bt241 — Today's day-of-week for the days filter.
+  const todayForDays = new Date(now);
+  const todayDow = todayForDays.getDay();
+  const routineBlockers = source
+    .filter(r => !r.disabled)
+    .filter(r => !r.onsiteOnly || onsite)
+    .filter(r => !Array.isArray(r.days) || r.days.length === 0 || r.days.includes(todayDow))
+    .map(r => {
+      const [h, m] = (r.time || "0:0").split(":").map(Number);
+      const startH = h + (m || 0) / 60;
+      const dur = (r.onsiteDurationMin && onsite) ? r.onsiteDurationMin : r.durationMin;
+      const endH = startH + (dur || 30) / 60;
+      return [startH, endH];
+    });
+  // Today's meetings — restrict to the date being optimized for.
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const todayYMD = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const meetingBlockers = (Array.isArray(meetings) ? meetings : [])
+    .filter(m => m.date === todayYMD)
+    .filter(m => m.parent === currentUser || !m.parent) // her meetings only
+    .map(m => {
+      const [sh, sm] = (m.start || "0:0").split(":").map(Number);
+      const [eh, em] = (m.end || "0:0").split(":").map(Number);
+      return [sh + (sm || 0) / 60, eh + (em || 0) / 60];
+    });
+  const allBlockers = [...routineBlockers, ...meetingBlockers];
+
+  const shapes = [];
+  for (const W of wakeCandidates) {
+    for (const B of bedCandidates) {
+      const activeH = B - W;
+      const sleepH = 24 - activeH;
+      // HARD: sleep ≥ 6h floor (her stated minimum).
+      if (sleepH < 6) continue;
+      if (activeH < 12) continue;
+      // Us-time window: from Solène's bedtime to your bedtime.
+      const usTimeH = Math.max(0, B - solBedHr);
+      // v05.05bt240 — Morning-quiet time NET of AM routines.
+      // Per chat: 'About 1.5 hours for me to get ready' on weekdays.
+      // The raw wake-to-baby-wake gap doesn't credit those routines,
+      // so it overstated the bonus. Now we subtract any blocker (work
+      // prep, pump, etc.) that falls in [W, solWakeHr] from the
+      // morning quiet total.
+      const rawMorningQuietH = Math.max(0, solWakeHr - W);
+      let morningBlockedMin = 0;
+      for (const [bStart, bEnd] of allBlockers) {
+        const ovStart = Math.max(W, bStart);
+        const ovEnd = Math.min(solWakeHr, bEnd);
+        if (ovEnd > ovStart) morningBlockedMin += (ovEnd - ovStart) * 60;
+      }
+      const morningQuietH = Math.max(0, rawMorningQuietH - morningBlockedMin / 60);
+      // AM workout: needs ≥45min FREE in the pre-baby window
+      const pmWorkoutFits = B >= 20.5;
+      const amWorkoutFits = morningQuietH >= 0.75;
+      const workoutFits = pmWorkoutFits || amWorkoutFits;
+      const workoutOptions = (pmWorkoutFits ? 1 : 0) + (amWorkoutFits ? 1 : 0);
+      // v05.05bt218 — Smarter deep-hour math. For each deep hour, sum
+      // the minutes NOT blocked by routines + meetings; aggregate as
+      // fractional hours. Previously this was a simple int count.
+      let deepUnblockedMin = 0;
+      for (const h of deepHours) {
+        const hStart = h;
+        const hEnd = h + 1;
+        // Skip if hour is outside the active period.
+        if (hEnd <= W || hStart >= B) continue;
+        // Clip to active period at the edges.
+        const effStart = Math.max(hStart, W);
+        const effEnd = Math.min(hEnd, B);
+        const effSpan = (effEnd - effStart) * 60; // minutes
+        // Sum blocked minutes within this clipped hour.
+        let blockedMin = 0;
+        for (const [bStart, bEnd] of allBlockers) {
+          const ovStart = Math.max(effStart, bStart);
+          const ovEnd = Math.min(effEnd, bEnd);
+          if (ovEnd > ovStart) blockedMin += (ovEnd - ovStart) * 60;
+        }
+        deepUnblockedMin += Math.max(0, effSpan - blockedMin);
+      }
+      const deepPeakH = deepUnblockedMin / 60;
+      shapes.push({
+        wake: W, bed: B, sleepH, usTimeH, morningQuietH,
+        workoutFits, amWorkoutFits, pmWorkoutFits, workoutOptions,
+        deepPeakH,
+        meetsUsMin: usTimeH >= 1,
+        // v05.05bt239 — adultTimeH = morning quiet + us time. Total
+        // solo/couple time uninterrupted by Solène's awake hours.
+        adultTimeH: morningQuietH + usTimeH,
+      });
+    }
+  }
+  // Filter to shapes meeting the us-time minimum first (her P4).
+  let pool = shapes.filter(s => s.meetsUsMin);
+  if (pool.length === 0) pool = shapes;
+  // v05.05bt239 — Ranking now uses adultTimeH (us + morning quiet) as the
+  // primary metric so wake time matters. Workout options counts how many
+  // slots are available (0/1/2). Deep-peak hours tiebreak. Sleep ties.
+  pool.sort((a, b) => {
+    if (Math.abs(a.adultTimeH - b.adultTimeH) > 0.25) return b.adultTimeH - a.adultTimeH;
+    if (a.workoutOptions !== b.workoutOptions) return b.workoutOptions - a.workoutOptions;
+    if (Math.abs(a.deepPeakH - b.deepPeakH) > 0.25) return b.deepPeakH - a.deepPeakH;
+    return b.sleepH - a.sleepH;
+  });
+  const picks = [];
+  for (const s of pool) {
+    const tooClose = picks.some(p => Math.abs(p.wake - s.wake) < 0.5 && Math.abs(p.bed - s.bed) < 0.5);
+    if (tooClose) continue;
+    picks.push(s);
+    if (picks.length >= 3) break;
+  }
+  const fmtT = (h) => {
+    const hr = Math.floor(h);
+    const min = Math.round((h - hr) * 60);
+    const h12 = ((hr + 11) % 12) + 1;
+    const ampm = hr < 12 ? "a" : "p";
+    return `${h12}${min ? `:${String(min).padStart(2, "0")}` : ""}${ampm}`;
+  };
+  const fmtH = (h) => {
+    const hr = Math.floor(h);
+    const min = Math.round((h - hr) * 60);
+    if (hr === 0) return `${min}m`;
+    return min > 0 ? `${hr}h ${min}m` : `${hr}h`;
+  };
+  // v05.05bt218 — Deep-hour label now shows fractional precision.
+  const fmtDeep = (h) => {
+    if (h < 0.1) return "—";
+    const rounded = Math.round(h * 2) / 2; // 0.5-hour resolution
+    const hr = Math.floor(rounded);
+    const half = rounded - hr >= 0.5;
+    if (hr === 0) return half ? "30m" : "—";
+    return half ? `${hr}h 30m` : `${hr}h`;
+  };
+  return picks.map((s, i) => {
+    let name, tradeoff;
+    if (picks.length === 1) {
+      name = "Best fit today";
+      tradeoff = "Only one shape passes your constraints. Sleep, routines, meetings, and pumping all squeeze the day tightly.";
+    } else {
+      const others = picks.filter((_, j) => j !== i);
+      const maxUsOther = Math.max(...others.map(o => o.usTimeH));
+      const maxQuietOther = Math.max(...others.map(o => o.morningQuietH));
+      const maxDeepOther = Math.max(...others.map(o => o.deepPeakH));
+      const maxSleepOther = Math.max(...others.map(o => o.sleepH));
+      // v05.05bt242 — Names describe what the shape gives you, not
+      // what it 'protects.' More concrete + evocative.
+      if (s.morningQuietH > maxQuietOther + 0.4) name = "The early quiet";
+      else if (s.usTimeH > maxUsOther + 0.4) name = "Long evening together";
+      else if (s.sleepH > maxSleepOther + 0.4) name = "Rest first";
+      else if (s.deepPeakH > maxDeepOther + 0.4) name = "Focus block";
+      else if (s.workoutOptions > Math.max(...others.map(o => o.workoutOptions))) name = "Body in motion";
+      else name = "Even keel";
+      const wins = [];
+      const losses = [];
+      if (s.morningQuietH >= maxQuietOther - 0.1 && s.morningQuietH >= 0.5) wins.push(`${fmtH(s.morningQuietH)} quiet morning`);
+      if (s.usTimeH >= maxUsOther - 0.1) wins.push(`${fmtH(s.usTimeH)} us time`);
+      else losses.push(`${fmtH(s.usTimeH)} us time (vs ${fmtH(maxUsOther)} max)`);
+      if (s.sleepH >= maxSleepOther) wins.push(`${fmtH(s.sleepH)} sleep`);
+      else if (maxSleepOther - s.sleepH > 0.4) losses.push(`${fmtH(s.sleepH)} sleep (${fmtH(maxSleepOther - s.sleepH)} short)`);
+      if (s.workoutOptions === 2) wins.push("AM+PM workout fits");
+      else if (s.amWorkoutFits) wins.push("AM workout fits");
+      else if (s.pmWorkoutFits) wins.push("PM workout fits");
+      else losses.push("no workout slot");
+      if (s.deepPeakH >= maxDeepOther - 0.1 && s.deepPeakH >= 0.5) wins.push(`${fmtDeep(s.deepPeakH)} unblocked peak focus`);
+      tradeoff = wins.length > 0
+        ? `Protects ${wins.slice(0, 2).join(" + ")}${losses.length > 0 ? `. Costs: ${losses[0]}.` : "."}`
+        : `Compromise across everything.`;
+    }
+    return {
+      name,
+      wakeLabel: fmtT(s.wake),
+      bedLabel: fmtT(s.bed),
+      sleepLabel: fmtH(s.sleepH),
+      usLabel: fmtH(s.usTimeH),
+      quietLabel: s.morningQuietH >= 0.25 ? fmtH(s.morningQuietH) : "—",
+      deepLabel: fmtDeep(s.deepPeakH),
+      workoutFits: s.workoutFits,
+      workoutOptions: s.workoutOptions,
+      amWorkoutFits: s.amWorkoutFits,
+      pmWorkoutFits: s.pmWorkoutFits,
+      tradeoff,
+      wake: s.wake, bed: s.bed,
+      sleepH: s.sleepH, usTimeH: s.usTimeH, deepPeakH: s.deepPeakH,
+    };
+  });
+}
+
+function getMaxBlockMin(workable) {
+  if (!Array.isArray(workable) || workable.length === 0) return 60;
+  return Math.max(15, ...workable.map(b => Number(b.durationMin) || 0));
+}
+
+// v05.05bt211 — Trade suggestions. Per chat reminder list: "Daddy could
+// take 9-11 → frees 2h deep". Scans the user's solo-duty windows for
+// today, scores each by how many minutes overlap their deep-focus hours
+// (from focusProfile.deepHours, or the 9-12/15-18 literature default
+// when no profile set). Returns up to N candidates sorted by deep
+// overlap descending. Each candidate has { start, end, deepMin, label }.
+// Past windows are skipped. Onsite mode → empty (grandparents have
+// baby, no trade needed).
+function computeTradeSuggestions({ activeShifts, focusProfile, now, currentUser, onsite, maxResults = 2 }) {
+  if (onsite) return [];
+  if (!activeShifts) return [];
+  const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+  const myShifts = activeShifts[currentUser] || [];
+  const partnerShifts = activeShifts[partner] || [];
+  const parseHM = (s) => {
+    const [h, m] = (s || "0:0").split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  // Build solo intervals: my shifts minus any partner overlap.
+  const mySolo = [];
+  for (const ms of myShifts) {
+    const a = parseHM(ms.start);
+    const b = parseHM(ms.end);
+    let pieces = [[a, b]];
+    for (const ps of partnerShifts) {
+      const pa = parseHM(ps.start);
+      const pb = parseHM(ps.end);
+      pieces = pieces.flatMap(([x, y]) => {
+        if (pb <= x || pa >= y) return [[x, y]];
+        const out = [];
+        if (pa > x) out.push([x, pa]);
+        if (pb < y) out.push([pb, y]);
+        return out;
+      });
+    }
+    for (const [x, y] of pieces) mySolo.push([x, y]);
+  }
+  // Deep hours: from profile or literature default.
+  const deepHours = (focusProfile && Array.isArray(focusProfile.deepHours) && focusProfile.deepHours.length > 0)
+    ? focusProfile.deepHours
+    : [9, 10, 11, 15, 16, 17];
+  const dipHours = (focusProfile && Array.isArray(focusProfile.dipHours)) ? focusProfile.dipHours : [];
+  // Score each solo window by minutes overlapping (deep AND NOT dip) hours.
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const candidates = [];
+  for (const [a, b] of mySolo) {
+    // Skip past windows entirely
+    if (b <= nowMin) continue;
+    // Trim to future
+    const startMin = Math.max(a, nowMin);
+    const endMin = b;
+    if (endMin - startMin < 30) continue;
+    let deepMin = 0;
+    for (let h = 0; h < 24; h++) {
+      if (!deepHours.includes(h)) continue;
+      if (dipHours.includes(h)) continue;
+      const hStart = h * 60;
+      const hEnd = (h + 1) * 60;
+      const ovStart = Math.max(startMin, hStart);
+      const ovEnd = Math.min(endMin, hEnd);
+      if (ovEnd > ovStart) deepMin += (ovEnd - ovStart);
+    }
+    if (deepMin < 45) continue; // skip windows with <45m of deep focus
+    candidates.push({ startMin, endMin, deepMin });
+  }
+  candidates.sort((a, b) => b.deepMin - a.deepMin);
+  const fmt = (m) => {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const h12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? "a" : "p";
+    return `${h12}${min ? `:${String(min).padStart(2, "0")}` : ""}${ampm}`;
+  };
+  return candidates.slice(0, maxResults).map(c => ({
+    start: c.startMin,
+    end: c.endMin,
+    deepMin: c.deepMin,
+    label: `${fmt(c.startMin)}–${fmt(c.endMin)}`,
+  }));
+}
+
 function parseNaturalLanguageTasks(text) {
   if (!text || !text.trim()) return [];
-  // v05.05bt136 — accept ellipses ("...", "..", "…") as task delimiters
-  // in addition to commas/semicolons/newlines/" and ". Normalize all
-  // ellipsis variants to a single sentinel before splitting.
   const normalized = text
     .replace(/…/g, "...")
-    .replace(/\.\.+/g, "\u0001");  // any 2+ dots → sentinel
-  // Primary split: commas, semicolons, newlines, " and ", or ellipsis
+    .replace(/\.\.+/g, "\u0001");
   let segments = normalized
-    .split(/[,;\n\u0001]|\band\b/i)
+    .split(/[,;\n\u0001]/)
     .map(s => s.trim())
     .filter(Boolean);
-  // v05.05bt115 — if only ONE segment came out AND it's long enough to
-  // plausibly be multiple tasks, try verb-led splitting as a fallback.
   if (segments.length === 1 && segments[0].length > 25) {
     const verbSplit = aggressiveVerbSplit(segments[0]);
     if (verbSplit.length >= 2) segments = verbSplit;
   }
-  return segments.map(parseOneNlTask).filter(t => t && t.title);
+  // v05.05bt171 — Sequence support. Per chat: "I have a sequence of
+  // events like wash hair. Dry hair. Flat iron hair. These are discrete
+  // tasks that can be done anytime of the day BUT one can't happen
+  // before the other." Solution: split each segment further on
+  // sequence delimiters " then ", "→", "->" (case-insensitive). Each
+  // resulting sub-task gets sequenceId + sequenceIndex metadata so the
+  // scheduler can enforce ordering across the day.
+  const SEQ_DELIM = /\s+then\s+|\s*→\s*|\s*->\s*/i;
+  const result = [];
+  for (const seg of segments) {
+    const subs = seg.split(SEQ_DELIM).map(s => s.trim()).filter(Boolean);
+    if (subs.length > 1) {
+      const seqId = "seq-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+      subs.forEach((s, idx) => {
+        const parsed = parseOneNlTask(s);
+        if (parsed && parsed.title) {
+          result.push({
+            ...parsed,
+            sequenceId: seqId,
+            sequenceIndex: idx,
+            sequenceTotal: subs.length,
+          });
+        }
+      });
+    } else {
+      const parsed = parseOneNlTask(seg);
+      if (parsed && parsed.title) result.push(parsed);
+    }
+  }
+  return result;
 }
 
 function parseOneNlTask(text) {
   let title = text;
   let effortMin = 30;
   let scheduledTime = null;
+  // v05.05bt199 — Recurring detection. Strips rule phrases from the
+  // title BEFORE other parsers so they don't leak in. Patterns:
+  //   • 'every day', 'daily', 'each day' → daily
+  //   • 'every week', 'weekly', 'each week' → weekly
+  //   • 'every monday' / 'each tuesday' / 'weekly on friday' → weekly
+  //   • 'every weekday' / 'on weekdays' → daily (approximation; user
+  //     can fine-tune via Edit if they want strict weekday-only)
+  let recurringRule = null;
+  if (/\bevery\s+day\b|\bdaily\b|\beach\s+day\b/i.test(title)) {
+    recurringRule = "daily";
+    title = title.replace(/\bevery\s+day\b|\bdaily\b|\beach\s+day\b/gi, "").trim();
+  } else if (/\bevery\s+weekday\b|\bon\s+weekdays\b/i.test(title)) {
+    recurringRule = "daily";
+    title = title.replace(/\bevery\s+weekday\b|\bon\s+weekdays\b/gi, "").trim();
+  } else if (/\bevery\s+(mon|tues|wednes|thurs|fri|satur|sun)day\b|\beach\s+(mon|tues|wednes|thurs|fri|satur|sun)day\b|\bweekly\s+on\s+(mon|tues|wednes|thurs|fri|satur|sun)day\b/i.test(title)) {
+    recurringRule = "weekly";
+    title = title.replace(/\b(?:every|each|weekly\s+on)\s+(mon|tues|wednes|thurs|fri|satur|sun)day\b/gi, "").trim();
+  } else if (/\bevery\s+week\b|\bweekly\b|\beach\s+week\b/i.test(title)) {
+    recurringRule = "weekly";
+    title = title.replace(/\bevery\s+week\b|\bweekly\b|\beach\s+week\b/gi, "").trim();
+  }
 
   // Time: "at 11am", "at 2:30pm", "11am", "2:30pm", "11:00am", "noon", "midnight"
   if (/\bnoon\b/i.test(title)) {
@@ -18425,7 +20587,7 @@ function parseOneNlTask(text) {
   title = title.replace(/\s+/g, " ").trim();
 
   if (!title) return null;
-  return { title, effortMin, scheduledTime };
+  return { title, effortMin, scheduledTime, recurringRule };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -18446,6 +20608,22 @@ const FOCUS_LOW_KEYWORDS = [
   "ack", "confirm", "rsvp", "file", "sort", "organize", "log", "track",
   "pay", "bill", "renew", "pickup", "pick up", "drop off",
 ];
+// v05.05bt222 — Per chat ('cleaning I feel like is time-consuming but
+// it is not necessarily deep focus work'). The previous logic checked
+// FOCUS_HIGH_KEYWORDS first, so "deep clean" matched "deep" and got
+// marked as deep work — wrong. CHORE_KEYWORDS represent unambiguous
+// physical-labor tasks that ALWAYS mean light cognitive load,
+// regardless of qualifiers like "deep" (deep clean), "thorough", etc.
+// These get checked BEFORE the high/low keyword scan so domestic
+// chores never get misclassified as cognitive deep work.
+const CHORE_KEYWORDS = [
+  "clean", "cleaning", "tidy", "tidying",
+  "fold", "laundry", "dishes", "dishwasher",
+  "vacuum", "dust", "dusting", "scrub", "mop",
+  "sweep", "trash", "garbage", "recycling",
+  "declutter", "wipe", "mop",
+  "groceries", "grocery run", "errands",
+];
 
 // v05.05bt155 — Focus collapsed from 3 categories (high/medium/low) to
 // 2 (deep/shallow) per chat. The mauve "medium" → gold mapping was
@@ -18453,6 +20631,34 @@ const FOCUS_LOW_KEYWORDS = [
 // Deep = terracotta coral (intensity, distinct from parent rails)
 // Shallow = sage green (calm, easy, distinct from regret reds)
 // normalizeFocus accepts legacy values too so existing tasks render.
+// v05.05bt186 — Modal-scrim infrastructure. Per chat ('log button
+// gets in the way' of bottom-sheet save buttons). Any modal calls
+// useScrim() to register itself; CentralLogButton calls useModalOpen()
+// and hides while any modal is registered. Works across all modals
+// (FocusQuiz, EnergyCheckIn, EditTask, ParentAway, Logger, etc) by
+// just adding the hook call — no state lifting needed.
+let _modalCount = 0;
+const _modalListeners = new Set();
+function _bumpModalCount(delta) {
+  _modalCount += delta;
+  _modalListeners.forEach(l => l(_modalCount));
+}
+function useScrim() {
+  useEffect(() => {
+    _bumpModalCount(1);
+    return () => _bumpModalCount(-1);
+  }, []);
+}
+function useModalOpen() {
+  const [open, setOpen] = useState(_modalCount > 0);
+  useEffect(() => {
+    const listener = (c) => setOpen(c > 0);
+    _modalListeners.add(listener);
+    return () => { _modalListeners.delete(listener); };
+  }, []);
+  return open;
+}
+
 function normalizeFocus(level) {
   if (level === "deep" || level === "high") return "deep";
   if (level === "shallow" || level === "low") return "shallow";
@@ -18472,6 +20678,9 @@ const FOCUS_LABEL = {
 function inferFocusLevel(title) {
   if (!title) return "deep";
   const lower = title.toLowerCase();
+  // v05.05bt222 — Chores override "deep"/"review"/etc. so "deep clean
+  // the kitchen" doesn't get classified as cognitive work.
+  if (CHORE_KEYWORDS.some(k => lower.includes(k))) return "shallow";
   if (FOCUS_HIGH_KEYWORDS.some(k => lower.includes(k))) return "deep";
   if (FOCUS_LOW_KEYWORDS.some(k => lower.includes(k))) return "shallow";
   // Unmatched → default to deep (active focus work).
@@ -18533,6 +20742,8 @@ function categoryRank(category) {
 function getBlockTag(slot) {
   if (slot.kind === "free") return { label: "FLEX", color: "#9C8B7A" };
   if (slot.kind === "meeting") return { label: "MEETING", color: "#8B7AA8" };
+  // v05.05bt181 — Predicted feed window during user's solo duty.
+  if (slot.kind === "feed-predicted") return { label: "PREDICTED", color: "#B89B7A" };
   if (slot.kind === "routine") {
     if (slot.id?.includes("commute")) return { label: "COMMUTE", color: "#9C8B7A" };
     if (slot.id === "workout") return { label: "MOVEMENT", color: "#7B9B6E" };
@@ -18555,6 +20766,7 @@ function getBlockTag(slot) {
 function getBlockIcon(slot) {
   if (slot.kind === "free") return "+";
   if (slot.kind === "meeting") return "▣";
+  if (slot.kind === "feed-predicted") return "◉";
   if (slot.kind === "routine") {
     const map = {
       "am": "☀", "commute-in": "→", "commute-out": "←",
@@ -18709,6 +20921,1447 @@ function ParentAwayBanner({ C, parentAway, now, onOpenEditor }) {
         </div>
       )}
     </button>
+  );
+}
+
+// v05.05bt189 — Preview-before-commit parser. Simple regex matching
+// for common edit commands. Per chat ('Let's do c for the parser' =
+// option C: simple parser + stubbed AI button). Returns either
+// {success:true, newTasks, message} or {success:false, message}.
+function parsePreviewCommand(text, previewTasks) {
+  const norm = (text || "").toLowerCase().trim();
+  if (!norm) return { success: false, message: "Type a command, e.g. 'move review to morning'" };
+
+  const findTask = (name) => {
+    const n = (name || "").toLowerCase().trim();
+    if (!n) return null;
+    let m = previewTasks.find(t => (t.title || "").toLowerCase() === n);
+    if (m) return m;
+    m = previewTasks.find(t => (t.title || "").toLowerCase().includes(n));
+    if (m) return m;
+    m = previewTasks.find(t => n.includes((t.title || "").toLowerCase()));
+    return m || null;
+  };
+
+  const timeFor = (tod) => {
+    if (tod === "morning") return "09:00";
+    if (tod === "afternoon") return "13:00";
+    if (tod === "evening") return "18:00";
+    if (tod === "night") return "20:00";
+    return null;
+  };
+
+  const parseTime = (str) => {
+    const m = (str || "").match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = m[2] ? parseInt(m[2], 10) : 0;
+    const ap = m[3];
+    if (ap === "pm" && h < 12) h += 12;
+    else if (ap === "am" && h === 12) h = 0;
+    else if (!ap && h >= 1 && h <= 7) h += 12; // bias ambiguous low hours toward PM
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  };
+
+  // DELETE
+  let m = norm.match(/^(?:delete|remove|drop|skip)\s+(.+)$/);
+  if (m) {
+    const target = findTask(m[1]);
+    if (!target) return { success: false, message: `Couldn't find a task matching "${m[1]}"` };
+    return {
+      success: true,
+      newTasks: previewTasks.filter(t => t.id !== target.id),
+      message: `Removed "${target.title}"`,
+    };
+  }
+
+  // UNSCHEDULE
+  m = norm.match(/^(?:unschedule|defer)\s+(.+)$/);
+  if (m) {
+    const target = findTask(m[1]);
+    if (!target) return { success: false, message: `Couldn't find a task matching "${m[1]}"` };
+    return {
+      success: true,
+      newTasks: previewTasks.map(t => t.id === target.id ? { ...t, scheduledTime: null } : t),
+      message: `Unscheduled "${target.title}"`,
+    };
+  }
+
+  // MOVE TO TIME-OF-DAY
+  m = norm.match(/^(?:move|put|shift|reschedule)\s+(.+?)\s+to\s+(?:the\s+)?(morning|afternoon|evening|night)$/);
+  if (m) {
+    const target = findTask(m[1]);
+    if (!target) return { success: false, message: `Couldn't find a task matching "${m[1]}"` };
+    return {
+      success: true,
+      newTasks: previewTasks.map(t => t.id === target.id ? { ...t, scheduledTime: timeFor(m[2]) } : t),
+      message: `Moved "${target.title}" to ${m[2]}`,
+    };
+  }
+
+  // MOVE TO SPECIFIC TIME
+  m = norm.match(/^(?:move|put|shift|reschedule)\s+(.+?)\s+(?:to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/);
+  if (m) {
+    const target = findTask(m[1]);
+    if (!target) return { success: false, message: `Couldn't find a task matching "${m[1]}"` };
+    const newTime = parseTime(m[2]);
+    if (!newTime) return { success: false, message: `Couldn't parse time "${m[2]}"` };
+    return {
+      success: true,
+      newTasks: previewTasks.map(t => t.id === target.id ? { ...t, scheduledTime: newTime } : t),
+      message: `Moved "${target.title}" to ${m[2]}`,
+    };
+  }
+
+  // SWAP
+  m = norm.match(/^swap\s+(.+?)\s+(?:and|with|&)\s+(.+)$/);
+  if (m) {
+    const t1 = findTask(m[1]);
+    const t2 = findTask(m[2]);
+    if (!t1 || !t2) return { success: false, message: "Couldn't find both tasks to swap" };
+    if (t1.id === t2.id) return { success: false, message: "Those refer to the same task" };
+    return {
+      success: true,
+      newTasks: previewTasks.map(t => {
+        if (t.id === t1.id) return { ...t, scheduledTime: t2.scheduledTime };
+        if (t.id === t2.id) return { ...t, scheduledTime: t1.scheduledTime };
+        return t;
+      }),
+      message: `Swapped "${t1.title}" and "${t2.title}"`,
+    };
+  }
+
+  return {
+    success: false,
+    message: 'Try: "move review to morning" · "swap A and B" · "delete X" · "move X to 2pm" · "unschedule X"',
+  };
+}
+
+function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApply }) {
+  // v05.05bt189 — Per chat: 'should have the app go through the
+  // algorithm and show a preview of what the proposed schedule is and
+  // another option with clear explanation as to why and have free text
+  // response that the user can say how they want to modify it or if
+  // they want to lock it in'. Option C: simple regex parser for common
+  // edits + stubbed AI button.
+  useScrim();
+  const [cmd, setCmd] = useState("");
+  const [hint, setHint] = useState(null);
+  const [aiHint, setAiHint] = useState(false);
+
+  const fmtTime = (hhmm) => {
+    if (!hhmm) return "—";
+    const [h, m] = hhmm.split(":").map(Number);
+    const h12 = ((h + 11) % 12) + 1;
+    const ap = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+  };
+
+  const handleApply = () => {
+    if (!cmd.trim()) return;
+    const result = onCommandApply(cmd);
+    if (result.success) {
+      setCmd("");
+      setHint({ ok: true, message: result.message });
+    } else {
+      setHint({ ok: false, message: result.message });
+    }
+  };
+
+  const scheduled = preview.tasks.filter(t => t.scheduledTime);
+  const unscheduled = preview.tasks.filter(t => !t.scheduledTime);
+  const scheduledSorted = [...scheduled].sort((a, b) => {
+    const [ah, am] = a.scheduledTime.split(":").map(Number);
+    const [bh, bm] = b.scheduledTime.split(":").map(Number);
+    return (ah * 60 + (am || 0)) - (bh * 60 + (bm || 0));
+  });
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(20,16,12,0.45)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+      }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%", maxWidth: 540,
+          background: C.paper,
+          borderRadius: "20px 20px 0 0",
+          padding: "16px 18px 24px",
+          paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+          maxHeight: "calc(100dvh - 40px)",
+          overflowY: "auto",
+        }}>
+        <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: C.gold, fontWeight: 700,
+        }}>PROPOSED SCHEDULE · REVIEW</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 19, fontWeight: 500, color: C.ink,
+          marginTop: 4, marginBottom: 4, lineHeight: 1.3,
+        }}>
+          {preview.tasks.length} {preview.tasks.length === 1 ? "task" : "tasks"} — lock in or adjust
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12.5, color: C.muted,
+          marginBottom: 14, lineHeight: 1.45,
+        }}>
+          {scheduled.length} slotted · {unscheduled.length} couldn't fit
+        </div>
+
+        {/* Scheduled tasks */}
+        {scheduledSorted.length > 0 && (
+          <div style={{ marginBottom: unscheduled.length > 0 ? 14 : 18 }}>
+            {scheduledSorted.map(t => (
+              <div key={t.id} style={{
+                padding: "10px 12px",
+                marginBottom: 6,
+                background: "#FDFAF1",
+                border: `1px solid ${C.line}22`,
+                borderRadius: 6,
+                borderLeft: `4px solid ${C.mommy}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, color: C.ink, fontWeight: 700,
+                    minWidth: 50, flexShrink: 0,
+                  }}>{fmtTime(t.scheduledTime)}</span>
+                  <span style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 15, color: C.ink, fontWeight: 500, flex: 1,
+                  }}>{t.title}</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: C.muted,
+                  }}>{t.effortMin}m</span>
+                </div>
+                {preview.reasons && preview.reasons[t.id] && (
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                    marginTop: 3, paddingLeft: 60, lineHeight: 1.4,
+                  }}>
+                    {preview.reasons[t.id]}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Unscheduled */}
+        {unscheduled.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.accent, fontWeight: 700, marginBottom: 6,
+            }}>Couldn't fit</div>
+            {unscheduled.map(t => (
+              <div key={t.id} style={{
+                padding: "8px 12px",
+                marginBottom: 5,
+                background: `${C.accent}10`,
+                border: `1px dashed ${C.accent}44`,
+                borderRadius: 6,
+              }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                  <span style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 14, color: C.ink, fontWeight: 500, flex: 1,
+                  }}>{t.title}</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: C.muted,
+                  }}>{t.effortMin}m</span>
+                </div>
+                {preview.reasons && preview.reasons[t.id] && (
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                    marginTop: 3, lineHeight: 1.4,
+                  }}>{preview.reasons[t.id]}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Free-text adjustment */}
+        <div style={{
+          padding: "12px 14px",
+          background: `${C.gold}0a`,
+          border: `1px solid ${C.gold}33`,
+          borderRadius: 8, marginBottom: 14,
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: C.muted, marginBottom: 6,
+            letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
+          }}>Tell me how to adjust</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+            <input
+              type="text"
+              value={cmd}
+              onChange={(e) => setCmd(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
+              placeholder='e.g. "move review to morning"'
+              style={{
+                flex: 1,
+                fontFamily: "inherit", fontSize: 13, color: C.ink,
+                border: `1.5px solid ${C.line}33`,
+                borderRadius: 6, padding: "8px 10px",
+                background: "#FBF5E9",
+              }}
+            />
+            <button
+              onClick={handleApply}
+              disabled={!cmd.trim()}
+              style={{
+                padding: "8px 12px",
+                background: cmd.trim() ? C.mommy : C.line,
+                color: "#FDFAF1", border: "none", borderRadius: 6,
+                cursor: cmd.trim() ? "pointer" : "not-allowed",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
+              }}>Try</button>
+          </div>
+          <button
+            onClick={() => setAiHint(true)}
+            style={{
+              padding: "6px 10px",
+              background: "transparent",
+              color: C.gold, border: `1px dashed ${C.gold}55`,
+              borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 10.5, letterSpacing: "0.1em", fontWeight: 600,
+              opacity: 0.85,
+            }}>✦ Use AI to adjust</button>
+          {aiHint && (
+            <div style={{
+              marginTop: 6,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 11.5, color: C.muted,
+              lineHeight: 1.4,
+            }}>
+              AI free-text editing is coming once the API hookup ships. For now the parser handles simple patterns — see the placeholder.
+            </div>
+          )}
+          {hint && (
+            <div style={{
+              marginTop: 8,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 12, lineHeight: 1.4,
+              color: hint.ok ? "#5A7A4E" : C.accent,
+            }}>
+              {hint.ok ? "✓ " : "✗ "}{hint.message}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: "11px 10px",
+              background: "transparent",
+              color: C.muted, border: `1px solid ${C.line}33`,
+              borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 11, letterSpacing: "0.12em", fontWeight: 600,
+              textTransform: "uppercase",
+            }}>Cancel</button>
+          <button
+            onClick={onLockIn}
+            style={{
+              flex: 2, padding: "11px 16px",
+              background: C.mommy, color: "#FDFAF1",
+              border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
+              textTransform: "uppercase",
+            }}>Lock in</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
+  // v05.05bt190 — Per chat: 'edit the time range and duration right
+  // there and not another pop up'. Replaces the bottom-sheet
+  // TimeEditPopover with an inline form that renders directly below
+  // the row being edited. Lighter touch, no scrim.
+  const initialStart = task.scheduledTime
+    || `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+  const [start, setStart] = useState(initialStart);
+  const [duration, setDuration] = useState(task.effortMin || 30);
+
+  const [sh, sm] = start.split(":").map(Number);
+  const safeSh = isFinite(sh) ? sh : 9;
+  const safeSm = isFinite(sm) ? sm : 0;
+  const endMin = safeSh * 60 + safeSm + Number(duration || 0);
+  const endH = Math.floor(endMin / 60) % 24;
+  const endM = endMin % 60;
+  const fmtT = (h, m) => {
+    const h12 = ((h + 11) % 12) + 1;
+    const ap = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+  };
+  const PRESETS = [15, 30, 45, 60, 90, 120];
+  const fmtDur = (m) => m < 60 ? `${m}m` : (m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h${m % 60}m`);
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        margin: "3px 0 6px 0",
+        padding: "10px 12px 10px 16px",
+        background: `${C.gold}0a`,
+        border: `1px solid ${C.gold}44`,
+        borderRadius: 6,
+      }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        flexWrap: "wrap", marginBottom: 8,
+      }}>
+        <input
+          type="time"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 13, color: C.ink, fontWeight: 600,
+            border: `1.5px solid ${C.line}33`,
+            borderRadius: 5, padding: "5px 8px",
+            background: "#FBF5E9", width: 100,
+          }}
+        />
+        <span style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12, color: C.muted,
+        }}>for</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {PRESETS.map(d => (
+            <button
+              key={d}
+              onClick={() => setDuration(d)}
+              style={{
+                padding: "4px 8px",
+                background: duration === d ? C.mommy : "transparent",
+                color: duration === d ? "#FDFAF1" : C.ink,
+                border: `1px solid ${duration === d ? C.mommy : C.line + "33"}`,
+                borderRadius: 4, cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 600,
+              }}>{fmtDur(d)}</button>
+          ))}
+          <input
+            type="number" min="5" max="480" step="5"
+            value={PRESETS.includes(duration) ? "" : duration}
+            placeholder="min"
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (v > 0) setDuration(v);
+            }}
+            style={{
+              width: 50,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, color: C.ink,
+              border: `1px solid ${C.line}33`,
+              borderRadius: 4, padding: "4px 6px",
+              background: "transparent",
+            }}
+          />
+        </div>
+      </div>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: 8,
+      }}>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12, color: C.muted,
+        }}>
+          Runs <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            color: C.ink, fontWeight: 600, fontStyle: "normal",
+          }}>{fmtT(safeSh, safeSm)}–{fmtT(endH, endM)}</span>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              padding: "5px 10px",
+              background: "transparent",
+              color: C.muted, border: `1px solid ${C.line}33`,
+              borderRadius: 5, cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.1em", fontWeight: 600,
+              textTransform: "uppercase",
+            }}>Cancel</button>
+          <button
+            onClick={() => onSave({ scheduledTime: start, effortMin: Number(duration) || 30 })}
+            style={{
+              padding: "5px 12px",
+              background: C.mommy, color: "#FDFAF1",
+              border: "none", borderRadius: 5, cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, letterSpacing: "0.1em", fontWeight: 700,
+              textTransform: "uppercase",
+            }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimeEditPopover({ C, task, onClose, onSave }) {
+  // v05.05bt188 — Per chat: 'When clicking on the time you should be
+  // able to change the time range or the duration'. Replaces the
+  // inline single-field time input with a small bottom-sheet that
+  // shows start time + duration. End time is computed and displayed.
+  useScrim();
+  const initialStart = task.scheduledTime
+    || `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+  const [start, setStart] = useState(initialStart);
+  const [duration, setDuration] = useState(task.effortMin || 30);
+
+  const [sh, sm] = start.split(":").map(Number);
+  const safeSh = isFinite(sh) ? sh : 9;
+  const safeSm = isFinite(sm) ? sm : 0;
+  const endMin = safeSh * 60 + safeSm + Number(duration || 0);
+  const endH = Math.floor(endMin / 60) % 24;
+  const endM = endMin % 60;
+  const endStr = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+  const fmtTime = (h, m) => {
+    const h12 = ((h + 11) % 12) + 1;
+    const ap = h < 12 ? "a" : "p";
+    return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+  };
+
+  const PRESETS = [15, 30, 45, 60, 90, 120];
+
+  const fmtDuration = (m) => m < 60 ? `${m}m` : (m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h ${m % 60}m`);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(20,16,12,0.45)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 540,
+        background: C.paper,
+        borderRadius: "20px 20px 0 0",
+        padding: "16px 18px 24px",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        maxHeight: "calc(100dvh - 40px)",
+        overflowY: "auto",
+      }}>
+        <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: C.gold, fontWeight: 700,
+        }}>EDIT TIME</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 18, fontWeight: 500, color: C.ink,
+          marginTop: 4, marginBottom: 16, lineHeight: 1.3,
+        }}>{task.title}</div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: C.muted, marginBottom: 6,
+            letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
+          }}>Start time</div>
+          <input
+            type="time"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 16, color: C.ink, fontWeight: 600,
+              border: `1.5px solid ${C.line}33`,
+              borderRadius: 8, padding: "10px 12px",
+              background: "#FBF5E9", width: "100%",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: C.muted, marginBottom: 6,
+            letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
+          }}>Duration</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 6 }}>
+            {PRESETS.map(d => (
+              <button
+                key={d}
+                onClick={() => setDuration(d)}
+                style={{
+                  padding: "10px 8px",
+                  background: duration === d ? C.mommy : "transparent",
+                  color: duration === d ? "#FDFAF1" : C.ink,
+                  border: `1.5px solid ${duration === d ? C.mommy : C.line + "33"}`,
+                  borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 13, fontWeight: 500,
+                }}>{fmtDuration(d)}</button>
+            ))}
+          </div>
+          <input
+            type="number" min="5" max="480" step="5"
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value) || 30)}
+            placeholder="Custom (min)"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 14, color: C.ink,
+              border: `1.5px solid ${C.line}33`,
+              borderRadius: 8, padding: "8px 12px",
+              background: "transparent", width: "100%",
+            }}
+          />
+        </div>
+
+        <div style={{
+          padding: "12px 14px",
+          background: `${C.gold}10`, borderRadius: 8,
+          marginBottom: 18,
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 14, color: C.muted, fontStyle: "italic",
+          textAlign: "center",
+        }}>
+          Runs <span style={{ fontFamily: "'JetBrains Mono', monospace", color: C.ink, fontWeight: 600, fontStyle: "normal" }}>{fmtTime(safeSh, safeSm)} – {fmtTime(endH, endM)}</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: "11px 14px",
+              background: "transparent",
+              color: C.muted, border: `1px solid ${C.line}33`,
+              borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+              fontSize: 11, letterSpacing: "0.14em", fontWeight: 600,
+              textTransform: "uppercase",
+            }}>Cancel</button>
+          <button
+            onClick={() => { onSave({ scheduledTime: start, effortMin: Number(duration) || 30 }); onClose(); }}
+            disabled={!start}
+            style={{
+              flex: 2, padding: "11px 16px",
+              background: start ? C.mommy : C.line,
+              color: "#FDFAF1", border: "none", borderRadius: 10,
+              cursor: start ? "pointer" : "not-allowed", fontFamily: "inherit",
+              fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
+              textTransform: "uppercase",
+            }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
+  useScrim();
+  // v05.05bt236/237 — Indirect energy check-in + behavioral triangulation.
+  // Per chat: 'I feel like I could still easily lie' + 'should let the user
+  // know the results.'
+  //
+  // The indirect questions tap signals harder to fake than direct 1-5
+  // rating, but the user is right — they CAN still be talked-up. So we
+  // also compute BEHAVIORAL signals from the existing event log (sleep
+  // hours, time since wake, whether morning activity has happened) and
+  // surface them alongside the self-reported answers. When the two
+  // disagree, that's the honesty check.
+  //
+  // After save, we also show what the inferred rating MEANS for today
+  // (which the previous version hid).
+  const QUESTIONS = [
+    {
+      key: "pull",
+      prompt: "If I told you to pick ONE task right now, you'd reach for…",
+      options: [
+        { label: "The hardest thing on the list",     score: 4 },
+        { label: "Something real but manageable",     score: 3 },
+        { label: "Something easy I can autopilot",    score: 2 },
+        { label: "Honestly? I'd skip the whole list", score: 1 },
+      ],
+    },
+    {
+      key: "body",
+      prompt: "In your body, you feel like…",
+      options: [
+        { label: "Could run a 5k",                     score: 4 },
+        { label: "Cruising, fine",                     score: 3 },
+        { label: "A bit foggy, tense, or under-slept", score: 2 },
+        { label: "Want to lie down",                   score: 1 },
+      ],
+    },
+    {
+      key: "time",
+      prompt: "When you look ahead at the next four hours, the time feels…",
+      options: [
+        { label: "Charged with possibility",  score: 4 },
+        { label: "About right, normal",       score: 3 },
+        { label: "Heavy, long",               score: 2 },
+        { label: "Honestly dreadful",         score: 1 },
+      ],
+    },
+    {
+      key: "avoidance",
+      prompt: "The last thing you crossed off was…",
+      options: [
+        { label: "Real work, I'm proud of it",   score: 4 },
+        { label: "Fine, a normal-day thing",     score: 3 },
+        { label: "Small, easy, didn't matter",   score: 2 },
+        { label: "I haven't crossed anything off yet", score: 1 },
+      ],
+    },
+  ];
+
+  const [answers, setAnswers] = useState({}); // { key: score }
+  const [quickMode, setQuickMode] = useState(false);
+  const [quickRating, setQuickRating] = useState(0);
+  // v05.05bt238 — One question at a time per chat. Wizard step index
+  // tracks which question is showing (or special values 'intro'/'summary'
+  // for the result + meaning view). Progress dots + Next/Back nav.
+  const [stepIdx, setStepIdx] = useState(0); // 0..QUESTIONS.length where last index = summary
+
+  // v05.05bt237 — Behavioral signals from the event log. These are
+  // observable facts, hard to lie about (you either slept 5h or 8h).
+  const behavioralSignals = (() => {
+    const evs = Array.isArray(events) ? events : [];
+    const nowDate = now || new Date();
+    const sigs = [];
+    // Hours slept overnight: find last sleep_down between 8pm-2am
+    // and matching sleep_up afterward
+    const recent = evs
+      .filter(e => (e.type === "sleep_down" || e.type === "sleep_up") && !e.silent)
+      .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    let nightSleep = null;
+    const lookbackStart = new Date(nowDate);
+    lookbackStart.setDate(lookbackStart.getDate() - 1);
+    lookbackStart.setHours(18, 0, 0, 0); // 6pm yesterday
+    for (let i = 0; i < recent.length - 1; i++) {
+      const e = recent[i];
+      if (e.type !== "sleep_down") continue;
+      const t = new Date(e.ts);
+      if (t < lookbackStart || t > nowDate) continue;
+      const hr = t.getHours();
+      if (!(hr >= 18 || hr <= 3)) continue;
+      // Find next sleep_up after this
+      for (let j = i + 1; j < recent.length; j++) {
+        if (recent[j].type === "sleep_up") {
+          const wakeT = new Date(recent[j].ts);
+          if (wakeT > t && wakeT <= nowDate) {
+            nightSleep = (wakeT - t) / 3600000; // hours
+          }
+          break;
+        }
+      }
+      break;
+    }
+    if (nightSleep !== null) {
+      let level, score;
+      if (nightSleep >= 7) { level = "Slept well"; score = 4; }
+      else if (nightSleep >= 6) { level = "Slept OK"; score = 3; }
+      else if (nightSleep >= 4.5) { level = "Light sleep"; score = 2; }
+      else { level = "Short sleep"; score = 1; }
+      sigs.push({
+        label: `${nightSleep.toFixed(1)}h overnight`,
+        readout: level,
+        score,
+      });
+    }
+    // Activity this morning: how many events logged today before now?
+    const todayStart = new Date(nowDate); todayStart.setHours(0, 0, 0, 0);
+    const todayEvents = evs.filter(e => {
+      const t = new Date(e.ts);
+      return t >= todayStart && t <= nowDate && !e.silent && e.type !== "wake_confirmed";
+    });
+    const morningHour = nowDate.getHours();
+    if (morningHour >= 7) {
+      const expectedByNow = Math.max(1, Math.floor((morningHour - 6) / 2));
+      let level, score;
+      if (todayEvents.length >= expectedByNow * 2) { level = "Lots done"; score = 4; }
+      else if (todayEvents.length >= expectedByNow) { level = "On pace"; score = 3; }
+      else if (todayEvents.length > 0) { level = "Slow start"; score = 2; }
+      else { level = "Nothing yet"; score = 1; }
+      sigs.push({
+        label: `${todayEvents.length} log${todayEvents.length === 1 ? "" : "s"} so far today`,
+        readout: level,
+        score,
+      });
+    }
+    return sigs;
+  })();
+
+  const behavioralAvg = behavioralSignals.length > 0
+    ? behavioralSignals.reduce((s, x) => s + x.score, 0) / behavioralSignals.length
+    : null;
+  const behavioralRating = behavioralAvg !== null
+    ? Math.max(1, Math.min(5, Math.round((behavioralAvg - 1) * (4 / 3) + 1)))
+    : null;
+
+  const answeredCount = Object.keys(answers).length;
+  const answerSum = Object.values(answers).reduce((a, b) => a + b, 0);
+  // Normalize avg (1-4) to 1-5 rating scale
+  const inferredRating = answeredCount === 0
+    ? 0
+    : Math.max(1, Math.min(5, Math.round(((answerSum / answeredCount) - 1) * (4 / 3) + 1)));
+
+  const LABELS = [
+    "Wrecked — survive mode",
+    "Low — minimal cognitive work",
+    "Average — light + medium",
+    "Good — most tasks workable",
+    "Sharp — bring on the hard stuff",
+  ];
+
+  const save = () => {
+    let finalRating;
+    if (quickMode) {
+      finalRating = quickRating;
+    } else if (answeredCount > 0 && behavioralRating) {
+      finalRating = Math.round((inferredRating + behavioralRating) / 2);
+    } else if (answeredCount > 0) {
+      finalRating = inferredRating;
+    } else if (behavioralRating) {
+      finalRating = behavioralRating;
+    } else {
+      finalRating = 0;
+    }
+    if (finalRating === 0) return;
+    onSave({
+      date: new Date().toISOString().slice(0, 10),
+      rating: finalRating,
+      ts: new Date().toISOString(),
+      mode: quickMode ? "direct" : "indirect",
+      ...(quickMode ? {} : {
+        responses: answers,
+        inferred: inferredRating || null,
+        behavioral: behavioralRating || null,
+      }),
+    });
+    onClose();
+  };
+
+  const setAnswer = (key, score) => setAnswers(prev => ({ ...prev, [key]: score }));
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(20,16,12,0.45)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 540,
+        background: C.paper,
+        borderRadius: "20px 20px 0 0",
+        padding: "16px 18px 24px",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        maxHeight: "calc(100dvh - 40px)",
+        overflowY: "auto",
+      }}>
+        <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          color: C.gold, fontWeight: 700,
+        }}>MORNING CHECK-IN</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, color: C.ink,
+          marginTop: 4, lineHeight: 1.3,
+        }}>{quickMode ? "How are you today?" : "Let's read the signal."}</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13, color: C.muted,
+          marginTop: 4, marginBottom: 18, lineHeight: 1.5,
+        }}>
+          {quickMode
+            ? "One tap. Scales today's expectations — low days defer deep work, sharp days push the harder tasks first."
+            : "Direct self-rating is famously unreliable — we anchor to who we want to be. A few indirect questions read the signal more honestly. Skip any you're not sure about."
+          }
+        </div>
+
+        {quickMode ? (
+          <>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setQuickRating(n)}
+                  style={{
+                    width: 50, height: 50, borderRadius: "50%",
+                    background: quickRating >= n ? C.gold : "transparent",
+                    border: `1.5px solid ${quickRating >= n ? C.gold : C.line + "44"}`,
+                    color: quickRating >= n ? "#FDFAF1" : C.muted,
+                    fontSize: 18, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>{n}</button>
+              ))}
+            </div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 14,
+              color: quickRating > 0 ? C.ink : C.muted,
+              textAlign: "center", minHeight: 22, marginBottom: 14,
+              lineHeight: 1.5,
+            }}>
+              {quickRating > 0 ? LABELS[quickRating - 1] : "Tap a number"}
+            </div>
+            <button
+              onClick={() => setQuickMode(false)}
+              style={{
+                width: "100%", padding: "8px",
+                background: "transparent", color: C.muted,
+                border: "none", cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, letterSpacing: "0.16em",
+                textTransform: "uppercase", marginBottom: 14,
+              }}>← Indirect questions instead</button>
+          </>
+        ) : (
+          <>
+            {/* v05.05bt238 — Wizard navigation: progress dots + back/next */}
+            {(() => {
+              const isSummary = stepIdx >= QUESTIONS.length;
+              const currentQ = isSummary ? null : QUESTIONS[stepIdx];
+              const canAdvance = isSummary || (currentQ && answers[currentQ.key] !== undefined);
+              return (
+                <>
+                  {/* Progress dots */}
+                  <div style={{
+                    display: "flex", justifyContent: "center", gap: 8,
+                    marginBottom: 16,
+                  }}>
+                    {QUESTIONS.map((_, i) => (
+                      <div key={i} style={{
+                        width: i === stepIdx && !isSummary ? 20 : 8,
+                        height: 8, borderRadius: 4,
+                        background: i < stepIdx || (i === stepIdx && answers[QUESTIONS[i].key] !== undefined)
+                          ? C.mommy
+                          : i === stepIdx ? C.gold : `${C.line}66`,
+                        transition: "all 0.2s",
+                      }} />
+                    ))}
+                    {/* Summary dot */}
+                    <div style={{
+                      width: isSummary ? 20 : 8, height: 8, borderRadius: 4,
+                      background: isSummary ? C.mommy : `${C.line}66`,
+                      transition: "all 0.2s",
+                    }} />
+                  </div>
+
+                  {!isSummary && currentQ && (
+                    <div style={{ minHeight: 280 }}>
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9, letterSpacing: "0.18em",
+                        color: C.muted, fontWeight: 700,
+                        marginBottom: 8, textTransform: "uppercase",
+                      }}>Question {stepIdx + 1} of {QUESTIONS.length}</div>
+                      <div style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 18, color: C.ink,
+                        marginBottom: 14, lineHeight: 1.4,
+                      }}>{currentQ.prompt}</div>
+                      <div style={{ display: "grid", gap: 8 }}>
+                        {currentQ.options.map((opt) => {
+                          const selected = answers[currentQ.key] === opt.score;
+                          return (
+                            <button
+                              key={opt.score}
+                              onClick={() => {
+                                setAnswer(currentQ.key, opt.score);
+                                // Auto-advance after 250ms so it feels responsive
+                                setTimeout(() => {
+                                  setStepIdx(prev => Math.min(QUESTIONS.length, prev + 1));
+                                }, 250);
+                              }}
+                              style={{
+                                padding: "14px 14px",
+                                textAlign: "left",
+                                background: selected ? `${C.mommy}20` : "transparent",
+                                color: C.ink,
+                                border: `1.5px solid ${selected ? C.mommy : C.line}`,
+                                borderRadius: 10,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 14.5, cursor: "pointer",
+                                lineHeight: 1.4,
+                              }}>{opt.label}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {isSummary && (answeredCount > 0 || behavioralRating !== null) && (
+                    <div style={{
+                      background: `${C.gold}10`,
+                      border: `1px solid ${C.gold}40`,
+                      borderRadius: 10,
+                      padding: "14px 16px",
+                      marginBottom: 4,
+                    }}>
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9, letterSpacing: "0.20em",
+                        textTransform: "uppercase", color: C.gold, fontWeight: 700,
+                        marginBottom: 10,
+                      }}>Signal read</div>
+
+                      {answeredCount > 0 && (
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 14, color: C.ink, marginBottom: 6,
+                        }}>
+                          Your answers: <span style={{ fontWeight: 700, fontStyle: "italic" }}>{LABELS[inferredRating - 1]}</span>
+                        </div>
+                      )}
+
+                      {behavioralSignals.length > 0 && (
+                        <>
+                          <div style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, letterSpacing: "0.16em",
+                            color: C.muted, fontWeight: 600,
+                            marginTop: 10, marginBottom: 4, textTransform: "uppercase",
+                          }}>Behavioral check</div>
+                          {behavioralSignals.map((sig, i) => (
+                            <div key={i} style={{
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontSize: 13, color: C.ink,
+                              marginBottom: 3, lineHeight: 1.4,
+                            }}>
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 11, color: C.muted, marginRight: 6,
+                              }}>•</span>
+                              {sig.label} <span style={{ fontStyle: "italic", color: C.muted }}>— {sig.readout}</span>
+                            </div>
+                          ))}
+                          {behavioralRating && (
+                            <div style={{
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontSize: 13, color: C.ink, marginTop: 6,
+                            }}>
+                              Behavior says: <span style={{ fontWeight: 700, fontStyle: "italic" }}>{LABELS[behavioralRating - 1]}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {answeredCount > 0 && behavioralRating && Math.abs(inferredRating - behavioralRating) >= 2 && (
+                        <div style={{
+                          marginTop: 10, paddingTop: 8,
+                          borderTop: `1px dashed ${C.muted}55`,
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontStyle: "italic", fontSize: 12.5,
+                          color: C.accent, lineHeight: 1.45,
+                        }}>
+                          ⚠ Your answers and behavior disagree by {Math.abs(inferredRating - behavioralRating)} levels. The honest read is somewhere between — we'll use the average.
+                        </div>
+                      )}
+
+                      <div style={{
+                        marginTop: 10, paddingTop: 8,
+                        borderTop: `1px dashed ${C.muted}55`,
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 12.5, color: C.muted, lineHeight: 1.45,
+                      }}>
+                        <span style={{ color: C.ink, fontWeight: 600 }}>What this means:</span>{" "}
+                        {(() => {
+                          const finalRating = (answeredCount > 0 && behavioralRating)
+                            ? Math.round((inferredRating + behavioralRating) / 2)
+                            : (answeredCount > 0 ? inferredRating : behavioralRating);
+                          if (finalRating <= 2) return "Deep work gets capped to shallow today. Cognitive demands deferred. Permission to coast.";
+                          if (finalRating === 3) return "Deep work in your peak windows only. Shallow elsewhere. Standard day.";
+                          return "Deep work prioritized. The scheduler will load your peak hours with the hardest tasks first.";
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wizard nav row */}
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 10, marginTop: 16, marginBottom: 8,
+                  }}>
+                    <button
+                      onClick={() => setStepIdx(prev => Math.max(0, prev - 1))}
+                      disabled={stepIdx === 0}
+                      style={{
+                        padding: "8px 14px",
+                        background: "transparent",
+                        color: stepIdx === 0 ? `${C.muted}55` : C.muted,
+                        border: "none",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11, letterSpacing: "0.16em", fontWeight: 600,
+                        textTransform: "uppercase",
+                        cursor: stepIdx === 0 ? "default" : "pointer",
+                      }}>← Back</button>
+                    {!isSummary ? (
+                      <button
+                        onClick={() => setStepIdx(prev => Math.min(QUESTIONS.length, prev + 1))}
+                        style={{
+                          padding: "8px 14px",
+                          background: "transparent",
+                          color: C.muted,
+                          border: "none",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, letterSpacing: "0.16em", fontWeight: 600,
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}>{canAdvance ? "Next →" : "Skip →"}</button>
+                    ) : <div />}
+                  </div>
+              </>
+              );
+            })()}
+
+            <button
+              onClick={() => setQuickMode(true)}
+              style={{
+                width: "100%", padding: "8px",
+                background: "transparent", color: C.muted,
+                border: "none", cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, letterSpacing: "0.16em",
+                textTransform: "uppercase", marginBottom: 14,
+              }}>I know how I feel · quick rate →</button>
+          </>
+        )}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: "11px 14px",
+              background: "transparent",
+              color: C.muted, border: `1px solid ${C.line}33`,
+              borderRadius: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, letterSpacing: "0.14em", fontWeight: 600,
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}>Skip</button>
+          <button
+            onClick={save}
+            disabled={quickMode ? quickRating === 0 : (answeredCount === 0 && !behavioralRating)}
+            style={{
+              flex: 2, padding: "11px 16px",
+              background: (quickMode ? quickRating > 0 : (answeredCount > 0 || behavioralRating)) ? C.mommy : C.line,
+              color: "#FDFAF1", border: "none", borderRadius: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
+              textTransform: "uppercase",
+              cursor: (quickMode ? quickRating > 0 : (answeredCount > 0 || behavioralRating)) ? "pointer" : "not-allowed",
+            }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FocusQuizModal({ C, focusProfile, onClose, onSave, onClear }) {
+  useScrim();
+  // v05.05bt176 — One-question-at-a-time wizard per chat ('looks
+  // daunting; let's do one question at a time'). Each question renders
+  // on its own with Next / Back navigation + progress dots. Also
+  // reframes Q1 to address the chat insight that morning is her
+  // chronotype peak BUT she's on baby duty in the morning. The quiz
+  // captures BIOLOGY (when you'd be sharpest if you had the time).
+  // The runway card already shows the intersection with availability.
+  const TIME_BLOCKS = [
+    { label: "6-8a", hours: [6, 7] },
+    { label: "8-10a", hours: [8, 9] },
+    { label: "10a-12p", hours: [10, 11] },
+    { label: "12-2p", hours: [12, 13] },
+    { label: "2-4p", hours: [14, 15] },
+    { label: "4-6p", hours: [16, 17] },
+    { label: "6-8p", hours: [18, 19] },
+    { label: "8-10p", hours: [20, 21] },
+  ];
+
+  const hoursToBlocks = (hours) => {
+    if (!Array.isArray(hours)) return new Set();
+    return new Set(TIME_BLOCKS.filter(b => b.hours.every(h => hours.includes(h))).map(b => b.label));
+  };
+  const blocksToHours = (set) => {
+    const out = [];
+    for (const lbl of set) {
+      const b = TIME_BLOCKS.find(x => x.label === lbl);
+      if (b) out.push(...b.hours);
+    }
+    return Array.from(new Set(out)).sort((a, b) => a - b);
+  };
+
+  const [step, setStep] = useState(0);
+  const [deepSet, setDeepSet] = useState(hoursToBlocks(focusProfile?.deepHours));
+  const [dipSet, setDipSet] = useState(hoursToBlocks(focusProfile?.dipHours));
+  const [lightSet, setLightSet] = useState(hoursToBlocks(focusProfile?.lightHours));
+  const [meetingDecay, setMeetingDecay] = useState(
+    typeof focusProfile?.meetingDecayMin === "number" ? focusProfile.meetingDecayMin : 30
+  );
+  const [protectChoice, setProtectChoice] = useState(focusProfile?.protect || "varies");
+
+  const toggle = (setFn, set, lbl) => {
+    const next = new Set(set);
+    if (next.has(lbl)) next.delete(lbl);
+    else next.add(lbl);
+    setFn(next);
+  };
+
+  const save = () => {
+    onSave({
+      deepHours: blocksToHours(deepSet),
+      dipHours: blocksToHours(dipSet),
+      lightHours: blocksToHours(lightSet),
+      meetingDecayMin: meetingDecay,
+      protect: protectChoice,
+      completedAt: new Date().toISOString(),
+    });
+    onClose();
+  };
+
+  const Chip = ({ active, onClick, children, color }) => (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "9px 13px",
+        background: active ? color : "transparent",
+        color: active ? "#FDFAF1" : C.ink,
+        border: `1.5px solid ${active ? color : C.line + "44"}`,
+        borderRadius: 999,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 12, letterSpacing: "0.04em", fontWeight: 600,
+        cursor: "pointer",
+      }}>{children}</button>
+  );
+
+  // Questions array drives the wizard.
+  const STEPS = [
+    {
+      title: "When would you be sharpest if nothing was in the way?",
+      sub: "Forget your shifts and meetings — just biology. When does your brain feel most alert and ready for hard thinking? Pick all that apply.",
+      render: () => (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {TIME_BLOCKS.map(b => (
+            <Chip key={b.label} active={deepSet.has(b.label)} onClick={() => toggle(setDeepSet, deepSet, b.label)} color={FOCUS_COLOR.deep}>
+              {b.label}
+            </Chip>
+          ))}
+        </div>
+      ),
+      canAdvance: deepSet.size > 0,
+      hint: deepSet.size === 0 ? "Pick at least one window to continue." : null,
+    },
+    {
+      title: "When does your energy tank?",
+      sub: "Post-lunch slump, end-of-day fade, whatever you experience. These hours will be flagged as 'don't schedule deep work here even if you typed those as peak.'",
+      render: () => (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {TIME_BLOCKS.map(b => (
+            <Chip key={b.label} active={dipSet.has(b.label)} onClick={() => toggle(setDipSet, dipSet, b.label)} color={C.accent}>
+              {b.label}
+            </Chip>
+          ))}
+        </div>
+      ),
+      canAdvance: true,
+      hint: null,
+    },
+    {
+      title: "When are you best at admin / light work?",
+      sub: "Email, paperwork, low-cognitive stuff. This can be different from deep work — some people do admin great when they're tired.",
+      render: () => (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {TIME_BLOCKS.map(b => (
+            <Chip key={b.label} active={lightSet.has(b.label)} onClick={() => toggle(setLightSet, lightSet, b.label)} color={FOCUS_COLOR.shallow}>
+              {b.label}
+            </Chip>
+          ))}
+        </div>
+      ),
+      canAdvance: true,
+      hint: null,
+    },
+    {
+      title: "After a meeting ends, how is your focus?",
+      sub: "The scheduler will avoid putting deep work in the post-meeting recovery window. Pick how long you usually need to bounce back.",
+      render: () => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { v: 0, l: "No impact / I batch meetings" },
+            { v: 15, l: "Bounce back fast (~15 min)" },
+            { v: 30, l: "Mild dip — 30 min" },
+            { v: 60, l: "Wrecks the next hour" },
+          ].map(o => (
+            <Chip key={o.v} active={meetingDecay === o.v} onClick={() => setMeetingDecay(o.v)} color={C.mommy}>
+              {o.l}
+            </Chip>
+          ))}
+        </div>
+      ),
+      canAdvance: true,
+      hint: null,
+    },
+    {
+      title: "Which window do you fight to protect?",
+      sub: "When you have a choice, what time do you guard for your own work?",
+      render: () => (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { v: "morning", l: "Mornings" },
+            { v: "evening", l: "Evenings" },
+            { v: "varies", l: "Depends on the day" },
+            { v: "whenever", l: "I work whenever I can" },
+          ].map(o => (
+            <Chip key={o.v} active={protectChoice === o.v} onClick={() => setProtectChoice(o.v)} color={C.gold}>
+              {o.l}
+            </Chip>
+          ))}
+        </div>
+      ),
+      canAdvance: true,
+      hint: null,
+    },
+  ];
+
+  const current = STEPS[step];
+  const isLast = step === STEPS.length - 1;
+  const isFirst = step === 0;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(20,16,12,0.45)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 540,
+        background: C.paper,
+        borderRadius: "20px 20px 0 0",
+        padding: "16px 18px 24px",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        maxHeight: "calc(100dvh - 24px)", overflowY: "auto",
+      }}>
+        <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          <div>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              color: C.gold, fontWeight: 700,
+            }}>FOCUS PROFILE · {step + 1} of {STEPS.length}</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 21, fontWeight: 500, color: C.ink,
+              marginTop: 4, lineHeight: 1.3,
+            }}>{current.title}</div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent", border: "none",
+              fontSize: 22, color: C.muted, cursor: "pointer",
+              padding: 0, lineHeight: 1, marginLeft: 8,
+            }}>×</button>
+        </div>
+
+        {/* Progress dots */}
+        <div style={{ display: "flex", gap: 5, marginBottom: 18 }}>
+          {STEPS.map((_, i) => (
+            <div key={i} style={{
+              flex: 1, height: 3, borderRadius: 2,
+              background: i <= step ? C.gold : `${C.line}33`,
+              transition: "background 0.2s",
+            }} />
+          ))}
+        </div>
+
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13, color: C.muted,
+          marginBottom: 16, lineHeight: 1.5,
+        }}>{current.sub}</div>
+
+        <div style={{ marginBottom: 20 }}>
+          {current.render()}
+        </div>
+
+        {current.hint && (
+          <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 12, textAlign: "center" }}>
+            {current.hint}
+          </div>
+        )}
+
+        {/* Nav buttons */}
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button
+            onClick={() => isFirst ? onClose() : setStep(s => s - 1)}
+            style={{
+              flex: 1, padding: "11px 14px",
+              background: "transparent",
+              color: C.muted, border: `1px solid ${C.line}33`,
+              borderRadius: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, letterSpacing: "0.14em", fontWeight: 600,
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}>
+            {isFirst ? "Cancel" : "← Back"}
+          </button>
+          <button
+            onClick={() => isLast ? save() : setStep(s => s + 1)}
+            disabled={!current.canAdvance}
+            style={{
+              flex: 2, padding: "11px 16px",
+              background: current.canAdvance ? C.mommy : C.line,
+              color: "#FDFAF1", border: "none", borderRadius: 10,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
+              textTransform: "uppercase",
+              cursor: current.canAdvance ? "pointer" : "not-allowed",
+            }}>
+            {isLast ? "Save profile" : "Next →"}
+          </button>
+        </div>
+
+        {focusProfile && isFirst && (
+          <button
+            onClick={() => { onClear(); onClose(); }}
+            style={{
+              width: "100%", marginTop: 12, padding: "8px 14px",
+              background: "transparent",
+              color: C.accent, border: "none",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.14em", fontWeight: 600,
+              textTransform: "uppercase",
+              cursor: "pointer", opacity: 0.8,
+            }}>
+            Clear existing profile · revert to defaults
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -18955,7 +22608,561 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings }) {
+// v05.05bt212 — RoutineLibraryEditor. Lets the user edit her DEFAULT
+// routines (replaces hardcoded DEFAULT_MOMMY_ROUTINES with a per-user
+// editable library). Per chat reminder list: "editable routines in
+// Settings". Per-day overrides (bt134 RoutineOverrideSheet) remain;
+// this edits the BASE that the per-day overrides apply on top of.
+function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, onClose }) {
+  // Start from current library if present; otherwise seed from defaults.
+  const seed = Array.isArray(initialLibrary)
+    ? initialLibrary.map(r => ({ ...r }))
+    : defaults.map(r => ({ ...r }));
+  const [routines, setRoutines] = useState(seed);
+  const [expandedId, setExpandedId] = useState(null);
+
+  const updateRoutine = (id, patch) => {
+    setRoutines(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r));
+  };
+  const deleteRoutine = (id) => {
+    setRoutines(rs => rs.filter(r => r.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  };
+  const addRoutine = () => {
+    const newId = `custom-${Date.now().toString(36)}`;
+    const nr = {
+      id: newId,
+      title: "New routine",
+      time: "12:00",
+      durationMin: 30,
+      kind: "routine",
+    };
+    setRoutines(rs => [...rs, nr]);
+    setExpandedId(newId);
+  };
+  const handleSave = () => {
+    // Sort by time before save so the library is stored in chronological order.
+    const sorted = [...routines].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
+    onSave(sorted);
+  };
+  // v05.05bt241 — Per-routine local edit buffers for inputs that need
+  // to allow empty / in-progress states. The bug: duration input had
+  // `Number(e.target.value) || 30` so clearing the field snapped back
+  // to 30. Now we track the input as a string while focused, commit
+  // a clamped number on blur.
+  const [draftDuration, setDraftDuration] = useState({}); // { id: stringValue }
+  const [draftTime, setDraftTime] = useState({}); // { id: stringValue }
+  const commitDuration = (id) => {
+    const raw = draftDuration[id];
+    if (raw === undefined) return;
+    const n = parseInt(raw, 10);
+    const clamped = isNaN(n) ? 30 : Math.max(5, Math.min(240, n));
+    updateRoutine(id, { durationMin: clamped });
+    setDraftDuration(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+  const commitTime = (id) => {
+    const raw = draftTime[id];
+    if (raw === undefined) return;
+    // Accept HH:MM. If invalid, keep previous.
+    if (/^\d{1,2}:\d{2}$/.test(raw)) {
+      const [h, m] = raw.split(":").map(Number);
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        updateRoutine(id, { time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` });
+      }
+    }
+    setDraftTime(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+
+  const fmtT = (hhmm) => {
+    if (!hhmm) return "—";
+    const [h, m] = hhmm.split(":").map(Number);
+    const h12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? "a" : "p";
+    return `${h12}${m ? `:${String(m).padStart(2, "0")}` : ""}${ampm}`;
+  };
+
+  return (
+    <div onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(61, 49, 40, 0.4)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+      }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.bg, width: "100%", maxWidth: 520,
+          borderRadius: "20px 20px 0 0",
+          padding: "20px 16px 28px",
+          maxHeight: "88vh", overflowY: "auto",
+          paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+        }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: C.gold, fontWeight: 700,
+          marginBottom: 4,
+        }}>Routines · defaults</div>
+        <h2 style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, margin: "0 0 4px",
+          color: C.ink,
+        }}>Edit your daily routines</h2>
+        <p style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13.5,
+          color: C.muted, margin: "0 0 16px", lineHeight: 1.5,
+        }}>These are your defaults. Per-day tweaks still work — they layer on top.</p>
+
+        {routines.length === 0 && (
+          <div style={{
+            padding: "16px 14px",
+            background: `${C.line}10`,
+            border: `1px dashed ${C.line}`,
+            borderRadius: 8,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 13, color: C.muted,
+            marginBottom: 12,
+          }}>No routines yet. Tap + Add routine below to start, or reset to load the defaults.</div>
+        )}
+
+        {routines.map((r, idx) => {
+          const isOpen = expandedId === r.id;
+          return (
+            <div key={r.id} style={{
+              border: `1px solid ${C.line}`,
+              borderLeft: r.disabled ? `3px solid ${C.line}` : `3px solid ${C.gold}`,
+              borderRadius: 6,
+              marginBottom: 8,
+              background: r.disabled ? `${C.line}08` : C.paper,
+              opacity: r.disabled ? 0.6 : 1,
+            }}>
+              <button onClick={() => setExpandedId(isOpen ? null : r.id)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center",
+                  gap: 10, padding: "10px 12px",
+                  background: "transparent", border: "none",
+                  cursor: "pointer", textAlign: "left",
+                }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, color: C.muted, minWidth: 48,
+                }}>{fmtT(r.time)}</span>
+                <span style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 15, color: C.ink, flex: 1,
+                  textDecoration: r.disabled ? "line-through" : "none",
+                }}>{r.title || "(untitled)"}</span>
+                {Array.isArray(r.days) && r.days.length > 0 && r.days.length < 7 && (
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, letterSpacing: "0.10em",
+                    color: C.mommy, fontWeight: 700,
+                    border: `1px solid ${C.mommy}55`,
+                    borderRadius: 4, padding: "2px 5px",
+                    textTransform: "uppercase",
+                  }}>
+                    {r.days.map(d => "SMTWTFS"[d]).join("")}
+                  </span>
+                )}
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, color: C.muted,
+                }}>{r.durationMin}m</span>
+                <span style={{ color: C.muted, fontSize: 13 }}>{isOpen ? "▲" : "▼"}</span>
+              </button>
+              {isOpen && (
+                <div style={{
+                  padding: "0 12px 12px",
+                  borderTop: `1px solid ${C.line}33`,
+                  paddingTop: 12,
+                }}>
+                  <label style={{ display: "block", marginBottom: 8 }}>
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4 }}>Title</div>
+                    <input type="text" value={r.title} onChange={e => updateRoutine(r.id, { title: e.target.value })}
+                      style={{
+                        width: "100%", padding: "8px 10px",
+                        background: C.bg, border: `1px solid ${C.line}`,
+                        borderRadius: 6, fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 14, color: C.ink,
+                      }} />
+                  </label>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <label style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4 }}>Time</div>
+                      <input type="time" value={r.time} onChange={e => updateRoutine(r.id, { time: e.target.value })}
+                        style={{
+                          width: "100%", padding: "8px 10px",
+                          background: C.bg, border: `1px solid ${C.line}`,
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 13, color: C.ink,
+                        }} />
+                    </label>
+                    <label style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4 }}>Duration (min)</div>
+                      <input
+                        type="number" min="5" max="240" step="5" inputMode="numeric"
+                        value={draftDuration[r.id] !== undefined ? draftDuration[r.id] : String(r.durationMin)}
+                        onChange={e => setDraftDuration(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        onBlur={() => commitDuration(r.id)}
+                        onKeyDown={e => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+                        style={{
+                          width: "100%", padding: "8px 10px",
+                          background: C.bg, border: `1px solid ${C.line}`,
+                          borderRadius: 6, fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 13, color: C.ink,
+                        }} />
+                    </label>
+                  </div>
+                  {/* v05.05bt241 — Days-of-week picker. Empty/missing array
+                      = every day. Per chat: 'should be a way to input
+                      cooking but only Tuesdays and Wednesdays.' */}
+                  {(() => {
+                    const DAYS = [
+                      { n: 1, l: "M" }, { n: 2, l: "T" }, { n: 3, l: "W" },
+                      { n: 4, l: "T" }, { n: 5, l: "F" }, { n: 6, l: "S" }, { n: 0, l: "S" },
+                    ];
+                    const selected = Array.isArray(r.days) ? r.days : [];
+                    const everyDay = selected.length === 0 || selected.length === 7;
+                    const toggleDay = (n) => {
+                      const cur = Array.isArray(r.days) ? r.days : [];
+                      const next = cur.includes(n) ? cur.filter(x => x !== n) : [...cur, n].sort();
+                      // If user selects all 7, clear the array (means every day, default)
+                      updateRoutine(r.id, { days: next.length === 7 ? undefined : next });
+                    };
+                    return (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Days</div>
+                          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontSize: 11, color: C.muted }}>
+                            {everyDay ? "every day" : selected.length === 0 ? "(no days)" : ""}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {DAYS.map(d => {
+                            const on = everyDay || selected.includes(d.n);
+                            return (
+                              <button key={d.n}
+                                onClick={() => toggleDay(d.n)}
+                                style={{
+                                  flex: 1, padding: "8px 0",
+                                  background: on ? C.mommy : "transparent",
+                                  color: on ? "#FDFAF1" : C.muted,
+                                  border: `1px solid ${on ? C.mommy : C.line}`,
+                                  borderRadius: 6,
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 12, fontWeight: 700,
+                                  cursor: "pointer",
+                                }}>{d.l}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {/* Flags */}
+                  <div style={{
+                    display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10,
+                  }}>
+                    {[
+                      { key: "optional",   label: "OPTIONAL",    hint: "skip-able on busy days" },
+                      { key: "joint",      label: "JOINT",       hint: "both parents engaged" },
+                      { key: "onsiteOnly", label: "ONSITE ONLY", hint: "commute days only" },
+                      { key: "disabled",   label: "DISABLED",    hint: "hidden from timeline" },
+                    ].map(flag => (
+                      <button key={flag.key}
+                        onClick={() => updateRoutine(r.id, { [flag.key]: !r[flag.key] })}
+                        title={flag.hint}
+                        style={{
+                          padding: "4px 8px",
+                          background: r[flag.key] ? C.gold : "transparent",
+                          color: r[flag.key] ? "#fff" : C.muted,
+                          border: `1px solid ${r[flag.key] ? C.gold : C.line}`,
+                          borderRadius: 4,
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, letterSpacing: "0.14em", fontWeight: 700,
+                          cursor: "pointer",
+                        }}>{flag.label}</button>
+                    ))}
+                  </div>
+                  <button onClick={() => deleteRoutine(r.id)}
+                    style={{
+                      width: "100%", padding: "8px 12px",
+                      background: "transparent", color: C.accent,
+                      border: `1px solid ${C.accent}55`, borderRadius: 6,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, letterSpacing: "0.18em", fontWeight: 700,
+                      textTransform: "uppercase", cursor: "pointer",
+                    }}>✕ Delete routine</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <button onClick={addRoutine}
+          style={{
+            width: "100%", padding: "12px",
+            background: "transparent", color: C.gold,
+            border: `1.5px dashed ${C.gold}`, borderRadius: 8,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, letterSpacing: "0.18em", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+            marginBottom: 16, marginTop: 4,
+          }}>+ Add routine</button>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onReset}
+            style={{
+              flex: 1, padding: "12px",
+              background: "transparent", color: C.muted,
+              border: `1px solid ${C.line}`, borderRadius: 8,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.18em", fontWeight: 700,
+              textTransform: "uppercase", cursor: "pointer",
+            }}>↺ Reset to defaults</button>
+          <button onClick={onClose}
+            style={{
+              flex: 1, padding: "12px",
+              background: "transparent", color: C.ink,
+              border: `1px solid ${C.line}`, borderRadius: 8,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.18em", fontWeight: 700,
+              textTransform: "uppercase", cursor: "pointer",
+            }}>Cancel</button>
+          <button onClick={handleSave}
+            style={{
+              flex: 2, padding: "12px",
+              background: C.mommy, color: "#fff",
+              border: "none", borderRadius: 8,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, letterSpacing: "0.18em", fontWeight: 700,
+              textTransform: "uppercase", cursor: "pointer",
+            }}>Save routines</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// v05.05bt216 — Schedule optimizer modal. Per chat: "if you just woke
+// up at X time and went to bed at Y time" optimization with sleep
+// constraint. Shows 3 day shapes (Us-time forward, Sleep-protected,
+// Deep-work protected, etc) with key metrics and a tradeoff sentence.
+// Uses lexicographic priorities: routines > pump > sleep ≥ 6h > Daddy
+// time > workout > deep work.
+function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, onsite, meetings, now, todaySetup, onClose, onApply }) {
+  const shapes = computeDayShapes({ focusProfile, routineLibrary, currentUser, onsite, meetings, now });
+  // v05.05bt242 — Detect which shape (if any) matches today's currently
+  // applied wake/bedtime targets. Per chat: 'should say what shape we
+  // are working with if we decide to go with another shape.'
+  const parseHM = (s) => {
+    if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return null;
+    const [h, m] = s.split(":").map(Number);
+    return h + (m || 0) / 60;
+  };
+  const activeWake = parseHM(todaySetup?.wakeTarget);
+  const activeBed = parseHM(todaySetup?.lightsOutTarget);
+  const matchedShape = (activeWake !== null && activeBed !== null)
+    ? shapes.find(s => Math.abs(s.wake - activeWake) < 0.4 && Math.abs(s.bed - activeBed) < 0.4)
+    : null;
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(61, 49, 40, 0.4)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.bg, width: "100%", maxWidth: 520,
+        borderRadius: "20px 20px 0 0",
+        padding: "20px 16px 28px",
+        maxHeight: "92vh", overflowY: "auto",
+        paddingBottom: "max(28px, env(safe-area-inset-bottom))",
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: C.gold, fontWeight: 700,
+          marginBottom: 4,
+        }}>Optimizer · sleep-protected</div>
+        <h2 style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, margin: "0 0 4px",
+          color: C.ink,
+        }}>If you woke at __ and slept by __</h2>
+        <p style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13.5,
+          color: C.muted, margin: "0 0 14px", lineHeight: 1.5,
+        }}>
+          Three day shapes — all respect Solène's routines, your pump cadence, and your 6h sleep floor. Deep-work hours subtract routine and meeting collisions, so what you see is what you actually get. Ranked by us time first, then workout fit, then unblocked deep-work hours.
+        </p>
+        {/* v05.05bt242 — Active-shape banner. Shows which shape today's
+            wake+bed targets correspond to (if any), so the user knows
+            what they're working with even after closing the modal. */}
+        {matchedShape ? (
+          <div style={{
+            background: `${C.gold}15`,
+            border: `1px solid ${C.gold}55`,
+            borderRadius: 8, padding: "10px 12px",
+            marginBottom: 14,
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: "0.18em",
+              textTransform: "uppercase", color: C.gold, fontWeight: 700,
+              marginBottom: 2,
+            }}>● Today's shape</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 15, color: C.ink, lineHeight: 1.4,
+            }}>You're working with <span style={{ fontWeight: 700 }}>"{matchedShape.name}"</span> — {matchedShape.wakeLabel} → {matchedShape.bedLabel}.</div>
+          </div>
+        ) : (todaySetup?.wakeTarget || todaySetup?.lightsOutTarget) && (
+          <div style={{
+            background: `${C.line}22`,
+            border: `1px solid ${C.line}55`,
+            borderRadius: 8, padding: "10px 12px",
+            marginBottom: 14,
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: "0.18em",
+              textTransform: "uppercase", color: C.muted, fontWeight: 700,
+              marginBottom: 2,
+            }}>○ Custom shape</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 14, color: C.muted, lineHeight: 1.4, fontStyle: "italic",
+            }}>Today's wake/bed doesn't match any suggested shape. Pick one below to switch.</div>
+          </div>
+        )}
+
+        {shapes.length === 0 ? (
+          <div style={{
+            padding: "14px 12px",
+            background: `${C.line}10`,
+            border: `1px dashed ${C.line}`,
+            borderRadius: 8,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 13, color: C.muted,
+          }}>
+            No shapes satisfy your constraints right now. Check that your sleep floor is reasonable and your routines aren't taking the full day.
+          </div>
+        ) : shapes.map((s, i) => {
+          const isRecommended = i === 0;
+          const isActive = matchedShape && matchedShape.wake === s.wake && matchedShape.bed === s.bed;
+          return (
+            <div key={i} style={{
+              background: isActive ? `${C.gold}12` : (isRecommended ? `${C.mommy}08` : C.paper),
+              border: `1px solid ${isActive ? C.gold : (isRecommended ? C.mommy + "55" : C.line)}`,
+              borderLeft: `4px solid ${isActive ? C.gold : (isRecommended ? C.mommy : C.gold)}`,
+              borderRadius: 8,
+              padding: "12px 14px",
+              marginBottom: 10,
+            }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.18em",
+                  textTransform: "uppercase",
+                  color: isActive ? C.gold : (isRecommended ? C.mommy : C.gold),
+                  fontWeight: 700,
+                }}>{isActive ? "● Today's shape" : (isRecommended ? "✦ Recommended" : "Alternative")}</div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 17, fontWeight: 500, color: C.ink,
+                  flex: 1,
+                }}>{s.name}</div>
+              </div>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: 16, color: C.ink, marginBottom: 8,
+              }}>
+                Wake{" "}
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: C.ink }}>{s.wakeLabel}</span>
+                {" → bed "}
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: C.ink }}>{s.bedLabel}</span>
+              </div>
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 6,
+                paddingTop: 8, paddingBottom: 8,
+                borderTop: `1px dashed ${C.line}55`,
+                borderBottom: `1px dashed ${C.line}55`,
+              }}>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: "0.16em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Sleep</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: C.ink, marginTop: 2 }}>{s.sleepLabel}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: "0.16em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>AM Quiet</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: s.quietLabel === "—" ? C.muted : C.gold, marginTop: 2 }}>{s.quietLabel}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: "0.16em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Us</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: C.daddy, marginTop: 2 }}>{s.usLabel}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: "0.16em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Workout</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: s.workoutFits ? "#7B9B6E" : C.muted, marginTop: 2 }}>{s.workoutOptions === 2 ? "AM+PM" : s.amWorkoutFits ? "AM" : s.pmWorkoutFits ? "PM" : "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, letterSpacing: "0.16em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Deep</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600, color: "#B85040", marginTop: 2 }}>{s.deepLabel}</div>
+                </div>
+              </div>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 12.5,
+                color: C.muted, marginTop: 8, lineHeight: 1.5,
+              }}>{s.tradeoff}</div>
+              {onApply && (
+                <button onClick={() => onApply(s)} style={{
+                  marginTop: 10, width: "100%",
+                  background: "transparent",
+                  color: isRecommended ? C.mommy : C.ink,
+                  border: `1px solid ${isRecommended ? C.mommy : C.line}`,
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, letterSpacing: "0.18em",
+                  fontWeight: 700, textTransform: "uppercase",
+                  cursor: "pointer",
+                }}>
+                  Set today's wake + bed
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 11.5,
+          color: C.muted, marginTop: 8, lineHeight: 1.5,
+          padding: "10px 12px",
+          background: `${C.gold}0a`,
+          borderRadius: 8,
+          borderLeft: `2px solid ${C.gold}55`,
+        }}>
+          <strong style={{ fontStyle: "normal", color: C.ink, fontWeight: 600 }}>Note on the 6h floor:</strong> sustained sleep under 7h for adults degrades executive function — research shows ~15% drop in working memory and decision quality after four consecutive nights below 7h. The 6h floor is your survival mode, not your steady state. Borrow on weekends.
+        </div>
+
+        <button onClick={onClose} style={{
+          marginTop: 14, width: "100%",
+          background: "transparent", color: C.ink,
+          border: `1px solid ${C.line}`, borderRadius: 8,
+          padding: "12px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.18em",
+          fontWeight: 700, textTransform: "uppercase",
+          cursor: "pointer",
+        }}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -19120,6 +23327,41 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // tucked behind a "more options" link. Per chat: "the task card I
   // find it too much and cumbersome".
   const [showFormAdvanced, setShowFormAdvanced] = useState(false);
+
+  // v05.05bt173 — Predict today's nap windows from rolling 7-day sleep
+  // history. Used to refine focus assessment of free blocks during the
+  // user's solo duty (a 1-3p nap on Mommy's shift is a deep window,
+  // not a light/interruptible one).
+  const predictedNaps = useMemo(() => predictNapWindows(events || [], now), [events, now]);
+  // v05.05bt180 — Predicted feed windows from rolling 7-day rhythm.
+  const predictedFeeds = useMemo(() => predictFeedWindows(events || [], now), [events, now]);
+  // v05.05bt184 — Solène's actual wake-window + nap-duration medians.
+  const babyStats = useMemo(() => computeBabyStats(events || [], now), [events, now]);
+  // v05.05bt211 — Trade suggestions. Windows where you're solo on duty
+  // during deep-focus hours and partner is off — flagging "Daddy could
+  // take 9-11 → 2h deep focus for you" as a coverage idea.
+  const tradeSuggestions = useMemo(() =>
+    computeTradeSuggestions({
+      activeShifts, focusProfile, now, currentUser, onsite, maxResults: 2,
+    }), [activeShifts, focusProfile, now, currentUser, onsite]);
+
+  // v05.05bt174 — Build a normalized list of today's meetings (for the
+  // owner viewing the plan) with their end-times as Date objects, so
+  // effectiveBlockProfile can detect post-meeting drift zones. Empty
+  // when no meetings or no decay configured.
+  const meetingsForBuffer = useMemo(() => {
+    if (!focusProfile || !focusProfile.meetingDecayMin) return [];
+    const todayKey = new Date(now).toDateString();
+    return (meetings || [])
+      .filter(m => m && m.start && m.durationMin)
+      .filter(m => (m.parent || currentUser) === currentUser)
+      .map(m => {
+        const start = new Date(m.start);
+        const end = new Date(start.getTime() + (m.durationMin || 30) * 60000);
+        return { start, end, date: start.toDateString() };
+      })
+      .filter(m => m.date === todayKey);
+  }, [meetings, currentUser, focusProfile, now]);
   // v05.05bt160 — Next-day planning. `dayView` controls whether the
   // card renders today or tomorrow. The toggle pill in the header
   // switches between them. All date-anchored derivations (timeline,
@@ -19306,6 +23548,47 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // get a coral dot + review prompt. From the drawer, the user can
   // schedule, move to unscheduled, mark done, or delete.
   const [showBrainDump, setShowBrainDump] = useState(false);
+  // v05.05bt174 — Focus profile quiz modal toggle.
+  const [showFocusQuiz, setShowFocusQuiz] = useState(false);
+  // v05.05bt181 — Morning energy check-in. Auto-opens once per day on
+  // first Today view if not yet set. Skipped silently if already taken.
+  const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
+  const todayISO = useMemo(() => {
+    const d = new Date(now); d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }, [now]);
+  useEffect(() => {
+    if (!dailyEnergy || dailyEnergy.date !== todayISO) {
+      // Trigger silently on first Today view of the day
+      const t = setTimeout(() => setShowEnergyCheckIn(true), 800);
+      return () => clearTimeout(t);
+    }
+  }, [todayISO, dailyEnergy]);
+  const lowEnergy = !!(dailyEnergy && dailyEnergy.date === todayISO && dailyEnergy.rating <= 2);
+  // v05.05bt181 — Drift detection. A task is "behind" when its planned
+  // end time (scheduledTime + effortMin) has passed by ≥15 min AND
+  // it's not marked complete. Surfaces a banner that prompts a
+  // re-slot of the remaining day.
+  const driftStatus = useMemo(() => {
+    const myOpen = (tasks || []).filter(t => t.ownerName === currentUser && !t.completedAt && t.scheduledTime);
+    const todayKey = todayISO;
+    let count = 0;
+    let earliest = null;
+    for (const t of myOpen) {
+      if (t.scheduledDate && t.scheduledDate !== todayKey) continue;
+      const [h, m] = t.scheduledTime.split(":").map(Number);
+      const planned = new Date(now);
+      planned.setHours(h, m || 0, 0, 0);
+      const endTime = new Date(planned.getTime() + (t.effortMin || 30) * 60000);
+      if (endTime.getTime() + 15 * 60000 < now.getTime()) {
+        count += 1;
+        if (!earliest || planned < earliest) earliest = planned;
+      }
+    }
+    return { count, earliest };
+  }, [tasks, currentUser, now, todayISO]);
+  const [driftDismissed, setDriftDismissed] = useState(false);
+  useEffect(() => { setDriftDismissed(false); }, [todayISO]); // reset daily
   const [brainDumpText, setBrainDumpText] = useState("");
   // v05.05bt133 — drawerItems moved below myTasks declaration to
   // avoid temporal-dead-zone reference error.
@@ -19363,6 +23646,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const [showSetup, setShowSetup] = useState(false);
   // v05.05bt125 — overflow menu for the cluttered button row
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  // v05.05bt193 — Per-task placement reasoning. Tracks which scheduled
+  // task currently has its 'why here?' explanation expanded inline.
+  // Single one at a time (toggling another collapses the current).
+  const [expandedReasonTaskId, setExpandedReasonTaskId] = useState(null);
+  // v05.05bt189 — Preview-before-commit state. Shape:
+  //   { tasks: array, reasons: dict }
+  // Populated by commitNlPending instead of immediate setTasks.
+  // User reviews + tweaks via free-text command; locks in or cancels.
+  const [previewState, setPreviewState] = useState(null);
+
+  // v05.05bt186a — Bump the modal-count for inline bottom-sheets that
+  // aren't dedicated components (so they participate in the FAB-hide
+  // mechanism via useModalOpen). Must be placed AFTER all referenced
+  // state declarations (was crashing in bt186 due to TDZ).
+  useEffect(() => {
+    const anyOpen = showBrainDump || showSetup || showNlInput || showAddForm
+      || !!editingTask || !!editingRoutine || !!splittingTask || !!movePickerForTask
+      || showActionsMenu || !!inlineTimeEdit || !!previewState;
+    if (anyOpen) {
+      _bumpModalCount(1);
+      return () => _bumpModalCount(-1);
+    }
+  }, [showBrainDump, showSetup, showNlInput, showAddForm, editingTask, editingRoutine, splittingTask, movePickerForTask, showActionsMenu, inlineTimeEdit, previewState]);
 
   // v05.05bt113 — per-user task isolation. Tasks created before this
   // build have no ownerName; treat them as Mommy's so existing data
@@ -19430,7 +23736,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     const cookOff   = setupApplies && todaySetup.cookingToday === false;
     const workoutOff = setupApplies && todaySetup.workoutToday === false;
 
-    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null);
+    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null, routineLibrary);
     routines = routines.filter(r => {
       if (r.id === "cook"    && cookOff)    return false;
       if (r.id === "workout" && workoutOff) return false;
@@ -19443,13 +23749,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
           const start = new Date(m.start);
           const end = new Date(m.end);
           if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
-          // v05.05bt160 — Match meetings to the reference day, not just now.
-          if (start.toDateString() !== today.toDateString()) return null;
+          // v05.05bt185 — Use ISO date (YYYY-MM-DD local) instead of
+          // toDateString() to guarantee deterministic matching. Also
+          // log filter rejection reason to help debug "added a meeting
+          // but it's not on the plan" reports.
+          if (isoDate(start) !== isoDate(today)) {
+            return null;
+          }
           const owner = m.parent || currentUser;
-          if (owner !== currentUser) return null;
-          // v05.05bt165 — Skip time-bank redemption meetings as blockers.
-          // They mean "partner is covering" so this window is FREE for the
-          // redeemer, not blocked.
+          if (owner !== currentUser) {
+            return null;
+          }
           if (isTimeBankRedemption(m)) return null;
           return {
             kind: "meeting",
@@ -19494,8 +23804,92 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     const visualDayEnd = lightsOut
       ? new Date(lightsOut.getTime() + 15 * 60000)
       : dayEnd;
-    return buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks], dayStart, visualDayEnd);
-  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate]);
+
+    // v05.05bt181 — Insert high-confidence predicted feed windows
+    // (≥4/7d sample) as visible 'feed' rows during the user's solo
+    // duty. Mirrors the scheduler's feed-blocker logic so the visual
+    // and the schedule agree on what's blocked.
+    const feedPredictions = (predictedFeeds || [])
+      .filter(f => f.sampleSize >= 4)
+      .filter(f => {
+        if (onsite) return false;
+        const fH = f.start.getHours() + f.start.getMinutes() / 60;
+        const findShift = (parent) => {
+          const shifts = activeShifts?.[parent] || [];
+          return shifts.find(s => {
+            const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+            const [eh, em] = (s.end || "0:0").split(":").map(Number);
+            return fH >= sh + (sm || 0) / 60 && fH < eh + (em || 0) / 60;
+          });
+        };
+        const mShift = findShift("Mommy");
+        const dShift = findShift("Daddy");
+        if (mShift && dShift) return false;
+        if (currentUser === "Mommy" && mShift && !dShift) return true;
+        if (currentUser === "Daddy" && dShift && !mShift) return true;
+        return false;
+      })
+      .map(f => ({
+        kind: "feed-predicted",
+        id: `feed-pred-${f.start.getTime()}`,
+        title: "Feeding Solène",
+        start: new Date(f.start),
+        end: new Date(f.end),
+        durationMin: f.durationMin,
+        sampleSize: f.sampleSize,
+        // v05.05bt205 — Carry volume + projection-type through to the
+        // row render so it can show "typical 4.2oz" or "next after 5oz".
+        typicalOz: f.typicalOz,
+        fromVolume: !!f.fromVolume,
+        context: f.context,
+      }));
+
+    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks, ...feedPredictions], dayStart, visualDayEnd);
+    // v05.05bt228 — Visually split free rows at shift boundaries so each
+    // visual row has a single owner. Per chat: when a mixed-duty block
+    // appears, the timeline should show two rows (one per owner half)
+    // instead of one combined row. Slivers below 5 min are dropped
+    // (consistent with the scheduler in bt224).
+    const splitFreeAtBoundaries = (items) => {
+      const result = [];
+      for (const item of items) {
+        if (item.kind !== "free") { result.push(item); continue; }
+        if (!item.start || !item.end) { result.push(item); continue; }
+        // Collect boundary times inside [item.start, item.end]
+        const todayMid = new Date(item.start); todayMid.setHours(0, 0, 0, 0);
+        const cutSet = new Set();
+        cutSet.add(item.start.getTime());
+        cutSet.add(item.end.getTime());
+        for (const parent of ["Mommy", "Daddy"]) {
+          const shifts = activeShifts?.[parent] || [];
+          for (const s of shifts) {
+            const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+            const [eh, em] = (s.end || "0:0").split(":").map(Number);
+            const startT = todayMid.getTime() + (sh * 60 + (sm || 0)) * 60000;
+            const endT = todayMid.getTime() + (eh * 60 + (em || 0)) * 60000;
+            if (startT > item.start.getTime() && startT < item.end.getTime()) cutSet.add(startT);
+            if (endT > item.start.getTime() && endT < item.end.getTime()) cutSet.add(endT);
+          }
+        }
+        const cuts = [...cutSet].sort((a, b) => a - b);
+        if (cuts.length <= 2) { result.push(item); continue; }
+        for (let i = 0; i < cuts.length - 1; i++) {
+          const s = new Date(cuts[i]);
+          const e = new Date(cuts[i + 1]);
+          const durMin = (e - s) / 60000;
+          if (durMin < 5) continue; // drop sliver
+          result.push({
+            ...item,
+            start: s,
+            end: e,
+            durationMin: durMin,
+          });
+        }
+      }
+      return result;
+    };
+    return splitFreeAtBoundaries(rawTimeline);
+  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -19624,43 +24018,58 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       scheduledTime: draftScheduledTime || null,
       createdAt: new Date().toISOString(),
       completedAt: null,
+      pinned: false,
     };
-    // v05.05bt155 — Auto-reanalyze on add, same as commitNlPending.
-    // If the new task has no manual scheduledTime, re-slot the full
-    // open set so it lands in a properly-prioritized spot. If it has
-    // a manual time, just append and re-slot the rest around it.
-    const existingOpen = myTasks.filter(t => !t.completedAt);
-    const unpinnedToSlot = newTask.scheduledTime
-      ? existingOpen.map(t => ({ ...t, scheduledTime: null }))
-      : [...existingOpen.map(t => ({ ...t, scheduledTime: null })), newTask];
-    // v05.05bt156 — Fresh workable: include completed tasks + the new
-    // task IF it has a manual time (so the engine slots around it).
-    const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
-    const pinned = newTask.scheduledTime ? [...completed, newTask] : completed;
-    const workable = computeFreshWorkableBlocks(pinned);
-    const { updates } = assignTaskTimes(unpinnedToSlot, workable);
+    // v05.05bt201 — Per chat ('hit set my priorities and try to submit
+    // it then it doesn't work'). Wrapped scheduling in try/catch so if
+    // computeFreshWorkableBlocks or assignTaskTimes throws (e.g.,
+    // malformed routine data or undefined shift), the new task still
+    // commits — it just lands as unscheduled instead of silently
+    // failing the entire add. The form ALWAYS closes on tap.
+    // v05.05bt204 — Auto-split tasks > 60m into chunks (sequenceId
+    // links them so they slot in order across consecutive blocks).
+    // v05.05bt209 — Chunk size now matches the longest currently-
+    // available workable block (with 15m floor). Per chat: 'if any
+    // task is greater than the maximum duration of a block… split it
+    // into two or more parts so that it fits in the block.' So we
+    // compute workable FIRST, then split based on real availability.
+    let finalChunks = [newTask];
+    try {
+      const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
+      const existingScheduledOpen = myTasks.filter(t => !t.completedAt && t.scheduledTime);
+      const pinnedItems = [
+        ...completed,
+        ...existingScheduledOpen,
+        ...(newTask.scheduledTime ? [newTask] : []),
+      ];
+      const workable = computeFreshWorkableBlocks(pinnedItems);
+      const maxBlockMin = getMaxBlockMin(workable);
+      const newTaskChunks = splitLongTask(newTask, maxBlockMin);
+      const toSlot = newTaskChunks.filter(t => !t.scheduledTime);
+      let updates = {};
+      if (toSlot.length > 0) {
+        const r = assignTaskTimes(toSlot, workable);
+        updates = r.updates;
+      }
+      finalChunks = newTaskChunks.map(t =>
+        t.scheduledTime ? t : { ...t, scheduledTime: updates[t.id] || null }
+      );
+    } catch (err) {
+      // Scheduling failed — commit as unscheduled so the task isn't lost.
+      console.error("addTask scheduling threw:", err);
+      finalChunks = [{ ...newTask, scheduledTime: newTask.scheduledTime || null }];
+    }
 
-    const finalNewTask = newTask.scheduledTime
-      ? newTask
-      : { ...newTask, scheduledTime: updates[newTask.id] || null };
-
-    const existingIds = new Set(existingOpen.map(t => t.id));
-    setTasks(prev => {
-      const next = prev.map(t => {
-        if (!existingIds.has(t.id)) return t;
-        return { ...t, scheduledTime: updates[t.id] || null };
-      });
-      return [...next, finalNewTask];
-    });
+    setTasks(prev => [...prev, ...finalChunks]);
     setDraftTitle("");
     setDraftEffort(30);
     setDraftRegret(3);
     setDraftFocus("deep");
     setDraftScheduledTime("");
     setShowAddForm(false);
-    // v05.05bt159 — Auto-expand unscheduled pile if the new task
+    // v05.05bt159 — Auto-expand unscheduled pile if any chunk
     // couldn't be slotted so the user sees it landed there.
-    if (!finalNewTask.scheduledTime) setShowUnscheduled(true);
+    if (finalChunks.some(t => !t.scheduledTime)) setShowUnscheduled(true);
   };
 
   // v05.05bt161 — Fast-path commit. Previously opened a Review modal
@@ -19713,38 +24122,114 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       usedMin: 0,
     }));
     const fOrder = { deep: 0, shallow: 1 };
+    // v05.05bt171 — Sequence support. Tasks with the same sequenceId
+    // must be scheduled in sequenceIndex order, each starting at or
+    // after the previous member's end time. To minimize disruption to
+    // priority-based scheduling: a sequence group inherits the MAX
+    // regret of any member for sort purposes (so the whole chain is
+    // treated as one priority class), and within the group, members
+    // are sorted by sequenceIndex.
+    const groupRegret = {};
+    for (const t of toAssign) {
+      if (t.sequenceId) {
+        groupRegret[t.sequenceId] = Math.max(
+          groupRegret[t.sequenceId] || 0,
+          t.regretScore || 0
+        );
+      }
+    }
     const queue = [...toAssign].sort((a, b) => {
-      if (b.regretScore !== a.regretScore) return b.regretScore - a.regretScore;
+      // v05.05bt200 — Stretch goals sort to the very bottom. Non-stretch
+      // claims all blocks first; stretch only fills if room remains.
+      const sa = a.stretchGoal ? 1 : 0;
+      const sb = b.stretchGoal ? 1 : 0;
+      if (sa !== sb) return sa - sb;
+      const ra = a.sequenceId ? groupRegret[a.sequenceId] : a.regretScore;
+      const rb = b.sequenceId ? groupRegret[b.sequenceId] : b.regretScore;
+      if (rb !== ra) return rb - ra;
+      // Same sequence → preserve index order
+      if (a.sequenceId && a.sequenceId === b.sequenceId) {
+        return (a.sequenceIndex || 0) - (b.sequenceIndex || 0);
+      }
       const fa = fOrder[normalizeFocus(a.focusLevel)];
       const fb = fOrder[normalizeFocus(b.focusLevel)];
       if (fa !== fb) return fa - fb;
-      // v05.05bt157 — Category tiebreaker. Work first (claims morning
-      // blocks), personal last (falls to evening). Tasks with no
-      // category sit between. This implements the "8am-5pm work wins,
-      // 5pm-12am personal wins" preference naturally via queue order
-      // without prompting the user on every tie.
       return categoryRank(a.category) - categoryRank(b.category);
     });
     const updates = {};
     const reasons = {};
+    // v05.05bt171 — sequenceConstraint[seqId] = Date the next member
+    // must start at-or-after (= end time of the most recently
+    // scheduled member in that sequence).
+    const sequenceConstraint = {};
     for (const task of queue) {
-      const block = blocks.find(b =>
-        b.durationMin - b.usedMin >= task.effortMin
-      );
-      if (block) {
-        const startTs = new Date(block.start.getTime() + block.usedMin * 60000);
-        const hh = String(startTs.getHours()).padStart(2, "0");
-        const mm = String(startTs.getMinutes()).padStart(2, "0");
+      const minStart = task.sequenceId ? sequenceConstraint[task.sequenceId] : null;
+      // v05.05bt220 — Focus-aware block selection. The scheduler was
+      // picking the FIRST block with space, ignoring focus alignment.
+      // That caused deep tasks to land in light blocks (e.g., scheduled
+      // 8-10:30a even though that's labeled light, while 3-5p deep sat
+      // empty). Now we score every fitting block by alignment first,
+      // then break ties by earliest start.
+      //
+      // Scoring (higher = better):
+      //   100 = block focus matches task focus exactly
+      //     5 = task is shallow, block is deep (use only if no shallow block fits — leaves deep for deep tasks)
+      //     1 = task is deep, block is shallow (last-resort; deep work in light slot)
+      const taskFocus = normalizeFocus(task.focusLevel);
+      let foundBlock = null;
+      let foundStart = null;
+      let bestScore = -1;
+      for (const b of blocks) {
+        const blockNextAvail = new Date(b.start.getTime() + b.usedMin * 60000);
+        const blockEnd = new Date(b.start.getTime() + b.durationMin * 60000);
+        const effectiveStart = (minStart && minStart > blockNextAvail) ? minStart : blockNextAvail;
+        const remainingFromEffective = (blockEnd - effectiveStart) / 60000;
+        if (remainingFromEffective < task.effortMin) continue;
+        // Compute alignment score
+        const blockFocus = normalizeFocus(b.focusLevel);
+        // v05.05bt243 — requireDeep is a hard filter: task MUST land in
+        // a deep block. Skip any shallow block entirely so the task either
+        // gets a deep slot or stays unscheduled (visible diagnostic).
+        if (task.requireDeep && blockFocus !== "deep") continue;
+        let score;
+        if (taskFocus === blockFocus) score = 100;
+        else if (taskFocus === "shallow") score = 5; // shallow into deep — only if nothing else
+        else score = 1; // deep-in-light, last resort
+        // Pick the best score; on tie, earliest effectiveStart wins.
+        if (score > bestScore || (score === bestScore && (!foundStart || effectiveStart < foundStart))) {
+          foundBlock = b;
+          foundStart = effectiveStart;
+          bestScore = score;
+        }
+      }
+      if (foundBlock) {
+        const hh = String(foundStart.getHours()).padStart(2, "0");
+        const mm = String(foundStart.getMinutes()).padStart(2, "0");
         updates[task.id] = `${hh}:${mm}`;
-        block.usedMin += task.effortMin;
-        const ap = startTs.getHours() < 12 ? "a" : "p";
-        const h12 = ((startTs.getHours() + 11) % 12) + 1;
-        const clockStr = startTs.getMinutes() === 0 ? `${h12}${ap}` : `${h12}:${String(startTs.getMinutes()).padStart(2,"0")}${ap}`;
-        reasons[task.id] = `→ ${clockStr} · ${FOCUS_LABEL[normalizeFocus(block.focusLevel)].toLowerCase()} window · ${FOCUS_LABEL[normalizeFocus(task.focusLevel)].toLowerCase()} task · R${task.regretScore}`;
+        // Mark block usage up through end of this task. May "skip"
+        // pre-gap time if sequence forced a later start; that pre-gap
+        // time becomes unreachable to later tasks in this block — an
+        // acceptable v1 tradeoff. (Future: split blocks on gap.)
+        const newUsedMin = ((foundStart - foundBlock.start) / 60000) + task.effortMin;
+        foundBlock.usedMin = newUsedMin;
+        // Update sequence constraint for next member
+        if (task.sequenceId) {
+          sequenceConstraint[task.sequenceId] = new Date(foundStart.getTime() + task.effortMin * 60000);
+        }
+        const ap = foundStart.getHours() < 12 ? "a" : "p";
+        const h12 = ((foundStart.getHours() + 11) % 12) + 1;
+        const clockStr = foundStart.getMinutes() === 0
+          ? `${h12}${ap}`
+          : `${h12}:${String(foundStart.getMinutes()).padStart(2,"0")}${ap}`;
+        const seqNote = task.sequenceId
+          ? ` · step ${(task.sequenceIndex ?? 0) + 1}/${task.sequenceTotal || "?"}`
+          : "";
+        reasons[task.id] = `→ ${clockStr} · ${FOCUS_LABEL[normalizeFocus(foundBlock.focusLevel)].toLowerCase()} window · ${FOCUS_LABEL[normalizeFocus(task.focusLevel)].toLowerCase()} task · R${task.regretScore}${seqNote}`;
       } else {
-        // Diagnose why it didn't fit
         const longest = blocks.reduce((max, b) => Math.max(max, b.durationMin - b.usedMin), 0);
-        if (longest < task.effortMin) {
+        if (task.sequenceId && minStart) {
+          reasons[task.id] = `sequence step ${(task.sequenceIndex ?? 0) + 1}: no block ≥ ${task.effortMin}m after prior step ended. Try freeing later time.`;
+        } else if (longest < task.effortMin) {
           reasons[task.id] = `no block ≥ ${task.effortMin}m (longest free: ${longest}m). Try shortening effort or freeing a routine.`;
         } else {
           reasons[task.id] = `higher-regret tasks took all blocks of ${task.effortMin}m+`;
@@ -19787,7 +24272,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     const setupApplies = todaySetup?.date === todayKey;
     const cookOff = setupApplies && todaySetup?.cookingToday === false;
     const workoutOff = setupApplies && todaySetup?.workoutToday === false;
-    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null);
+    let routines = getRoutineSlotsForToday(currentUser, onsite, today, setupApplies ? todaySetup?.routineOverrides : null, routineLibrary);
     routines = routines.filter(r => {
       if (r.id === "cook"    && cookOff)    return false;
       if (r.id === "workout" && workoutOff) return false;
@@ -19858,13 +24343,133 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     // if any, but the workable set stops at lights-out.)
     const notBefore = isTomorrow ? null : now;
     const schedulerDayEnd = lightsOut ? new Date(lightsOut) : dayEnd;
-    const allItems = [...cascaded, ...bedtimeRoutines, ...todayMeetingsLocal, ...pinnedSlots];
-    return computeFreeSpans(allItems, dayStart, schedulerDayEnd, notBefore).map(s => ({
+    // v05.05bt181 — Per chat ('yes to a' = make feed windows block).
+    // Predicted feed windows during the user's solo duty get inserted
+    // into the items list as block-out events, so computeFreeSpans
+    // carves around them. Only applies during solo duty (not partner
+    // shift, not joint, not onsite — those windows the user isn't
+    // feeding even if a feed is predicted, or feeding is shared).
+    // High-confidence threshold (≥4/7d) to avoid over-blocking on
+    // weak predictions; sample size lives on the prediction itself.
+    const feedBlockers = (predictedFeeds || [])
+      .filter(f => f.sampleSize >= 4)
+      .filter(f => {
+        // Block only if THIS user is the solo owner during the feed
+        const fH = f.start.getHours() + f.start.getMinutes() / 60;
+        const findShift = (parent) => {
+          const shifts = activeShifts?.[parent] || [];
+          return shifts.find(s => {
+            const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+            const [eh, em] = (s.end || "0:0").split(":").map(Number);
+            return fH >= sh + (sm || 0) / 60 && fH < eh + (em || 0) / 60;
+          });
+        };
+        if (onsite) return false;
+        const mShift = findShift("Mommy");
+        const dShift = findShift("Daddy");
+        if (mShift && dShift) return false; // joint
+        if (currentUser === "Mommy" && mShift && !dShift) return true;
+        if (currentUser === "Daddy" && dShift && !mShift) return true;
+        return false;
+      })
+      .map(f => ({
+        start: new Date(f.start),
+        end: new Date(f.end),
+        kind: "feed-predicted",
+        title: "Solène feed (predicted)",
+        parent: currentUser,
+      }));
+    const allItems = [...cascaded, ...bedtimeRoutines, ...todayMeetingsLocal, ...pinnedSlots, ...feedBlockers];
+    // v05.05bt224 — Split free spans at shift-transition times so a
+    // single block never crosses owner boundaries. Previously a free
+    // span from 8:26 to 9:26 would get classified by owner-at-start
+    // (Daddy, since 8:26 falls in Daddy's 6:30-8:30 shift), even though
+    // 8:30 onward is Mommy's. The scheduler would then treat the whole
+    // hour as Daddy-territory, leading to mis-attributed focus levels
+    // and incorrect trade-idea windows. Now each shift transition that
+    // falls inside a span becomes a cut point.
+    const collectShiftBoundaries = () => {
+      const cuts = new Set();
+      for (const parent of ["Mommy", "Daddy"]) {
+        const shifts = activeShifts?.[parent] || [];
+        for (const s of shifts) {
+          const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+          const [eh, em] = (s.end || "0:0").split(":").map(Number);
+          cuts.add(sh * 60 + (sm || 0));
+          cuts.add(eh * 60 + (em || 0));
+        }
+      }
+      return [...cuts].sort((a, b) => a - b);
+    };
+    const shiftBoundaryMinutes = collectShiftBoundaries();
+    const todayMidnight = new Date(today); todayMidnight.setHours(0, 0, 0, 0);
+    const splitSpanByBoundaries = (span) => {
+      const cutsInside = shiftBoundaryMinutes
+        .map(bMin => new Date(todayMidnight.getTime() + bMin * 60000))
+        .filter(d => d > span.start && d < span.end);
+      if (cutsInside.length === 0) return [span];
+      cutsInside.sort((a, b) => a - b);
+      const pieces = [];
+      let cursor = span.start;
+      for (const cut of cutsInside) {
+        pieces.push({
+          start: cursor,
+          end: cut,
+          durationMin: (cut - cursor) / 60000,
+        });
+        cursor = cut;
+      }
+      pieces.push({
+        start: cursor,
+        end: span.end,
+        durationMin: (span.end - cursor) / 60000,
+      });
+      return pieces;
+    };
+    // v05.05bt173 — Refine block focus with baby-state. A free block
+    // during the user's solo duty that overlaps a predicted nap should
+    // be DEEP (not capped at shallow by the time-of-day rule). This
+    // lets deep tasks claim those slots first. Helper computes owner
+    // inline for each span.
+    const refineFocus = (start, end) => {
+      let owner = null;
+      if (!onsite) {
+        const slotHour = start.getHours() + start.getMinutes() / 60;
+        const findShiftAt = (parent) => {
+          const shifts = activeShifts?.[parent] || [];
+          return shifts.find(s => {
+            const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+            const [eh, em] = (s.end || "0:0").split(":").map(Number);
+            return slotHour >= sh + (sm || 0) / 60 && slotHour < eh + (em || 0) / 60;
+          });
+        };
+        const m = findShiftAt("Mommy"), d = findShiftAt("Daddy");
+        if (m && d) owner = "joint";
+        else if (m) owner = "Mommy";
+        else if (d) owner = "Daddy";
+      }
+      return _applyLowEnergyCap(
+        effectiveBlockProfile(start, end, owner, currentUser, predictedNaps, onsite, focusProfile, meetingsForBuffer, predictedFeeds, false, babyStats),
+        lowEnergy
+      ).focusLevel;
+    };
+    // v05.05bt224 — Apply boundary-aware splitting AFTER free-span
+    // computation but BEFORE focus classification. Filter slivers
+    // <5min that arise from boundary cuts (e.g., 8:26-8:30 = 4min).
+    const rawSpans = computeFreeSpans(allItems, dayStart, schedulerDayEnd, notBefore);
+    const splitSpans = rawSpans.flatMap(s => splitSpanByBoundaries({
       start: new Date(s.start),
       end: new Date(s.end),
       durationMin: s.durationMin,
-      focusLevel: getBlockFocusLevel(s.start),
     }));
+    return splitSpans
+      .filter(s => s.durationMin >= 5)
+      .map(s => ({
+        start: new Date(s.start),
+        end: new Date(s.end),
+        durationMin: s.durationMin,
+        focusLevel: refineFocus(new Date(s.start), new Date(s.end)),
+      }));
   };
 
   // v05.05bt161 — Optional pending argument. When called without args
@@ -19875,10 +24480,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // about "Add all" not appearing to do anything (she didn't realize
   // there was a separate Review modal commit step).
   const commitNlPending = (pendingOverride) => {
-    const pending = pendingOverride || nlPending;
+    // v05.05bt203 — Only treat the override as a real value if it's
+    // a non-empty array. Previously this was `pendingOverride || nlPending`
+    // which let a React click event slip through (when a button onClick
+    // pointed directly at commitNlPending, the event was passed as the
+    // first arg, became 'pendingOverride', and broke the .map() below
+    // because events have no .map). Symptom: 'Add + slot N tasks' did
+    // nothing.
+    const pending = Array.isArray(pendingOverride) ? pendingOverride : nlPending;
     if (!pending || pending.length === 0) return;
     const baseTs = Date.now();
-    let newTasks = pending.map((p, i) => ({
+    const rawNewTasks = pending.map((p, i) => ({
       id: `task_${baseTs}_${i}_${Math.random().toString(36).slice(2, 5)}`,
       title: p.title,
       effortMin: p.effortMin,
@@ -19886,47 +24498,62 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       focusLevel: p.focusLevel === "auto" ? inferFocusLevel(p.title) : normalizeFocus(p.focusLevel),
       // v05.05bt157 — Auto-infer category. User can override later.
       category: p.category || inferCategory(p.title),
+      // v05.05bt171 — Carry sequence metadata if parser detected
+      // a "then"/"→" chain. Scheduler uses these to enforce order.
+      sequenceId: p.sequenceId || null,
+      sequenceIndex: typeof p.sequenceIndex === "number" ? p.sequenceIndex : null,
+      sequenceTotal: p.sequenceTotal || null,
       // v05.05bt160 — Tag to the selected day (today/tomorrow).
       scheduledDate: referenceISO,
       ownerName: currentUser,
       scheduledTime: p.scheduledTime || null,
+      // v05.05bt199 — Carry NL-detected recurring rule ('every day',
+      // 'weekly on monday', etc.) through to the task.
+      recurringRule: p.recurringRule || null,
       createdAt: new Date().toISOString(),
       completedAt: null,
     }));
-    // v05.05bt155 — Auto-reanalyze the FULL open set per chat ("had to
-    // go to the settings and hit reanalyze schedule once i added").
-    // Existing open tasks with non-pinned scheduledTime get re-slotted
-    // alongside the new ones, so the engine can find a globally better
-    // arrangement (high-regret new task can displace lower-regret older
-    // one to a worse slot, etc.). Tasks with an explicit manual time on
-    // entry (parsed from NL "at 11am" or set in the structured form)
-    // stay pinned. This matches what the manual "Re-analyze" button
-    // does — just automatic on every add now.
-    const existingOpen = myTasks.filter(t => !t.completedAt);
-    const pinnedNew = newTasks.filter(t => t.scheduledTime); // user set a time explicitly
-    const unpinnedToSlot = [
-      ...existingOpen.map(t => ({ ...t, scheduledTime: null })),
-      ...newTasks.filter(t => !t.scheduledTime),
-    ];
-
-    // v05.05bt156 — Fresh workable: include completed tasks + newly
-    // pinned-by-user tasks so the engine slots around them.
+    // v05.05bt204 — Auto-split tasks > maxBlock into chunks BEFORE
+    // scheduling so the scheduler sees only sub-block-sized work units.
+    // v05.05bt206 — Track splits so the banner can confirm the chunking.
+    // v05.05bt209 — Cap chunks at the longest currently-available
+    // workable block (15m floor). Per chat: chunk to fit, not 60m.
+    // Order: compute workable from pinned items FIRST, then split.
+    const existingScheduledOpen = myTasks.filter(t => !t.completedAt && t.scheduledTime);
     const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
-    const workable = computeFreshWorkableBlocks([...completed, ...pinnedNew]);
-    const { updates, reasons } = assignTaskTimes(unpinnedToSlot, workable);
+    const pinnedRaw = rawNewTasks.filter(t => t.scheduledTime);
+    const allPinned = [...completed, ...existingScheduledOpen, ...pinnedRaw];
+    const workable = computeFreshWorkableBlocks(allPinned);
+    const maxBlockMin = getMaxBlockMin(workable);
 
-    // Apply updates to both existing tasks and new tasks.
+    let newTasks = [];
+    const splitNotices = [];
+    for (const t of rawNewTasks) {
+      const chunks = splitLongTask(t, maxBlockMin);
+      newTasks.push(...chunks);
+      if (chunks.length > 1) {
+        splitNotices.push({ id: t.id, title: t.title, parts: chunks.map(c => c.effortMin) });
+      }
+    }
+    const toSlot = newTasks.filter(t => !t.scheduledTime);
+    const { updates, reasons } = toSlot.length > 0
+      ? assignTaskTimes(toSlot, workable)
+      : { updates: {}, reasons: {} };
+
     const updatedNew = newTasks.map(t =>
       t.scheduledTime ? t : { ...t, scheduledTime: updates[t.id] || null }
     );
-    const existingIds = new Set(existingOpen.map(t => t.id));
-    setTasks(prev => {
-      const next = prev.map(t => {
-        if (!existingIds.has(t.id)) return t;
-        return { ...t, scheduledTime: updates[t.id] || null };
-      });
-      return [...next, ...updatedNew];
-    });
+    // v05.05bt189 — Per chat: preview-before-commit. Instead of
+    // setTasks directly, stage the proposed placements in previewState
+    // so the user reviews + can adjust via free-text command + locks
+    // in. Empty pile (single task with explicit time set on entry +
+    // nothing more to consider) skips the preview to avoid annoyance.
+    const skipPreview = updatedNew.length === 1 && !!updatedNew[0].scheduledTime;
+    if (skipPreview) {
+      setTasks(prev => [...prev, ...updatedNew]);
+    } else {
+      setPreviewState({ tasks: updatedNew, reasons });
+    }
 
     setNlText("");
     setNlPending(null);
@@ -19943,7 +24570,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         reason: reasons[t.id] || (t.scheduledTime ? "manual time set on entry" : null),
       })),
       algorithm: "greedy regret-priority",
-      reanalyzed: true, // mark auto-reanalyzed so the badge shows
+      reanalyzed: false, // v05.05bt175 — no longer global reshuffle on add
+      splits: splitNotices,
     });
     // v05.05bt159 — Per chat "nothing gets added as well to the task list":
     // if any new task ended up unscheduled (couldn't be slotted), auto-open
@@ -19957,29 +24585,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const autoSchedule = () => {
     const workable = getWorkableBlocks();
     if (workable.length === 0 || unscheduledTasks.length === 0) return;
-    const { updates, reasons } = assignTaskTimes(unscheduledTasks, workable);
+    // v05.05bt206/bt209 — Auto-split unscheduled tasks before scheduling,
+    // capping chunks at the longest currently-available workable block.
+    const maxBlockMin = getMaxBlockMin(workable);
+    const splitNotices = [];
+    const expanded = [];
+    const originalIds = new Set();
+    for (const t of unscheduledTasks) {
+      const chunks = splitLongTask(t, maxBlockMin);
+      expanded.push(...chunks);
+      originalIds.add(t.id);
+      if (chunks.length > 1) {
+        splitNotices.push({ id: t.id, title: t.title, parts: chunks.map(c => c.effortMin) });
+      }
+    }
+    const { updates, reasons } = assignTaskTimes(expanded, workable);
     if (Object.keys(updates).length === 0) {
       setScheduleStatus({
         slotted: 0,
-        unscheduled: unscheduledTasks.length,
-        total: unscheduledTasks.length,
-        items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: reasons[t.id] })),
+        unscheduled: expanded.length,
+        total: expanded.length,
+        items: expanded.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: reasons[t.id] })),
         algorithm: "greedy regret-priority",
+        splits: splitNotices,
       });
-      /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
       return;
     }
-    setTasks(prev => prev.map(t =>
-      updates[t.id] ? { ...t, scheduledTime: updates[t.id] } : t
-    ));
+    // Replace original tasks with their expanded chunks + assigned times.
+    setTasks(prev => {
+      const surviving = prev.filter(t => !originalIds.has(t.id));
+      const finalChunks = expanded.map(c => ({
+        ...c,
+        scheduledTime: updates[c.id] || null,
+      }));
+      return [...surviving, ...finalChunks];
+    });
     setScheduleStatus({
       slotted: Object.keys(updates).length,
-      unscheduled: unscheduledTasks.length - Object.keys(updates).length,
-      total: unscheduledTasks.length,
-      items: unscheduledTasks.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
+      unscheduled: expanded.length - Object.keys(updates).length,
+      total: expanded.length,
+      items: expanded.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
       algorithm: "greedy regret-priority",
+      splits: splitNotices,
     });
-    /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
   };
 
   // v05.05bt142 — Re-analyze: unschedule every open task, then re-run
@@ -19987,44 +24635,118 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   // wants the engine to find a better placement. Completed tasks are
   // left alone (their time is historical fact).
   const reanalyze = () => {
+    // v05.05bt175 — Pin-aware reanalyze. Tasks with t.pinned===true
+    // keep their scheduledTime (treated as fixed). Everything else
+    // gets stripped + re-shuffled. The pinned set is included in the
+    // workable computation so the engine schedules AROUND them.
+    // v05.05bt206 — Auto-split long tasks before scheduling.
+    // v05.05bt210 — Per chat ('when you re-analyze, it shouldn't even
+    // consider the past time'). PIN RELEASE: any pin whose time has
+    // already passed is treated as released — the task drops into the
+    // unpinned bucket and gets re-slotted into future-only blocks. The
+    // workable computation already trims to notBefore=now, so past time
+    // is never considered as available — but past pins were sneaking in
+    // as 'blockers' and confusing the scheduler. This fix cleans both
+    // sides.
+    const isPastTime = (timeStr) => {
+      if (!timeStr) return false;
+      const [h, m] = timeStr.split(":").map(Number);
+      const dt = new Date(referenceDate); dt.setHours(h, m || 0, 0, 0);
+      return dt.getTime() < now.getTime();
+    };
     const open = myTasks.filter(t => !t.completedAt);
     if (open.length === 0) return;
-    const openStripped = open.map(t => ({ ...t, scheduledTime: null }));
-    // v05.05bt156 — Compute workable from a FRESH timeline that doesn't
-    // include the open tasks (since we're stripping them). The plain
-    // getWorkableBlocks() reads dayTimeline (current state) which still
-    // has the open tasks taking up slots — making free blocks too small
-    // and tasks fall through. This was the "everything just erased"
-    // bug from chat.
+    // A pin only stays valid if its time is in the future. Past pins
+    // are released → task gets stripped + re-slotted.
+    const pinnedOpen = open.filter(t => t.pinned && t.scheduledTime && !isPastTime(t.scheduledTime));
+    const unpinned = open.filter(t => !(t.pinned && t.scheduledTime && !isPastTime(t.scheduledTime)));
+    // Track which IDs had their pin released so we can clear pinned:true
+    // on the re-added entries (otherwise the next reanalyze would honor
+    // a pin to the NEW time that the user never set).
+    const releasedPastPinIds = new Set(
+      open.filter(t => t.pinned && t.scheduledTime && isPastTime(t.scheduledTime)).map(t => t.id)
+    );
+    const unpinnedStripped = unpinned.map(t => ({
+      ...t,
+      scheduledTime: null,
+      pinned: releasedPastPinIds.has(t.id) ? false : t.pinned,
+    }));
     const completed = myTasks.filter(t => t.completedAt && t.scheduledTime);
-    const workable = computeFreshWorkableBlocks(completed);
+    // v05.05bt209 — Compute workable BEFORE splitting so chunk size
+    // matches actual block availability.
+    const workable = computeFreshWorkableBlocks([...completed, ...pinnedOpen]);
+    const maxBlockMin = getMaxBlockMin(workable);
+    // Expand long tasks into chunks (capped at maxBlockMin, 15m floor).
+    const splitMap = {}; // originalId → array of chunk tasks
+    const expanded = [];
+    for (const t of unpinnedStripped) {
+      const chunks = splitLongTask(t, maxBlockMin);
+      expanded.push(...chunks);
+      if (chunks.length > 1) splitMap[t.id] = chunks;
+    }
+    const splitNotices = Object.entries(splitMap).map(([id, chunks]) => {
+      const original = unpinned.find(t => t.id === id);
+      return {
+        id,
+        title: original?.title || "task",
+        parts: chunks.map(c => c.effortMin),
+      };
+    });
     if (workable.length === 0) {
       setScheduleStatus({
         slotted: 0,
-        unscheduled: open.length,
-        total: open.length,
+        unscheduled: unpinned.length,
+        total: unpinned.length,
         reanalyzed: true,
-        items: open.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: "no free blocks today — fully booked" })),
+        items: unpinned.map(t => ({ id: t.id, title: t.title, scheduled: false, reason: "no free blocks today — fully booked" })),
         algorithm: "greedy regret-priority",
+        releasedPinCount: releasedPastPinIds.size,
+        splits: splitNotices,
       });
-      /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
       return;
     }
-    const { updates, reasons } = assignTaskTimes(openStripped, workable);
-    const openIds = new Set(open.map(t => t.id));
-    setTasks(prev => prev.map(t => {
-      if (!openIds.has(t.id)) return t;
-      return { ...t, scheduledTime: updates[t.id] || null };
-    }));
+    const { updates, reasons } = assignTaskTimes(expanded, workable);
+    // Build the new task list: drop originals that got split AND all
+    // unpinned tasks, then re-add either the unsplit-updated tasks
+    // OR the expanded chunks with their assigned times.
+    const splitOriginalIds = new Set(Object.keys(splitMap));
+    const unpinnedIds = new Set(unpinned.map(t => t.id));
+    const expandedById = {};
+    for (const c of expanded) expandedById[c.id] = c;
+    setTasks(prev => {
+      // Strip out all original unpinned tasks (we'll re-add their
+      // expanded forms below).
+      const surviving = prev.filter(t => !unpinnedIds.has(t.id));
+      // For each task in `expanded`, build a final task entry.
+      const finalNew = expanded.map(c => {
+        // Preserve the original task's complete metadata if this was
+        // an unsplit pass-through (chunks of length 1 reuse same id).
+        const original = unpinned.find(t => t.id === c.id || (splitMap[t.id] && splitMap[t.id].some(ch => ch.id === c.id)));
+        const base = original || c;
+        return {
+          ...base,
+          ...c, // chunk's overrides (effortMin, sequenceId/Index/Total, id)
+          scheduledTime: updates[c.id] || null,
+        };
+      });
+      return [...surviving, ...finalNew];
+    });
     setScheduleStatus({
       slotted: Object.keys(updates).length,
-      unscheduled: open.length - Object.keys(updates).length,
-      total: open.length,
+      unscheduled: expanded.length - Object.keys(updates).length,
+      total: expanded.length,
       reanalyzed: true,
-      items: open.map(t => ({ id: t.id, title: t.title, scheduled: !!updates[t.id], reason: reasons[t.id] })),
+      items: expanded.map(c => ({
+        id: c.id,
+        title: c.title + (c.sequenceTotal > 1 ? ` (part ${(c.sequenceIndex ?? 0) + 1}/${c.sequenceTotal})` : ""),
+        scheduled: !!updates[c.id],
+        reason: reasons[c.id],
+      })),
       algorithm: "greedy regret-priority",
+      pinnedCount: pinnedOpen.length,
+      releasedPinCount: releasedPastPinIds.size,
+      splits: splitNotices,
     });
-    /* v05.05bt159 — no auto-dismiss; user closes manually via the × button on the banner so they can read why tasks failed to slot */
   };
 
   // v05.05bt150 — Monday export rewritten per chat. CSV with two
@@ -20115,8 +24837,53 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
 
   // v05.05bt107 — apply edits from the edit modal
   const saveEdit = (updated) => {
+    // v05.05bt206 — Per chat: long tasks should auto-split. If the
+    // user bumps effort > the current max workable block AND the task
+    // isn't pinned to a specific time AND isn't already part of a
+    // user-defined sequence, replace the task with split chunks.
+    // v05.05bt209 — Cap chunks at the actual longest available block
+    // instead of hardcoded 60m.
     setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
     setEditingTask(null);
+    const candidate = { ...updated };
+    const effort = Number(candidate.effortMin || 30);
+    if (!candidate.scheduledTime && !candidate.sequenceId && effort > 15) {
+      setTimeout(() => {
+        setTasks(prev => {
+          const t = prev.find(x => x.id === updated.id);
+          if (!t) return prev;
+          if (t.scheduledTime) return prev;
+          if (t.sequenceId) return prev;
+          // Compute current max workable block from this user's state.
+          const completed = prev.filter(x => x.ownerName === currentUser && x.completedAt && x.scheduledTime);
+          const pinned = prev.filter(x => x.ownerName === currentUser && !x.completedAt && x.scheduledTime && x.pinned);
+          let maxBlockMin = 60;
+          try {
+            const workable = computeFreshWorkableBlocks([...completed, ...pinned]);
+            maxBlockMin = getMaxBlockMin(workable);
+          } catch { /* fall back to 60 */ }
+          if (Number(t.effortMin) <= maxBlockMin) return prev;
+          const chunks = splitLongTask(t, maxBlockMin);
+          if (chunks.length <= 1) return prev;
+          const remainder = prev.filter(x => x.id !== t.id);
+          setScheduleStatus({
+            slotted: 0,
+            unscheduled: 0,
+            total: chunks.length,
+            reanalyzed: false,
+            items: [],
+            algorithm: "split-on-edit",
+            splits: [{
+              id: t.id,
+              title: t.title,
+              parts: chunks.map(c => c.effortMin),
+            }],
+            splitOnly: true,
+          });
+          return [...remainder, ...chunks];
+        });
+      }, 0);
+    }
   };
 
   // v05.05bt107 — replace a task with its suggested chunks
@@ -20140,11 +24907,46 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   };
 
   const toggleComplete = (id) => {
-    setTasks(prev => prev.map(t =>
-      t.id === id
-        ? { ...t, completedAt: t.completedAt ? null : new Date().toISOString() }
-        : t
-    ));
+    // v05.05bt195 — Recurring task support. When a recurring task is
+    // marked complete, automatically push a new occurrence into the
+    // task list with scheduledDate advanced by the rule (daily=+1d,
+    // weekly=+7d). The new task inherits all the planning metadata
+    // (title, effort, regret, focus, owner, scheduledTime) but is
+    // un-completed. Toggling off completion does NOT delete the
+    // auto-created occurrence — that has to be done manually.
+    setTasks(prev => {
+      const target = prev.find(t => t.id === id);
+      if (!target) return prev;
+      const wasComplete = !!target.completedAt;
+      const nowIso = new Date().toISOString();
+      const updated = prev.map(t =>
+        t.id === id ? { ...t, completedAt: wasComplete ? null : nowIso } : t
+      );
+      // Only act on completing (not un-completing) AND when the task
+      // has a recurringRule. Guard against double-creation by
+      // checking the prior completedAt was null.
+      if (!wasComplete && target.recurringRule && (target.recurringRule === "daily" || target.recurringRule === "weekly")) {
+        const baseDateStr = target.scheduledDate || (() => {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          return d.toISOString().slice(0, 10);
+        })();
+        const baseDate = new Date(baseDateStr + "T00:00:00");
+        const advance = target.recurringRule === "daily" ? 1 : 7;
+        baseDate.setDate(baseDate.getDate() + advance);
+        const nextDateStr = baseDate.toISOString().slice(0, 10);
+        const nextOccurrence = {
+          ...target,
+          id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+          scheduledDate: nextDateStr,
+          completedAt: null,
+          createdAt: nowIso,
+          recurringParentId: target.recurringParentId || target.id,
+        };
+        return [...updated, nextOccurrence];
+      }
+      return updated;
+    });
   };
 
   const deleteTask = (id) => {
@@ -20266,6 +25068,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       {p.scheduledTime && <span style={{ color: C.gold, fontWeight: 700, marginRight: 6 }}>{p.scheduledTime}</span>}
                       {p.title}
                       <span style={{ color: "#7C6B5A", marginLeft: 6 }}>· {fmtDurationHM(p.effortMin)}</span>
+                      {p.recurringRule && (
+                        <span style={{
+                          marginLeft: 6,
+                          padding: "1px 5px",
+                          background: `${C.mommy}1a`,
+                          border: `1px solid ${C.mommy}55`,
+                          borderRadius: 3,
+                          fontSize: 9, fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          color: C.mommy,
+                          textTransform: "uppercase",
+                        }}>↻ {p.recurringRule}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -20489,14 +25304,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 disabled={!draftTitle.trim()}
                 style={{
                   flex: 1,
-                  background: draftTitle.trim() ? C.mommy : C.line,
-                  color: "#fff", border: "none",
+                  background: draftTitle.trim() ? C.mommy : `${C.line}55`,
+                  color: draftTitle.trim() ? "#fff" : C.muted,
+                  border: "none",
                   borderRadius: 8, padding: "10px",
                   fontSize: 13, fontWeight: 600,
                   cursor: draftTitle.trim() ? "pointer" : "not-allowed",
                   fontFamily: "inherit",
                 }}>
-                Add to plan
+                {draftTitle.trim() ? "Add to plan" : "Type a title first ↑"}
               </button>
               <button
                 onClick={() => setShowFormAdvanced(s => !s)}
@@ -20545,362 +25361,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         )}
 
         {/* Schedule-aware suggestions */}
-        {(() => {
-          const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
-          const isPartnerAway = parentAway
-            && parentAway.parent === partner
-            && new Date(parentAway.from) <= now
-            && (!parentAway.until || new Date(parentAway.until) >= now);
-          if (isPartnerAway) {
-            // v05.05bt110 — solo-day still gets block suggestions from
-            // predicted naps + planned wearable pumps. Falls back to the
-            // generic "Solo today" message only when no blocks could be
-            // derived (not enough sleep history, no upcoming pumps).
-            if (blockMatches.length === 0) {
-              return (
-                <div style={{
-                  background: `${C.gold}11`, border: `1px dashed ${C.gold}55`,
-                  borderRadius: 8, padding: "10px 12px", marginBottom: 14,
-                }}>
-                  <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.gold, fontWeight: 700, marginBottom: 4 }}>
-                    Solo today
-                  </div>
-                  <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.5 }}>
-                    {partner} is away. No predictable nap or wearable-pump blocks yet — need a few more days of sleep data or schedule a pump first. Work happens during whatever quiet moments emerge today.
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
-                    Solo · suggested blocks
-                  </div>
-                  <div style={{ fontSize: 9, color: C.gold, fontStyle: "italic" }}>
-                    {partner} away
-                  </div>
-                </div>
-                {blockMatches.slice(0, 5).map((b, i) => {
-                  const kindLabel = b.kind === "nap" ? "predicted nap"
-                    : b.kind === "pump-wearable" ? "wearable pump"
-                    : b.context;
-                  return (
-                    <div key={i} style={{
-                      background: b.suggested ? `${C.gold}11` : "transparent",
-                      border: `1px solid ${b.suggested ? C.gold + "33" : C.line + "22"}`,
-                      borderRadius: 8, padding: "8px 10px", marginBottom: 6,
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                        <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: C.ink, fontWeight: 600 }}>
-                          {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
-                        </div>
-                        <div style={{
-                          fontSize: 9, color: FOCUS_COLOR[normalizeFocus(b.focusLevel)],
-                          letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700,
-                        }}>
-                          {FOCUS_LABEL[normalizeFocus(b.focusLevel)]} focus
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 9, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
-                        {kindLabel}{b.sampleSize ? ` (n=${b.sampleSize})` : ""}
-                      </div>
-                      {b.suggested ? (
-                        <div style={{ fontSize: 13, color: C.ink, marginTop: 4, lineHeight: 1.4 }}>
-                          <span style={{ color: regretColors[b.suggested.regretScore], fontWeight: 700, marginRight: 4 }}>
-                            {b.suggested.regretScore}
-                          </span>
-                          {b.suggested.title}
-                          {b.suggested.focusLevel && b.suggested.focusLevel !== b.focusLevel && (
-                            <span style={{ fontSize: 10, color: C.muted, marginLeft: 6, fontStyle: "italic" }}>
-                              (best fit — {b.suggested.focusLevel} focus task)
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 4, lineHeight: 1.4 }}>
-                          {b.emptyReason || "No open task fits. Use for rest, or a smaller task."}
-                          {b.blockingTaskId && (() => {
-                            const blocker = sortedActive.find(t => t.id === b.blockingTaskId);
-                            if (!blocker) return null;
-                            return (
-                              <>
-                                {" "}
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setSplittingTask(blocker); }}
-                                  style={{
-                                    background: "transparent", border: "none",
-                                    padding: 0, color: C.mommy,
-                                    fontFamily: "inherit", fontStyle: "italic",
-                                    fontSize: 11, cursor: "pointer",
-                                    borderBottom: `1px dotted ${C.mommy}`,
-                                  }}
-                                  title={`Split "${blocker.title}" into smaller chunks`}>
-                                  split it?
-                                </button>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.5 }}>
-                  Predictions from last 7 days of sleep events + your planned pump times. Reality varies — protect the highest-regret task for the longest predicted nap.
-                </div>
-              </div>
-            );
-          }
-          // v05.05bt163 — Open Blocks panel: drop the strict guard so
-          // the panel surfaces even when no unscheduled tasks are
-          // waiting (so "N open" link does SOMETHING). Falls back to
-          // the timeline-derived contiguous spans for accuracy.
-          if (!showOpenBlocks) return null;
-          return (
-            <div style={{ marginBottom: 18 }}>
-              <div style={{
-                display: "flex", alignItems: "baseline", gap: 12,
-                borderBottom: `1px solid ${C.line}22`,
-                paddingBottom: 6, marginBottom: 6,
-              }}>
-                <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontWeight: 500,
-                  fontSize: 20, color: C.ink,
-                  letterSpacing: "-0.01em",
-                }}>
-                  Open blocks
-                </span>
-                <button
-                  onClick={() => setShowOpenBlocks(false)}
-                  style={{
-                    background: "transparent", border: "none", padding: 0,
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 11,
-                    color: "#7C6B5A", cursor: "pointer",
-                    borderBottom: `1px dotted ${C.line}88`,
-                    marginLeft: "auto",
-                  }}>
-                  hide
-                </button>
-              </div>
-              {/* v05.05bt149 — Intro copy explaining what this panel
-                  does. Per chat: "the open blocks suggestions is still
-                  not intuitive to me what this doing and where i should
-                  intervene." */}
-              <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontStyle: "italic", fontSize: 12.5,
-                color: "#7C6B5A", lineHeight: 1.45,
-                marginBottom: 12,
-              }}>
-                These are <strong style={{ fontStyle: "normal", color: C.ink }}>your free windows today</strong> — gaps between routines and meetings. Tap any block to fill it with a task, or accept the suggestion the engine picked from your queue.
-              </div>
-              {blockMatches.slice(0, 4).map((b, i) => (
-                <div key={i} style={{
-                  background: b.suggested ? `${C.gold}10` : "transparent",
-                  border: `1px solid ${b.suggested ? C.gold + "2a" : C.line + "22"}`,
-                  borderRadius: 12, padding: "12px 14px", marginBottom: 8,
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                    <div style={{
-                      fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
-                      color: C.gold, fontWeight: 700,
-                      letterSpacing: "0.04em",
-                    }}>
-                      {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {b.durationMin}m
-                    </div>
-                    <div style={{
-                      fontSize: 8.5, color: FOCUS_COLOR[normalizeFocus(b.focusLevel)],
-                      letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700,
-                      fontFamily: "'JetBrains Mono', monospace",
-                    }}>
-                      {FOCUS_LABEL[normalizeFocus(b.focusLevel)]} focus
-                    </div>
-                  </div>
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 12,
-                    color: "#7C6B5A", marginTop: 4, lineHeight: 1.4,
-                  }}>
-                    {b.context}
-                  </div>
-                  {b.suggested ? (
-                    <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
-                      fontSize: 16, fontWeight: 500,
-                      color: C.ink, marginTop: 6, lineHeight: 1.3,
-                      letterSpacing: "-0.005em",
-                    }}>
-                      <span style={{
-                        color: regretColors[b.suggested.regretScore], fontWeight: 700, marginRight: 6,
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 13,
-                      }}>
-                        {b.suggested.regretScore}
-                      </span>
-                      {b.suggested.title}
-                      {b.suggested.focusLevel && b.suggested.focusLevel !== b.focusLevel && (
-                        <span style={{
-                          fontSize: 11, color: "#7C6B5A", marginLeft: 6,
-                          fontStyle: "italic", fontWeight: 400,
-                        }}>
-                          (best fit — {b.suggested.focusLevel} focus task)
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
-                      fontSize: 12.5, color: "#7C6B5A",
-                      fontStyle: "italic", marginTop: 6, lineHeight: 1.45,
-                    }}>
-                      {b.emptyReason || "No open task fits this block. Pick one manually below."}
-                      {b.blockingTaskId && (() => {
-                        const blocker = sortedActive.find(t => t.id === b.blockingTaskId);
-                        if (!blocker) return null;
-                        return (
-                          <>
-                            {" "}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setSplittingTask(blocker); }}
-                              style={{
-                                background: "transparent", border: "none",
-                                padding: 0, color: C.mommy,
-                                fontFamily: "inherit", fontStyle: "italic",
-                                fontSize: 12.5, cursor: "pointer",
-                                borderBottom: `1px dotted ${C.mommy}`,
-                              }}
-                              title={`Split "${blocker.title}" into smaller chunks`}>
-                              split it?
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  {/* v05.05bt128 — Interactive actions per open block.
-                      Fill = accept suggestion. Pick other = expand
-                      picker with remaining unscheduled tasks. Split =
-                      break the suggested task into chunks (only when
-                      ≥45m). Once a block is filled the task gets a
-                      scheduledTime, falls out of unscheduledTasks, and
-                      this block disappears from blockMatches on next
-                      render. When all blocks resolved, the whole
-                      Open Blocks section auto-hides. */}
-                  <div style={{
-                    display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap",
-                  }}>
-                    {b.suggested && (
-                      <button
-                        onClick={() => fillBlockWithTask(b.start, b.suggested.id)}
-                        style={{
-                          background: C.mommy, color: "#fff",
-                          border: "none", borderRadius: 8,
-                          padding: "6px 12px", fontSize: 11, fontWeight: 600,
-                          cursor: "pointer", fontFamily: "inherit",
-                          letterSpacing: "0.02em",
-                        }}>
-                        Fill this block
-                      </button>
-                    )}
-                    {sortedActive.length > (b.suggested ? 1 : 0) && (
-                      <button
-                        onClick={() => setPickerForBlock(
-                          pickerForBlock === b.start.getTime() ? null : b.start.getTime()
-                        )}
-                        style={{
-                          background: "transparent",
-                          color: C.mommy,
-                          border: `1.5px solid ${C.mommy}`,
-                          borderRadius: 8,
-                          padding: "5px 11px", fontSize: 11, fontWeight: 600,
-                          cursor: "pointer", fontFamily: "inherit",
-                          letterSpacing: "0.02em",
-                        }}>
-                        {pickerForBlock === b.start.getTime()
-                          ? "Close"
-                          : (b.suggested ? "Pick other ▾" : "Pick task ▾")}
-                      </button>
-                    )}
-                    {b.suggested && b.suggested.effortMin >= 45 && (
-                      <button
-                        onClick={() => setSplittingTask(b.suggested)}
-                        style={{
-                          background: "transparent",
-                          color: "#7C6B5A",
-                          border: `1px solid ${C.line}55`,
-                          borderRadius: 8,
-                          padding: "5px 11px", fontSize: 11, fontWeight: 600,
-                          cursor: "pointer", fontFamily: "inherit",
-                          letterSpacing: "0.02em",
-                        }}>
-                        ⨯ Split
-                      </button>
-                    )}
-                  </div>
-
-                  {pickerForBlock === b.start.getTime() && (
-                    <div style={{
-                      marginTop: 10, paddingTop: 10,
-                      borderTop: `1px dashed ${C.line}55`,
-                    }}>
-                      <div style={{
-                        fontSize: 9, letterSpacing: "0.26em",
-                        textTransform: "uppercase", color: "#7C6B5A",
-                        fontWeight: 700, marginBottom: 8,
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}>
-                        Other unscheduled tasks
-                      </div>
-                      {sortedActive
-                        .filter(t => t.id !== b.suggested?.id)
-                        .map(t => {
-                          const tooLong = t.effortMin > b.durationMin;
-                          return (
-                            <button
-                              key={t.id}
-                              onClick={() => fillBlockWithTask(b.start, t.id)}
-                              style={{
-                                width: "100%", textAlign: "left",
-                                background: "transparent",
-                                border: "none",
-                                borderBottom: `1px solid ${C.line}22`,
-                                padding: "8px 0",
-                                display: "flex", alignItems: "center", gap: 8,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}>
-                              <span style={{
-                                fontSize: 11, fontWeight: 700,
-                                color: regretColors[t.regretScore],
-                                fontFamily: "'JetBrains Mono', monospace",
-                                width: 16, textAlign: "center", flexShrink: 0,
-                              }}>{t.regretScore}</span>
-                              <span style={{
-                                flex: 1, minWidth: 0,
-                                fontFamily: "'Cormorant Garamond', serif",
-                                fontSize: 14, color: C.ink, lineHeight: 1.3,
-                              }}>{t.title}</span>
-                              <span style={{
-                                fontSize: 10, color: tooLong ? "#C18D7A" : "#7C6B5A",
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontWeight: tooLong ? 700 : 500,
-                                flexShrink: 0,
-                              }}>
-                                {t.effortMin}m{tooLong ? " ⚠" : ""}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
 
         {/* v05.05bt113 — Day timeline: routines + scheduled tasks in
             chronological order, with free blocks between as
@@ -20914,498 +25374,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
             "best next move" only make sense for live today data. Tomorrow
             view shows a small italic header instead so the user knows
             they're in planning mode. */}
-        {currentUser === "Mommy" && isTomorrow && (
-          <div style={{
-            background: `${C.mommy}0c`,
-            border: `1px dashed ${C.mommy}55`,
-            borderRadius: 12,
-            padding: "12px 14px", marginBottom: 16,
-            fontFamily: "'Cormorant Garamond', serif",
-            fontStyle: "italic", fontSize: 14,
-            color: "#7C6B5A", lineHeight: 1.45,
-          }}>
-            <strong style={{ fontStyle: "normal", color: C.mommy }}>Planning tomorrow.</strong>{" "}
-            Tasks added here are tagged for {referenceDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}. They'll roll into Today automatically when the day flips.
-          </div>
-        )}
-        {currentUser === "Mommy" && !isTomorrow && !showRightNow && (
-          <div style={{ textAlign: "right", marginBottom: 8 }}>
-            <button
-              onClick={() => setShowRightNow(true)}
-              style={{
-                background: "transparent", border: "none", padding: 0,
-                fontFamily: "'Cormorant Garamond', serif",
-                fontStyle: "italic", fontSize: 11.5,
-                color: "rgba(124,107,90,0.7)", cursor: "pointer",
-                borderBottom: `1px dotted ${C.line}66`,
-              }}>
-              show right-now & next-move
-            </button>
-          </div>
-        )}
-        {currentUser === "Mommy" && !isTomorrow && showRightNow && (() => {
-          const currentSlot = dayTimeline.find(s => s.start <= now && now < s.end);
-          if (!currentSlot) return null;
-
-          // On-duty parent right now (from activeShifts)
-          const slotHour = now.getHours() + now.getMinutes() / 60;
-          const findShiftAt = (parent) => {
-            const shifts = activeShifts?.[parent] || [];
-            return shifts.find(s => {
-              const [sh, sm] = (s.start || "0:0").split(":").map(Number);
-              const [eh, em] = (s.end || "0:0").split(":").map(Number);
-              return slotHour >= sh + (sm || 0) / 60 && slotHour < eh + (em || 0) / 60;
-            });
-          };
-          const mommyShift = findShiftAt("Mommy");
-          const daddyShift = findShiftAt("Daddy");
-          let onDutyParent = onsite ? "Grandparents" : (mommyShift ? "Mommy" : daddyShift ? "Daddy" : null);
-          let minutesUntilHandoff = null;
-          if (mommyShift || daddyShift) {
-            const cur = mommyShift || daddyShift;
-            const [eh, em] = (cur.end || "0:0").split(":").map(Number);
-            const endDate = new Date(now); endDate.setHours(eh, em || 0, 0, 0);
-            minutesUntilHandoff = Math.round((endDate - now) / 60000);
-          }
-
-          // Best next move — top unfinished scheduled task at/after now, or
-          // top unscheduled task by regret
-          const upcomingScheduled = scheduledTasks.find(t => !t.completedAt && t.end > now);
-          // v05.05bt148 — BNM now ALWAYS the next scheduled task per chat
-          // ("how come Best Next Move is not the same as the schedule?").
-          // Was: upcomingScheduled || topUnscheduled[0]. Now: scheduled-only.
-          // If nothing's scheduled, the empty-state copy invites the user
-          // to schedule something rather than showing an off-schedule pick.
-          const nextMove = upcomingScheduled;
-
-          const tag = getBlockTag(currentSlot);
-          const ownerForCurrentColor = onsite ? C.gold : (mommyShift ? C.mommy : daddyShift ? C.daddy : C.muted);
-
-          // v05.05bt127 — Helpers for conditional rows. (a) Baby state
-          // from latest sleep_up/sleep_down event. (b) Pump cue via
-          // simple time-since-last-pump heuristic (2.5h interval).
-          const sleepEvents = (events || [])
-            .filter(e => e.type === "sleep_up" || e.type === "sleep_down")
-            .sort((a, b) => new Date(b.ts) - new Date(a.ts));
-          const lastSleepEv = sleepEvents[0] || null;
-          const babyState = lastSleepEv
-            ? (lastSleepEv.type === "sleep_down" ? "asleep" : "awake")
-            : null;
-          const babyStateMin = lastSleepEv
-            ? Math.max(0, Math.round((now - new Date(lastSleepEv.ts)) / 60000))
-            : null;
-
-          const lastPumpEv = (events || [])
-            .filter(e => e.type === "pump")
-            .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0] || null;
-          const lastPumpAt = lastPumpEv ? new Date(lastPumpEv.ts) : null;
-          // End-of-pump heuristic. If event has durationMin, last pump
-          // ended at ts + durationMin. Otherwise treat ts as the end.
-          const lastPumpEnd = lastPumpAt
-            ? new Date(lastPumpAt.getTime() + (lastPumpEv.durationMin || 0) * 60000)
-            : null;
-          const nextPumpAt = lastPumpEnd
-            ? new Date(lastPumpEnd.getTime() + 2.5 * 60 * 60000)
-            : null;
-          const pumpDeltaMin = nextPumpAt
-            ? Math.round((nextPumpAt - now) / 60000)
-            : null;
-
-          // Is current user (Mommy) on duty right now?
-          const userOnDuty = !!mommyShift && !onsite;
-          // Daddy on duty (without onsite override)
-          const partnerOnDuty = !!daddyShift && !onsite;
-          // Show baby state only when user is on duty or no one is
-          // (partner away) — never when partner is on duty.
-          const showBabyState = userOnDuty || (!userOnDuty && !partnerOnDuty);
-
-          const fmtDur = m => {
-            if (m < 60) return `${m}m`;
-            const h = Math.floor(m / 60);
-            const r = m % 60;
-            return r === 0 ? `${h}h` : `${h}h ${r}m`;
-          };
-          const fmtClockShort = d => {
-            const h = d.getHours(), mi = d.getMinutes();
-            const h12 = ((h + 11) % 12) + 1;
-            return `${h12}${mi ? `:${String(mi).padStart(2, "0")}` : ""}${h < 12 ? "a" : "p"}`;
-          };
-
-          return (
-            <div style={{
-              // Dusty-rose tinted paper gradient per mockup
-              background: "linear-gradient(135deg, rgba(251, 241, 240, 1) 0%, rgba(251, 245, 233, 1) 100%)",
-              border: `1px solid rgba(237, 221, 216, 1)`,
-              borderRadius: 14,
-              padding: "14px 12px", marginBottom: 16,
-              position: "relative",
-              boxShadow: "0 1px 0 rgba(255,255,255,0.5) inset, 0 6px 22px -14px rgba(61, 49, 40, 0.14)",
-              // v05.05bt131 — Two-column split with vertical divider
-              // per chat 'let's split that to the left vs right with
-              // the vertical line divider. Adds more diversity'.
-              display: "grid",
-              gridTemplateColumns: "1fr 1px 1fr",
-              gap: 12,
-              alignItems: "stretch",
-            }}>
-              {/* ── LEFT: Right Now state ── */}
-              <div>
-                {/* Eyebrow pill */}
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 5,
-                  background: `${C.mommy}1f`,
-                  border: `1px solid ${C.mommy}40`,
-                  color: C.mommy,
-                  fontFamily: "'Inter', sans-serif",
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.18em",
-                  padding: "3px 9px", borderRadius: 999,
-                  marginBottom: 10,
-                }}>
-                  <span style={{
-                    display: "inline-block",
-                    width: 4, height: 4, borderRadius: "50%",
-                    background: C.mommy,
-                  }} />
-                  RIGHT NOW
-                </div>
-                {/* v05.05bt156 — Subtitle clarifying what this half shows. */}
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 10.5,
-                  color: "rgba(124,107,90,0.7)",
-                  lineHeight: 1.25, marginTop: -6, marginBottom: 8,
-                }}>
-                  what's happening now
-                </div>
-
-                {/* v05.05bt152 — Right Now now shows WHAT'S happening,
-                    not just a naked time range. Per chat: "i still dont
-                    know what the right now current block is supposed to
-                    tell us". Title of the current slot leads, time is
-                    secondary. Free → italic "Open block · 10–11a"
-                    Routine → "Cooking · 12–1p", Task → "{task} · 9–10a",
-                    Meeting → "{meeting} · 2–3p". */}
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontWeight: 500, fontSize: 18,
-                  fontStyle: currentSlot.kind === "free" || currentSlot.kind === "routine" ? "italic" : "normal",
-                  color: currentSlot.kind === "free" ? C.gold : C.mommy,
-                  lineHeight: 1.15,
-                  letterSpacing: "-0.005em",
-                  marginBottom: 3,
-                  overflow: "hidden", textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}>
-                  {currentSlot.kind === "free" ? "Open block" : currentSlot.title}
-                </div>
-                <div style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10.5, color: "#7C6B5A",
-                  fontWeight: 600, letterSpacing: "0.02em",
-                  marginBottom: 10,
-                }}>
-                  {fmtTimeShort(currentSlot.start)}–{fmtTimeShort(currentSlot.end)}
-                </div>
-
-                {/* Always: on-duty row + handoff countdown */}
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  fontSize: 11, color: C.ink, lineHeight: 1.35,
-                  marginBottom: 4,
-                }}>
-                  <span style={{
-                    fontSize: 12, width: 14, textAlign: "center",
-                    color: ownerForCurrentColor,
-                    flexShrink: 0,
-                  }}>👤</span>
-                  <span>
-                    <span style={{ color: ownerForCurrentColor, fontWeight: 600 }}>
-                      {onDutyParent ? `${onDutyParent} on duty` : "Off duty"}
-                    </span>
-                    {minutesUntilHandoff !== null && minutesUntilHandoff > 0 && (
-                      <span style={{ color: "#7C6B5A" }}> · {minutesUntilHandoff}m until handoff</span>
-                    )}
-                  </span>
-                </div>
-
-                {/* Conditional: baby state — only when user on duty (or no one) */}
-                {showBabyState && babyState && (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    fontSize: 11, color: "#7C6B5A", lineHeight: 1.35,
-                    marginBottom: 4,
-                  }}>
-                    <span style={{ fontSize: 12, width: 14, textAlign: "center", flexShrink: 0 }}>
-                      {babyState === "asleep" ? "😴" : "👶"}
-                    </span>
-                    <span>
-                      Solène {babyState} · <span style={{ color: C.ink, fontWeight: 600 }}>{fmtDur(babyStateMin)}</span>
-                    </span>
-                  </div>
-                )}
-
-                {/* Conditional: pump cue per heuristic.
-                    delta ≤ 30m or negative → coral urgent
-                    30m < delta ≤ 2h → small italic muted
-                    delta > 2h or no data → hide */}
-                {pumpDeltaMin !== null && pumpDeltaMin <= 30 && (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    fontSize: 11, color: "#C18D7A", fontWeight: 500,
-                    lineHeight: 1.35, marginBottom: 4,
-                  }}>
-                    <span style={{ fontSize: 12, width: 14, textAlign: "center", color: "#C18D7A", flexShrink: 0 }}>💧</span>
-                    <span>
-                      {pumpDeltaMin < 0
-                        ? <>Pump overdue <span style={{ fontWeight: 700 }}>{Math.abs(pumpDeltaMin)}m</span></>
-                        : <>Pump in <span style={{ fontWeight: 700 }}>{pumpDeltaMin}m</span></>}
-                    </span>
-                  </div>
-                )}
-                {pumpDeltaMin !== null && pumpDeltaMin > 30 && pumpDeltaMin <= 120 && (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    fontSize: 10.5, color: "#7C6B5A",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic",
-                    lineHeight: 1.35, marginBottom: 4,
-                  }}>
-                    <span style={{ fontSize: 10, width: 14, textAlign: "center", color: C.muted, flexShrink: 0 }}>·</span>
-                    <span>Next pump {fmtClockShort(nextPumpAt)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* ── DIVIDER ── vertical line between columns */}
-              <div style={{
-                width: 1,
-                background: "linear-gradient(180deg, transparent, rgba(229, 220, 201, 0.7) 12%, rgba(229, 220, 201, 0.7) 88%, transparent)",
-              }} />
-
-              {/* ── RIGHT: Best Next Move ── */}
-              {nextMove ? (
-                <div>
-                  <div style={{
-                    color: C.mommy,
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
-                  }}>BEST NEXT MOVE</div>
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 10.5,
-                    color: "rgba(124,107,90,0.7)",
-                    lineHeight: 1.25, marginTop: 2, marginBottom: 8,
-                  }}>
-                    your next scheduled task
-                  </div>
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    marginBottom: 8,
-                  }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleComplete(nextMove.id); }}
-                      style={{
-                        width: 18, height: 18, borderRadius: 4,
-                        border: `1.5px solid ${C.line}aa`,
-                        background: "transparent",
-                        cursor: "pointer", flexShrink: 0, padding: 0,
-                      }}
-                      aria-label="Mark done" />
-                    <span
-                      onClick={() => setEditingTask(nextMove)}
-                      style={{
-                        flex: 1, minWidth: 0, cursor: "pointer",
-                        fontFamily: "'Cormorant Garamond', serif",
-                        fontStyle: "italic", fontWeight: 500,
-                        fontSize: 14, color: C.ink,
-                        lineHeight: 1.2, letterSpacing: "-0.005em",
-                      }}>
-                      {nextMove.title}
-                    </span>
-                    <button
-                      onClick={() => setEditingTask(nextMove)}
-                      style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        background: `${C.mommy}1f`,
-                        color: C.mommy,
-                        border: "none", cursor: "pointer",
-                        fontSize: 12, fontWeight: 600, lineHeight: 1,
-                        flexShrink: 0,
-                        fontFamily: "inherit",
-                      }}
-                      aria-label="Open task">›</button>
-                  </div>
-                  {/* Focus/Regret meta */}
-                  <div style={{
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: 9, fontWeight: 700,
-                    letterSpacing: "0.1em",
-                    marginBottom: 8,
-                  }}>
-                    <span style={{
-                      color: FOCUS_COLOR[normalizeFocus(nextMove.focusLevel)],
-                    }}>
-                      {FOCUS_LABEL[normalizeFocus(nextMove.focusLevel)].toUpperCase()} FOCUS
-                    </span>
-                    <span style={{ color: C.muted, margin: "0 4px", fontWeight: 400 }}>·</span>
-                    <span style={{ color: C.mommy, letterSpacing: "0.04em" }}>
-                      Regret {nextMove.regretScore}
-                    </span>
-                  </div>
-                  {/* v05.05bt144 — Countdown timer per chat. When the next
-                      move has a scheduledTime, show "starts in 17m" before
-                      start, "12m left" once underway, or "ran over by Nm"
-                      if past. Updates with the existing now tick. */}
-                  {(() => {
-                    if (!nextMove.scheduledTime) return null;
-                    const [hh, mm] = nextMove.scheduledTime.split(":").map(Number);
-                    const start = new Date(now);
-                    start.setHours(hh, mm, 0, 0);
-                    const end = new Date(start.getTime() + (nextMove.effortMin || 30) * 60000);
-                    const diffStartMin = Math.round((start - now) / 60000);
-                    const diffEndMin = Math.round((end - now) / 60000);
-                    // v05.05bt152 — Three regimes for the BNM time pill,
-                    // per chat ("the next move starts in 5 hours??"):
-                    //   urgent  ( <90m to start ) → red/gold pill, prominent
-                    //   soon    ( 90m – 3h )     → mono mauve, calm
-                    //   distant ( >3h )          → italic muted "quiet stretch"
-                    //   ongoing                  → green "Xm left"
-                    //   past                     → coral "ran over"
-                    // For distant + unscheduled tasks waiting, the
-                    // copy invites filling the gap.
-                    let label, color, style = "pill";
-                    if (diffStartMin > 0) {
-                      const hasUnscheduled = unscheduledTasks && unscheduledTasks.length > 0;
-                      if (diffStartMin <= 90) {
-                        label = `starts in ${diffStartMin >= 60 ? fmtDurationHM(diffStartMin) : diffStartMin + "m"}`;
-                        color = C.gold;
-                      } else if (diffStartMin <= 180) {
-                        label = `at ${fmtTimeShort(start)}`;
-                        color = C.mommy;
-                        style = "flat";
-                      } else {
-                        label = hasUnscheduled
-                          ? `${fmtDurationHM(diffStartMin)} until next task — slot something?`
-                          : `Quiet till ${fmtTimeShort(start)} (${fmtDurationHM(diffStartMin)})`;
-                        color = "#7C6B5A";
-                        style = "flat";
-                      }
-                    } else if (diffEndMin > 0) {
-                      label = diffEndMin >= 60
-                        ? `${fmtDurationHM(diffEndMin)} left`
-                        : `${diffEndMin}m left`;
-                      color = "#7B9B6E";
-                    } else {
-                      label = `ran over by ${Math.abs(diffEndMin)}m`;
-                      color = "#B85040";
-                    }
-                    if (style === "flat") {
-                      return (
-                        <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
-                          fontStyle: "italic", fontSize: 12,
-                          color, marginBottom: 8, lineHeight: 1.4,
-                        }}>{label}</div>
-                      );
-                    }
-                    return (
-                      <div style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, fontWeight: 700,
-                        letterSpacing: "0.06em", color,
-                        marginBottom: 8,
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        background: `${color}14`,
-                        border: `1px solid ${color}40`,
-                        padding: "3px 8px", borderRadius: 999,
-                      }}>
-                        <span style={{
-                          width: 5, height: 5, borderRadius: "50%", background: color,
-                          animation: diffStartMin > 0 && diffStartMin <= 5
-                            ? "ll-ledger-pulse 1.2s ease-in-out infinite" : "none",
-                        }} />
-                        {label}
-                      </div>
-                    );
-                  })()}
-                  {/* Collapsible Why here */}
-                  {(() => {
-                    const slotMatch = dayTimeline.find(s => s.kind === "task" && s.id === nextMove.id);
-                    const reason = slotMatch
-                      ? getBlockReasoning(slotMatch, getBlockFocusLevel(slotMatch.start),
-                          (onsite ? "grandparents have baby" : null), onsite)
-                      : null;
-                    if (!reason) return null;
-                    return (
-                      <>
-                        <button
-                          onClick={() => setWhyHereOpen(o => !o)}
-                          style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            fontFamily: "'Cormorant Garamond', serif",
-                            fontStyle: "italic", fontSize: 11,
-                            color: C.mommy, cursor: "pointer",
-                            borderBottom: `1px dotted ${C.mommy}`,
-                            lineHeight: 1.3, paddingBottom: 1,
-                            background: "none", border: "none",
-                            borderBottomWidth: 1, borderBottomStyle: "dotted",
-                            borderBottomColor: C.mommy,
-                            margin: 0, padding: 0,
-                          }}>
-                          why here
-                        </button>
-                        {whyHereOpen && (
-                          <div style={{
-                            marginTop: 6,
-                            padding: "8px 10px",
-                            background: `${C.mommy}10`,
-                            borderLeft: `2px solid ${C.mommy}`,
-                            borderRadius: "0 6px 6px 0",
-                            fontFamily: "'Cormorant Garamond', serif",
-                            fontStyle: "italic", fontSize: 12,
-                            color: "#7C6B5A", lineHeight: 1.5,
-                          }}>
-                            <span style={{
-                              color: C.gold, fontStyle: "normal", fontWeight: 700,
-                              marginRight: 4,
-                            }}>↳</span>
-                            {reason}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <div style={{
-                  display: "flex", flexDirection: "column",
-                  justifyContent: "center", alignItems: "flex-start",
-                }}>
-                  <div style={{
-                    color: C.mommy,
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: 9, fontWeight: 700, letterSpacing: "0.22em",
-                  }}>BEST NEXT MOVE</div>
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 10.5,
-                    color: "rgba(124,107,90,0.7)",
-                    lineHeight: 1.25, marginTop: 2, marginBottom: 8,
-                  }}>
-                    your next scheduled task
-                  </div>
-                  <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 13,
-                    color: "#7C6B5A", lineHeight: 1.4,
-                  }}>
-                    Nothing pending. Add a task above to start planning.
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
         {/* v05.05bt117 — schedule-status banner. Auto-dismisses after 4s.
             Lets user see whether their NL batch or Auto-fill actually
@@ -21442,6 +25410,33 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 cursor: "pointer", padding: 4,
                 fontFamily: "inherit",
               }}>×</button>
+            {/* v05.05bt206 — split-on-edit notification. Different copy
+                from the reanalyze flow since nothing got scheduled here
+                — only a task got chopped up. */}
+            {scheduleStatus.splitOnly && scheduleStatus.splits && scheduleStatus.splits.length > 0 ? (
+              <>
+                <span style={{
+                  display: "inline-block",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontStyle: "normal", fontSize: 9,
+                  letterSpacing: "0.22em", textTransform: "uppercase",
+                  color: C.gold, fontWeight: 700,
+                  marginRight: 8,
+                  background: `${C.gold}15`,
+                  padding: "2px 8px", borderRadius: 999,
+                }}>✦ Auto-split</span>
+                {scheduleStatus.splits.map((s, idx) => (
+                  <div key={s.id + idx} style={{ marginTop: idx === 0 ? 4 : 2 }}>
+                    "<strong style={{ fontStyle: "normal" }}>{s.title}</strong>" split into{" "}
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontSize: 11 }}>
+                      {s.parts.map(p => `${p}m`).join(" + ")}
+                    </span>
+                    {" "}so it fits the timeline's 1-hour blocks.{" "}
+                    <span style={{ color: C.muted, fontSize: 11 }}>Tap Reanalyze to slot the parts.</span>
+                  </div>
+                ))}
+              </>
+            ) : <>
             {scheduleStatus.reanalyzed && (
               <span style={{
                 display: "inline-block",
@@ -21493,6 +25488,48 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   }}>{scheduleStatusOpen ? "hide why" : "show why"}</button>
                 )}
               </>
+            )}
+            {/* v05.05bt206 — Splits summary. When reanalyze (or auto-add)
+                chunked any tasks, show a small Cormorant-italic line
+                listing them so the user knows why their 90m task is now
+                two rows. */}
+            {/* v05.05bt210 — Released past-pin notice. */}
+            {!scheduleStatus.splitOnly && scheduleStatus.releasedPinCount > 0 && (
+              <div style={{
+                marginTop: 6,
+                fontSize: 11.5, fontStyle: "italic",
+                color: "#7C6B5A", lineHeight: 1.5,
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontStyle: "normal", fontSize: 9,
+                  letterSpacing: "0.18em", textTransform: "uppercase",
+                  color: C.muted, fontWeight: 700,
+                  marginRight: 6,
+                }}>↻ Past pins released</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontSize: 11 }}>{scheduleStatus.releasedPinCount}</span>
+                {" "}pin{scheduleStatus.releasedPinCount !== 1 ? "s" : ""} pointed at a time that's already passed — re-slotted into future blocks.
+              </div>
+            )}
+            {!scheduleStatus.splitOnly && scheduleStatus.splits && scheduleStatus.splits.length > 0 && (
+              <div style={{
+                marginTop: 6,
+                fontSize: 11.5, fontStyle: "italic",
+                color: "#7C6B5A", lineHeight: 1.5,
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontStyle: "normal", fontSize: 9,
+                  letterSpacing: "0.18em", textTransform: "uppercase",
+                  color: C.gold, fontWeight: 700,
+                  marginRight: 6,
+                }}>✦ Auto-split</span>
+                {scheduleStatus.splits.length === 1 ? (
+                  <>"{scheduleStatus.splits[0].title}" → <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontSize: 11 }}>{scheduleStatus.splits[0].parts.map(p => `${p}m`).join(" + ")}</span></>
+                ) : (
+                  <>{scheduleStatus.splits.length} long tasks chunked into 60m blocks</>
+                )}
+              </div>
             )}
             {/* v05.05bt151 — Expandable detail: algorithm name + per-task
                 reason. Shows where each task landed and why anything
@@ -21553,21 +25590,75 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 </div>
               </div>
             )}
+            </>}
           </div>
         )}
-        {/* v05.05bt146 — Aesthetic redesign per mockup approval.
-            Editorial header replaces the busy action strip. Single
-            "Today" italic serif h1, single mono meta line with the
-            actionable "N open ⟶ fill" piece. */}
+        {/* v05.05bt167 — Editorial header redesigned to single-line
+            context. Drops the "N tasks · M routines · K open ⟶ fill"
+            mono meta line in favor of a one-sentence Cormorant italic
+            line that reads naturally: "10:32a · Daddy has Solène — your
+            time to focus." Mirrors the mockup approved bt167-vision. */}
         {currentUser === "Mommy" && dayTimeline.length > 0 && (
           <div style={{ marginBottom: 14 }}>
             {(() => {
-              const taskCount = dayTimeline.filter(s => s.kind === "task").length;
-              const freeCount = dayTimeline.filter(s => s.kind === "free").length;
-              const routineCount = dayTimeline.filter(s => s.kind === "routine").length;
+              // Derive current on-duty parent for the context line.
+              const currentSlot = dayTimeline.find(s => s.start <= now && s.end > now);
+              let currentOwner = null;
+              if (onsite) {
+                currentOwner = null; // grandparents
+              } else {
+                const slotHour = now.getHours() + now.getMinutes() / 60;
+                const findShiftAt = (parent) => {
+                  const shifts = activeShifts?.[parent] || [];
+                  return shifts.find(s => {
+                    const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+                    const [eh, em] = (s.end || "0:0").split(":").map(Number);
+                    return slotHour >= sh + (sm || 0) / 60 && slotHour < eh + (em || 0) / 60;
+                  });
+                };
+                const mommyShift = findShiftAt("Mommy");
+                const daddyShift = findShiftAt("Daddy");
+                if (mommyShift && daddyShift) currentOwner = "joint";
+                else if (mommyShift) currentOwner = "Mommy";
+                else if (daddyShift) currentOwner = "Daddy";
+              }
+
+              const openTasks = myTasks.filter(t => !t.completedAt);
+              const slotted = openTasks.filter(t => t.scheduledTime).length;
+              const unscheduled = openTasks.filter(t => !t.scheduledTime).length;
+
+              const fmtTimeShort = (d) => {
+                const h = d.getHours(), m = d.getMinutes();
+                const h12 = ((h + 11) % 12) + 1;
+                return `${h12}${m ? `:${String(m).padStart(2,"0")}` : ""}${h < 12 ? "a" : "p"}`;
+              };
+
+              const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, (() => { const d = new Date(now); d.setHours(0,0,0,0); return d; })());
+
+              // who-has phrasing
+              let whoHasPhrase = null;
+              let whoColor = C.muted;
+              if (isTomorrow) {
+                whoHasPhrase = `tomorrow's plan`;
+                whoColor = C.mommy;
+              } else if (currentOwner === "Mommy") {
+                whoHasPhrase = "you have Solène";
+                whoColor = C.mommy;
+              } else if (currentOwner === "Daddy") {
+                whoHasPhrase = "Daddy has Solène — your time";
+                whoColor = C.daddy;
+              } else if (currentOwner === "joint") {
+                whoHasPhrase = "together with Solène";
+                whoColor = C.gold;
+              } else if (onsite) {
+                whoHasPhrase = "Solène with grandparents";
+                whoColor = C.gold;
+              }
+
               return (
-                <div style={{ marginBottom: 14, padding: "0 4px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ padding: "0 4px" }}>
+                  {/* Heading row: h1 + toggle pill + ⋯ menu */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
                       <h1 style={{
                         fontFamily: "'Cormorant Garamond', serif",
@@ -21575,8 +25666,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         fontSize: 24, color: C.ink,
                         margin: 0, lineHeight: 1.05,
                         letterSpacing: "-0.015em",
-                      }}>{isTomorrow ? "Tomorrow" : "Today"}</h1>
-                      {/* v05.05bt160 — Day toggle: small pill switch. */}
+                      }}>{isTomorrow ? "Tomorrow" : "Mommy's Day"}</h1>
                       <div style={{
                         display: "inline-flex", alignItems: "stretch",
                         background: `${C.line}15`,
@@ -21610,9 +25700,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         ))}
                       </div>
                     </div>
-                    {/* v05.05bt148 — ⋯ menu moved inline with the
-                        Today heading. Always visible, never in an
-                        awkward floating corner. */}
                     <div style={{ position: "relative" }}>
                       <button
                         onClick={() => setShowActionsMenu(s => !s)}
@@ -21636,6 +25723,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         }}>
                           {[
                             { icon: "⚙", label: "Today's setup", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
+                            { icon: "◆", label: focusProfile ? "Focus profile · retake" : "Focus profile · take quiz", onClick: () => { setShowFocusQuiz(true); setShowActionsMenu(false); } },
+                            { icon: "↻", label: "Routines · edit defaults", onClick: () => { setShowRoutineEditor(true); setShowActionsMenu(false); } },
+                            { icon: "✦", label: "Optimize today's shape", onClick: () => { setShowOptimizer(true); setShowActionsMenu(false); } },
                             { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
                             { icon: "✎", label: "Brain dump", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
                             { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
@@ -21661,50 +25751,392 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       )}
                     </div>
                   </div>
+
+                  {/* v05.05bt194 — Date sub-line dropped for TODAY per
+                      chat ('Is there some redundancy in having the
+                      time and date hence it is also on the banners').
+                      The top banner already shows 'Sat, May 16 · 12:41p'.
+                      For TOMORROW, keep it — the top banner is anchored
+                      to today's date so we need to show tomorrow's. */}
+                  {isTomorrow && (
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, color: C.muted,
+                      letterSpacing: "0.18em", textTransform: "uppercase",
+                      marginBottom: 12, padding: "0 0 0 1px",
+                    }}>
+                      {new Date(referenceDate).toLocaleDateString(undefined, {
+                        weekday: "short", month: "short", day: "numeric",
+                      })}
+                    </div>
+                  )}
+
+                  {/* v05.05bt194 — Glowing 'you're live' badge moved
+                      INSIDE the runway card per chat ('Does the who
+                      is on duty make more sense in under the runway?').
+                      The current-state pill (owner + time) now sits at
+                      the top of the runway forecast, consolidating
+                      'right now' + 'next few hours' into one card. */}
+                </div>
+              );
+            })()}
+            {/* v05.05bt172 — Day-summary forecast card. Per chat:
+                "having a summary somewhere where you have x amount of
+                deep focus time available and x amount of long stretch
+                etc." Aggregates dayTimeline free-block focus levels +
+                durations into a quick "runway" snapshot, then compares
+                to total task-effort to surface "fits / overcommitted".
+                Placed below the context so it's the first thing the
+                user reads before scanning the timeline. */}
+            {currentUser === "Mommy" && !isTomorrow && dayTimeline.length > 0 && (() => {
+              // Pull only future free time (the rendering trim above
+              // mutates `slot` locally; here we re-derive from the
+              // un-trimmed dayTimeline + apply notBefore=now).
+              const futureFree = dayTimeline
+                .filter(s => s.kind === "free" && s.end.getTime() > now.getTime())
+                .map(s => {
+                  const start = s.start.getTime() < now.getTime() ? now : s.start;
+                  const dur = (s.end.getTime() - start.getTime()) / 60000;
+                  return { ...s, start, durationMin: dur };
+                })
+                .filter(s => s.durationMin >= 15);
+              if (futureFree.length === 0) return null;
+
+              // v05.05bt173 — Compute effective focus per slot using
+              // owner + predicted naps. Bucket the minutes by SOURCE so
+              // the user can see WHERE deep focus comes from (partner
+              // shift vs predicted nap vs joint shift) — answering
+              // "where do the minutes come from?" directly.
+              const slotOwner = (slot) => {
+                if (onsite) return null;
+                const slotHour = slot.start.getHours() + slot.start.getMinutes() / 60;
+                const findShiftAt = (parent) => {
+                  const shifts = activeShifts?.[parent] || [];
+                  return shifts.find(s => {
+                    const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+                    const [eh, em] = (s.end || "0:0").split(":").map(Number);
+                    return slotHour >= sh + (sm || 0) / 60 && slotHour < eh + (em || 0) / 60;
+                  });
+                };
+                const mShift = findShiftAt("Mommy");
+                const dShift = findShiftAt("Daddy");
+                if (mShift && dShift) return "joint";
+                if (mShift) return "Mommy";
+                if (dShift) return "Daddy";
+                return null;
+              };
+
+              // Buckets for the breakdown
+              let deepPartnerMin = 0;
+              let deepNapMin = 0;
+              let deepJointMin = 0;
+              let deepOnsiteMin = 0;
+              let lightMin = 0;
+              let longStretches = 0;
+              for (const s of futureFree) {
+                const owner = slotOwner(s);
+                const profile = _applyLowEnergyCap(
+                  effectiveBlockProfile(
+                    s.start, s.end, owner, currentUser, predictedNaps, onsite,
+                    focusProfile, meetingsForBuffer, predictedFeeds, false, babyStats
+                  ),
+                  lowEnergy
+                );
+                if (profile.focusLevel === "deep") {
+                  if (onsite) deepOnsiteMin += s.durationMin;
+                  else if (owner === "joint") deepJointMin += s.durationMin;
+                  else if (owner === currentUser) deepNapMin += s.durationMin;
+                  else deepPartnerMin += s.durationMin;
+                } else {
+                  lightMin += s.durationMin;
+                }
+                if (s.durationMin >= 60) longStretches += 1;
+              }
+              const deepMin = deepPartnerMin + deepNapMin + deepJointMin + deepOnsiteMin;
+              const totalFree = deepMin + lightMin;
+
+              // Total task effort (open + unscheduled, MY tasks today)
+              const myOpen = myTasks.filter(t => !t.completedAt);
+              const taskMin = myOpen.reduce((a, t) => a + (t.effortMin || 0), 0);
+              const overcommit = taskMin - totalFree;
+
+              const fmtHM = (m) => {
+                m = Math.round(m);
+                const h = Math.floor(m / 60);
+                const min = m - h * 60;
+                if (h === 0) return `${min}m`;
+                if (min === 0) return `${h}h`;
+                return `${h}h ${min}m`;
+              };
+
+              // Build the deep-focus breakdown sentence
+              const deepParts = [];
+              if (deepPartnerMin > 0) deepParts.push(`${fmtHM(deepPartnerMin)} partner shift`);
+              if (deepNapMin > 0) deepParts.push(`${fmtHM(deepNapMin)} nap predicted`);
+              if (deepJointMin > 0) deepParts.push(`${fmtHM(deepJointMin)} joint shift`);
+              if (deepOnsiteMin > 0) deepParts.push(`${fmtHM(deepOnsiteMin)} grandparents`);
+              const deepExplainer = deepParts.length > 0 ? deepParts.join(" + ") : "—";
+
+              return (
+                <div style={{
+                  background: `${C.line}10`,
+                  border: `1px solid ${C.line}33`,
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                  marginBottom: 16,
+                }}>
+                  {/* v05.05bt195 — Glowing badge moved out of this card
+                      and onto the NOW line in the timeline per chat
+                      ('Maybe the now slider that goes up and down
+                      should be the one that glows ... is this better
+                      than the glowing badge inside the forecast? And
+                      then the forecast stays the forecast'). The NOW
+                      line now color-codes by current owner and reads
+                      'NOW · YOUR DUTY' or 'NOW · DADDY DUTY'. Runway
+                      card is back to pure forecast. */}
                   <div style={{
-                    marginTop: 3,
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, color: C.muted,
-                    letterSpacing: "0.08em",
+                    fontSize: 9, letterSpacing: "0.22em",
+                    textTransform: "uppercase",
+                    color: C.gold, fontWeight: 700,
+                    marginBottom: 8,
+                  }}>Today's runway</div>
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 14, lineHeight: 1.55,
+                    color: C.ink,
                   }}>
-                    {taskCount} task{taskCount !== 1 ? "s" : ""} · {routineCount} routine{routineCount !== 1 ? "s" : ""}
-                    {freeCount > 0 && (
-                      <>
-                        {" · "}
-                        <button
-                          onClick={() => setShowOpenBlocks(s => !s)}
-                          style={{
-                            background: "transparent", border: "none",
-                            padding: 0, color: C.gold,
-                            fontFamily: "inherit", fontSize: "inherit",
-                            fontWeight: 700, cursor: "pointer",
-                            letterSpacing: "inherit",
-                            borderBottom: `1px dotted ${C.gold}`,
-                            paddingBottom: 1,
-                          }}>
-                          {freeCount} open ⟶ fill
-                        </button>
-                      </>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 600, color: FOCUS_COLOR.deep }}>{fmtHM(deepMin)}</span>{" "}
+                    for deep work ·{" "}
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, fontWeight: 600, color: FOCUS_COLOR.shallow }}>{fmtHM(lightMin)}</span>{" "}
+                    for light work
+                    {/* v05.05bt173 — Breakdown sources so you can see
+                        WHERE the deep minutes come from. */}
+                    {deepMin > 0 && (
+                      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4, fontStyle: "italic", lineHeight: 1.4 }}>
+                        <span style={{ color: FOCUS_COLOR.deep, fontStyle: "normal", fontWeight: 500 }}>↳ deep:</span> {deepExplainer}
+                      </div>
                     )}
-                    {/* v05.05bt148 — Secondary discoverable add-task
-                        affordance per chat. Same as the FAB but
-                        always visible in the page flow. */}
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4, fontStyle: "italic" }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", color: C.ink }}>{longStretches}</span> {longStretches === 1 ? "stretch" : "stretches"} ≥ 1h
+                    </div>
+                    {/* v05.05bt185 — Meetings diagnostic. Per chat:
+                        'I tested adding a meeting and I don't see it
+                        auto added to the today plan'. Shows what the
+                        TodayTaskPlanCard's `meetings` prop actually
+                        contains for today + your shift. If you add a
+                        meeting and the count here doesn't update, the
+                        meeting isn't reaching this component (cloud
+                        sync / state issue). If the count IS right but
+                        the timeline still shows free, the dayTimeline
+                        filter is the problem. */}
+                    {(() => {
+                      const todayKey = isoDate(new Date(now));
+                      const mineToday = (meetings || []).filter(m => {
+                        try {
+                          const s = new Date(m.start);
+                          if (isNaN(s.getTime())) return false;
+                          if (isoDate(s) !== todayKey) return false;
+                          const own = m.parent || currentUser;
+                          if (own !== currentUser) return false;
+                          if (isTimeBankRedemption(m)) return false;
+                          return true;
+                        } catch { return false; }
+                      });
+                      if (mineToday.length === 0) return null;
+                      const totalMin = mineToday.reduce((a, m) => {
+                        const dur = (new Date(m.end) - new Date(m.start)) / 60000;
+                        return a + (isFinite(dur) ? dur : 0);
+                      }, 0);
+                      return (
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontStyle: "italic" }}>
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", color: C.ink }}>{mineToday.length}</span> {mineToday.length === 1 ? "meeting" : "meetings"} booked · {fmtHM(totalMin)}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div style={{
+                    marginTop: 10, paddingTop: 8,
+                    borderTop: `1px solid ${C.line}22`,
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 12.5,
+                    color: C.ink, lineHeight: 1.5,
+                  }}>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontStyle: "normal", fontWeight: 600,
+                      color: C.ink, fontSize: 12.5,
+                    }}>{fmtHM(taskMin)}</span> of tasks added
                     {" · "}
-                    <button
-                      onClick={() => setShowNlInput(true)}
-                      style={{
-                        background: "transparent", border: "none",
-                        padding: 0, color: C.mommy,
-                        fontFamily: "inherit", fontSize: "inherit",
-                        fontWeight: 700, cursor: "pointer",
-                        letterSpacing: "inherit",
-                        borderBottom: `1px dotted ${C.mommy}`,
-                        paddingBottom: 1,
-                      }}>+ add task</button>
+                    {overcommit > 30 ? (
+                      <span style={{ color: C.accent, fontWeight: 500 }}>
+                        ↳ {fmtHM(overcommit)} won't fit — trim or push to tomorrow
+                      </span>
+                    ) : overcommit > 0 ? (
+                      <span style={{ color: C.gold, fontWeight: 500 }}>
+                        ↳ a tight fit
+                      </span>
+                    ) : (
+                      <span style={{ color: FOCUS_COLOR.shallow, fontWeight: 500 }}>
+                        ↳ comfortably fits
+                      </span>
+                    )}
                   </div>
                 </div>
               );
             })()}
+            {/* v05.05bt211 — Trade suggestions. Surfaces 1-2 windows
+                where Daddy could take baby duty and unlock significant
+                deep focus for the user. Informational for v1 — tap
+                later could pre-fill a swap request. */}
+            {!isTomorrow && currentUser === "Mommy" && tradeSuggestions.length > 0 && (
+              <div style={{
+                background: `${C.daddy}0e`,
+                border: `1px dashed ${C.daddy}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 14,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.22em",
+                  textTransform: "uppercase",
+                  color: C.daddy, fontWeight: 700,
+                  marginBottom: 6,
+                }}>↔ Trade ideas</div>
+                {tradeSuggestions.map((t, i) => {
+                  const hours = Math.floor(t.deepMin / 60);
+                  const mins = t.deepMin % 60;
+                  const dur = hours > 0
+                    ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`)
+                    : `${mins}m`;
+                  // v05.05bt223 — Look up any matching trade request for
+                  // this window (today's date, same start/end ±5min).
+                  const todayStr = (() => {
+                    const d = new Date(now);
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                  })();
+                  const existing = (tradeRequests || []).find(r => {
+                    if (!r || typeof r !== "object") return false;
+                    if (r.date !== todayStr) return false;
+                    if (r.from !== currentUser) return false;
+                    if (typeof r.startHr !== "number" || typeof r.endHr !== "number") return false;
+                    const startDiff = Math.abs(r.startHr - t.start / 60);
+                    const endDiff = Math.abs(r.endHr - t.end / 60);
+                    return startDiff < 0.1 && endDiff < 0.1;
+                  });
+                  const statusLabel = existing && (() => {
+                    const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+                    if (existing.status === "pending")        return { text: `↻ Sent · waiting for ${partner}`, color: C.muted };
+                    if (existing.status === "accepted_shift") return { text: `✓ ${partner} will cover`, color: "#7B9B6E" };
+                    if (existing.status === "accepted_bank") {
+                      const h = Math.round(existing.deepMin / 60 * 10) / 10;
+                      return { text: `✓ ${partner} covers · you owe ${h}h`, color: C.gold };
+                    }
+                    if (existing.status === "declined")       return { text: `✕ ${partner} declined`, color: C.accent };
+                    return null;
+                  })();
+                  const isClickable = !existing || existing.status === "declined";
+                  return (
+                    <div key={i} style={{
+                      marginTop: i === 0 ? 0 : 4,
+                    }}>
+                      <button
+                        onClick={isClickable ? () => { if (typeof openSendTrade === "function") openSendTrade(t); } : undefined}
+                        disabled={!isClickable}
+                        style={{
+                          width: "100%", textAlign: "left",
+                          background: isClickable ? "transparent" : `${C.line}08`,
+                          border: isClickable ? `1px solid ${C.daddy}33` : "none",
+                          borderRadius: 6, padding: isClickable ? "8px 10px" : "4px 0",
+                          fontFamily: "inherit",
+                          cursor: isClickable ? "pointer" : "default",
+                        }}>
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 13.5, color: C.ink,
+                          lineHeight: 1.5,
+                        }}>
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11, fontWeight: 600, color: C.daddy,
+                          }}>{t.label}</span>
+                          {" — Daddy covers → "}
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11, fontWeight: 700, color: FOCUS_COLOR.deep,
+                          }}>{dur}</span>
+                          {" of deep focus"}
+                        </div>
+                        {statusLabel ? (
+                          <div style={{
+                            marginTop: 4,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, letterSpacing: "0.14em",
+                            color: statusLabel.color, fontWeight: 700,
+                          }}>{statusLabel.text}</div>
+                        ) : (
+                          <div style={{
+                            marginTop: 4,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9, letterSpacing: "0.18em",
+                            color: C.daddy, fontWeight: 700,
+                          }}>↔ Tap to send request</div>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 11,
+                  color: C.muted, marginTop: 6, lineHeight: 1.45,
+                }}>
+                  Heads-up — Daddy is off-duty in these windows and they overlap your peak. Worth asking.
+                </div>
+              </div>
+            )}
+            {/* v05.05bt181 — Drift banner. Shows when tasks have
+                blown past their planned end time. Tap re-slot to push
+                them into remaining free time (respects pinned). */}
+            {!isTomorrow && !driftDismissed && driftStatus.count > 0 && (
+              <div style={{
+                background: `${C.accent}14`,
+                border: `1.5px solid ${C.accent}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 12,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.18em",
+                  color: C.accent, fontWeight: 800,
+                }}>↳ DRIFT</div>
+                <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{driftStatus.count}</span>{" "}
+                  {driftStatus.count === 1 ? "task is" : "tasks are"} running behind.{" "}
+                  <span style={{ color: C.muted, fontStyle: "italic" }}>Schedule mismatched reality.</span>
+                </div>
+                <button
+                  onClick={() => { reanalyze(); }}
+                  style={{
+                    background: C.accent, color: "#FDFAF1",
+                    border: "none", borderRadius: 6,
+                    padding: "6px 10px",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, letterSpacing: "0.1em", fontWeight: 700,
+                    cursor: "pointer", textTransform: "uppercase",
+                  }}>Re-slot</button>
+                <button
+                  onClick={() => setDriftDismissed(true)}
+                  style={{
+                    background: "transparent", border: "none",
+                    fontSize: 16, color: C.muted, cursor: "pointer",
+                    padding: 0, lineHeight: 1,
+                  }}>×</button>
+              </div>
+            )}
             <div style={{ padding: "0", position: "relative" }}>
               {(() => {
                 const rows = [];
@@ -21725,9 +26157,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 // v05.05bt142 — bidirectional: when expanded, render a
                 // matching "hide" pill at the top so the user can
                 // re-collapse.
+                // v05.05bt208 — Per chat ('we should still be at least
+                // an hour before now and everything before THAT hour is
+                // collapsed underneath earlier'). Free slots now follow
+                // the same 1-hour rule as non-free; the earlierCount
+                // sums both so the pill says the right total.
                 const earlierCutoff = now.getTime() - 60 * 60 * 1000;
                 const earlierCount = dayTimeline.filter(s =>
-                  s.kind !== "free" && s.end.getTime() < earlierCutoff
+                  s.end.getTime() < earlierCutoff
                 ).length;
                 if (showEarlier && earlierCount > 0) {
                   rows.push(
@@ -21747,11 +26184,117 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   );
                 }
                 let earlierPillInserted = false;
+                // v05.05bt202 — Per chat ('what happened to my now
+                // slider'). currentSlotIdx is -1 when 'now' isn't in
+                // any slot (e.g., a sub-15-min gap between routines
+                // that buildDayTimeline drops, or when now sits in a
+                // past free block that gets filtered out). Fallback:
+                // find the first slot starting AFTER now and insert
+                // the NOW line right before it; flag tracks whether
+                // we've inserted yet so it only renders once. Also
+                // handle the after-all-slots case below the forEach.
+                // v05.05bt202 + bt207 — Per chat ('now slider is at the
+                // bottom at 5:49p'). currentSlotIdx can be -1 when 'now'
+                // sits in a gap, OR the slot containing now can be
+                // dropped by the trim-to-15-min rule below (e.g., 5:00-
+                // 6:00 free at 5:49p has only 11min remaining → dropped
+                // → the inside-forEach NOW check never reached → post-
+                // loop fallback fires at bottom). Fix: place the NOW
+                // line check at the TOP of forEach, before any early
+                // returns. Condition: !nowLineInserted AND (this slot
+                // contains now OR this slot is the first one at-or-after
+                // now). nowLineInserted guard prevents double-render.
+                let nowLineInserted = false;
+                const renderNowLine = (anchorKey) => {
+                  const nowFmt = (() => {
+                    const h = now.getHours(), m = now.getMinutes();
+                    const h12 = ((h + 11) % 12) + 1;
+                    return `${h12}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`;
+                  })();
+                  const _slotHour = now.getHours() + now.getMinutes() / 60;
+                  const _findShift = (parent) => {
+                    const shifts = activeShifts?.[parent] || [];
+                    return shifts.find(s => {
+                      const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+                      const [eh, em] = (s.end || "0:0").split(":").map(Number);
+                      return _slotHour >= sh + (sm || 0) / 60 && _slotHour < eh + (em || 0) / 60;
+                    });
+                  };
+                  const _m = _findShift("Mommy");
+                  const _d = _findShift("Daddy");
+                  let _color = C.gold;
+                  let _label = "NOW";
+                  if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
+                  else if (_m && _d) { _color = C.gold; _label = "NOW · TOGETHER"; }
+                  else if ((_m && currentUser === "Mommy") || (_d && currentUser === "Daddy")) {
+                    _color = currentUser === "Mommy" ? C.mommy : C.daddy;
+                    _label = "NOW · YOUR DUTY";
+                  } else if (_m) { _color = C.mommy; _label = "NOW · MOMMY DUTY"; }
+                  else if (_d) { _color = C.daddy; _label = "NOW · DADDY DUTY"; }
+                  rows.push(
+                    <div key={`nowline-${anchorKey}`}
+                      className="nl-now-line-pulse"
+                      style={{
+                        "--nl-color": _color,
+                        position: "relative",
+                        height: 0, margin: "0 14px",
+                        borderTop: `1.5px solid ${_color}`,
+                        zIndex: 2,
+                      }}>
+                      <span className="nl-now-pill-pulse"
+                        style={{
+                          "--nl-color": _color,
+                          position: "absolute", top: -10, left: 0,
+                          background: _color, padding: "3px 9px",
+                          font: "800 8.5px/1 'JetBrains Mono', monospace",
+                          letterSpacing: "0.18em", color: "#FDFAF1",
+                          borderRadius: 4,
+                        }}>{_label}</span>
+                      <span className="nl-now-pill-pulse"
+                        style={{
+                          "--nl-color": _color,
+                          position: "absolute", top: -9, right: 0,
+                          background: _color, padding: "3px 7px",
+                          font: "700 9px/1 'JetBrains Mono', monospace",
+                          color: "#FDFAF1", borderRadius: 4,
+                        }}>{nowFmt}</span>
+                    </div>
+                  );
+                };
                 dayTimeline.forEach((slot, i) => {
-                  if (slot.kind === "free" && slot.end.getTime() < now.getTime()) {
-                    return;
+                  // v05.05bt207 — NOW line anchor FIRST, before any early
+                  // returns. Fires for whichever slot contains now OR is
+                  // the first one at-or-after now.
+                  if (!nowLineInserted) {
+                    const containsNow = slot.start.getTime() <= now.getTime() && now.getTime() < slot.end.getTime();
+                    const startsAtOrAfterNow = slot.start.getTime() >= now.getTime();
+                    if (containsNow || startsAtOrAfterNow) {
+                      nowLineInserted = true;
+                      renderNowLine(i);
+                    }
                   }
-                  if (!showEarlier && slot.kind !== "free" && slot.end.getTime() < earlierCutoff) {
+                  // v05.05bt194 — Past free blocks were unconditionally
+                  // dropped, so 'show earlier' only revealed past
+                  // tasks/routines/meetings. Per chat: 'When I click
+                  // see Earlier I only see 7-8 and not all the earlier
+                  // times'. Now: past free blocks are dropped only
+                  // when showEarlier is false.
+                  // v05.05bt208 — Free past slots: previously dropped
+                  // hard once their end < now (or unconditionally with
+                  // !showEarlier). Now follow the SAME 1-hour rule as
+                  // non-free past slots: render if end >= earlierCutoff
+                  // (now − 1h), otherwise fall through to the earlier-
+                  // pill bundle below.
+                  // v05.05bt169 — Trim free blocks that straddle `now`
+                  // so the displayed time + duration match what the
+                  // scheduler actually sees.
+                  if (slot.kind === "free" && slot.start.getTime() < now.getTime() && slot.end.getTime() > now.getTime()) {
+                    const trimmedStart = new Date(now);
+                    const newDuration = (slot.end.getTime() - trimmedStart.getTime()) / 60000;
+                    if (newDuration < 15) return; // too small to show
+                    slot = { ...slot, start: trimmedStart, durationMin: newDuration };
+                  }
+                  if (!showEarlier && slot.end.getTime() < earlierCutoff) {
                     if (!earlierPillInserted && earlierCount > 0) {
                       earlierPillInserted = true;
                       rows.push(
@@ -21789,40 +26332,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     lastSection = section.label;
                   }
 
-                  // v05.05bt124 — insert NOW line before the current slot
-                  if (i === currentSlotIdx) {
-                    const nowFmt = (() => {
-                      const h = now.getHours(), m = now.getMinutes();
-                      const h12 = ((h + 11) % 12) + 1;
-                      return `${h12}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`;
-                    })();
-                    rows.push(
-                      <div key={`nowline-${i}`} style={{
-                        position: "relative",
-                        height: 0, margin: "0 14px",
-                        borderTop: `1.5px solid ${C.gold}`,
-                        zIndex: 2,
-                      }}>
-                        <span style={{
-                          position: "absolute", top: -8, left: 0,
-                          background: C.bg, padding: "2px 6px",
-                          font: "700 8px/1 'JetBrains Mono', monospace",
-                          letterSpacing: "0.2em", color: C.gold,
-                          borderRadius: 4, border: `1px solid ${C.gold}`,
-                        }}>NOW</span>
-                        <span style={{
-                          position: "absolute", top: -7, right: 0,
-                          font: "600 9px/1 'JetBrains Mono', monospace",
-                          color: C.gold, background: C.bg, padding: "2px 6px",
-                        }}>{nowFmt}</span>
-                      </div>
-                    );
-                  }
+                  // v05.05bt207 — Old in-loop NOW line block removed.
+                  // Now anchored at the top of forEach via renderNowLine
+                  // helper above, before any early returns can drop the
+                  // current slot. Kept the helper definition; just no
+                  // inline duplicate check here.
 
                   const isFree    = slot.kind === "free";
                   const isRoutine = slot.kind === "routine";
                   const isTask    = slot.kind === "task";
                   const isMeeting = slot.kind === "meeting";
+                  // v05.05bt181 — predicted feed window during user's solo
+                  // duty. Rendered like a soft routine, but italicized and
+                  // labeled with sample size so user knows it's a guess.
+                  const isFeedPred = slot.kind === "feed-predicted";
+                  // v05.05bt226 — Past-time detection. A row's end is before
+                  // 'now' → it's in the past. Free blocks that are entirely
+                  // past should render as 'closed because the time has
+                  // passed' rather than as fillable open slots. Tomorrow
+                  // view excludes this (everything is future).
+                  const isPast = !isTomorrow && slot.end <= now;
+                  const isPastFree = isFree && isPast;
                   const fmt = d => fmtTimeShort(d);
                   const tag = getBlockTag(slot);
                   const icon = getBlockIcon(slot);
@@ -21859,6 +26389,75 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     if (findShiftAt("Mommy"))      { babyContext = "Mommy on duty"; owner = "Mommy"; }
                     else if (findShiftAt("Daddy")) { babyContext = "Daddy on duty"; owner = "Daddy"; }
                   }
+                  // v05.05bt225/227 — Proportional rail + mixed-block
+                  // explanation. Per chat: 'should say for how long
+                  // daddy has her and then when I have her'. Slices
+                  // [slot.start, slot.end] at every shift transition,
+                  // returns segments with owner + start/end. The rail
+                  // renders heights proportional; the sub-line renders
+                  // the breakdown when there's >1 segment.
+                  const railSegments = (() => {
+                    const totalMs = slot.end.getTime() - slot.start.getTime();
+                    if (totalMs <= 0) return [{ owner, startMs: slot.start.getTime(), endMs: slot.end.getTime(), pct: 100 }];
+                    if (onsite) return [{ owner: null, startMs: slot.start.getTime(), endMs: slot.end.getTime(), pct: 100 }];
+                    if (isRoutine && slot.joint) return [{ owner: "joint", startMs: slot.start.getTime(), endMs: slot.end.getTime(), pct: 100 }];
+                    const todayMid = new Date(slot.start);
+                    todayMid.setHours(0, 0, 0, 0);
+                    const cutSet = new Set();
+                    cutSet.add(slot.start.getTime());
+                    cutSet.add(slot.end.getTime());
+                    for (const parent of ["Mommy", "Daddy"]) {
+                      const shifts = activeShifts?.[parent] || [];
+                      for (const s of shifts) {
+                        const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+                        const [eh, em] = (s.end || "0:0").split(":").map(Number);
+                        const startT = todayMid.getTime() + (sh * 60 + (sm || 0)) * 60000;
+                        const endT = todayMid.getTime() + (eh * 60 + (em || 0)) * 60000;
+                        if (startT > slot.start.getTime() && startT < slot.end.getTime()) cutSet.add(startT);
+                        if (endT > slot.start.getTime() && endT < slot.end.getTime()) cutSet.add(endT);
+                      }
+                    }
+                    const cuts = [...cutSet].sort((a, b) => a - b);
+                    const segs = [];
+                    for (let i = 0; i < cuts.length - 1; i++) {
+                      const midT = (cuts[i] + cuts[i + 1]) / 2;
+                      const midDate = new Date(midT);
+                      const slotHr = midDate.getHours() + midDate.getMinutes() / 60;
+                      const findShift = (parent) => {
+                        const shifts = activeShifts?.[parent] || [];
+                        return shifts.find(s => {
+                          const [sh, sm] = (s.start || "0:0").split(":").map(Number);
+                          const [eh, em] = (s.end || "0:0").split(":").map(Number);
+                          return slotHr >= sh + (sm || 0) / 60 && slotHr < eh + (em || 0) / 60;
+                        });
+                      };
+                      const m = findShift("Mommy"), d = findShift("Daddy");
+                      let segOwner;
+                      if (m && d) segOwner = "joint";
+                      else if (m) segOwner = "Mommy";
+                      else if (d) segOwner = "Daddy";
+                      else segOwner = null;
+                      segs.push({ owner: segOwner, startMs: cuts[i], endMs: cuts[i + 1] });
+                    }
+                    // Merge consecutive same-owner segments
+                    const merged = [];
+                    for (const seg of segs) {
+                      const last = merged[merged.length - 1];
+                      if (last && last.owner === seg.owner) last.endMs = seg.endMs;
+                      else merged.push({ ...seg });
+                    }
+                    return merged.map(s => ({
+                      ...s,
+                      pct: ((s.endMs - s.startMs) / totalMs) * 100,
+                    }));
+                  })();
+                  const isMixedOwner = railSegments.length > 1;
+                  const railColorFor = (segOwner) => {
+                    if (segOwner === "Daddy") return C.daddy;
+                    if (segOwner === "joint") return C.gold;
+                    if (segOwner === "Mommy") return C.mommy;
+                    return isFree ? `${C.line}66` : "rgba(201,187,164,0.55)";
+                  };
                   // v05.05bt135 — separate text shown in meta from the
                   // avatar. The avatar already says "X on duty", so
                   // meta drops that and keeps only other context like
@@ -21919,26 +26518,28 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         </div>
                       )}
                       {/* v05.05bt148/149 — Colored left rail.
-                          Tasks: solid rail.
-                          Free blocks: faded rail + the row gets a
-                            subtle background tint so it visually
-                            separates from solid routines/tasks.
-                          Routines: gray rail (no person owns it).
-                          Color encodes on-duty parent. */}
+                          v05.05bt167 — Rail spans full row height (top:0
+                          bottom:0) so adjacent same-owner rows visually
+                          form a single continuous bar.
+                          v05.05bt187 — Width bumped 3→7, then 4 (bt190).
+                          v05.05bt225 — Now PROPORTIONAL when the row
+                          crosses shift boundaries. Each sub-segment
+                          renders in its own owner color with height
+                          proportional to its share of the row. */}
                       <div style={{
                         position: "absolute",
-                        left: 0, top: 6, bottom: 6, width: 2,
-                        borderRadius: 1,
-                        background:
-                          isFree ? (owner === "Daddy" ? `${C.daddy}88` : owner === "joint" ? `${C.gold}88` : owner === "Mommy" ? `${C.mommy}88` : `${C.line}66`)
-                          : isTask ? (owner === "Daddy" ? C.daddy : owner === "joint" ? C.gold : C.mommy)
-                          // v05.05bt163 — Routines now show the on-duty
-                          // parent's rail color (mauve or blue), not
-                          // gray. Routine-vs-task signal comes from
-                          // the italic title + the small "R" badge.
-                          : (owner === "Daddy" ? `${C.daddy}88` : owner === "joint" ? `${C.gold}88` : owner === "Mommy" ? `${C.mommy}88` : "rgba(201,187,164,0.55)"),
+                        left: 0, top: 0, bottom: 0, width: 4,
+                        display: "flex", flexDirection: "column",
                         zIndex: 1,
-                      }} />
+                      }}>
+                        {railSegments.map((seg, i) => (
+                          <div key={i} style={{
+                            width: "100%",
+                            height: `${seg.pct}%`,
+                            background: railColorFor(seg.owner),
+                          }} />
+                        ))}
+                      </div>
                       <div
                       data-drop-key={dropKey || undefined}
                       onTouchStart={isTask && !slot.completedAt ? (e) => handleSwipeStart(e, slot) : undefined}
@@ -21958,11 +26559,37 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         : justMoved ? `${C.gold}1c`
                         : isFree ? `${C.gold}08`
                         : "transparent",
-                      borderBottom: `1px ${isFree ? "dashed" : "solid"} ${isDropTarget ? C.mommy + "50" : isFree ? C.gold + "22" : C.line + "22"}`,
-                      borderTop: isDropTarget && isFree ? `1px dashed ${C.mommy}` : "none",
+                      // v05.05bt188 — Owner-colored thin boundary per chat
+                      // ('thin boundary line of the same color around
+                      // blocks'). Rail covers the LEFT edge, so only
+                      // top/right/bottom get the 1px border. Owner-color
+                      // at low alpha so it's a hint, not heavy.
+                      // Drop-target dashed-mauve override wins when present.
+                      borderTop: isDropTarget && isFree ? `1px dashed ${C.mommy}` : `1px solid ${
+                        owner === "Mommy" ? C.mommy + "33"
+                        : owner === "Daddy" ? C.daddy + "33"
+                        : owner === "joint" ? C.gold + "33"
+                        : C.line + "1a"
+                      }`,
+                      borderRight: `1px solid ${
+                        owner === "Mommy" ? C.mommy + "33"
+                        : owner === "Daddy" ? C.daddy + "33"
+                        : owner === "joint" ? C.gold + "33"
+                        : C.line + "1a"
+                      }`,
+                      borderBottom: `1px ${isFree ? "dashed" : "solid"} ${
+                        isDropTarget ? C.mommy + "50"
+                        : owner === "Mommy" ? C.mommy + "33"
+                        : owner === "Daddy" ? C.daddy + "33"
+                        : owner === "joint" ? C.gold + "33"
+                        : isFree ? C.gold + "22"
+                        : C.line + "22"
+                      }`,
+                      marginBottom: 3,
+                      borderRadius: "0 4px 4px 0",
                       alignItems: "center",
-                      cursor: isBeingDragged ? "grabbing" : (isFree ? "pointer" : (isTask && !slot.completedAt ? "grab" : "default")),
-                      opacity: isBeingDragged ? 0.92 : (isTask && slot.completedAt ? 0.55 : 1),
+                      cursor: isBeingDragged ? "grabbing" : (isFree && !isPast ? "pointer" : (isTask && !slot.completedAt ? "grab" : "default")),
+                      opacity: isBeingDragged ? 0.92 : (isTask && slot.completedAt ? 0.55 : (isPastFree ? 0.55 : 1)),
                       transition: isBeingDragged
                         ? "none"
                         : (swipedTaskId === slot.id && swipeOffset !== 0)
@@ -21977,65 +26604,50 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       userSelect: "none",
                       pointerEvents: isBeingDragged ? "none" : "auto",
                     }}
-                    onClick={isFree && !draggingId ? () => {
+                    onClick={isFree && !isPast && !draggingId ? () => {
+                      // v05.05bt168 — Tapping a free/open block now opens
+                      // the free-write input as default per chat. The
+                      // block's time + duration are remembered for when
+                      // the user submits (NL-parsed tasks fall back to
+                      // this slot if no explicit time is given). The
+                      // structured form stays accessible via the
+                      // 'detailed entry instead' link inside the NL UI.
+                      // v05.05bt226 — Past free blocks are excluded
+                      // from the tap handler (time has passed).
                       const hh = String(slot.start.getHours()).padStart(2, "0");
                       const mm = String(slot.start.getMinutes()).padStart(2, "0");
                       setDraftScheduledTime(`${hh}:${mm}`);
                       setDraftEffort(Math.min(120, Math.max(15, Math.round(slot.durationMin / 15) * 15)));
-                      setShowAddForm(true);
+                      setShowNlInput(true);
+                      setShowAddForm(false);
                     } : (swipedTaskId && swipedTaskId !== slot.id ? () => dismissSwipe() : undefined)}>
-                      {/* Time column — v05.05bt146: range + duration, no
-                          ↕ button (drag or tap-time-to-edit). */}
+                      {/* Time column — v05.05bt146: range + duration.
+                          v05.05bt179a: dot moved inline-left next to
+                          the time per chat. */}
                       <div style={{
                         fontFamily: "'JetBrains Mono', monospace",
                         color: isFree ? C.muted : C.ink, fontWeight: 600,
                         letterSpacing: "-0.02em",
                         textAlign: "left",
                       }}>
-                        {isTask && !slot.completedAt && inlineTimeEdit === slot.id ? (
-                          <input
-                            type="time"
-                            defaultValue={slot.scheduledTime || `${String(slot.start.getHours()).padStart(2,"0")}:${String(slot.start.getMinutes()).padStart(2,"0")}`}
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                            onBlur={(e) => {
-                              if (e.target.value) moveTaskToTime(slot.id, e.target.value);
-                              setInlineTimeEdit(null);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                if (e.target.value) moveTaskToTime(slot.id, e.target.value);
-                                setInlineTimeEdit(null);
-                              }
-                              if (e.key === "Escape") setInlineTimeEdit(null);
-                            }}
-                            style={{
-                              fontFamily: "inherit", fontSize: 11,
-                              color: C.gold, fontWeight: 600,
-                              border: `1.5px solid ${C.mommy}`,
-                              borderRadius: 6, padding: "2px 4px",
-                              background: "#FBF5E9",
-                              width: 70,
-                            }}
-                          />
-                        ) : (
-                          <div
-                            onClick={isTask && !slot.completedAt ? (e) => { e.stopPropagation(); setInlineTimeEdit(slot.id); } : undefined}
-                            style={{
-                              fontSize: 11, lineHeight: 1.15,
-                              cursor: isTask && !slot.completedAt ? "pointer" : "default",
-                              textDecoration: isTask && !slot.completedAt ? "underline dotted" : "none",
-                              textUnderlineOffset: 2,
-                              textDecorationColor: `${C.gold}55`,
-                            }}
-                            title={isTask && !slot.completedAt ? "Tap to edit time" : null}>
-                            {fmtTimeRange(slot.start, slot.end)}
-                          </div>
-                        )}
-                        {!isFree && slot.durationMin > 0 && (
+                        <div
+                          onClick={isTask && !slot.completedAt ? (e) => { e.stopPropagation(); setInlineTimeEdit(slot.id); } : undefined}
+                          style={{
+                            fontSize: 11, lineHeight: 1.15,
+                            cursor: isTask && !slot.completedAt ? "pointer" : "default",
+                            textDecoration: isTask && !slot.completedAt ? "underline dotted" : "none",
+                            textUnderlineOffset: 2,
+                            textDecorationColor: `${C.gold}55`,
+                          }}
+                          title={isTask && !slot.completedAt ? "Tap to edit time + duration" : null}>
+                          {fmtTimeRange(slot.start, slot.end)}
+                        </div>
+                        {slot.durationMin > 0 && (
                           <div style={{
                             marginTop: 1,
-                            fontSize: 9, color: C.muted, fontWeight: 500,
+                            fontSize: 9,
+                            color: isFree ? C.gold : C.muted,
+                            fontWeight: isFree ? 700 : 500,
                             letterSpacing: "0.01em",
                           }}>
                             {fmtDurationHM(slot.durationMin)}
@@ -22067,36 +26679,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                               {slot.completedAt ? "✓" : ""}
                             </button>
                           )}
-                          {/* v05.05bt155/156 — Focus dot binary: terracotta
-                              (deep) or sage (shallow). 8px visual but
-                              a 14px wide / full-height button as the
-                              hit target so it's easier to tap on touch. */}
-                          {isTask && (() => {
-                            const fl = normalizeFocus(slot.focusLevel);
-                            const dotColor = FOCUS_COLOR[fl];
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); if (!slot.completedAt) cycleFocusLevel(slot.id); }}
-                                disabled={!!slot.completedAt}
-                                title={slot.completedAt ? null : `${FOCUS_LABEL[fl]} focus · tap to toggle`}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center", justifyContent: "center",
-                                  width: 18, height: 18,
-                                  padding: 0, border: "none",
-                                  background: "transparent",
-                                  flexShrink: 0,
-                                  cursor: slot.completedAt ? "default" : "pointer",
-                                  opacity: slot.completedAt ? 0.4 : 1,
-                                }}>
-                                <span style={{
-                                  display: "block",
-                                  width: 9, height: 9, borderRadius: "50%",
-                                  background: dotColor,
-                                }} />
-                              </button>
-                            );
-                          })()}
+                          {/* v05.05bt222 — Focus dot removed from left side
+                              of the title row; moved alongside regret on the
+                              right (see below) per chat. The whole row reads
+                              as: time | checkbox | title | ...meta · 🧠/🍃 R3 */}
                           {isTask && !slot.completedAt && inlineTitleEdit === slot.id ? (
                             <input
                               type="text"
@@ -22154,9 +26740,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                           }}
                           title={(isTask && !slot.completedAt) ? "Tap to edit name" : isRoutine ? "Tap to adjust today" : null}>
                             {isFree ? (
-                              <span style={{ color: C.gold, fontWeight: 500 }}>
-                                + Open · tap to fill
-                              </span>
+                              isPast ? (
+                                <span style={{ color: C.muted, fontWeight: 500, fontStyle: "italic" }}>
+                                  ✕ Closed · time has passed
+                                </span>
+                              ) : (
+                                <>
+                                  <span style={{ color: C.gold, fontWeight: 500 }}>
+                                    + Open · tap to fill
+                                  </span>
+                                  {(() => {
+                                    const napOverlap = (predictedNaps || []).reduce((best, nap) => {
+                                      if (nap.sampleSize < 4) return best;
+                                      const overStart = Math.max(slot.start.getTime(), nap.start.getTime());
+                                      const overEnd = Math.min(slot.end.getTime(), nap.end.getTime());
+                                      const overMin = Math.max(0, (overEnd - overStart) / 60000);
+                                      return overMin > best.overMin ? { overMin, nap } : best;
+                                    }, { overMin: 0, nap: null });
+                                    if (napOverlap.overMin < 30) return null;
+                                    return (
+                                      <span style={{
+                                        marginLeft: 8,
+                                        padding: "2px 7px",
+                                        background: `${C.mommy}1a`,
+                                        border: `1px solid ${C.mommy}55`,
+                                        borderRadius: 4,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 8.5, fontWeight: 800,
+                                        letterSpacing: "0.12em",
+                                        color: C.mommy,
+                                        textTransform: "uppercase",
+                                        verticalAlign: 2,
+                                      }}>💤 NAP · {napOverlap.nap.sampleSize}/7d</span>
+                                    );
+                                  })()}
+                                </>
+                              )
                             ) : slot.title}
                             {isTask && recentlyMovedIds.has(slot.id) && (
                               <span style={{
@@ -22166,20 +26785,401 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                                 letterSpacing: "0.08em",
                               }}>· moved</span>
                             )}
+                            {/* v05.05bt171 — Sequence badge: tasks
+                                chained via "then" show "→ 2/3" in
+                                small mono so the order is obvious. */}
+                            {isTask && slot.sequenceId && slot.sequenceTotal && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9, color: C.mommy,
+                                fontWeight: 700, marginLeft: 6,
+                                letterSpacing: "0.05em",
+                                opacity: 0.85,
+                              }}>→ {(slot.sequenceIndex ?? 0) + 1}/{slot.sequenceTotal}</span>
+                            )}
+                            {/* v05.05bt175 — Pin badge: pinned tasks
+                                show a small 📌 in gold next to title. */}
+                            {isTask && slot.pinned && (
+                              <span style={{
+                                fontSize: 11, color: C.gold,
+                                marginLeft: 6, opacity: 0.95,
+                                verticalAlign: "middle",
+                              }} title="Pinned · won't move on Reanalyze">📌</span>
+                            )}
+                            {/* v05.05bt196 — Recurring badge. Daily/weekly
+                                tasks show a small ↻ in mauve next to title. */}
+                            {isTask && slot.recurringRule && (
+                              <span style={{
+                                fontSize: 10, color: C.mommy,
+                                marginLeft: 6, opacity: 0.9,
+                                fontWeight: 700,
+                                verticalAlign: "middle",
+                              }} title={`Repeats ${slot.recurringRule}`}>↻ {slot.recurringRule === "daily" ? "d" : "w"}</span>
+                            )}
+                            {/* v05.05bt200 — Stretch goal badge. */}
+                            {isTask && slot.stretchGoal && (
+                              <span style={{
+                                fontSize: 8.5, color: C.gold,
+                                marginLeft: 6,
+                                fontWeight: 800,
+                                letterSpacing: "0.12em",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                verticalAlign: "middle",
+                              }} title="Stretch goal — slots if room">✦ STRETCH</span>
+                            )}
+                            {/* v05.05bt205 — Feed-predicted volume hint. Shows
+                                either "typical 4.2oz" (time-of-day pattern) or
+                                "after 5.0oz feed" (volume-anchored projection). */}
+                            {isFeedPred && (slot.typicalOz != null || slot.fromVolume) && (
+                              <span style={{
+                                fontSize: 9, color: C.gold,
+                                marginLeft: 6,
+                                fontWeight: 700,
+                                letterSpacing: "0.06em",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                verticalAlign: "middle",
+                                opacity: 0.95,
+                              }} title={slot.context}>
+                                {slot.fromVolume
+                                  ? `· after ${slot.typicalOz != null ? slot.typicalOz.toFixed(1) : "?"}oz`
+                                  : `· typical ${slot.typicalOz.toFixed(1)}oz`}
+                              </span>
+                            )}
                             {isRoutine && slot.overridden && (
                               <span style={{ fontSize: 8.5, color: C.gold, marginLeft: 6, letterSpacing: "0.12em", fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
                                 ADJ
                               </span>
                             )}
+                            {/* v05.05bt193 — 'why here?' link on scheduled
+                                tasks. Surfaces the placement reasoning that
+                                was previously only visible on free blocks.
+                                Tap toggles expandedReasonTaskId. */}
+                            {isTask && !slot.completedAt && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedReasonTaskId(prev => prev === slot.id ? null : slot.id);
+                                }}
+                                style={{
+                                  marginLeft: 8,
+                                  background: "transparent",
+                                  border: "none", padding: 0,
+                                  cursor: "pointer",
+                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontStyle: "italic",
+                                  fontSize: 11, color: C.muted,
+                                  textDecoration: "underline dotted",
+                                  textDecorationColor: `${C.gold}88`,
+                                  textUnderlineOffset: 2,
+                                }}>
+                                {expandedReasonTaskId === slot.id ? "hide" : "why here"}
+                              </button>
+                            )}
                           </span>
                           )}
                         </div>
-                        {/* v05.05bt149 — Sub-context dropped from free
-                            blocks since the title now reads "+ Open ·
-                            tap to fill" (clear affordance, no need for
-                            a second line). The focus-level info still
-                            lives in the why-here panel when a task is
-                            placed in this slot. */}
+                        {/* v05.05bt193 — Task reasoning panel. Renders
+                            below the title when expanded. Pulls the
+                            same effectiveBlockProfile reasoning the
+                            free blocks use. */}
+                        {isTask && !slot.completedAt && expandedReasonTaskId === slot.id && (() => {
+                          const profile = _applyLowEnergyCap(
+                            effectiveBlockProfile(
+                              slot.start, slot.end, owner, currentUser, predictedNaps, onsite,
+                              focusProfile, meetingsForBuffer, predictedFeeds, false, babyStats
+                            ),
+                            lowEnergy
+                          );
+                          const fl = normalizeFocus(profile.focusLevel);
+                          const focusColor = FOCUS_COLOR[fl] || FOCUS_COLOR.shallow;
+                          const taskFocus = normalizeFocus(slot.focusLevel);
+                          const focusMatch = taskFocus === fl;
+                          return (
+                            <div style={{
+                              marginTop: 6, padding: "8px 10px",
+                              background: `${C.gold}0a`,
+                              border: `1px solid ${C.gold}33`,
+                              borderRadius: 6,
+                            }}>
+                              <div style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9, color: C.gold, fontWeight: 800,
+                                letterSpacing: "0.14em",
+                                marginBottom: 5,
+                              }}>WHY THIS SLOT</div>
+                              <div style={{
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 11.5, lineHeight: 1.45,
+                                color: C.ink,
+                              }}>
+                                {Array.isArray(profile.reasons) && profile.reasons.filter(Boolean).map((r, idx) => (
+                                  <div key={idx} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 2 }}>
+                                    <span style={{ color: focusColor, opacity: 0.85, flexShrink: 0, fontWeight: 700 }}>•</span>
+                                    <span>{r}</span>
+                                  </div>
+                                ))}
+                                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 2 }}>
+                                  <span style={{ color: focusMatch ? "#5A7A4E" : C.accent, flexShrink: 0, fontWeight: 700 }}>•</span>
+                                  <span>
+                                    Your task focus is <span style={{ color: FOCUS_COLOR[taskFocus] || C.muted, fontWeight: 600 }}>{taskFocus}</span>;
+                                    {" "}slot is <span style={{ color: focusColor, fontWeight: 600 }}>{fl}</span> —
+                                    {focusMatch ? " perfect match." : (taskFocus === "deep" && fl === "shallow" ? " task wants deep but slot is light · consider moving to a deep window if you have one." : " mismatched but workable.")}
+                                  </span>
+                                </div>
+                                {(slot.regretScore || 0) >= 4 && (
+                                  <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+                                    <span style={{ color: C.accent, flexShrink: 0, fontWeight: 700 }}>•</span>
+                                    <span>High regret ({slot.regretScore}/5) — the scheduler prioritized this task in the queue.</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        {/* v05.05bt173 — Open-block sub-line driven by
+                            effectiveBlockProfile: combines circadian
+                            with baby-state. A free block during your
+                            solo duty that overlaps a predicted nap
+                            reads "deep · nap predicted" instead of
+                            "light · interruptible". Recall the
+                            algorithm should consider what the baby is
+                            doing, not just whose shift it is. */}
+                        {isFree && (() => {
+                          // v05.05bt227 — Per chat: mixed-duty blocks
+                          // should show "for how long daddy has her
+                          // and then when I have her", and the focus
+                          // explanation should acknowledge that the
+                          // block isn't fully uninterrupted. For multi-
+                          // owner blocks (railSegments.length > 1), we
+                          // compute a per-segment profile and surface
+                          // the breakdown.
+                          const fmtSegT = (ms) => {
+                            const d = new Date(ms);
+                            const h = d.getHours();
+                            const m = d.getMinutes();
+                            const h12 = ((h + 11) % 12) + 1;
+                            const ampm = h < 12 ? "a" : "p";
+                            return `${h12}${m ? `:${String(m).padStart(2, "0")}` : ""}${ampm}`;
+                          };
+                          const fmtMin = (ms) => {
+                            const m = Math.round(ms / 60000);
+                            const h = Math.floor(m / 60);
+                            const r = m % 60;
+                            return h > 0 ? (r > 0 ? `${h}h${r}m` : `${h}h`) : `${r}m`;
+                          };
+                          if (isMixedOwner) {
+                            // Mixed: compute focus per segment via
+                            // effectiveBlockProfile, surface the time
+                            // breakdown with each segment's care state.
+                            const segProfiles = railSegments.map(seg => {
+                              const segStart = new Date(seg.startMs);
+                              const segEnd = new Date(seg.endMs);
+                              return {
+                                ...seg,
+                                start: segStart,
+                                end: segEnd,
+                                profile: _applyLowEnergyCap(
+                                  effectiveBlockProfile(
+                                    segStart, segEnd, seg.owner, currentUser,
+                                    predictedNaps, onsite, focusProfile,
+                                    meetingsForBuffer, predictedFeeds, false, babyStats
+                                  ),
+                                  lowEnergy
+                                ),
+                              };
+                            });
+                            // Dominant focus: weighted by duration. If
+                            // any segment is shallow, mark as MIXED so
+                            // the user knows the block isn't all-deep.
+                            const totalMs = slot.end.getTime() - slot.start.getTime();
+                            const deepMs = segProfiles
+                              .filter(s => normalizeFocus(s.profile.focusLevel) === "deep")
+                              .reduce((sum, s) => sum + (s.endMs - s.startMs), 0);
+                            const allDeep = deepMs === totalMs;
+                            const focusLbl = allDeep ? "deep · partial" : "mixed";
+                            const focusColor = allDeep ? FOCUS_COLOR.deep : C.gold;
+                            return (
+                              <div style={{ marginTop: 2 }}>
+                                <div style={{
+                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontSize: 11.5, lineHeight: 1.35,
+                                  color: C.ink,
+                                }}>
+                                  <span style={{
+                                    color: focusColor, fontWeight: 700,
+                                    letterSpacing: "0.04em",
+                                    fontSize: 10,
+                                    textTransform: "uppercase",
+                                  }}>{focusLbl}</span>
+                                  <span style={{ color: C.muted, fontStyle: "italic" }}> · mixed shift — partial focus only</span>
+                                </div>
+                                <div style={{
+                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontSize: 11.5, lineHeight: 1.45,
+                                  color: C.ink, marginTop: 4, paddingLeft: 2,
+                                }}>
+                                  {segProfiles.map((s, i) => {
+                                    const segColor = s.owner === "Daddy" ? C.daddy
+                                      : s.owner === "joint" ? C.gold
+                                      : s.owner === "Mommy" ? C.mommy
+                                      : C.muted;
+                                    const whoLabel = s.owner === currentUser ? "you have Solène"
+                                      : s.owner === "Mommy" ? "Mommy has Solène"
+                                      : s.owner === "Daddy" ? "Daddy has Solène"
+                                      : s.owner === "joint" ? "joint shift"
+                                      : "grandparents have Solène";
+                                    return (
+                                      <div key={i} style={{
+                                        display: "flex", gap: 6,
+                                        alignItems: "flex-start", marginBottom: 1,
+                                      }}>
+                                        <span style={{
+                                          color: segColor, opacity: 0.85,
+                                          flexShrink: 0, fontWeight: 700,
+                                        }}>•</span>
+                                        <span>
+                                          <span style={{
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: 10, fontWeight: 600,
+                                            color: segColor,
+                                          }}>{fmtSegT(s.startMs)}–{fmtSegT(s.endMs)} ({fmtMin(s.endMs - s.startMs)})</span>
+                                          {" · "}
+                                          <span style={{ fontStyle: "italic" }}>{whoLabel}</span>
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                  {!allDeep && (
+                                    <div style={{
+                                      marginTop: 4, paddingLeft: 14,
+                                      fontStyle: "italic", color: C.muted,
+                                      fontSize: 11,
+                                    }}>
+                                      ↳ Only the portion when Solène isn't with you is uninterrupted — the rest of this block, you're on duty.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                          // Single-owner — existing logic
+                          const profile = _applyLowEnergyCap(
+                            effectiveBlockProfile(
+                              slot.start, slot.end, owner, currentUser, predictedNaps, onsite,
+                              focusProfile, meetingsForBuffer, predictedFeeds, false, babyStats
+                            ),
+                            lowEnergy
+                          );
+                          const fl = normalizeFocus(profile.focusLevel);
+                          const focusLbl = FOCUS_LABEL[fl] || "Light";
+                          const focusColor = FOCUS_COLOR[fl] || FOCUS_COLOR.shallow;
+                          return (
+                            <div style={{ marginTop: 2 }}>
+                              <div style={{
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 11.5, lineHeight: 1.35,
+                                color: C.ink,
+                              }}>
+                                <span style={{
+                                  color: focusColor, fontWeight: 700,
+                                  letterSpacing: "0.04em",
+                                  fontSize: 10,
+                                  textTransform: "uppercase",
+                                }}>{focusLbl.toLowerCase()}</span>
+                                {profile.careLabel && (
+                                  <span style={{ color: C.muted, fontStyle: "italic" }}> · {profile.careLabel}</span>
+                                )}
+                              </div>
+                              {Array.isArray(profile.reasons) && profile.reasons.length > 0 && (
+                                <div style={{
+                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontSize: 11.5, lineHeight: 1.45,
+                                  color: C.ink,
+                                  marginTop: 4, paddingLeft: 2,
+                                }}>
+                                  {profile.reasons.filter(Boolean).map((r, idx) => (
+                                    <div key={idx} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 1 }}>
+                                      <span style={{ color: focusColor, opacity: 0.85, flexShrink: 0, fontWeight: 700 }}>•</span>
+                                      <span>{r}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {/* v05.05bt192 — 'What fits here?' suggestion.
+                                  Heuristic-based: filter my-unscheduled
+                                  tasks that fit the block duration, prefer
+                                  focus-level match, then regret desc.
+                                  Tap to slot the suggestion into this
+                                  block. AI stub button alongside. */}
+                              {(() => {
+                                const candidates = (tasks || [])
+                                  .filter(t => t.ownerName === currentUser
+                                            && !t.completedAt
+                                            && !t.scheduledTime
+                                            && (t.effortMin || 30) <= slot.durationMin)
+                                  .sort((a, b) => {
+                                    const aFocusMatch = normalizeFocus(a.focusLevel) === profile.focusLevel ? 1 : 0;
+                                    const bFocusMatch = normalizeFocus(b.focusLevel) === profile.focusLevel ? 1 : 0;
+                                    if (bFocusMatch !== aFocusMatch) return bFocusMatch - aFocusMatch;
+                                    if ((b.regretScore || 0) !== (a.regretScore || 0)) return (b.regretScore || 0) - (a.regretScore || 0);
+                                    return (a.effortMin || 30) - (b.effortMin || 30);
+                                  });
+                                if (candidates.length === 0) return null;
+                                const top = candidates[0];
+                                const slotTime = `${String(slot.start.getHours()).padStart(2, "0")}:${String(slot.start.getMinutes()).padStart(2, "0")}`;
+                                return (
+                                  <div style={{
+                                    marginTop: 8, padding: "6px 10px",
+                                    background: `${C.gold}10`,
+                                    border: `1px dashed ${C.gold}55`,
+                                    borderRadius: 6,
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    flexWrap: "wrap",
+                                  }}>
+                                    <span style={{
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 9, color: C.gold, fontWeight: 800,
+                                      letterSpacing: "0.14em",
+                                    }}>✦ FITS</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTasks(prev => prev.map(t => t.id === top.id ? { ...t, scheduledTime: slotTime } : t));
+                                      }}
+                                      style={{
+                                        flex: 1,
+                                        background: "transparent", border: "none",
+                                        padding: 0, cursor: "pointer",
+                                        textAlign: "left", color: C.ink,
+                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontSize: 13, fontWeight: 500,
+                                      }}
+                                      title="Tap to slot this task here">
+                                      {top.title}{" "}
+                                      <span style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 10, color: C.muted, fontWeight: 600,
+                                      }}>{top.effortMin || 30}m</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTasks(prev => prev.map(t => t.id === top.id ? { ...t, scheduledTime: slotTime } : t));
+                                      }}
+                                      style={{
+                                        padding: "3px 8px",
+                                        background: C.gold, color: "#FDFAF1",
+                                        border: "none", borderRadius: 4,
+                                        cursor: "pointer",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, letterSpacing: "0.1em", fontWeight: 700,
+                                      }}>SLOT</button>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* v05.05bt152 — Persistent × delete REMOVED from
@@ -22192,6 +27192,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                         display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
                       }}>
+                        {/* v05.05bt222 — Focus emoji glyph adjacent to regret.
+                            🧠 = deep cognitive work · 🍃 = light / chore.
+                            Tappable to cycle focus level. */}
+                        {isTask && !slot.completedAt && (() => {
+                          const fl = normalizeFocus(slot.focusLevel);
+                          const glyph = fl === "deep" ? "🧠" : "🍃";
+                          return (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
+                              title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
+                              style={{
+                                background: "transparent", border: "none",
+                                padding: "2px 2px", cursor: "pointer",
+                                fontSize: 13, lineHeight: 1,
+                              }}>
+                              {glyph}
+                            </button>
+                          );
+                        })()}
                         {isTask && !slot.completedAt && (
                           <button
                             onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
@@ -22231,93 +27250,65 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       </div>
                     </div>
                   );
+                  // v05.05bt190 — Inline edit panel attached directly
+                  // below the row being edited. Replaces the bottom-
+                  // sheet TimeEditPopover per chat ('edit the time
+                  // range and duration right there and not another
+                  // pop up').
+                  if (isTask && !slot.completedAt && inlineTimeEdit === slot.id) {
+                    rows.push(
+                      <InlineTimeEditPanel
+                        key={`edit-${slot.id}`}
+                        C={C}
+                        task={slot}
+                        onCancel={() => setInlineTimeEdit(null)}
+                        onSave={(patch) => {
+                          setTasks(prev => prev.map(x => x.id === slot.id ? { ...x, ...patch } : x));
+                          setInlineTimeEdit(null);
+                        }}
+                      />
+                    );
+                  }
                 });
+                // v05.05bt207 — Post-bedtime fallback: if now is past
+                // every slot's end (e.g., it's 11:30p), nowLineInserted
+                // is still false. Render the pulse at the bottom of the
+                // timeline using the shared helper.
+                if (!nowLineInserted && !isTomorrow && dayTimeline.length > 0) {
+                  renderNowLine("tail");
+                }
                 return rows;
               })()}
             </div>
-            {/* v05.05bt148/152 — Legend per chat. Persistent footer
-                explaining the left-rail colors AND the focus dot colors. */}
-            <div style={{
-              marginTop: 14, padding: "10px 12px",
-              background: `${C.line}10`,
-              borderRadius: 8,
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9, color: "#7C6B5A",
-              letterSpacing: "0.08em",
-              display: "flex", flexDirection: "column", gap: 6,
-            }}>
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "6px 14px",
-                justifyContent: "center", alignItems: "center",
-              }}>
-                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>RAILS</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 10, height: 2, background: C.mommy, borderRadius: 1 }} />
-                  <span>Mommy</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 10, height: 2, background: C.daddy, borderRadius: 1 }} />
-                  <span>Daddy</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 10, height: 2, background: C.gold, borderRadius: 1 }} />
-                  <span>Joint</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 10, height: 2, background: "rgba(201,187,164,0.6)", borderRadius: 1 }} />
-                  <span>Routine</span>
-                </span>
-              </div>
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "6px 14px",
-                justifyContent: "center", alignItems: "center",
-                borderTop: `1px solid ${C.line}33`, paddingTop: 6,
-              }}>
-                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>FOCUS DOT</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: FOCUS_COLOR.deep }} />
-                  <span>Deep · intense focus</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: FOCUS_COLOR.shallow }} />
-                  <span>Light · easy/admin</span>
-                </span>
-              </div>
-              {/* v05.05bt153 — Regret/priority legend per chat. Same
-                  color scale used everywhere (right column on tasks,
-                  Review modal, EditTaskModal). R1-R2 muted, R3 gold,
-                  R4 rose-coral, R5 deep red. */}
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "6px 14px",
-                justifyContent: "center", alignItems: "center",
-                borderTop: `1px solid ${C.line}33`, paddingTop: 6,
-              }}>
-                <span style={{ fontSize: 8, opacity: 0.6, letterSpacing: "0.18em" }}>PRIORITY</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: C.muted, fontWeight: 700 }}>R1–2</span>
-                  <span style={{ opacity: 0.7 }}>Tomorrow's fine</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: C.gold, fontWeight: 700 }}>R3</span>
-                  <span style={{ opacity: 0.7 }}>Slightly behind</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: "#C18D7A", fontWeight: 700 }}>R4</span>
-                  <span style={{ opacity: 0.7 }}>Significantly behind</span>
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ color: "#A04848", fontWeight: 700 }}>R5</span>
-                  <span style={{ opacity: 0.7 }}>Cannot push</span>
-                </span>
-              </div>
-            </div>
-            <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontSize: 11, color: "rgba(124,107,90,0.6)",
-              marginTop: 8, fontStyle: "italic", textAlign: "center",
-            }}>
-              Tap title/time/focus/regret to edit · grab ⋮⋮ to drag · delete from All Tasks.
-            </div>
+            {/* v05.05bt167 — Backlog footer. Quiet link to All Tasks
+                showing unscheduled count. Replaces the legend + tip
+                line. Tap navigates to All Tasks sub-tab via setting a
+                hint state (currently informational only; All Tasks
+                is reachable via the sub-tab pills above). */}
+            {(() => {
+              const unscheduled = myTasks.filter(t => !t.completedAt && !t.scheduledTime).length;
+              if (unscheduled === 0) return null;
+              return (
+                <div style={{
+                  marginTop: 14, padding: "11px 14px",
+                  background: `${C.line}10`,
+                  borderRadius: 8,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 12.5,
+                  color: "#7C6B5A",
+                }}>
+                  <span>
+                    <strong style={{
+                      fontStyle: "normal", color: C.ink, fontWeight: 600,
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                    }}>{unscheduled}</strong>
+                    {" "}unscheduled · backlog
+                  </span>
+                  <span style={{ color: C.gold, fontSize: 11, opacity: 0.7 }}>see All Tasks ↗</span>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -22539,11 +27530,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     fontFamily: "'JetBrains Mono', monospace",
                     width: 16, textAlign: "center", flexShrink: 0,
                   }}>{t.regretScore}</span>
-                  {/* Focus dot — color-codes focus level */}
+                  {/* v05.05bt222 — Focus emoji glyph (🧠 deep / 🍃 light) replacing the colored dot. */}
                   <span style={{
-                    width: 8, height: 8, borderRadius: "50%",
-                    background: focusColor, flexShrink: 0,
-                  }} title={`${FOCUS_LABEL[normalizeFocus(t.focusLevel)]} focus`} />
+                    fontSize: 14, flexShrink: 0, lineHeight: 1,
+                  }} title={`${FOCUS_LABEL[normalizeFocus(t.focusLevel)]} focus`}>
+                    {normalizeFocus(t.focusLevel) === "deep" ? "🧠" : "🍃"}
+                  </span>
                   {/* Tap on body to edit */}
                   <button
                     onClick={() => setEditingTask(t)}
@@ -22642,31 +27634,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         </div>
       </div>
 
-      {/* v05.05bt146 — FAB swap per chat. The primary action is now
-          "+ add task" (mauve, matches the app's primary tint). Brain
-          Dump moved into the ⋯ menu (tap "Brain dump" item there).
-          Solves the two-FAB conflict from bt132–145. */}
-      {!showBrainDump && !editingTask && !editingRoutine && !showSetup
-        && !splittingTask && !movePickerForTask && !showActionsMenu
-        && !showNlInput && !showAddForm && (
-      <button
-        onClick={() => setShowNlInput(true)}
-        style={{
-          position: "fixed",
-          bottom: 88, right: 20,
-          width: 56, height: 56, borderRadius: "50%",
-          background: C.mommy,
-          color: "#fff",
-          border: "none",
-          fontSize: 28, fontWeight: 500, lineHeight: 1,
-          cursor: "pointer",
-          boxShadow: `0 8px 22px -4px ${C.mommy}b0, 0 1px 0 rgba(255,255,255,0.25) inset`,
-          fontFamily: "inherit",
-          zIndex: 50,
-        }}
-        title="Add a task"
-        aria-label="Add task">+</button>
-      )}
+      {/* v05.05bt191 — Add-task FAB removed per chat ('not a fan of
+          two round adding things button at the same time'). The
+          central LOG button stays as the sole bottom-area floating
+          action. Tasks are still addable via: tapping any free block
+          on the timeline (most direct path), or the ⋯ menu's
+          "Brain dump" item, or the structured add form. The FAB was
+          redundant with those paths. */}
 
       {/* v05.05bt148 — Monday CSV manual-copy fallback. When the
           clipboard API fails (common on iOS Safari after menu nav),
@@ -23080,6 +28054,96 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
           currentUser={currentUser}
         />
       )}
+      {showFocusQuiz && (
+        <FocusQuizModal
+          C={C}
+          focusProfile={focusProfile}
+          onClose={() => setShowFocusQuiz(false)}
+          onSave={(profile) => setFocusProfile(profile)}
+          onClear={() => setFocusProfile(null)}
+        />
+      )}
+      {showRoutineEditor && (
+        <RoutineLibraryEditor
+          C={C}
+          initialLibrary={routineLibrary}
+          defaults={DEFAULT_MOMMY_ROUTINES}
+          onSave={(rs) => { setRoutineLibrary(rs); setShowRoutineEditor(false); }}
+          onReset={() => { setRoutineLibrary(null); setShowRoutineEditor(false); }}
+          onClose={() => setShowRoutineEditor(false)}
+        />
+      )}
+      {showOptimizer && (
+        <ScheduleOptimizerModal
+          C={C}
+          focusProfile={focusProfile}
+          routineLibrary={routineLibrary}
+          currentUser={currentUser}
+          onsite={onsite}
+          meetings={meetings}
+          now={now}
+          todaySetup={todaySetup}
+          onClose={() => setShowOptimizer(false)}
+          onApply={(shape) => {
+            // v05.05bt216 — Persist wake + bedtime targets into todaySetup
+            // so the bedtime cascade picks them up. The cascade already
+            // reads todaySetup.lightsOutTarget for re-anchoring PM
+            // routines. Wake target reserved for future morning cascade.
+            const fmtTime = (h) => {
+              const hr = Math.floor(h);
+              const min = Math.round((h - hr) * 60);
+              return `${String(hr).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+            };
+            setTodaySetup(prev => ({
+              ...(prev || {}),
+              date: isoDate(new Date(now)),
+              wakeTarget: fmtTime(shape.wake),
+              lightsOutTarget: fmtTime(shape.bed),
+            }));
+            setShowOptimizer(false);
+          }}
+        />
+      )}
+      {showEnergyCheckIn && (
+        <EnergyCheckInModal
+          C={C}
+          events={events}
+          now={now}
+          onClose={() => setShowEnergyCheckIn(false)}
+          onSave={(e) => setDailyEnergy(e)}
+        />
+      )}
+      {previewState && (
+        <PreviewBeforeCommitModal
+          C={C}
+          preview={previewState}
+          onLockIn={() => {
+            setTasks(prev => [...prev, ...previewState.tasks]);
+            const slotted = previewState.tasks.filter(t => t.scheduledTime).length;
+            const unscheduled = previewState.tasks.length - slotted;
+            setScheduleStatus({
+              slotted, unscheduled,
+              total: previewState.tasks.length,
+              items: previewState.tasks.map(t => ({
+                id: t.id, title: t.title, scheduled: !!t.scheduledTime,
+                reason: previewState.reasons[t.id] || (t.scheduledTime ? "manual time set on entry" : null),
+              })),
+              algorithm: "greedy regret-priority",
+              reanalyzed: false,
+            });
+            if (unscheduled > 0) setShowUnscheduled(true);
+            setPreviewState(null);
+          }}
+          onCancel={() => setPreviewState(null)}
+          onCommandApply={(cmd) => {
+            const result = parsePreviewCommand(cmd, previewState.tasks);
+            if (result.success) {
+              setPreviewState({ ...previewState, tasks: result.newTasks });
+            }
+            return result;
+          }}
+        />
+      )}
     </Section>
   );
 }
@@ -23097,6 +28161,23 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
   const [category, setCategory] = useState(task.category || "");
   // v05.05bt114 — surfaces scheduledTime so user can correct or remove it
   const [scheduledTime, setScheduledTime] = useState(task.scheduledTime || "");
+  // v05.05bt175 — Pin toggle. Pinned tasks keep their scheduledTime
+  // across reanalyze. Auto-disabled when no scheduledTime (you can't
+  // pin something with no time).
+  const [pinned, setPinned] = useState(!!task.pinned);
+  // v05.05bt243 — Per-task 'must be deep' override. Forces the scheduler
+  // to place this task ONLY in deep blocks, even on low-energy days.
+  // Useful when a single task genuinely needs your best cognitive window
+  // regardless of how you feel.
+  const [requireDeep, setRequireDeep] = useState(!!task.requireDeep);
+  // v05.05bt196 — Recurring task rule. Null = one-off. 'daily' or
+  // 'weekly' = auto-create next occurrence on completion (the
+  // toggleComplete handler picks it up).
+  const [recurringRule, setRecurringRule] = useState(task.recurringRule || null);
+  // v05.05bt200 — Stretch goal tier. Nice-to-do today; scheduler
+  // deprioritizes so must-do tasks always land first. If room remains
+  // after non-stretch fills, stretch goals slot in.
+  const [stretchGoal, setStretchGoal] = useState(!!task.stretchGoal);
 
   const regretLabels = {
     1: "Tomorrow's fine", 2: "Prefer today",
@@ -23115,6 +28196,10 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
       focusLevel,
       category: category || null,
       scheduledTime: scheduledTime || null,
+      pinned: pinned && !!scheduledTime, // can only pin if time set
+      requireDeep: !!requireDeep,
+      recurringRule: recurringRule || null,
+      stretchGoal: !!stretchGoal,
     });
   };
 
@@ -23228,6 +28313,120 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
           </button>
         )}
       </div>
+      {/* v05.05bt175 — Pin toggle. Pinned tasks survive Reanalyze; the
+          engine schedules around them. Disabled when no scheduledTime
+          (you can't pin something with no time). */}
+      <button
+        onClick={() => setPinned(p => !p)}
+        disabled={!scheduledTime}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", padding: "8px 10px", marginBottom: 12,
+          background: pinned ? `${C.gold}1a` : "transparent",
+          border: `1.5px solid ${pinned ? C.gold : C.line + "33"}`,
+          borderRadius: 6, cursor: scheduledTime ? "pointer" : "not-allowed",
+          opacity: scheduledTime ? 1 : 0.5,
+          fontFamily: "inherit",
+        }}>
+        <span style={{ fontSize: 14, color: pinned ? C.gold : C.muted }}>
+          {pinned ? "📌" : "○"}
+        </span>
+        <span style={{
+          fontSize: 12.5, color: pinned ? C.ink : C.muted,
+          fontWeight: pinned ? 600 : 500,
+        }}>
+          {pinned ? "Pinned — won't move on Reanalyze" : "Pin to this time"}
+        </span>
+        {!scheduledTime && (
+          <span style={{ fontSize: 10, color: C.muted, fontStyle: "italic", marginLeft: "auto" }}>
+            set a time first
+          </span>
+        )}
+      </button>
+      {/* v05.05bt243 — Per-task 'must be deep' override toggle. */}
+      <button
+        onClick={() => setRequireDeep(p => !p)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", padding: "8px 10px", marginBottom: 12,
+          background: requireDeep ? `${FOCUS_COLOR.deep}1a` : "transparent",
+          border: `1.5px solid ${requireDeep ? FOCUS_COLOR.deep : C.line + "33"}`,
+          borderRadius: 6, cursor: "pointer",
+          fontFamily: "inherit",
+        }}>
+        <span style={{ fontSize: 14, color: requireDeep ? FOCUS_COLOR.deep : C.muted }}>
+          {requireDeep ? "◉" : "○"}
+        </span>
+        <span style={{
+          fontSize: 12.5, color: requireDeep ? C.ink : C.muted,
+          fontWeight: requireDeep ? 600 : 500,
+        }}>
+          {requireDeep ? "Must land in a deep block — no exceptions" : "Force into a deep block"}
+        </span>
+      </button>
+      {/* v05.05bt196 — Recurring rule picker. When set, completing the
+          task auto-creates the next occurrence (toggleComplete handles
+          the dispatch). Useful for daily standups, weekly reviews,
+          pump sessions, etc. */}
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4, marginTop: 6 }}>
+        Repeat
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginBottom: 10 }}>
+        {[
+          { v: null, l: "Once" },
+          { v: "daily", l: "Daily" },
+          { v: "weekly", l: "Weekly" },
+        ].map(opt => (
+          <button
+            key={opt.l}
+            onClick={() => setRecurringRule(opt.v)}
+            style={{
+              padding: "8px 6px",
+              background: recurringRule === opt.v ? C.mommy : "transparent",
+              color: recurringRule === opt.v ? "#FDFAF1" : C.ink,
+              border: `1.5px solid ${recurringRule === opt.v ? C.mommy : C.line + "33"}`,
+              borderRadius: 6, cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+            }}>{opt.l}</button>
+        ))}
+      </div>
+      {recurringRule && (
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 11.5,
+          color: C.muted, marginBottom: 10, paddingLeft: 2,
+          lineHeight: 1.4,
+        }}>
+          {recurringRule === "daily"
+            ? "↻ A new copy will appear tomorrow when you check this off."
+            : `↻ A new copy will appear next ${(task.scheduledDate ? new Date(task.scheduledDate + "T00:00:00") : new Date()).toLocaleDateString(undefined, { weekday: "long" })} when you check this off.`}
+        </div>
+      )}
+      {/* v05.05bt200 — Stretch goal toggle. Tasks marked as stretch
+          are scheduled AFTER all non-stretch tasks of the same regret
+          tier, so 'must do today' always wins the slot competition. */}
+      <button
+        onClick={() => setStretchGoal(s => !s)}
+        style={{
+          width: "100%", padding: "10px 12px",
+          background: stretchGoal ? `${C.gold}1a` : "transparent",
+          color: stretchGoal ? C.ink : C.muted,
+          border: `1.5px solid ${stretchGoal ? C.gold : C.line + "33"}`,
+          borderRadius: 8, cursor: "pointer",
+          fontFamily: "inherit", fontSize: 13,
+          textAlign: "left", marginBottom: 10,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+        <span style={{ fontSize: 14, color: stretchGoal ? C.gold : C.muted }}>
+          {stretchGoal ? "✦" : "○"}
+        </span>
+        <span style={{
+          fontSize: 12.5,
+          fontWeight: stretchGoal ? 600 : 500,
+        }}>
+          {stretchGoal ? "Stretch goal — slots if room" : "Mark as stretch goal"}
+        </span>
+      </button>
       <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
         How bad if not done today?
       </div>
@@ -23486,7 +28685,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
       ))}
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button onClick={onCommit} disabled={pending.length === 0} style={{
+        <button onClick={() => onCommit()} disabled={pending.length === 0} style={{
           flex: 1, background: pending.length > 0 ? C.mommy : C.line, color: "#fff",
           border: "none", borderRadius: 8, padding: "10px",
           fontSize: 13, fontWeight: 600,
@@ -24840,7 +30039,224 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   );
 }
 
-function InventoryView({ C, inventory, events, currentUser, moveToFridge, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal, pumpPlan, setPumpPlan }) {
+// v05.05bt244 — CaregiverPackCard. Per chat: 'link the breast milk bags
+// I give to caregiver from the inventory ... how many oz of bags of
+// breastmilk should be given to caregiver or which ones from inventory.'
+//
+// Approach: compute Solène's average daily oz consumption from the last
+// 14 days of bottle/feed events (per chat: 2 weeks is sufficient for a
+// ~4mo old — consumption changes gradually at this age, day-to-day
+// noise dominates if you use a shorter window). Multiply by the hours
+// the caregiver will have her, plus a 20% buffer. Then pick bags from
+// inventory in expiry-priority order: rt first (shortest safe window),
+// then fridge, then freezer (which would need to be thawed first).
+function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
+  const [hours, setHours] = useState(4);
+  // Average daily oz over last 14 days
+  const ms14d = 14 * 24 * 60 * 60 * 1000;
+  const cutoff = now.getTime() - ms14d;
+  // v05.05bt246 — Filter to feed events (the canonical type used by
+  // mommy/daddy when logging bottles via the central log button, and by
+  // caregiver quick-log). Breastfeed events don't have oz so they
+  // don't contribute to the oz calculation, but they DO confirm Solène
+  // is feeding regularly on a given day. We use feed-only here for the
+  // oz math.
+  const recentFeeds = (Array.isArray(events) ? events : [])
+    .filter(e => e.type === "feed" && e.oz)
+    .filter(e => new Date(e.ts).getTime() >= cutoff);
+  const dayTotals = {};
+  recentFeeds.forEach(e => {
+    const d = new Date(e.ts);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    dayTotals[key] = (dayTotals[key] || 0) + Number(e.oz || 0);
+  });
+  const daysSampled = Object.keys(dayTotals).length;
+  const avgDailyOz = daysSampled > 0
+    ? Object.values(dayTotals).reduce((a, b) => a + b, 0) / daysSampled
+    : null;
+  // Recommended oz: scaled by hours fraction of day, plus 20% buffer.
+  // Clamp to a minimum of 4oz so we never recommend zero.
+  const recommendedOz = avgDailyOz !== null
+    ? Math.max(4, Math.ceil(avgDailyOz * (hours / 24) * 1.2 * 4) / 4) // round to 0.25
+    : null;
+  // Bag-pick: prefer rt (shortest expiry), then fridge, then freezer.
+  // Sort within each location by pumpedAt asc (oldest first).
+  const valid = (Array.isArray(inventory) ? inventory : []).filter(i => !i.expired && i.oz > 0);
+  const sortByAge = (a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt);
+  const sorted = [
+    ...valid.filter(i => i.location === "rt").sort(sortByAge),
+    ...valid.filter(i => i.location === "fridge").sort(sortByAge),
+    ...valid.filter(i => i.location === "freezer").sort(sortByAge),
+  ];
+  const picks = [];
+  let pickedOz = 0;
+  if (recommendedOz !== null) {
+    for (const bag of sorted) {
+      if (pickedOz >= recommendedOz) break;
+      picks.push(bag);
+      pickedOz += bag.oz;
+    }
+  }
+  const totalInventoryOz = valid.reduce((s, i) => s + i.oz, 0);
+  const shortBy = recommendedOz !== null ? Math.max(0, recommendedOz - pickedOz) : 0;
+  const fmtBagDate = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  const locLabel = (loc) => loc === "rt" ? "Room temp" : loc === "fridge" ? "Fridge" : "Freezer";
+  const locColor = (loc) => loc === "rt" ? C.accent : loc === "fridge" ? C.daddy : C.gold;
+  return (
+    <div style={{
+      background: C.paper,
+      border: `1px solid ${C.line}`,
+      borderRadius: 14,
+      padding: "14px 14px 14px",
+      marginBottom: 14,
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10, letterSpacing: "0.22em",
+        textTransform: "uppercase", color: viewerColor, fontWeight: 700,
+        marginBottom: 4,
+      }}>Pack for caregiver</div>
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontSize: 18, fontWeight: 500, color: C.ink,
+        marginBottom: 8, lineHeight: 1.3,
+      }}>How many oz to send</div>
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontStyle: "italic", fontSize: 12.5, color: C.muted,
+        marginBottom: 12, lineHeight: 1.5,
+      }}>
+        Based on her last {daysSampled} day{daysSampled === 1 ? "" : "s"} of intake. 2 weeks is enough for a ~4mo old — feed volume changes gradually at this age.
+      </div>
+
+      {/* Duration picker */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, color: C.muted }}>For</span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[2, 4, 6, 8, 12].map(h => (
+            <button key={h} onClick={() => setHours(h)} style={{
+              padding: "6px 10px",
+              background: hours === h ? viewerColor : "transparent",
+              color: hours === h ? "#FDFAF1" : C.ink,
+              border: `1px solid ${hours === h ? viewerColor : C.line}`,
+              borderRadius: 6,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, fontWeight: 700, cursor: "pointer",
+            }}>{h}h</button>
+          ))}
+        </div>
+      </div>
+
+      {avgDailyOz === null ? (
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13, color: C.muted, lineHeight: 1.5,
+        }}>
+          Not enough feed data in the last 14 days to recommend an amount. Log a few more feeds and check back.
+        </div>
+      ) : (
+        <>
+          <div style={{
+            background: `${viewerColor}10`,
+            border: `1px solid ${viewerColor}40`,
+            borderRadius: 10,
+            padding: "12px 14px",
+            marginBottom: 12,
+          }}>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 13, color: C.ink, lineHeight: 1.5,
+            }}>
+              Solène averages <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{avgDailyOz.toFixed(1)} oz/day</span>.
+            </div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 16, color: C.ink, marginTop: 4, lineHeight: 1.4,
+            }}>
+              Send <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: viewerColor }}>~{recommendedOz} oz</span> for {hours}h <span style={{ fontStyle: "italic", color: C.muted, fontSize: 12 }}>(includes ~20% buffer)</span>
+            </div>
+          </div>
+
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, letterSpacing: "0.18em",
+            textTransform: "uppercase", color: C.muted, fontWeight: 700,
+            marginBottom: 6,
+          }}>Suggested bags · prioritized by expiry</div>
+          {picks.length === 0 ? (
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 13, color: C.muted,
+            }}>Inventory is empty.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 6, marginBottom: 8 }}>
+              {picks.map((bag, i) => (
+                <div key={bag.id || i} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px",
+                  background: `${C.bg}`,
+                  border: `1px solid ${C.line}55`,
+                  borderRadius: 8,
+                }}>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                    color: locColor(bag.location), fontWeight: 700,
+                    padding: "2px 5px", borderRadius: 4,
+                    border: `1px solid ${locColor(bag.location)}55`,
+                  }}>{locLabel(bag.location)}</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 13, fontWeight: 700, color: C.ink, flex: 1,
+                  }}>{bag.oz}oz</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: C.muted,
+                  }}>pumped {fmtBagDate(bag.pumpedAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {picks.length > 0 && (
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 12.5, color: shortBy > 0 ? C.accent : C.muted,
+              fontStyle: "italic", lineHeight: 1.45,
+              marginTop: 6,
+            }}>
+              Total: <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontWeight: 700, color: C.ink }}>{pickedOz.toFixed(2)} oz</span>
+              {shortBy > 0 && (
+                <> · short by <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontWeight: 700 }}>{shortBy.toFixed(2)} oz</span> — pump or thaw a freezer bag</>
+              )}
+              {shortBy === 0 && picks.some(b => b.location === "freezer") && (
+                <> · includes freezer bag(s) — thaw ahead of time</>
+              )}
+            </div>
+          )}
+          {totalInventoryOz < recommendedOz && (
+            <div style={{
+              background: `${C.accent}15`,
+              border: `1px solid ${C.accent}55`,
+              borderRadius: 8,
+              padding: "8px 12px", marginTop: 10,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 12.5, color: C.ink, lineHeight: 1.4,
+            }}>
+              ⚠ Total inventory ({totalInventoryOz.toFixed(1)}oz) is below the recommended send. Plan an extra pump before drop-off.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveToFreezer, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal, pumpPlan, setPumpPlan }) {
   // Viewer color for chrome that's about inventory management (which both
   // parents do) rather than active pumping or lactation calories (which
   // are Mommy-specific). Daddy adds bottles, picks bottles, manages the
@@ -24854,6 +30270,16 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
 
   return (
     <div style={{ marginTop: 14 }}>
+      {/* v05.05bt247 — Pack-for-caregiver pinned to TOP of Inventory tab
+          per chat: 'I don't see where the packing for caregiver is.' Was
+          buried below pump planner / burn history before. Belongs near
+          top since this is what most users open the Inventory tab for
+          when planning a handoff. */}
+      <CaregiverPackCard
+        C={C} inventory={inventory} events={events} now={now}
+        viewerColor={viewerColor}
+      />
+
       {/* v05.05bt57 — PumpGoalsCard replaces the previous standalone
           "Mommy's burn today" tile. Now stacks: today's pump vs Solène's
           age-banded daily target + 7-day trend + calorie deficit planner
@@ -24863,6 +30289,16 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
         mommyMaintenanceCal={mommyMaintenanceCal}
         setMommyMaintenanceCal={setMommyMaintenanceCal}
       />
+
+      {/* v05.05bt235 — Pump schedule planner. Plan around a meeting,
+          appointment, or stretch where you can't pump. Suggests boost
+          + catch-up sessions, and a power pump if the gap is long
+          enough to dent supply. */}
+      {currentUser === "Mommy" && (
+        <PumpSchedulePlannerCard
+          C={C} events={events} now={now} lastPump={lastPump}
+        />
+      )}
 
       {/* v05.05bt78 — Daily burn history. Mommy-only. Shows the last 7
           days as a small bar chart with kcal per day. No targets, no
@@ -25022,6 +30458,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
             {valid.map(item => (
               <InventoryRow key={item.id} item={item} C={C}
                 onMoveToFridge={() => moveToFridge(item.id)}
+                onMoveToFreezer={() => moveToFreezer(item.id)}
                 onEdit={() => editBottle && editBottle(item.id)}
                 onRemove={() => removeInventory(item.id)} />
             ))}
@@ -25051,6 +30488,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, remove
               {expired.map(item => (
                 <div key={item.id} style={{ opacity: 0.85 }}>
                   <InventoryRow item={item} C={C}
+                    onMoveToFreezer={() => moveToFreezer(item.id)}
                     onEdit={() => editBottle && editBottle(item.id)}
                     onRemove={() => removeInventory(item.id)} />
                 </div>
@@ -25221,10 +30659,16 @@ function BigStat({ C, label, value, accent }) {
   );
 }
 
-function InventoryRow({ item, C, onMoveToFridge, onRemove, onEdit }) {
+function InventoryRow({ item, C, onMoveToFridge, onMoveToFreezer, onRemove, onEdit }) {
   const remHrs = item.remaining;
   const isRT = item.location === "rt";
+  const isFridge = item.location === "fridge";
+  const isFreezer = item.location === "freezer";
   const urgent = remHrs < 1 && isRT;
+  // v05.05bt213 — Show location pill that matches actual location.
+  const locLabel = isRT ? "RT" : isFridge ? "FRIDGE" : "FREEZER";
+  const locBg = isRT ? `${C.accent}22` : isFreezer ? `${C.daddy}18` : `${C.ink}11`;
+  const locFg = isRT ? C.accent : isFreezer ? C.daddy : C.ink;
   return (
     <div style={{
       background: C.paper, borderRadius: 10, padding: "10px 12px",
@@ -25232,12 +30676,12 @@ function InventoryRow({ item, C, onMoveToFridge, onRemove, onEdit }) {
       display: "flex", alignItems: "center", gap: 10,
     }}>
       <div style={{
-        background: isRT ? `${C.accent}22` : `${C.ink}11`,
-        color: isRT ? C.accent : C.ink,
+        background: locBg,
+        color: locFg,
         padding: "3px 8px", borderRadius: 5,
         fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
       }}>
-        {isRT ? "RT" : "FRIDGE"}
+        {locLabel}
       </div>
       <button onClick={onEdit} style={{
         flex: 1, textAlign: "left", background: "transparent", border: "none", cursor: "pointer",
@@ -25264,13 +30708,26 @@ function InventoryRow({ item, C, onMoveToFridge, onRemove, onEdit }) {
           })()}
         </div>
       </button>
-      {isRT && (
+      {isRT && onMoveToFridge && (
         <button onClick={onMoveToFridge} style={{
           background: "transparent", color: C.ink,
           border: `1px solid ${C.line}33`, borderRadius: 6,
           padding: "4px 9px", fontSize: 10, fontWeight: 500, cursor: "pointer",
         }}>
           → fridge
+        </button>
+      )}
+      {/* v05.05bt213 — Move to freezer button. Shows for RT and fridge
+          bottles (and expired bottles per onMoveToFreezer being passed).
+          Freezer is the longest safe window so this is always a valid
+          escalation when you can't use a bottle in time. */}
+      {!isFreezer && onMoveToFreezer && (
+        <button onClick={onMoveToFreezer} style={{
+          background: "transparent", color: C.daddy,
+          border: `1px solid ${C.daddy}44`, borderRadius: 6,
+          padding: "4px 9px", fontSize: 10, fontWeight: 500, cursor: "pointer",
+        }}>
+          → freezer
         </button>
       )}
       <button onClick={onEdit} title="Edit (no log)" style={{
@@ -25613,6 +31070,11 @@ function DiaperBagSection({ C, diaperBag, setDiaperBag }) {
 
 // ---- Central LOG button (impossible to miss) --------------------------
 function CentralLogButton({ C, mode, onClick, currentUser }) {
+  // v05.05bt186 — Auto-hide while any modal is open so bottom-sheet
+  // save buttons aren't blocked. Per chat ('log button gets in the
+  // way ... applies across the entire app').
+  const anyModalOpen = useModalOpen();
+  if (anyModalOpen) return null;
   // Bottom UI zone (LOG button + tab bar) is owned by the viewer, in contrast
   // to page-level primary-action coral used elsewhere (Generate code, Use
   // code, etc). This is the strongest cross-room signal in the app — at a
@@ -25674,13 +31136,13 @@ function TabBar({ C, tab, setTab, currentUser }) {
   // bar) instead of the page-level coral accent. This makes the tab bar
   // unmistakably "yours" at a glance — paired with the viewer-color LOG
   // button it forms a coherent docked panel claimed by the viewer.
-  const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
-  const tabs = [
-    // v05.05bt47: each tab now carries an icon for at-a-glance recognition.
-    // Lucide-react glyphs picked to match each tab's domain: Home for the
-    // landing/Now state, BookOpen for the Journal, Stethoscope for Wellness
-    // (medical/check-in feel), Milk literally for the Milk tab,
-    // Calendar for Schedule, PiggyBank for Bank.
+  // v05.05bt214 — Caregiver persona uses sage green. Caregiver mode
+  // also strips parent-focused tabs (Schedule, Bank, Wellness) — the
+  // caregiver only needs Now (current state + bottles available),
+  // Journal (to log events), and Milk (bottles + use-by times).
+  const isCaregiver = currentUser === "Caregiver";
+  const viewerColor = isCaregiver ? "#7B9B6E" : (currentUser === "Daddy" ? C.daddy : C.mommy);
+  const allTabs = [
     { id: "now",       label: "Now",      icon: Home },
     { id: "log",       label: "Journal",  icon: BookOpen },
     { id: "doctor",    label: "Wellness", icon: Stethoscope },
@@ -25689,6 +31151,15 @@ function TabBar({ C, tab, setTab, currentUser }) {
     { id: "shifts",    label: "Schedule", icon: Calendar },
     { id: "bank",      label: "Bank",     icon: PiggyBank },
   ];
+  // Caregiver gets a 3-tab strip — Now, Journal, Milk. No spacer needed
+  // for a 3-tab bar; render them centered with even spacing.
+  const tabs = isCaregiver
+    ? [
+        { id: "now",       label: "Now",      icon: Home },
+        { id: "log",       label: "Journal",  icon: BookOpen },
+        { id: "inventory", label: "Milk",     icon: Milk },
+      ]
+    : allTabs;
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
@@ -26447,6 +31918,7 @@ function PickerOption({ C, icon, label, sub, onClick, color }) {
 
 // ---- Forms ------------------------------------------------------------
 function ModalShell({ C, onClose, title, children, placement }) {
+  useScrim();
   // v05.05bt143 — placement="center" mounts the modal in the vertical
   // middle of the viewport instead of as a bottom sheet. Used for the
   // edit task popup since users had to scroll up to see the bottom of
@@ -26572,7 +32044,7 @@ function ModalShell({ C, onClose, title, children, placement }) {
         </div>
         <div style={{
           flex: 1, overflowY: "auto",
-          paddingBottom: `calc(28px + env(safe-area-inset-bottom, 0px))`,
+          paddingBottom: `calc(96px + env(safe-area-inset-bottom, 0px))`,
           // Inertial scroll on iOS so the modal body feels native.
           WebkitOverflowScrolling: "touch",
         }}>
@@ -26584,6 +32056,212 @@ function ModalShell({ C, onClose, title, children, placement }) {
 }
 
 // Soft prompt that fires automatically at handoff
+// v05.05bt223 — Send-trade-request modal (sender side). Simple confirmation
+// that turns a Trade Idea card row into a pending request to the partner.
+function SendTradeRequestModal({ C, window, partner, onClose, onSend }) {
+  const fmtT = (h) => {
+    const hr = Math.floor(h);
+    const min = Math.round((h - hr) * 60);
+    const h12 = ((hr + 11) % 12) + 1;
+    const ampm = hr < 12 ? "a" : "p";
+    return `${h12}${min ? `:${String(min).padStart(2, "0")}` : ""}${ampm}`;
+  };
+  const startHr = window.start / 60;
+  const endHr = window.end / 60;
+  const dur = window.deepMin;
+  const durLabel = (() => {
+    const h = Math.floor(dur / 60);
+    const m = dur % 60;
+    return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  })();
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(61, 49, 40, 0.4)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.bg, width: "100%", maxWidth: 480,
+        borderRadius: "20px 20px 0 0", padding: "20px 16px 24px",
+        paddingBottom: "max(24px, env(safe-area-inset-bottom))",
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: C.daddy, fontWeight: 700,
+          marginBottom: 4,
+        }}>↔ Send trade request</div>
+        <h2 style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, margin: "0 0 12px",
+          color: C.ink,
+        }}>Ask {partner} for coverage?</h2>
+        <div style={{
+          padding: "12px 14px",
+          background: `${C.daddy}10`,
+          border: `1px solid ${C.daddy}33`,
+          borderRadius: 10, marginBottom: 14,
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, color: C.ink, fontWeight: 600, marginBottom: 4,
+          }}>{fmtT(startHr)} – {fmtT(endHr)} today</div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 14, color: C.ink, lineHeight: 1.5,
+          }}>Unlocks <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12, fontWeight: 700, color: FOCUS_COLOR.deep,
+          }}>{durLabel}</span> of deep focus for you.</div>
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13,
+          color: C.muted, marginBottom: 14, lineHeight: 1.5,
+        }}>{partner} will see a request on next open and can choose to cover the shift, bank the time for later, or decline.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: "12px",
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}`, borderRadius: 8,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, letterSpacing: "0.18em", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={() => { onSend(window); onClose(); }} style={{
+            flex: 2, padding: "12px",
+            background: C.daddy, color: "#fff",
+            border: "none", borderRadius: 8,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, letterSpacing: "0.18em", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>Send to {partner}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// v05.05bt223 — Incoming trade request modal (receiver side, push-style).
+// Per chat: pops on next open, requires action to dismiss.
+// Three options:
+//   1. Cover the shift — creates a coverage meeting on receiver's calendar
+//   2. Bank the time   — adds timeBank credit (receiver owes nothing; sender
+//                         banks the minutes to redeem later)
+//   3. Decline         — sender sees declined status on their trade card
+function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
+  const fmtT = (h) => {
+    const hr = Math.floor(h);
+    const min = Math.round((h - hr) * 60);
+    const h12 = ((hr + 11) % 12) + 1;
+    const ampm = hr < 12 ? "a" : "p";
+    return `${h12}${min ? `:${String(min).padStart(2, "0")}` : ""}${ampm}`;
+  };
+  const dur = request.deepMin;
+  const durLabel = (() => {
+    const h = Math.floor(dur / 60);
+    const m = dur % 60;
+    return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  })();
+  const dateLabel = (() => {
+    const [y, mo, d] = request.date.split("-").map(Number);
+    const dt = new Date(y, mo - 1, d);
+    const todayY = new Date().toDateString();
+    if (dt.toDateString() === todayY) return "today";
+    return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  })();
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(61, 49, 40, 0.55)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "16px",
+    }}>
+      <div style={{
+        background: C.bg, width: "100%", maxWidth: 460,
+        borderRadius: 16, padding: "22px 18px 20px",
+        boxShadow: "0 12px 48px rgba(40, 30, 20, 0.25)",
+      }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.22em",
+          textTransform: "uppercase", color: partnerColor, fontWeight: 700,
+          marginBottom: 4,
+        }}>↔ Trade request</div>
+        <h2 style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, margin: "0 0 12px",
+          color: C.ink, lineHeight: 1.25,
+        }}>
+          <span style={{ color: partnerColor, fontWeight: 600 }}>{request.from}</span> is asking for coverage
+        </h2>
+        <div style={{
+          padding: "12px 14px",
+          background: `${partnerColor}10`,
+          border: `1px solid ${partnerColor}33`,
+          borderRadius: 10, marginBottom: 16,
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12, color: C.ink, fontWeight: 600, marginBottom: 4,
+          }}>{fmtT(request.startHr)} – {fmtT(request.endHr)} {dateLabel}</div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 14, color: C.ink, lineHeight: 1.5,
+          }}>Would unlock <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12, fontWeight: 700, color: FOCUS_COLOR.deep,
+          }}>{durLabel}</span> of deep focus for {request.from}.</div>
+        </div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 12.5, color: C.muted, fontStyle: "italic",
+          marginBottom: 12, lineHeight: 1.45,
+        }}>How would you like to respond?</div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <button onClick={() => onResolve(request.id, "shift")} style={{
+            padding: "14px 16px",
+            background: partnerColor, color: "#fff",
+            border: "none", borderRadius: 10,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 15, fontWeight: 500,
+            cursor: "pointer", textAlign: "left",
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>✓ Cover the shift</div>
+            <div style={{ fontSize: 12, opacity: 0.85, fontStyle: "italic" }}>
+              Free favor — covers the window, nothing logged.
+            </div>
+          </button>
+          <button onClick={() => onResolve(request.id, "bank")} style={{
+            padding: "14px 16px",
+            background: "transparent", color: C.ink,
+            border: `1.5px solid ${C.gold}`,
+            borderRadius: 10,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 15, fontWeight: 500,
+            cursor: "pointer", textAlign: "left",
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 2, color: C.gold }}>○ Cover + bank</div>
+            <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+              Covers the window AND logs that {request.from} owes you {durLabel} to reclaim later.
+            </div>
+          </button>
+          <button onClick={() => onResolve(request.id, "declined")} style={{
+            padding: "12px 14px",
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}`,
+            borderRadius: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, fontWeight: 700,
+            letterSpacing: "0.18em", textTransform: "uppercase",
+            cursor: "pointer",
+          }}>Decline</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HandoffPromptModal({ C, fromParent, toParent, existingText, onClose, onSubmit, onSkip }) {
   const [text, setText] = useState(existingText || "");
   const fromColor = fromParent === "Mommy" ? C.mommy : C.daddy;
