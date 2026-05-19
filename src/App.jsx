@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt247";
+const APP_VERSION = "2026.05.05bt250";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -15703,6 +15703,14 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
 
 function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
   const [showAdd, setShowAdd] = useState(false);
+  // v05.05bt248 — Default-start date for the add-meeting modal so tapping
+  // "+ Add commitment" on the TOMORROW DayPlanCard pre-fills tomorrow's
+  // date. Per chat: 'The scheduler is not considering the tomorrow
+  // meeting commitments when looking at the tomorrow schedule.' Root
+  // cause: when daddy taps add on Tomorrow's card, the form defaulted
+  // to NOW (today's date), so unless he manually changed it, the
+  // meeting saved with today's date — invisible to tomorrow view.
+  const [addMeetingDefaultDate, setAddMeetingDefaultDate] = useState(null);
   // v05.05bt133 — Schedule tab now split into three sub-views:
   // 'today' = Today's Ledger card (working parent OS),
   // 'schedule' = base shift schedule + day plan + meetings,
@@ -15810,7 +15818,9 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
       {currentUser === "Mommy" && scheduleSubTab === "today" && (
         <TodayTaskPlanCard
           C={C} tasks={tasks} setTasks={setTasks}
-          activeShifts={activeShifts} events={events} now={now}
+          activeShifts={activeShifts}
+          tomorrowProjection={tomorrowProjection}
+          events={events} now={now}
           currentUser={currentUser}
           parentAway={parentAway}
           pumpPlan={pumpPlan}
@@ -15957,7 +15967,10 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 commitments={todayCommitments}
                 onRemoveCommitment={removeMeeting}
                 onEditCommitment={(m) => setEditingMeeting(m)}
-                onAddCommitment={() => setShowAdd(true)}
+                onAddCommitment={() => {
+                  setAddMeetingDefaultDate(new Date());
+                  setShowAdd(true);
+                }}
                 showAddButton={true}
                 isToday={true}
                 now={now}
@@ -15974,7 +15987,14 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
                 commitments={tomorrowMeetings}
                 onRemoveCommitment={removeMeeting}
                 onEditCommitment={(m) => setEditingMeeting(m)}
-                onAddCommitment={() => setShowAdd(true)}
+                onAddCommitment={() => {
+                  // Pre-fill tomorrow's date so the meeting actually
+                  // saves with tomorrow's date.
+                  const tom = new Date(now);
+                  tom.setDate(tom.getDate() + 1);
+                  setAddMeetingDefaultDate(tom);
+                  setShowAdd(true);
+                }}
                 showAddButton={true}
                 isToday={false}
                 now={now}
@@ -16171,7 +16191,7 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
       {/* v05.05bt133 — End of Schedule sub-view. Modals below render
           regardless of which sub-tab is active. */}
 
-      {showAdd && <AddMeetingModal C={C} onClose={() => setShowAdd(false)} onSubmit={addMeeting} currentUser={currentUser} />}
+      {showAdd && <AddMeetingModal C={C} onClose={() => { setShowAdd(false); setAddMeetingDefaultDate(null); }} onSubmit={addMeeting} currentUser={currentUser} defaultDate={addMeetingDefaultDate} />}
       {showAwayModal && (
         <ParentAwayModal
           C={C}
@@ -18133,10 +18153,11 @@ function MeetingRow({ m, C, onRemove, onEdit }) {
 // Thin wrapper around InlineCommitmentForm so the Shifts tab "Add commitment"
 // button uses the same simplified form as the LOG sheet. Single source of truth
 // for commitment-creation UX.
-function AddMeetingModal({ C, onClose, onSubmit, currentUser }) {
+function AddMeetingModal({ C, onClose, onSubmit, currentUser, defaultDate }) {
   return (
     <ModalShell C={C} onClose={onClose} title="Add commitment">
       <InlineCommitmentForm C={C} currentUser={currentUser}
+        defaultDate={defaultDate}
         onSubmit={(m) => { onSubmit(m); onClose(); }} />
     </ModalShell>
   );
@@ -23162,7 +23183,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -23371,6 +23392,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const referenceDate = useMemo(() => getReferenceDate(now, dayView), [now, dayView]);
   const referenceISO = isoDate(referenceDate);
   const isTomorrow = dayView === "tomorrow";
+  // v05.05bt249 — When viewing tomorrow, the timeline + scheduler must use
+  // the PROJECTED tomorrow shifts (which include adjustments from
+  // tomorrow's meetings), not today's activeShifts. Per chat: Daddy added
+  // a tomorrow meeting at 11:30, shift adjustment showed in Shifts tab,
+  // but the tomorrow scheduler still showed Daddy on duty during 11:30
+  // because it was reading today's shift data.
+  const effectiveActiveShifts = isTomorrow
+    ? (tomorrowProjection?.projected || activeShifts)
+    : activeShifts;
   // v05.05bt128 — Open-block picker: which block (start ms) has its
   // 'pick other' picker expanded. null = no picker open.
   const [pickerForBlock, setPickerForBlock] = useState(null);
@@ -23552,18 +23582,28 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
   const [showFocusQuiz, setShowFocusQuiz] = useState(false);
   // v05.05bt181 — Morning energy check-in. Auto-opens once per day on
   // first Today view if not yet set. Skipped silently if already taken.
+  // v05.05bt250 — Per chat: 'The morning check in keeps popping up if I
+  // go away from the main scheduler screen and come back again to it.'
+  // Root cause: useEffect fires every TodayTaskPlanCard remount. Now we
+  // also gate on localStorage so once it's shown today, it stays
+  // dismissed until tomorrow (or until the user actually saves a rating).
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
   const todayISO = useMemo(() => {
     const d = new Date(now); d.setHours(0, 0, 0, 0);
     return d.toISOString().slice(0, 10);
   }, [now]);
+  const energyShownKey = `ll:energyCheckShownAt:${currentUser}`;
   useEffect(() => {
-    if (!dailyEnergy || dailyEnergy.date !== todayISO) {
-      // Trigger silently on first Today view of the day
-      const t = setTimeout(() => setShowEnergyCheckIn(true), 800);
-      return () => clearTimeout(t);
-    }
-  }, [todayISO, dailyEnergy]);
+    if (dailyEnergy && dailyEnergy.date === todayISO) return; // already saved
+    let shownToday = false;
+    try { shownToday = localStorage.getItem(energyShownKey) === todayISO; } catch {}
+    if (shownToday) return; // already shown (possibly dismissed) today
+    const t = setTimeout(() => {
+      setShowEnergyCheckIn(true);
+      try { localStorage.setItem(energyShownKey, todayISO); } catch {}
+    }, 800);
+    return () => clearTimeout(t);
+  }, [todayISO, dailyEnergy, energyShownKey]);
   const lowEnergy = !!(dailyEnergy && dailyEnergy.date === todayISO && dailyEnergy.rating <= 2);
   // v05.05bt181 — Drift detection. A task is "behind" when its planned
   // end time (scheduledTime + effortMin) has passed by ≥15 min AND
@@ -23815,7 +23855,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         if (onsite) return false;
         const fH = f.start.getHours() + f.start.getMinutes() / 60;
         const findShift = (parent) => {
-          const shifts = activeShifts?.[parent] || [];
+          const shifts = effectiveActiveShifts?.[parent] || [];
           return shifts.find(s => {
             const [sh, sm] = (s.start || "0:0").split(":").map(Number);
             const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -23861,7 +23901,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         cutSet.add(item.start.getTime());
         cutSet.add(item.end.getTime());
         for (const parent of ["Mommy", "Daddy"]) {
-          const shifts = activeShifts?.[parent] || [];
+          const shifts = effectiveActiveShifts?.[parent] || [];
           for (const s of shifts) {
             const [sh, sm] = (s.start || "0:0").split(":").map(Number);
             const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -23913,7 +23953,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       return [...naps, ...pumps].sort((a, b) => a.start - b.start);
     }
     const blocks = [];
-    const partnerShifts = (activeShifts?.[partner] || [])
+    const partnerShifts = (effectiveActiveShifts?.[partner] || [])
       .map(s => {
         const [sh, sm] = (s.start || "0:0").split(":").map(Number);
         const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -24357,7 +24397,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
         // Block only if THIS user is the solo owner during the feed
         const fH = f.start.getHours() + f.start.getMinutes() / 60;
         const findShift = (parent) => {
-          const shifts = activeShifts?.[parent] || [];
+          const shifts = effectiveActiveShifts?.[parent] || [];
           return shifts.find(s => {
             const [sh, sm] = (s.start || "0:0").split(":").map(Number);
             const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -24391,7 +24431,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
     const collectShiftBoundaries = () => {
       const cuts = new Set();
       for (const parent of ["Mommy", "Daddy"]) {
-        const shifts = activeShifts?.[parent] || [];
+        const shifts = effectiveActiveShifts?.[parent] || [];
         for (const s of shifts) {
           const [sh, sm] = (s.start || "0:0").split(":").map(Number);
           const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -24436,7 +24476,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
       if (!onsite) {
         const slotHour = start.getHours() + start.getMinutes() / 60;
         const findShiftAt = (parent) => {
-          const shifts = activeShifts?.[parent] || [];
+          const shifts = effectiveActiveShifts?.[parent] || [];
           return shifts.find(s => {
             const [sh, sm] = (s.start || "0:0").split(":").map(Number);
             const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -25609,7 +25649,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
               } else {
                 const slotHour = now.getHours() + now.getMinutes() / 60;
                 const findShiftAt = (parent) => {
-                  const shifts = activeShifts?.[parent] || [];
+                  const shifts = effectiveActiveShifts?.[parent] || [];
                   return shifts.find(s => {
                     const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                     const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -25780,6 +25820,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 </div>
               );
             })()}
+            {/* v05.05bt250 — Prominent + Add task entry. Per chat: 'Need
+                some way to intuitively add task. I know clicking on one
+                bloc allows you to do this but may it be intuitive. User
+                may think it's to only add to that specific block.' The
+                bt191 removal of the mauve FAB left only free-block tap
+                and the ⋯ → Brain dump as entry points; neither reads
+                as 'add a task TO THE DAY.' This restores a clear,
+                visible button at the top of the timeline that opens
+                the NL parser. */}
+            <button
+              onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
+              style={{
+                width: "100%", marginBottom: 12,
+                background: "transparent",
+                color: C.mommy,
+                border: `1.5px dashed ${C.mommy}55`,
+                borderRadius: 10,
+                padding: "12px 14px",
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 14,
+                cursor: "pointer", textAlign: "left",
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+              <span style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 16, fontWeight: 600, color: C.mommy,
+              }}>+</span>
+              <span>Add a task to your day</span>
+            </button>
             {/* v05.05bt172 — Day-summary forecast card. Per chat:
                 "having a summary somewhere where you have x amount of
                 deep focus time available and x amount of long stretch
@@ -25811,7 +25880,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                 if (onsite) return null;
                 const slotHour = slot.start.getHours() + slot.start.getMinutes() / 60;
                 const findShiftAt = (parent) => {
-                  const shifts = activeShifts?.[parent] || [];
+                  const shifts = effectiveActiveShifts?.[parent] || [];
                   return shifts.find(s => {
                     const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                     const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -26213,7 +26282,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   })();
                   const _slotHour = now.getHours() + now.getMinutes() / 60;
                   const _findShift = (parent) => {
-                    const shifts = activeShifts?.[parent] || [];
+                    const shifts = effectiveActiveShifts?.[parent] || [];
                     return shifts.find(s => {
                       const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                       const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -26379,7 +26448,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                   } else {
                     const slotHour = slot.start.getHours() + slot.start.getMinutes() / 60;
                     const findShiftAt = (parent) => {
-                      const shifts = activeShifts?.[parent] || [];
+                      const shifts = effectiveActiveShifts?.[parent] || [];
                       return shifts.find(s => {
                         const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                         const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -26407,7 +26476,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                     cutSet.add(slot.start.getTime());
                     cutSet.add(slot.end.getTime());
                     for (const parent of ["Mommy", "Daddy"]) {
-                      const shifts = activeShifts?.[parent] || [];
+                      const shifts = effectiveActiveShifts?.[parent] || [];
                       for (const s of shifts) {
                         const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                         const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -26424,7 +26493,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                       const midDate = new Date(midT);
                       const slotHr = midDate.getHours() + midDate.getMinutes() / 60;
                       const findShift = (parent) => {
-                        const shifts = activeShifts?.[parent] || [];
+                        const shifts = effectiveActiveShifts?.[parent] || [];
                         return shifts.find(s => {
                           const [sh, sm] = (s.start || "0:0").split(":").map(Number);
                           const [eh, em] = (s.end || "0:0").split(":").map(Number);
@@ -27227,21 +27296,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, events, now, curr
                           </button>
                         )}
                         {isTask && !slot.completedAt && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingTask(slot); }}
+                            title="Edit task"
+                            aria-label="Edit task"
+                            style={{
+                              padding: "6px 4px",
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              color: C.muted,
+                              fontSize: 13, lineHeight: 1,
+                              fontFamily: "inherit",
+                              opacity: 0.7,
+                            }}>
+                            ✎
+                          </button>
+                        )}
+                        {isTask && !slot.completedAt && (
                           <div
                             onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
                             onTouchMove={draggingIdRef.current ? handleDragMove : undefined}
                             onTouchEnd={handleDragEnd}
                             onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
                             title="Hold and drag to move"
+                            aria-label="Drag to move task"
                             style={{
-                              padding: "6px 4px 6px 6px",
+                              padding: "8px 6px 8px 8px",
                               cursor: "grab",
-                              color: "rgba(166,139,160,0.55)",
-                              fontSize: 14, lineHeight: 1,
+                              color: C.mommy,
+                              fontSize: 18, lineHeight: 1,
                               fontFamily: "system-ui, sans-serif",
-                              letterSpacing: "-0.2em",
+                              letterSpacing: "-0.1em",
                               touchAction: "none",
                               userSelect: "none",
+                              opacity: 0.7,
+                              fontWeight: 700,
                             }}>
                             ⋮⋮
                           </div>
@@ -31617,7 +31707,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
 // "Add commitment" button (via AddMeetingModal which wraps this in a ModalShell).
 // Single source of truth for commitment creation: change the form here and both
 // entry points update.
-function InlineCommitmentForm({ C, onSubmit, currentUser, initial }) {
+function InlineCommitmentForm({ C, onSubmit, currentUser, initial, defaultDate }) {
   const PRESETS = [
     { id: "meeting_red",    label: "Work meeting",    emoji: "🔴", level: "red",    duration: 60 },
     { id: "meeting_yellow", label: "Work meeting",    emoji: "🟡", level: "yellow", duration: 60 },
@@ -31657,10 +31747,24 @@ function InlineCommitmentForm({ C, onSubmit, currentUser, initial }) {
   const [isFlex, setIsFlex] = useState(initial?.flex || false);
   const [start, setStart] = useState(() => {
     if (initial?.start) return toLocalIso(initial.start);
-    const d = new Date();
-    if (d.getMinutes() > 30) { d.setHours(d.getHours() + 1); d.setMinutes(0); }
-    else { d.setMinutes(30); }
-    return d.toISOString().slice(0, 16);
+    // v05.05bt248 — Honor defaultDate (e.g. 'Tomorrow') if provided.
+    // Sets the date to that day and time to a reasonable default
+    // (9:00am for non-today dates, next half-hour for today).
+    const d = defaultDate ? new Date(defaultDate) : new Date();
+    const isToday = (() => {
+      const today = new Date();
+      return d.getFullYear() === today.getFullYear()
+        && d.getMonth() === today.getMonth()
+        && d.getDate() === today.getDate();
+    })();
+    if (!isToday) {
+      d.setHours(9, 0, 0, 0); // 9am default for future dates
+    } else {
+      if (d.getMinutes() > 30) { d.setHours(d.getHours() + 1); d.setMinutes(0); }
+      else { d.setMinutes(30); }
+    }
+    // toLocalIso instead of toISOString to preserve local TZ
+    return toLocalIso(d.toISOString());
   });
   const [durationMin, setDurationMin] = useState(initialDuration);
   const [customDurationOpen, setCustomDurationOpen] = useState(
