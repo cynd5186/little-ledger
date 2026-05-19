@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt253";
+const APP_VERSION = "2026.05.05bt255";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -9967,14 +9967,16 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
   // v05.05bt253 — Morning routine prompt. Per chat: '5:30am prompt to see
   // if she has done her morning routine. Daddy will be the one doing it
   // on weekdays before dropping her off at daycare.' Mirrors the bedtime
-  // bath-prompt pattern: window 5:30am-8:30am, hidden once user marks
+  // bath-prompt pattern: window 5:45am-1:00pm (wide so the prompt stays
+  // visible until you actually do it — per chat: 'stay there until
+  // answered or snooze so that we dont forget'), hidden once user marks
   // done or snoozes. The list of steps lives in user state (editable)
   // not hardcoded.
   const morningInfo = (() => {
     const promptStart = new Date(now);
-    promptStart.setHours(5, 30, 0, 0);
+    promptStart.setHours(5, 45, 0, 0);
     const promptEnd = new Date(now);
-    promptEnd.setHours(8, 30, 0, 0);
+    promptEnd.setHours(13, 0, 0, 0);
     if (now < promptStart || now > promptEnd) return null;
     // Already marked done this morning?
     const doneToday = events.find(e =>
@@ -9992,7 +9994,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     }
     return { steps: morningRoutineSteps || [] };
   })();
-  const [morningExpanded, setMorningExpanded] = useState(true);
+  const [morningExpanded, setMorningExpanded] = useState(false);
 
   // v05.05bt35: notification sounds.
   // Trigger short chimes whenever a banner transitions from hidden→visible
@@ -10277,7 +10279,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                 }}>Edit steps</button>
             </details>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
             <button onClick={onMarkMorningDone} style={{
               background: C.ink, color: C.paper, border: "none",
               padding: "8px 6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
@@ -10292,14 +10294,6 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
             }}>
               <Clock size={11} /> Snooze 30m
-            </button>
-            <button onClick={onEditMorningSteps} style={{
-              background: "transparent", color: C.muted,
-              border: `1px solid ${C.line}33`, borderRadius: 8,
-              padding: "8px 6px", fontSize: 11, fontWeight: 500, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-            }}>
-              ✎ Steps
             </button>
           </div>
         </div>
