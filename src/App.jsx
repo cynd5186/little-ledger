@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt250";
+const APP_VERSION = "2026.05.05bt253";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -2549,6 +2549,33 @@ function SoleneHandoffInner() {
   const [docSummary, setDocSummary] = useState(null); // { generated, html, copyText }
   // Handoff note: { from, to, text, ts, acknowledged }
   const [handoffNote, setHandoffNote] = useState(null);
+  // v05.05bt253 — Configurable morning-routine steps for the 5:30am
+  // prompt. Per chat: 'Daddy will be the one doing it in weekdays
+  // before dropping her off at daycare and he may need help remembering
+  // exactly what to do. Since the routine could change as she gets
+  // older I don't want to hardcode it here.' Stored under solene key
+  // and surfaced via an expandable list inside the prompt.
+  const [morningRoutineSteps, setMorningRoutineSteps] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ll:morningRoutineSteps");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [
+      "Diaper change",
+      "Wipe-down or quick bath",
+      "Dress for the day",
+      "Bottle / morning feed",
+      "Pack daycare bag",
+      "Coat / shoes on",
+    ];
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:morningRoutineSteps", JSON.stringify(morningRoutineSteps)); } catch {}
+  }, [morningRoutineSteps]);
+  const [showMorningStepsEditor, setShowMorningStepsEditor] = useState(false);
   const [noteArchive, setNoteArchive] = useState([]);
   const [showHandoffNoteEditor, setShowHandoffNoteEditor] = useState(false);
   const [showNoteArchive, setShowNoteArchive] = useState(false);
@@ -6110,6 +6137,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
             silent: true,
           })}
+          morningRoutineSteps={morningRoutineSteps}
+          onMarkMorningDone={() => addEvent({ type: "morning_routine_done", silent: true })}
+          onSnoozeMorning={() => addEvent({
+            type: "morning_routine_snoozed",
+            snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
+            silent: true,
+          })}
+          onEditMorningSteps={() => setShowMorningStepsEditor(true)}
           activePump={activePump}
           onStartPump={(type = "standard") => setActivePump({
             startedAt: new Date().toISOString(),
@@ -9785,7 +9820,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onEditMorningSteps, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -9928,6 +9963,36 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
       : null;
     return { latestFeedTimeStr };
   })();
+
+  // v05.05bt253 — Morning routine prompt. Per chat: '5:30am prompt to see
+  // if she has done her morning routine. Daddy will be the one doing it
+  // on weekdays before dropping her off at daycare.' Mirrors the bedtime
+  // bath-prompt pattern: window 5:30am-8:30am, hidden once user marks
+  // done or snoozes. The list of steps lives in user state (editable)
+  // not hardcoded.
+  const morningInfo = (() => {
+    const promptStart = new Date(now);
+    promptStart.setHours(5, 30, 0, 0);
+    const promptEnd = new Date(now);
+    promptEnd.setHours(8, 30, 0, 0);
+    if (now < promptStart || now > promptEnd) return null;
+    // Already marked done this morning?
+    const doneToday = events.find(e =>
+      e.type === "morning_routine_done" && new Date(e.ts) >= promptStart
+    );
+    if (doneToday) return null;
+    // Snoozed?
+    const sessionSnoozes = events
+      .filter(e => e.type === "morning_routine_snoozed" && new Date(e.ts) >= promptStart)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    const latestSnooze = sessionSnoozes[0];
+    if (latestSnooze && latestSnooze.snoozeUntil) {
+      const snoozeUntil = new Date(latestSnooze.snoozeUntil);
+      if (now < snoozeUntil) return null;
+    }
+    return { steps: morningRoutineSteps || [] };
+  })();
+  const [morningExpanded, setMorningExpanded] = useState(true);
 
   // v05.05bt35: notification sounds.
   // Trigger short chimes whenever a banner transitions from hidden→visible
@@ -10149,6 +10214,92 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
             }}>
               <Sun size={12} /> Still awake
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* v05.05bt253 — Morning routine check-in. 5:30am-8:30am window.
+          Shows the configured step list (editable) as a memory aid for
+          whichever parent is doing morning care, especially Daddy on
+          weekdays before daycare. */}
+      {morningInfo && (
+        <div style={{
+          marginTop: 14, padding: 12,
+          background: `${C.daddy}10`,
+          border: `1.5px solid ${C.daddy}55`,
+          borderRadius: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Sun size={12} color={C.daddy} />
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: C.daddy,
+            }}>
+              morning check
+            </span>
+          </div>
+          <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 10 }}>
+            Has Solène had her morning routine?
+          </div>
+          {/* Steps list with expand/collapse */}
+          {Array.isArray(morningInfo.steps) && morningInfo.steps.length > 0 && (
+            <details
+              open={morningExpanded}
+              onToggle={(e) => setMorningExpanded(e.currentTarget.open)}
+              style={{ marginBottom: 10 }}>
+              <summary style={{
+                cursor: "pointer",
+                fontSize: 11, color: C.daddy, fontWeight: 600,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                marginBottom: 6,
+              }}>
+                {morningExpanded ? "Hide steps" : `Show the ${morningInfo.steps.length} step${morningInfo.steps.length === 1 ? "" : "s"}`}
+              </summary>
+              <ol style={{
+                margin: 0, paddingLeft: 22,
+                fontSize: 13, color: C.ink, lineHeight: 1.6,
+                fontFamily: "'Cormorant Garamond', serif",
+              }}>
+                {morningInfo.steps.map((s, i) => (
+                  <li key={i}>{typeof s === "string" ? s : s.step}</li>
+                ))}
+              </ol>
+              <button
+                onClick={onEditMorningSteps}
+                style={{
+                  marginTop: 6, padding: 0,
+                  background: "transparent", border: "none",
+                  color: C.muted, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.12em", fontWeight: 600,
+                  textTransform: "uppercase", textDecoration: "underline",
+                }}>Edit steps</button>
+            </details>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            <button onClick={onMarkMorningDone} style={{
+              background: C.ink, color: C.paper, border: "none",
+              padding: "8px 6px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            }}>
+              <Sun size={11} /> Done
+            </button>
+            <button onClick={onSnoozeMorning} style={{
+              background: "transparent", color: C.daddy,
+              border: `1px solid ${C.daddy}66`, borderRadius: 8,
+              padding: "8px 6px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            }}>
+              <Clock size={11} /> Snooze 30m
+            </button>
+            <button onClick={onEditMorningSteps} style={{
+              background: "transparent", color: C.muted,
+              border: `1px solid ${C.line}33`, borderRadius: 8,
+              padding: "8px 6px", fontSize: 11, fontWeight: 500, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            }}>
+              ✎ Steps
             </button>
           </div>
         </div>
@@ -11730,14 +11881,44 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
     };
   };
 
-  const schedule = DAY_SKELETON.map(skel => {
-    if (skel.kind === "feed") return overlayBucket(skel, feedBuckets);
-    if (skel.kind === "nap") return overlayBucket(skel, napBuckets);
-    if (skel.kind === "wake") return overlayBucket(skel, wakeBuckets);
-    if (skel.kind === "bedtime") return overlayBucket(skel, bedBuckets);
-    if (skel.kind === "diaper") return overlayBucket(skel, diaperBuckets);
-    return null;
-  }).filter(Boolean).sort((a, b) => a.medianMin - b.medianMin);
+  // v05.05bt251 — Data-first schedule. Per chat: 'The typical day looks
+  // wrong and doesn't seem to mimic the last 7 days.' Previously, the
+  // DAY_SKELETON had 16 hardcoded items (3 naps, 5 feeds, 4 diapers,
+  // etc.) and overlayBucket only adjusted each one's median time. So
+  // even if Solène actually has 6 feeds and 2 naps in a typical day,
+  // the schedule always showed 5 feeds and 3 naps from the skeleton.
+  //
+  // Now: each DATA BUCKET becomes one row. The skeleton is only used
+  // per-type as a fallback when that type has zero buckets in the
+  // 7-day window — so a new caregiver day with no logged feeds yet
+  // still shows the typical feed times, but a well-logged week
+  // shows the actual count.
+  const skeletonByKind = (kind) => DAY_SKELETON.filter(s => s.kind === kind).map(skel => ({
+    ...skel,
+    medianMin: skel.hr * 60,
+    medianOz: skel.defaultOz,
+    fromData: false,
+  }));
+  const labelForFeed = (b) => b.medianOz ? `Feed ~${b.medianOz}oz` : "Feed";
+  const labelForWake = (b) => b.medianMin < 9 * 60 ? "Wake up" : "Wake from nap";
+  const rowsFromBuckets = (buckets, kind, actType, labelFn) =>
+    buckets.map(b => ({
+      hr: b.medianMin / 60,
+      kind,
+      actType,
+      label: labelFn(b),
+      medianMin: b.medianMin,
+      medianOz: b.medianOz,
+      bucketHour: b.bucketHour,
+      fromData: true,
+    }));
+  const feedRows  = feedBuckets.length   > 0 ? rowsFromBuckets(feedBuckets,  "feed",    "feed",       labelForFeed) : skeletonByKind("feed");
+  const napRows   = napBuckets.length    > 0 ? rowsFromBuckets(napBuckets,   "nap",     "sleep_down", () => "Nap (down)") : skeletonByKind("nap");
+  const wakeRows  = wakeBuckets.length   > 0 ? rowsFromBuckets(wakeBuckets,  "wake",    "sleep_up",   labelForWake) : skeletonByKind("wake");
+  const bedRows   = bedBuckets.length    > 0 ? rowsFromBuckets(bedBuckets,   "bedtime", "sleep_down", () => "Bedtime") : skeletonByKind("bedtime");
+  const diaperRows = diaperBuckets.length > 0 ? rowsFromBuckets(diaperBuckets,"diaper",  "diaper",     () => "Diaper change") : skeletonByKind("diaper");
+  const schedule = [...feedRows, ...napRows, ...wakeRows, ...bedRows, ...diaperRows]
+    .sort((a, b) => a.medianMin - b.medianMin);
 
   // For each scheduled item, check if a matching event was logged today.
   // v05.05bt243 — rowId must include the typical hour, not just kind+medianMin.
@@ -22629,6 +22810,144 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
   );
 }
 
+// v05.05bt253 — MorningStepsEditorModal. Lets the user maintain a
+// configurable checklist of morning-routine steps. Surfaced inside the
+// OnDutyCard's 5:30am-8:30am prompt as a memory aid for whoever's doing
+// morning care (often Daddy on weekdays). Stored in localStorage; can
+// grow/change as Solène ages without code changes.
+function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
+  useScrim();
+  const [steps, setSteps] = useState(() => {
+    const arr = Array.isArray(initialSteps) ? initialSteps.slice() : [];
+    return arr.map(s => typeof s === "string" ? s : (s.step || ""));
+  });
+  const update = (i, v) => setSteps(prev => prev.map((s, idx) => idx === i ? v : s));
+  const remove = (i) => setSteps(prev => prev.filter((_, idx) => idx !== i));
+  const move = (i, dir) => setSteps(prev => {
+    const next = prev.slice();
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return prev;
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+  const add = () => setSteps(prev => [...prev, ""]);
+  const save = () => onSave(steps.map(s => s.trim()).filter(s => s.length > 0));
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(20,16,12,0.45)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 540,
+        background: C.paper,
+        borderRadius: "20px 20px 0 0",
+        padding: "16px 18px 24px",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        maxHeight: "calc(100dvh - 40px)",
+        overflowY: "auto",
+      }}>
+        <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase",
+          color: C.daddy, fontWeight: 700,
+        }}>Morning routine</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontWeight: 500, color: C.ink,
+          marginTop: 4, lineHeight: 1.3,
+        }}>Steps to do with Solène</div>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 13, color: C.muted,
+          marginTop: 4, marginBottom: 16, lineHeight: 1.5,
+        }}>Shown in the 5:30–8:30am prompt as a memory aid. Update as Solène's routine evolves.</div>
+
+        {steps.length === 0 && (
+          <div style={{
+            padding: "16px 12px",
+            background: `${C.line}11`,
+            border: `1px dashed ${C.line}`,
+            borderRadius: 8,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 13, color: C.muted,
+            textAlign: "center", marginBottom: 12,
+          }}>No steps yet. Add the first one below.</div>
+        )}
+        {steps.map((s, i) => (
+          <div key={i} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            marginBottom: 8,
+          }}>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, color: C.muted, fontWeight: 700,
+              minWidth: 20, textAlign: "right",
+            }}>{i + 1}.</span>
+            <input
+              value={s}
+              onChange={e => update(i, e.target.value)}
+              placeholder="Step description"
+              style={{
+                flex: 1, padding: "8px 10px",
+                background: C.bg, border: `1px solid ${C.line}`,
+                borderRadius: 6, fontFamily: "'Cormorant Garamond', serif",
+                fontSize: 14, color: C.ink,
+              }} />
+            <button onClick={() => move(i, -1)} disabled={i === 0} style={{
+              padding: "6px 8px", background: "transparent",
+              color: i === 0 ? `${C.muted}55` : C.muted,
+              border: "none", cursor: i === 0 ? "default" : "pointer",
+              fontSize: 14, fontFamily: "inherit",
+            }}>↑</button>
+            <button onClick={() => move(i, 1)} disabled={i === steps.length - 1} style={{
+              padding: "6px 8px", background: "transparent",
+              color: i === steps.length - 1 ? `${C.muted}55` : C.muted,
+              border: "none", cursor: i === steps.length - 1 ? "default" : "pointer",
+              fontSize: 14, fontFamily: "inherit",
+            }}>↓</button>
+            <button onClick={() => remove(i)} style={{
+              padding: "6px 8px", background: "transparent",
+              color: C.accent, border: "none", cursor: "pointer",
+              fontSize: 14, fontFamily: "inherit",
+            }}>×</button>
+          </div>
+        ))}
+
+        <button onClick={add} style={{
+          width: "100%", padding: "10px 12px",
+          background: "transparent", color: C.gold,
+          border: `1.5px dashed ${C.gold}66`, borderRadius: 8,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, letterSpacing: "0.14em", fontWeight: 700,
+          textTransform: "uppercase", cursor: "pointer",
+          marginTop: 6, marginBottom: 18,
+        }}>+ Add step</button>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: "11px 14px",
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}33`, borderRadius: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11, letterSpacing: "0.14em", fontWeight: 600,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={save} style={{
+            flex: 2, padding: "11px 16px",
+            background: C.daddy, color: "#FDFAF1",
+            border: "none", borderRadius: 10,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // v05.05bt212 — RoutineLibraryEditor. Lets the user edit her DEFAULT
 // routines (replaces hardcoded DEFAULT_MOMMY_ROUTINES with a per-user
 // editable library). Per chat reminder list: "editable routines in
@@ -23929,7 +24248,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       return result;
     };
     return splitFreeAtBoundaries(rawTimeline);
-  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts]);
+  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -24674,6 +24993,36 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // the assign algorithm. Used after focus/regret edits when the user
   // wants the engine to find a better placement. Completed tasks are
   // left alone (their time is historical fact).
+  // v05.05bt251 — Auto-reanalyze when routines change. Per chat: 'If I
+  // adjust my routine then everything else should adjust to after the
+  // AM routine.' Previously, editing a routine updated the visual
+  // timeline (now that routineLibrary is in dayTimeline deps), but
+  // tasks kept their pre-edit scheduledTime — overlapping the new
+  // routine block. This effect runs reanalyze() shortly after any
+  // routine change so tasks re-shuffle around the updated routines.
+  // Pinned tasks stay put (existing reanalyze behavior).
+  const routineSignatureRef = useRef(null);
+  useEffect(() => {
+    if (!Array.isArray(routineLibrary)) return;
+    // Build a stable signature of the routines that affect placement
+    const sig = routineLibrary
+      .filter(r => !r.disabled)
+      .map(r => `${r.id}:${r.time}:${r.durationMin}:${(r.days || []).join(",")}:${r.onsiteOnly ? "1" : "0"}:${r.onsiteDurationMin || ""}`)
+      .sort()
+      .join("|");
+    if (routineSignatureRef.current === null) {
+      // First render — store signature, don't reanalyze
+      routineSignatureRef.current = sig;
+      return;
+    }
+    if (routineSignatureRef.current === sig) return;
+    routineSignatureRef.current = sig;
+    // Routines actually changed — defer reanalyze so the timeline
+    // settles before re-placing tasks
+    const t = setTimeout(() => reanalyze(), 400);
+    return () => clearTimeout(t);
+  }, [routineLibrary]);
+
   const reanalyze = () => {
     // v05.05bt175 — Pin-aware reanalyze. Tasks with t.pinned===true
     // keep their scheduledTime (treated as fixed). Everything else
@@ -28163,6 +28512,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           onClose={() => setShowRoutineEditor(false)}
         />
       )}
+      {showMorningStepsEditor && (
+        <MorningStepsEditorModal
+          C={C}
+          initialSteps={morningRoutineSteps}
+          onSave={(steps) => { setMorningRoutineSteps(steps); setShowMorningStepsEditor(false); }}
+          onClose={() => setShowMorningStepsEditor(false)}
+        />
+      )}
       {showOptimizer && (
         <ScheduleOptimizerModal
           C={C}
@@ -30164,10 +30521,57 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
   const avgDailyOz = daysSampled > 0
     ? Object.values(dayTotals).reduce((a, b) => a + b, 0) / daysSampled
     : null;
-  // Recommended oz: scaled by hours fraction of day, plus 20% buffer.
-  // Clamp to a minimum of 4oz so we never recommend zero.
-  const recommendedOz = avgDailyOz !== null
-    ? Math.max(4, Math.ceil(avgDailyOz * (hours / 24) * 1.2 * 4) / 4) // round to 0.25
+  // v05.05bt252 — Two improvements to the recommendation math per chat:
+  // 'make sure you consider her y oz per x hours to cover an absence spell.'
+  //
+  // (1) Use AWAKE-hour rate, not 24h-rate. Solène doesn't feed during
+  //     overnight sleep (~10.5h), so dividing daily oz by 24 understates
+  //     the daytime per-hour rate. A 4mo typically has ~13.5 awake hours;
+  //     we derive this from her actual sleep_down/sleep_up events when
+  //     available, fall back to 13.5h otherwise.
+  //
+  // (2) Cross-check via 'feeds in window × median feed oz'. Count how
+  //     many feed buckets she typically has during this duration window
+  //     based on her cadence, multiply by her typical feed oz. Take the
+  //     MAX of the two methods + buffer — the caregiver should be over-
+  //     prepared, not under.
+  // Compute typical awake hours from recent sleep events
+  const sleepEvents = (Array.isArray(events) ? events : [])
+    .filter(e => (e.type === "sleep_down" || e.type === "sleep_up") && new Date(e.ts).getTime() >= cutoff && !e.silent);
+  let awakeHoursPerDay = 13.5; // sensible default for ~4mo
+  if (sleepEvents.length >= 10) {
+    // Estimate from data: average wake-up hour and bedtime hour
+    const wakeHours = sleepEvents
+      .filter(e => e.type === "sleep_up" && new Date(e.ts).getHours() >= 5 && new Date(e.ts).getHours() < 11)
+      .map(e => new Date(e.ts).getHours() + new Date(e.ts).getMinutes() / 60);
+    const bedHours = sleepEvents
+      .filter(e => e.type === "sleep_down" && new Date(e.ts).getHours() >= 18)
+      .map(e => new Date(e.ts).getHours() + new Date(e.ts).getMinutes() / 60);
+    if (wakeHours.length >= 3 && bedHours.length >= 3) {
+      const avgWake = wakeHours.reduce((a, b) => a + b, 0) / wakeHours.length;
+      const avgBed = bedHours.reduce((a, b) => a + b, 0) / bedHours.length;
+      awakeHoursPerDay = Math.max(10, Math.min(15, avgBed - avgWake));
+    }
+  }
+  const ozPerAwakeHour = avgDailyOz !== null ? avgDailyOz / awakeHoursPerDay : null;
+  // Method 1: hours × rate
+  const method1Oz = ozPerAwakeHour !== null ? hours * ozPerAwakeHour : null;
+  // Method 2: typical feed cadence × oz per feed
+  const ozsPerFeed = recentFeeds.map(e => Number(e.oz || 0)).filter(o => o > 0).sort((a, b) => a - b);
+  const medianFeedOz = ozsPerFeed.length > 0 ? ozsPerFeed[Math.floor(ozsPerFeed.length / 2)] : 4;
+  const feedsPerDay = daysSampled > 0
+    ? recentFeeds.length / daysSampled
+    : (avgDailyOz !== null ? avgDailyOz / medianFeedOz : null);
+  const feedsPerAwakeHour = feedsPerDay !== null ? feedsPerDay / awakeHoursPerDay : null;
+  // Round up expected feeds in window — better to overprep
+  const feedsInWindow = feedsPerAwakeHour !== null ? Math.ceil(hours * feedsPerAwakeHour) : null;
+  const method2Oz = feedsInWindow !== null ? feedsInWindow * medianFeedOz : null;
+  // Take the max of both methods + 20% buffer, clamped to minimum of one full feed
+  const baseRecommendedOz = (method1Oz !== null && method2Oz !== null)
+    ? Math.max(method1Oz, method2Oz)
+    : (method1Oz || method2Oz);
+  const recommendedOz = baseRecommendedOz !== null
+    ? Math.max(medianFeedOz, Math.ceil(baseRecommendedOz * 1.2 * 4) / 4) // round to 0.25
     : null;
   // Bag-pick: prefer rt (shortest expiry), then fridge, then freezer.
   // Sort within each location by pumpedAt asc (oldest first).
@@ -30261,13 +30665,15 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
               fontFamily: "'Cormorant Garamond', serif",
               fontSize: 13, color: C.ink, lineHeight: 1.5,
             }}>
-              Solène averages <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{avgDailyOz.toFixed(1)} oz/day</span>.
+              Solène averages <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{avgDailyOz.toFixed(1)} oz/day</span> across {daysSampled} day{daysSampled === 1 ? "" : "s"} — about <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{ozPerAwakeHour ? ozPerAwakeHour.toFixed(1) : "—"} oz/awake-hour</span> ({awakeHoursPerDay.toFixed(1)}h awake/day).
             </div>
             <div style={{
               fontFamily: "'Cormorant Garamond', serif",
-              fontSize: 16, color: C.ink, marginTop: 4, lineHeight: 1.4,
+              fontSize: 16, color: C.ink, marginTop: 6, lineHeight: 1.4,
             }}>
-              Send <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: viewerColor }}>~{recommendedOz} oz</span> for {hours}h <span style={{ fontStyle: "italic", color: C.muted, fontSize: 12 }}>(includes ~20% buffer)</span>
+              Send <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: viewerColor }}>~{recommendedOz} oz</span> for {hours}h{feedsInWindow !== null && (
+                <> · ~{feedsInWindow} feed{feedsInWindow === 1 ? "" : "s"} of {medianFeedOz}oz</>
+              )} <span style={{ fontStyle: "italic", color: C.muted, fontSize: 12 }}>(20% buffer)</span>
             </div>
           </div>
 
