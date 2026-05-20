@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt276";
+const APP_VERSION = "2026.05.05bt280";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -24481,6 +24481,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return overlaps;
   }, [tasks, currentUser, now, todayISO]);
   const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
+  // v05.05bt280 — Per chat: 'when i hit on "fits..." the app still accepts
+  // the suggestion rather than giving me options.' Track which open slot
+  // is currently showing the picker (slot key = start ms). Tap "fits"
+  // expands the candidate list; tap a specific candidate to slot it.
+  const [fitsPickerSlotKey, setFitsPickerSlotKey] = useState(null);
   // v05.05bt274 — High-priority unscheduled detection. Per chat: 'R5s
   // should definitely be prioritized - I don't understand how those
   // don't get scheduled and a lower R score does.' If there are R5 (or
@@ -24501,32 +24506,61 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const releaseLowerPinsAndReanalyze = () => {
     setTasks(prev => prev.map(t => {
       if (t.pinned && (t.regretScore || 3) < 5 && t.ownerName === currentUser && !t.completedAt) {
-        return { ...t, pinned: false };
+        return { ...t, pinned: false, scheduledTime: null };
       }
       return t;
     }));
-    // Reanalyze after pin release
-    setTimeout(() => reanalyze(), 100);
+    setReanalyzeTrigger(c => c + 1);
   };
-  // Auto-resolve overlap: release ALL pins on overlapping tasks, then reanalyze
+  // v05.05bt279 — Auto-resolve overlap (fixed). Per chat: 'autofix overlap
+  // does nothing.' The bt274 implementation only unpinned PINNED tasks
+  // (no-op if both were manually-positioned without pin) and used
+  // setTimeout that captured a stale reanalyze closure. Fixed by:
+  // 1) Pick the LOWER-regret task in each pair to strip — preserves the
+  //    more important task at its time, sends the other back to the pool
+  // 2) Strip scheduledTime + pinned in same setTasks call
+  // 3) Trigger reanalyze via useEffect counter (so the call uses the
+  //    NEW tasks closure, not a stale one)
   const autoResolveOverlaps = () => {
-    const overlapIds = new Set();
-    overlapWarnings.forEach(w => { overlapIds.add(w.a.id); overlapIds.add(w.b.id); });
-    if (overlapIds.size === 0) return;
-    setTasks(prev => prev.map(t => {
-      if (overlapIds.has(t.id) && t.pinned) {
-        return { ...t, pinned: false };
-      }
-      return t;
-    }));
-    setTimeout(() => reanalyze(), 100);
+    if (overlapWarnings.length === 0) return;
+    const idsToStrip = new Set();
+    for (const w of overlapWarnings) {
+      const ta = (tasks || []).find(t => t.id === w.a.id);
+      const tb = (tasks || []).find(t => t.id === w.b.id);
+      if (!ta || !tb) continue;
+      const ra = ta.regretScore || 3;
+      const rb = tb.regretScore || 3;
+      // Strip the LOWER-regret task; keep the higher in place.
+      // On ties, strip the later-starting one.
+      if (ra > rb) idsToStrip.add(tb.id);
+      else if (rb > ra) idsToStrip.add(ta.id);
+      else idsToStrip.add(w.b.id); // tie → strip second
+    }
+    if (idsToStrip.size === 0) return;
+    setTasks(prev => prev.map(t =>
+      idsToStrip.has(t.id) ? { ...t, pinned: false, scheduledTime: null } : t
+    ));
+    setReanalyzeTrigger(c => c + 1);
   };
+  // Counter-driven reanalyze trigger. Fires reanalyze AFTER React commits
+  // the state update from autoResolve/releaseLowerPins. The useEffect's
+  // closure captures the latest reanalyze which has fresh task state.
+  const [reanalyzeTrigger, setReanalyzeTrigger] = useState(0);
+  useEffect(() => {
+    if (reanalyzeTrigger === 0) return;
+    reanalyze();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reanalyzeTrigger]);
   // v05.05bt264 — Panel-level trade-ideas dismissal. Per chat: 'the whole
   // panel should be dismissed if user wants to not request trade - it
   // can pop up again when reanalyze if there's still some valuable trade.'
   // In-memory state so it resets on re-analyze (and on page refresh,
   // which is a reasonable 'fresh look').
   const [tradePanelDismissed, setTradePanelDismissed] = useState(false);
+  // v05.05bt279 — Per chat: 'trade ideas should be collapse by default
+  // and maybe that should be under runway?' Default collapsed; user
+  // expands when they want to consider trades.
+  const [tradePanelExpanded, setTradePanelExpanded] = useState(false);
   // v05.05bt271 — Routine timer state. Per chat: 'routine tasks should
   // also have the play button.' Keyed by routine-id + today's date so
   // timers reset overnight. localStorage-backed within the day so
@@ -24750,12 +24784,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     routines = resolveRoutineOverlaps(routines);
     const bedtimeRoutines = [];
     if (lightsOut) {
-      const bedStart = new Date(lightsOut);
-      const bedEnd = new Date(lightsOut.getTime() + 15 * 60000);
+      // v05.05bt279 — Bedtime routine now ENDS at lights-out (15 min
+      // run-up "in bed by..."), not starts at it. Previous start=lightsOut
+      // got filtered by the bt275 visualDayEnd clamp since start >=
+      // dayEnd. Per chat: 'where is my lights out when I say when I want
+      // to wake up?'
+      const bedStart = new Date(lightsOut.getTime() - 15 * 60000);
+      const bedEnd = new Date(lightsOut);
       bedtimeRoutines.push({
         kind: "routine",
         id: "bedtime",
-        title: "Lights out · in bed",
+        title: "🌙 Lights out · in bed",
         start: bedStart,
         end: bedEnd,
         durationMin: 15,
@@ -26977,9 +27016,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 Placed below the context so it's the first thing the
                 user reads before scanning the timeline. */}
             {currentUser === "Mommy" && !isTomorrow && dayTimeline.length > 0 && (() => {
-              // Pull only future free time (the rendering trim above
-              // mutates `slot` locally; here we re-derive from the
-              // un-trimmed dayTimeline + apply notBefore=now).
+              // v05.05bt280 — Per chat: 'we lost the runway completely now.'
+              // Previously returned null when futureFree empty; now always
+              // renders so user has visual confirmation it exists.
               const futureFree = dayTimeline
                 .filter(s => s.kind === "free" && s.end.getTime() > now.getTime())
                 .map(s => {
@@ -26988,7 +27027,34 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   return { ...s, start, durationMin: dur };
                 })
                 .filter(s => s.durationMin >= 15);
-              if (futureFree.length === 0) return null;
+              if (futureFree.length === 0) {
+                // No free time left today — but still render a quiet card
+                return (
+                  <div style={{
+                    background: `${C.line}10`,
+                    border: `1px solid ${C.line}33`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    marginBottom: 16,
+                    textAlign: "left",
+                  }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, letterSpacing: "0.22em",
+                      textTransform: "uppercase",
+                      color: C.gold, fontWeight: 700,
+                      marginBottom: 6,
+                    }}>Today's runway</div>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 13, fontStyle: "italic",
+                      color: C.muted, lineHeight: 1.5,
+                    }}>
+                      No open blocks left today — your timeline is full or you're past lights-out.
+                    </div>
+                  </div>
+                );
+              }
 
               // v05.05bt173 — Compute effective focus per slot using
               // owner + predicted naps. Bucket the minutes by SOURCE so
@@ -27183,19 +27249,33 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 background: `${C.daddy}0e`,
                 border: `1px dashed ${C.daddy}55`,
                 borderRadius: 10,
-                padding: "10px 14px",
+                padding: tradePanelExpanded ? "10px 14px" : "8px 14px",
                 marginBottom: 14,
               }}>
                 <div style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  marginBottom: 6,
+                  marginBottom: tradePanelExpanded ? 6 : 0,
+                  gap: 8,
                 }}>
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, letterSpacing: "0.22em",
-                    textTransform: "uppercase",
-                    color: C.daddy, fontWeight: 700,
-                  }}>↔ Trade ideas</div>
+                  <button
+                    type="button"
+                    onClick={() => setTradePanelExpanded(v => !v)}
+                    style={{
+                      flex: 1, background: "transparent", border: "none",
+                      padding: 0, textAlign: "left", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, letterSpacing: "0.22em",
+                      textTransform: "uppercase",
+                      color: C.daddy, fontWeight: 700,
+                    }}>↔ Trade ideas</span>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, color: C.muted, fontWeight: 600,
+                    }}>{tradeSuggestions.length} · {tradePanelExpanded ? "▾" : "▸"}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setTradePanelDismissed(true)}
@@ -27214,7 +27294,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 {/* v05.05bt272 — Time bank context. If partner owes you,
                     these trades are essentially free (you're cashing in
                     owed time). */}
-                {(() => {
+                {tradePanelExpanded && (() => {
                   const balanceMin = (timeBank && timeBank.balance) || 0;
                   if (balanceMin <= 15) return null; // ignore tiny balances
                   const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
@@ -27237,7 +27317,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   );
                 })()}
-                {tradeSuggestions.map((t, i) => {
+                {tradePanelExpanded && tradeSuggestions.map((t, i) => {
                   const hours = Math.floor(t.deepMin / 60);
                   const mins = t.deepMin % 60;
                   const dur = hours > 0
@@ -27804,17 +27884,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       };
                       const m = findShift("Mommy"), d = findShift("Daddy");
                       let segOwner;
+                      let segCovering = null;
                       if (m && d) segOwner = "joint";
-                      else if (m) segOwner = "Mommy";
-                      else if (d) segOwner = "Daddy";
+                      else if (m) {
+                        segOwner = "Mommy";
+                        // v05.05bt277 — Capture coverage signal. Per chat:
+                        // 'is the scheduler considering the auto adjustments...
+                        // i am covering for daddy at 12p but the railing
+                        // is showing mauve.' The rail IS correct (you're
+                        // on duty when covering), but no visual cue
+                        // signaled the slice was a cover. Now we surface it.
+                        if (m._coveringFor) segCovering = m._coveringFor;
+                      }
+                      else if (d) {
+                        segOwner = "Daddy";
+                        if (d._coveringFor) segCovering = d._coveringFor;
+                      }
                       else segOwner = null;
-                      segs.push({ owner: segOwner, startMs: cuts[i], endMs: cuts[i + 1] });
+                      segs.push({ owner: segOwner, startMs: cuts[i], endMs: cuts[i + 1], coveringFor: segCovering });
                     }
                     // Merge consecutive same-owner segments
                     const merged = [];
                     for (const seg of segs) {
                       const last = merged[merged.length - 1];
-                      if (last && last.owner === seg.owner) last.endMs = seg.endMs;
+                      if (last && last.owner === seg.owner && last.coveringFor === seg.coveringFor) last.endMs = seg.endMs;
                       else merged.push({ ...seg });
                     }
                     return merged.map(s => ({
@@ -27837,6 +27930,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     babyContext === "Mommy on duty" || babyContext === "Daddy on duty"
                       ? null
                       : babyContext;
+                  // v05.05bt277 — Coverage badge. If any segment is a
+                  // coverage slice, surface 'covering for X' so the user
+                  // knows the adjustment was honored (mauve rail when
+                  // Mommy covers Daddy IS correct, but the user needs
+                  // confirmation).
+                  const coveringSegment = railSegments.find(s => s.coveringFor);
+                  const coveringFor = coveringSegment ? coveringSegment.coveringFor : null;
+                  const coveringOwner = coveringSegment ? coveringSegment.owner : null;
                   // v05.05bt137/138 — reasoning lifted to row level so
                   // the expansion is driven by the global showAllWhy
                   // toggle (top of Your Day section). Per-row state
@@ -27928,10 +28029,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         isDropTarget && isFree ? `${C.mommy}10`
                         : isDropTarget ? `${C.mommy}0a`
                         : justMoved ? `${C.gold}1c`
+                        : slot.id === "bedtime" ? `${C.mommy}1c` // v05.05bt280 — bedtime hard-stop, prominent mauve fill
                         : isFree ? `${C.gold}08`
-                        : isMeeting ? "#8B7AA814" // v05.05bt273 — meeting purple tint so it pops
-                        : isPumpReminder ? `${C.mommy}14` // v05.05bt274 — pump mauve tint, same family as PUMP pill
+                        : isMeeting ? "#8B7AA814"
+                        : isPumpReminder ? `${C.mommy}14`
                         : "transparent",
+                      // v05.05bt280 — Bedtime: thick double-border above as HARD STOP marker
+                      ...(slot.id === "bedtime" ? {
+                        borderTop: `3px double ${C.mommy}`,
+                        marginTop: 6,
+                      } : {}),
                       // v05.05bt188 — Owner-colored thin boundary per chat
                       // ('thin boundary line of the same color around
                       // blocks'). Rail covers the LEFT edge, so only
@@ -28024,30 +28131,96 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             letterSpacing: "0.01em",
                           }}>
                             {(() => {
-                              // v05.05bt266 — Show actual time vs estimate.
-                              // v05.05bt271 — Extended to routines.
-                              // Running: '⏱ 12m' so user sees elapsed.
-                              // Completed with actualMin: 'X est · Y actual' + ⚠ for 50%+ overruns.
+                              // v05.05bt266/271 — Show actual time vs estimate.
+                              // v05.05bt279 — A+C HYBRID. Per chat: 'let's try
+                              // A but maybe with C style.' Tiny inline ▶
+                              // appears in the time column for current OR
+                              // upcoming rows (within ±90min of now), so user
+                              // can start any near-term task even if diverting
+                              // from original plan. Far-future + done rows
+                              // stay quiet.
                               const rtTimer = isRoutine ? routineTimers[slot.id] : null;
                               const isRunning = isTask
                                 ? (slot.actualStartedAt && !slot.completedAt)
                                 : (rtTimer && rtTimer.startedAt && !rtTimer.actualMin);
                               const actualMin = isTask ? slot.actualMin : (rtTimer && rtTimer.actualMin);
                               const startedAt = isTask ? slot.actualStartedAt : (rtTimer && rtTimer.startedAt);
+
+                              // Running state: show ⏸ + elapsed prominently
                               if ((isTask || isRoutine) && isRunning && startedAt) {
                                 const elapsedMin = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
+                                const onStopClick = (e) => {
+                                  e.stopPropagation();
+                                  if (isTask) {
+                                    const elapsedMs = Date.now() - new Date(startedAt).getTime();
+                                    const aMin = Math.max(1, Math.round(elapsedMs / 60000));
+                                    setTasks(prev => prev.map(t =>
+                                      t.id === slot.id
+                                        ? { ...t, actualMin: aMin, actualStartedAt: null, completedAt: new Date().toISOString() }
+                                        : t
+                                    ));
+                                  } else {
+                                    const elapsedMs = Date.now() - new Date(startedAt).getTime();
+                                    const aMin = Math.max(1, Math.round(elapsedMs / 60000));
+                                    setRoutineTimers(prev => ({
+                                      ...prev,
+                                      [slot.id]: { startedAt: prev[slot.id]?.startedAt || new Date().toISOString(), actualMin: aMin, completedAt: new Date().toISOString() }
+                                    }));
+                                  }
+                                };
                                 return (
-                                  <span style={{ color: C.accent, fontWeight: 700 }}>
-                                    ⏱ {elapsedMin}m
-                                  </span>
+                                  <button onClick={onStopClick} title="Stop timer · captures actual time" style={{
+                                    background: "transparent", border: "none", padding: 0,
+                                    color: C.accent, fontWeight: 700, fontSize: 9,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    cursor: "pointer",
+                                  }}>
+                                    ⏸ {elapsedMin}m
+                                  </button>
                                 );
                               }
+
+                              // Completed with actualMin: est · actual
                               if ((isTask || isRoutine) && actualMin) {
                                 const est = isTask ? (slot.effortMin || slot.durationMin) : slot.durationMin;
                                 const overran = actualMin > est * 1.5;
                                 return (
                                   <span>
                                     {fmtDurationHM(est)} est · <span style={{ color: overran ? C.accent : C.muted, fontWeight: 600 }}>{fmtDurationHM(actualMin)} actual{overran ? " ⚠" : ""}</span>
+                                  </span>
+                                );
+                              }
+
+                              // Idle state: show ▶ + duration on ALL
+                              // incomplete task/routine rows. Per chat:
+                              // 'should we have the play button near
+                              // each duration due to sometimes hopping
+                              // around?' Yes — always-available is more
+                              // useful than status-aware here.
+                              const isStartable = (isTask || isRoutine) && !slot.completedAt;
+                              if (isStartable) {
+                                const onStartClick = (e) => {
+                                  e.stopPropagation();
+                                  if (isTask) {
+                                    setTasks(prev => prev.map(t =>
+                                      t.id === slot.id ? { ...t, actualStartedAt: new Date().toISOString() } : t
+                                    ));
+                                  } else {
+                                    setRoutineTimers(prev => ({
+                                      ...prev,
+                                      [slot.id]: { startedAt: new Date().toISOString() }
+                                    }));
+                                  }
+                                };
+                                return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                    <button onClick={onStartClick} title="Start timer for this task" style={{
+                                      background: "transparent", border: "none", padding: 0,
+                                      color: C.mommy, fontWeight: 700, fontSize: 9,
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      cursor: "pointer", lineHeight: 1,
+                                    }}>▶</button>
+                                    <span>{fmtDurationHM(slot.durationMin)}</span>
                                   </span>
                                 );
                               }
@@ -28086,27 +28259,73 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               right (see below) per chat. The whole row reads
                               as: time | checkbox | title | ...meta · 🧠/🍃 R3 */}
                           {isTask && !slot.completedAt && inlineTitleEdit === slot.id ? (
-                            <input
-                              type="text"
-                              defaultValue={slot.title}
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                              onBlur={(e) => commitInlineTitle(slot.id, e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") commitInlineTitle(slot.id, e.target.value);
-                                if (e.key === "Escape") setInlineTitleEdit(null);
-                              }}
-                              style={{
-                                flex: 1, minWidth: 0,
-                                fontFamily: "'Cormorant Garamond', serif",
-                                fontSize: 15, fontWeight: 500,
-                                color: C.ink,
-                                border: `1.5px solid ${C.mommy}`,
-                                borderRadius: 6, padding: "3px 8px",
-                                background: "#FBF5E9",
-                                letterSpacing: "-0.005em",
-                              }}
-                            />
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, flex: 1 }}>
+                              <input
+                                type="text"
+                                defaultValue={slot.title}
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                                onBlur={(e) => commitInlineTitle(slot.id, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commitInlineTitle(slot.id, e.target.value);
+                                  if (e.key === "Escape") setInlineTitleEdit(null);
+                                }}
+                                style={{
+                                  flex: 1, minWidth: 0,
+                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontSize: 15, fontWeight: 500,
+                                  color: C.ink,
+                                  border: `1.5px solid ${C.mommy}`,
+                                  borderRadius: 6, padding: "3px 8px",
+                                  background: "#FBF5E9",
+                                  letterSpacing: "-0.005em",
+                                }}
+                              />
+                              {/* v05.05bt279 — Delete + more affordances when
+                                  inline-editing. Per chat: 'i need an easier
+                                  way to delete a task - right now when i
+                                  click on the title, i can only edit the
+                                  title name.' */}
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  // onMouseDown to fire BEFORE input's onBlur
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (window.confirm(`Delete "${slot.title}"?`)) {
+                                    setInlineTitleEdit(null);
+                                    deleteTask(slot.id);
+                                  }
+                                }}
+                                title="Delete task"
+                                style={{
+                                  padding: "5px 8px",
+                                  background: "transparent",
+                                  border: `1px solid ${C.accent}66`,
+                                  borderRadius: 4,
+                                  color: C.accent, cursor: "pointer",
+                                  fontSize: 13, lineHeight: 1, fontWeight: 700,
+                                  fontFamily: "inherit",
+                                }}>✕</button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setInlineTitleEdit(null);
+                                  setEditingTask(slot);
+                                }}
+                                title="Edit all task fields"
+                                style={{
+                                  padding: "5px 8px",
+                                  background: "transparent",
+                                  border: `1px solid ${C.line}55`,
+                                  borderRadius: 4,
+                                  color: C.muted, cursor: "pointer",
+                                  fontSize: 13, lineHeight: 1,
+                                  fontFamily: "inherit",
+                                }}>⋯</button>
+                            </div>
                           ) : (
                           <span
                             onClick={(isTask && !slot.completedAt)
@@ -28186,6 +28405,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 fontWeight: 700, marginLeft: 6,
                                 letterSpacing: "0.08em",
                               }}>· moved</span>
+                            )}
+                            {/* v05.05bt277 — Coverage badge: this slice is
+                                a coverage adjustment (e.g. Mommy covering
+                                Daddy's meeting). Color matches the
+                                covered parent so the cross-parent context
+                                reads at a glance. */}
+                            {coveringFor && coveringOwner && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9,
+                                color: coveringFor === "Mommy" ? C.mommy : C.daddy,
+                                fontWeight: 700, marginLeft: 6,
+                                letterSpacing: "0.08em",
+                                background: `${coveringFor === "Mommy" ? C.mommy : C.daddy}12`,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                              }} title={`${coveringOwner} is covering ${coveringFor}'s commitment`}>↻ covering {coveringFor}</span>
                             )}
                             {/* v05.05bt171 — Sequence badge: tasks
                                 chained via "then" show "→ 2/3" in
@@ -28527,55 +28763,113 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     return (a.effortMin || 30) - (b.effortMin || 30);
                                   });
                                 if (candidates.length === 0) return null;
-                                const top = candidates[0];
+                                const slotKey = `${slot.start.getTime()}`;
                                 const slotTime = `${String(slot.start.getHours()).padStart(2, "0")}:${String(slot.start.getMinutes()).padStart(2, "0")}`;
+                                const isExpanded = fitsPickerSlotKey === slotKey;
+                                const topCount = Math.min(candidates.length, 5);
+                                const top = candidates[0];
+                                // Collapsed: show preview + tap to expand
+                                if (!isExpanded) {
+                                  return (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFitsPickerSlotKey(slotKey);
+                                      }}
+                                      style={{
+                                        marginTop: 8, padding: "6px 10px",
+                                        background: `${C.gold}10`,
+                                        border: `1px dashed ${C.gold}55`,
+                                        borderRadius: 6,
+                                        display: "flex", alignItems: "center", gap: 8,
+                                        width: "100%", cursor: "pointer",
+                                        fontFamily: "inherit", textAlign: "left",
+                                      }}
+                                      title="Tap to pick from candidates that fit">
+                                      <span style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, color: C.gold, fontWeight: 800,
+                                        letterSpacing: "0.14em",
+                                      }}>✦ FITS · {candidates.length}</span>
+                                      <span style={{
+                                        flex: 1, color: C.ink,
+                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontStyle: "italic",
+                                        fontSize: 12,
+                                      }}>{top.title}{candidates.length > 1 ? ` · +${candidates.length - 1} more` : ""}</span>
+                                      <span style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, color: C.muted, fontWeight: 600,
+                                      }}>▸</span>
+                                    </button>
+                                  );
+                                }
+                                // Expanded picker
                                 return (
                                   <div style={{
-                                    marginTop: 8, padding: "6px 10px",
+                                    marginTop: 8, padding: "8px 10px",
                                     background: `${C.gold}10`,
                                     border: `1px dashed ${C.gold}55`,
                                     borderRadius: 6,
-                                    display: "flex", alignItems: "center", gap: 8,
-                                    flexWrap: "wrap",
                                   }}>
-                                    <span style={{
-                                      fontFamily: "'JetBrains Mono', monospace",
-                                      fontSize: 9, color: C.gold, fontWeight: 800,
-                                      letterSpacing: "0.14em",
-                                    }}>✦ FITS</span>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setTasks(prev => prev.map(t => t.id === top.id ? { ...t, scheduledTime: slotTime } : t));
-                                      }}
-                                      style={{
-                                        flex: 1,
-                                        background: "transparent", border: "none",
-                                        padding: 0, cursor: "pointer",
-                                        textAlign: "left", color: C.ink,
-                                        fontFamily: "'Cormorant Garamond', serif",
-                                        fontSize: 13, fontWeight: 500,
-                                      }}
-                                      title="Tap to slot this task here">
-                                      {top.title}{" "}
+                                    <div style={{
+                                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                                      marginBottom: 6,
+                                    }}>
                                       <span style={{
                                         fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: 10, color: C.muted, fontWeight: 600,
-                                      }}>{top.effortMin || 30}m</span>
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setTasks(prev => prev.map(t => t.id === top.id ? { ...t, scheduledTime: slotTime } : t));
-                                      }}
-                                      style={{
-                                        padding: "3px 8px",
-                                        background: C.gold, color: "#FDFAF1",
-                                        border: "none", borderRadius: 4,
-                                        cursor: "pointer",
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: 9, letterSpacing: "0.1em", fontWeight: 700,
-                                      }}>SLOT</button>
+                                        fontSize: 9, color: C.gold, fontWeight: 800,
+                                        letterSpacing: "0.14em",
+                                      }}>✦ PICK ONE TO SLOT</span>
+                                      <button onClick={(e) => { e.stopPropagation(); setFitsPickerSlotKey(null); }} style={{
+                                        background: "transparent", border: "none", padding: 0,
+                                        color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
+                                      }}>×</button>
+                                    </div>
+                                    {candidates.slice(0, topCount).map((c, idx) => {
+                                      const fl = normalizeFocus(c.focusLevel);
+                                      const flGlyph = fl === "deep" ? "🧠" : "🍃";
+                                      return (
+                                        <button
+                                          key={c.id}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setTasks(prev => prev.map(t => t.id === c.id ? { ...t, scheduledTime: slotTime } : t));
+                                            setFitsPickerSlotKey(null);
+                                          }}
+                                          style={{
+                                            display: "flex", alignItems: "center", gap: 8,
+                                            width: "100%", padding: "5px 6px",
+                                            background: "transparent",
+                                            border: "none", borderTop: idx === 0 ? "none" : `1px solid ${C.line}22`,
+                                            cursor: "pointer", textAlign: "left",
+                                            fontFamily: "inherit",
+                                          }}>
+                                          <span style={{ fontSize: 12 }}>{flGlyph}</span>
+                                          <span style={{
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: 10, fontWeight: 700,
+                                            color: regretColors[c.regretScore],
+                                          }}>R{c.regretScore}</span>
+                                          <span style={{
+                                            flex: 1, color: C.ink,
+                                            fontFamily: "'Cormorant Garamond', serif",
+                                            fontSize: 13,
+                                          }}>{c.title}</span>
+                                          <span style={{
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: 10, color: C.muted, fontWeight: 600,
+                                          }}>{c.effortMin || 30}m</span>
+                                        </button>
+                                      );
+                                    })}
+                                    {candidates.length > topCount && (
+                                      <div style={{
+                                        marginTop: 4,
+                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontStyle: "italic", fontSize: 11, color: C.muted,
+                                      }}>+ {candidates.length - topCount} more · use All Tasks to slot</div>
+                                    )}
                                   </div>
                                 );
                               })()}
@@ -28594,124 +28888,44 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
                       }}>
-                        {/* v05.05bt276 — Focus + R unified visual chip per
-                            chat: too many icons on the right side. Each
-                            still tappable to cycle, but visually reads
-                            as one element. */}
-                        {isTask && !slot.completedAt && (
-                          <div style={{
-                            display: "inline-flex", alignItems: "center",
-                            gap: 0,
-                            border: `1px solid ${C.line}55`,
-                            borderRadius: 5,
-                            background: `${C.line}08`,
-                            overflow: "hidden",
-                          }}>
-                            {(() => {
-                              const fl = normalizeFocus(slot.focusLevel);
-                              const glyph = fl === "deep" ? "🧠" : "🍃";
-                              return (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
-                                  title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
-                                  style={{
-                                    background: "transparent", border: "none",
-                                    padding: "2px 4px 2px 5px", cursor: "pointer",
-                                    fontSize: 12, lineHeight: 1,
-                                  }}>
-                                  {glyph}
-                                </button>
-                              );
-                            })()}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
-                              style={{
-                                background: "transparent", border: "none",
-                                borderLeft: `1px solid ${C.line}33`,
-                                padding: "2px 6px 2px 5px", cursor: "pointer",
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 10, fontWeight: 700,
-                                letterSpacing: "0.04em",
-                                color: regretColors[slot.regretScore],
-                              }}
-                              title={`Regret ${slot.regretScore}/5 · tap to cycle`}>
-                              R{slot.regretScore}
-                            </button>
-                          </div>
-                        )}
-                        {(isTask || isRoutine) && !slot.completedAt && (() => {
-                          // v05.05bt266 — Real-duration timer (MLP).
-                          // v05.05bt271 — Extended to routines too.
-                          // Tasks store actualMin on the task object.
-                          // Routines store in localStorage (routineTimers
-                          // map, per-day). Both share the same button.
-                          const rtKey = slot.id;
-                          const rtTimer = isRoutine ? routineTimers[rtKey] : null;
-                          const running = isTask
-                            ? !!slot.actualStartedAt
-                            : !!(rtTimer && rtTimer.startedAt && !rtTimer.actualMin);
-                          const startedMs = running
-                            ? (isTask
-                                ? new Date(slot.actualStartedAt).getTime()
-                                : new Date(rtTimer.startedAt).getTime())
-                            : null;
-                          const onClickTimer = (e) => {
-                            e.stopPropagation();
-                            if (isTask) {
-                              if (!running) {
-                                setTasks(prev => prev.map(t =>
-                                  t.id === slot.id ? { ...t, actualStartedAt: new Date().toISOString() } : t
-                                ));
-                              } else {
-                                const elapsedMs = Date.now() - startedMs;
-                                const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
-                                setTasks(prev => prev.map(t =>
-                                  t.id === slot.id
-                                    ? { ...t, actualMin, actualStartedAt: null, completedAt: new Date().toISOString() }
-                                    : t
-                                ));
-                              }
-                            } else {
-                              // Routine: write to routineTimers
-                              if (!running) {
-                                setRoutineTimers(prev => ({
-                                  ...prev,
-                                  [rtKey]: { startedAt: new Date().toISOString() }
-                                }));
-                              } else {
-                                const elapsedMs = Date.now() - startedMs;
-                                const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
-                                setRoutineTimers(prev => ({
-                                  ...prev,
-                                  [rtKey]: { startedAt: prev[rtKey]?.startedAt || new Date().toISOString(), actualMin, completedAt: new Date().toISOString() }
-                                }));
-                              }
-                            }
-                          };
+                        {/* v05.05bt278 — Chip border dropped per chat ('makes
+                            it look clunky'). Back to two floating buttons
+                            — same as before bt276. */}
+                        {isTask && !slot.completedAt && (() => {
+                          const fl = normalizeFocus(slot.focusLevel);
+                          const glyph = fl === "deep" ? "🧠" : "🍃";
                           return (
                             <button
-                              type="button"
-                              onClick={onClickTimer}
-                              title={running ? "Stop timer · captures actual time" : "Start timer"}
-                              aria-label={running ? "Stop timer" : "Start timer"}
+                              onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
+                              title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
                               style={{
-                                padding: running ? "4px 7px" : "5px 7px",
-                                background: running ? `${C.accent}20` : "transparent",
-                                border: `1px solid ${running ? C.accent : C.mommy}55`,
-                                borderRadius: 4,
-                                cursor: "pointer",
-                                color: running ? C.accent : C.mommy,
-                                fontSize: running ? 10 : 11,
-                                lineHeight: 1, fontWeight: 700,
-                                fontFamily: running ? "'JetBrains Mono', monospace" : "inherit",
-                                display: "inline-flex", alignItems: "center", gap: 3,
+                                background: "transparent", border: "none",
+                                padding: "2px 2px", cursor: "pointer",
+                                fontSize: 13, lineHeight: 1,
                               }}>
-                              {running ? (
-                                <>⏸ {Math.max(1, Math.round((Date.now() - startedMs) / 60000))}m</>
-                              ) : "▶"}
+                              {glyph}
                             </button>
                           );
                         })()}
+                        {isTask && !slot.completedAt && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: "2px 4px", cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, fontWeight: 700,
+                              letterSpacing: "0.04em",
+                              color: regretColors[slot.regretScore],
+                            }}
+                            title={`Regret ${slot.regretScore}/5 · tap to cycle`}>
+                            R{slot.regretScore}
+                          </button>
+                        )}
+                        {/* v05.05bt279 — Timer moved inline into the time
+                            column (status-aware visibility). Right column
+                            no longer carries it — reduces clutter, lets
+                            ▶ appear contextually next to the time. */}
                         {/* v05.05bt276 — ✎ pencil removed per chat: 'too
                             many icons on the right side.' The task title
                             itself is already clickable (bt140) and opens
