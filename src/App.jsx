@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt273";
+const APP_VERSION = "2026.05.05bt276";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -20519,7 +20519,27 @@ function computeFreeSpans(items, dayStart, dayEnd, notBefore) {
 // 30 minutes minimum (smaller gaps just close naturally). Result is an
 // array of mixed kinds: routine | task | free, each with start/end/duration.
 function buildDayTimeline(items, dayStart, dayEnd) {
-  const sorted = [...items].sort((a, b) => a.start - b.start);
+  // v05.05bt275 — Per chat: 'i STILL see past midnight on the today
+  // scheduler view. There should be nothing past lights out nor past
+  // 11:59a. Lights out should definitely be BOLD HARD STOP.' Filter
+  // out items starting after dayEnd entirely; clamp items whose end
+  // overruns dayEnd back to dayEnd so nothing renders past the stop.
+  const dayEndMs = dayEnd.getTime();
+  const dayStartMs = dayStart.getTime();
+  const filtered = items
+    .filter(i => {
+      const sMs = i.start.getTime();
+      return sMs < dayEndMs && (i.end ? i.end.getTime() > dayStartMs : true);
+    })
+    .map(i => {
+      if (i.end && i.end.getTime() > dayEndMs) {
+        const clampedEnd = new Date(dayEndMs);
+        const newDurMin = Math.max(1, (dayEndMs - i.start.getTime()) / 60000);
+        return { ...i, end: clampedEnd, durationMin: newDurMin, _clampedAtDayEnd: true };
+      }
+      return i;
+    });
+  const sorted = [...filtered].sort((a, b) => a.start - b.start);
   const out = [];
   let cursor = dayStart;
   // v05.05bt149 — Free blocks now chunked into 1-hour pieces per chat
@@ -23892,7 +23912,57 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // v05.05bt115 — after NL parse, pause to ask per-task regret/focus
   // before committing. nlPending = array of { title, effortMin,
   // scheduledTime, regretScore, focusLevel } in review state, or null.
+  // v05.05bt276 — Persistent NL review draft. Per chat: 'can accidentally
+  // click out of screen and lose what we were working on so needs to
+  // remember in case that happens.' nlPending now persists across
+  // accidental-close events. Modal visibility is decoupled from data:
+  // closing the modal preserves nlPending so user can resume. Commit
+  // OR explicit Discard clears it. localStorage backup so refresh-loss
+  // also recovers.
   const [nlPending, setNlPending] = useState(null);
+  // v05.05bt276 — Separate "review modal open" from "pending exists." Per
+  // chat: 'can accidentally click out of screen and lose what we were
+  // working on.' Closing the modal (Cancel/tap-outside) now only hides
+  // the modal; pending list survives. Draft also persisted to
+  // localStorage for refresh resilience.
+  const [nlReviewOpen, setNlReviewOpen] = useState(false);
+  // Hydrate draft from localStorage once on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ll:nlReviewDraft");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setNlPending(parsed);
+          // Don't auto-open the modal; user invokes via reviewBeforeAdding.
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist on every change
+  useEffect(() => {
+    try {
+      if (Array.isArray(nlPending) && nlPending.length > 0) {
+        localStorage.setItem("ll:nlReviewDraft", JSON.stringify(nlPending));
+      } else {
+        localStorage.removeItem("ll:nlReviewDraft");
+      }
+    } catch {}
+  }, [nlPending]);
+  const openNlReview = (initial) => {
+    if (initial !== undefined) setNlPending(initial);
+    setNlReviewOpen(true);
+  };
+  const closeNlReview = () => {
+    // Soft-close — preserves nlPending so user can resume.
+    setNlReviewOpen(false);
+  };
+  const discardNlReview = () => {
+    setNlPending(null);
+    setNlReviewOpen(false);
+    try { localStorage.removeItem("ll:nlReviewDraft"); } catch {}
+  };
   const [copyStatus, setCopyStatus] = useState(null);
   // v05.05bt117 — banner after NL commit so user can see what happened
   // ("3 slotted into Your Day, 1 went to Unscheduled (no fit)").
@@ -24411,6 +24481,46 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return overlaps;
   }, [tasks, currentUser, now, todayISO]);
   const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
+  // v05.05bt274 — High-priority unscheduled detection. Per chat: 'R5s
+  // should definitely be prioritized - I don't understand how those
+  // don't get scheduled and a lower R score does.' If there are R5 (or
+  // R4) tasks that didn't fit, surface as a banner with one-tap
+  // "release lower-priority pins + re-analyze" action.
+  const highPriorityUnscheduled = useMemo(() => {
+    return (tasks || [])
+      .filter(t => t.ownerName === currentUser && !t.completedAt && !t.scheduledTime)
+      .filter(t => !t.scheduledDate || t.scheduledDate === todayISO)
+      .filter(t => (t.regretScore || 3) >= 5);
+  }, [tasks, currentUser, todayISO]);
+  const lowerPriorityPinned = useMemo(() => {
+    return (tasks || [])
+      .filter(t => t.ownerName === currentUser && !t.completedAt && t.scheduledTime && t.pinned)
+      .filter(t => !t.scheduledDate || t.scheduledDate === todayISO)
+      .filter(t => (t.regretScore || 3) < 5);
+  }, [tasks, currentUser, todayISO]);
+  const releaseLowerPinsAndReanalyze = () => {
+    setTasks(prev => prev.map(t => {
+      if (t.pinned && (t.regretScore || 3) < 5 && t.ownerName === currentUser && !t.completedAt) {
+        return { ...t, pinned: false };
+      }
+      return t;
+    }));
+    // Reanalyze after pin release
+    setTimeout(() => reanalyze(), 100);
+  };
+  // Auto-resolve overlap: release ALL pins on overlapping tasks, then reanalyze
+  const autoResolveOverlaps = () => {
+    const overlapIds = new Set();
+    overlapWarnings.forEach(w => { overlapIds.add(w.a.id); overlapIds.add(w.b.id); });
+    if (overlapIds.size === 0) return;
+    setTasks(prev => prev.map(t => {
+      if (overlapIds.has(t.id) && t.pinned) {
+        return { ...t, pinned: false };
+      }
+      return t;
+    }));
+    setTimeout(() => reanalyze(), 100);
+  };
   // v05.05bt264 — Panel-level trade-ideas dismissal. Per chat: 'the whole
   // panel should be dismissed if user wants to not request trade - it
   // can pop up again when reanalyze if there's still some valuable trade.'
@@ -24653,16 +24763,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }
 
     // v05.05bt163 — Visual day ends at lights-out (no open blocks after).
-    // v05.05bt273 — Hard cap at midnight of the reference date. Per chat:
-    // 'how come it goes past midnight. for today, it should stop at the
-    // end of the day and not show tomorrow's times unless in the tomorrow
-    // tab.' If lightsOut crosses midnight (unusual late-night setup),
-    // we still cap so the today view doesn't bleed into tomorrow.
+    // v05.05bt273 — Hard cap at midnight of the reference date.
+    // v05.05bt275 — Per chat: 'lights out should definitely be BOLD HARD
+    // STOP.' Drop the 15-min trailing buffer; lights-out IS the stop.
+    // Late pump (within 30min of lights-out) can extend slightly so the
+    // pump doesn't get cut off mid-session.
     const midnightCap = new Date(referenceDate);
     midnightCap.setHours(23, 59, 0, 0);
-    const lightsOutPlus = lightsOut ? new Date(lightsOut.getTime() + 15 * 60000) : null;
-    const visualDayEnd = lightsOutPlus && lightsOutPlus < midnightCap
-      ? lightsOutPlus
+    const latestPumpEnd = (currentUser === "Mommy" && Array.isArray(pumpPlan?.manualSessions))
+      ? pumpPlan.manualSessions
+          .filter(h => h >= 0 && h < 36)
+          .reduce((max, h) => {
+            const endMin = Math.round(h * 60) + 20;
+            const d = new Date(referenceDate);
+            d.setHours(0, 0, 0, 0);
+            d.setMinutes(endMin);
+            return d.getTime() > max ? d.getTime() : max;
+          }, 0)
+      : 0;
+    const lightsOutMs = lightsOut ? lightsOut.getTime() : null;
+    // If a pump ends after lights-out (within 30min), extend to pump end so it shows
+    const pumpExtension = (lightsOutMs && latestPumpEnd > lightsOutMs && latestPumpEnd - lightsOutMs <= 30 * 60000)
+      ? new Date(latestPumpEnd)
+      : null;
+    const candidateEnd = pumpExtension || lightsOut;
+    const visualDayEnd = candidateEnd && candidateEnd < midnightCap
+      ? candidateEnd
       : midnightCap;
 
     // v05.05bt181 — Insert high-confidence predicted feed windows
@@ -24722,7 +24848,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             return {
               id: `pump-reminder-${i}`,
               kind: "pump_reminder",
-              title: "Pump session",
+              // v05.05bt274 — Emoji prefix so immovable items read at a glance
+              title: "🍼 Pump session",
               start, end,
               durationMin: 20,
             };
@@ -25005,12 +25132,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // but the user gets to adjust regret/focus per task before commit.
   const reviewBeforeAdding = () => {
     const parsed = parseNaturalLanguageTasks(nlText);
-    if (parsed.length === 0) return;
+    if (parsed.length === 0) {
+      // v05.05bt276 — Empty input but draft exists → just open with draft
+      if (nlPending && nlPending.length > 0) setNlReviewOpen(true);
+      return;
+    }
     setNlPending(parsed.map(p => ({
       ...p,
       regretScore: 3,
       focusLevel: "auto",
     })));
+    setNlReviewOpen(true);
   };
 
   // v05.05bt116 — pure assignment: given unscheduled tasks + workable
@@ -25100,10 +25232,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         // a deep block. Skip any shallow block entirely so the task either
         // gets a deep slot or stays unscheduled (visible diagnostic).
         if (task.requireDeep && blockFocus !== "deep") continue;
+        // v05.05bt275 — Protect substantive deep windows. Per chat:
+        // 'if the algorithm knows it is a mismatch then it should have
+        // not done that considering I have a lot of high R deep tasks.'
+        // Shallow-into-deep was allowed at score 5 — meaning peak
+        // 30min residual blocks were getting filled with shallow work.
+        // New rule: shallow can only claim deep blocks if the remaining
+        // space is tiny (<30min), where no real deep task would fit
+        // anyway. Substantive deep windows stay protected.
         let score;
-        if (taskFocus === blockFocus) score = 100;
-        else if (taskFocus === "shallow") score = 5; // shallow into deep — only if nothing else
-        else score = 1; // deep-in-light, last resort
+        const remainingMin = (blockEnd - effectiveStart) / 60000;
+        if (taskFocus === blockFocus) {
+          score = 100;
+        } else if (taskFocus === "shallow" && blockFocus === "deep") {
+          if (remainingMin >= 30) continue; // protect deep windows
+          score = 5;
+        } else {
+          score = 1; // deep-in-shallow last resort
+        }
+        // v05.05bt275 — 9-5 work-hour bias. Per chat: 'from 9-5,
+        // prioritize work tasks over house tasks.' House/personal/
+        // errand tasks get a penalty during 9am-5pm so they prefer
+        // morning/evening blocks. Work tasks fully claim work hours.
+        const blockHour = effectiveStart.getHours();
+        const isWorkHours = blockHour >= 9 && blockHour < 17;
+        const cat = (task.category || "").toLowerCase();
+        const isHouseTask = cat && cat !== "work" && (cat === "house" || cat === "personal" || cat === "errand" || cat === "chore");
+        if (isWorkHours && isHouseTask) {
+          score -= 15;
+        }
         // Pick the best score; on tie, earliest effectiveStart wins.
         if (score > bestScore || (score === bestScore && (!foundStart || effectiveStart < foundStart))) {
           foundBlock = b;
@@ -26093,6 +26250,45 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   }}>
                   set priority + focus before adding
                 </button>
+              </div>
+            )}
+            {/* v05.05bt276 — Resume saved draft. If user has a pending
+                draft (from a previous session/accidental close) and isn't
+                currently typing new NL, surface a "resume" link. */}
+            {(!nlText.trim() || parseNaturalLanguageTasks(nlText).length === 0)
+              && Array.isArray(nlPending) && nlPending.length > 0 && (
+              <div style={{
+                marginTop: 8,
+                padding: "8px 10px",
+                background: `${C.gold}10`,
+                border: `1px solid ${C.gold}55`,
+                borderRadius: 6,
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+              }}>
+                <span style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 12, color: C.ink,
+                }}>
+                  📋 Saved draft · <strong style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontSize: 11 }}>{nlPending.length}</strong> task{nlPending.length !== 1 ? "s" : ""} waiting to review
+                </span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => setNlReviewOpen(true)} style={{
+                    background: C.gold, color: "#fff", border: "none",
+                    borderRadius: 4, padding: "4px 9px",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, letterSpacing: "0.1em", fontWeight: 700,
+                    cursor: "pointer", textTransform: "uppercase",
+                  }}>Resume</button>
+                  <button
+                    onClick={() => { setNlPending(null); try { localStorage.removeItem("ll:nlReviewDraft"); } catch {} }}
+                    title="Discard saved draft"
+                    style={{
+                      background: "transparent",
+                      border: `1px solid ${C.line}33`, borderRadius: 4,
+                      padding: "4px 8px", color: C.muted,
+                      cursor: "pointer", fontSize: 12, lineHeight: 1,
+                    }}>×</button>
+                </div>
               </div>
             )}
             <div style={{
@@ -27133,6 +27329,47 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               </div>
             )}
+            {/* v05.05bt274 — R5 unscheduled banner. Per chat: 'R5s
+                should definitely be prioritized.' If R5 tasks couldn't
+                fit AND there are lower-R pinned tasks taking blocks,
+                one-tap to release those pins + re-analyze. */}
+            {!isTomorrow && highPriorityUnscheduled.length > 0 && lowerPriorityPinned.length > 0 && (
+              <div style={{
+                background: `${C.accent}14`,
+                border: `1.5px solid ${C.accent}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 12,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.18em",
+                  color: C.accent, fontWeight: 800,
+                }}>↳ R5 WAITING</div>
+                <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{highPriorityUnscheduled.length}</span>{" "}
+                  high-priority task{highPriorityUnscheduled.length === 1 ? "" : "s"} unscheduled.{" "}
+                  <span style={{ color: C.muted, fontStyle: "italic" }}>
+                    {lowerPriorityPinned.length} pinned lower-R task{lowerPriorityPinned.length === 1 ? "" : "s"} taking space.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={releaseLowerPinsAndReanalyze}
+                  title="Unpin lower-priority tasks + re-analyze to make room"
+                  style={{
+                    padding: "6px 11px",
+                    background: C.accent, color: "#FDFAF1",
+                    border: "none", borderRadius: 6,
+                    cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                    textTransform: "uppercase",
+                  }}>Free up space</button>
+              </div>
+            )}
+
             {/* v05.05bt273 — Sequence violation toast. */}
             {sequenceViolation && (
               <div style={{
@@ -27172,6 +27409,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{overlapWarnings.length}</span>{" "}
                     {overlapWarnings.length === 1 ? "pair of tasks" : "pairs of tasks"} overlap{overlapWarnings.length === 1 ? "s" : ""} in time.
                   </div>
+                  <button
+                    type="button"
+                    onClick={autoResolveOverlaps}
+                    title="Release pins on overlapping tasks + re-analyze to redistribute"
+                    style={{
+                      padding: "5px 9px",
+                      background: C.accent, color: "#FDFAF1",
+                      border: `1px solid ${C.accent}`, borderRadius: 6,
+                      cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                      textTransform: "uppercase",
+                    }}>Auto-fix</button>
                   <button
                     type="button"
                     onClick={() => setOverlapBannerExpanded(v => !v)}
@@ -27680,6 +27930,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         : justMoved ? `${C.gold}1c`
                         : isFree ? `${C.gold}08`
                         : isMeeting ? "#8B7AA814" // v05.05bt273 — meeting purple tint so it pops
+                        : isPumpReminder ? `${C.mommy}14` // v05.05bt274 — pump mauve tint, same family as PUMP pill
                         : "transparent",
                       // v05.05bt188 — Owner-colored thin boundary per chat
                       // ('thin boundary line of the same color around
@@ -28343,39 +28594,50 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
                       }}>
-                        {/* v05.05bt222 — Focus emoji glyph adjacent to regret.
-                            🧠 = deep cognitive work · 🍃 = light / chore.
-                            Tappable to cycle focus level. */}
-                        {isTask && !slot.completedAt && (() => {
-                          const fl = normalizeFocus(slot.focusLevel);
-                          const glyph = fl === "deep" ? "🧠" : "🍃";
-                          return (
+                        {/* v05.05bt276 — Focus + R unified visual chip per
+                            chat: too many icons on the right side. Each
+                            still tappable to cycle, but visually reads
+                            as one element. */}
+                        {isTask && !slot.completedAt && (
+                          <div style={{
+                            display: "inline-flex", alignItems: "center",
+                            gap: 0,
+                            border: `1px solid ${C.line}55`,
+                            borderRadius: 5,
+                            background: `${C.line}08`,
+                            overflow: "hidden",
+                          }}>
+                            {(() => {
+                              const fl = normalizeFocus(slot.focusLevel);
+                              const glyph = fl === "deep" ? "🧠" : "🍃";
+                              return (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
+                                  title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
+                                  style={{
+                                    background: "transparent", border: "none",
+                                    padding: "2px 4px 2px 5px", cursor: "pointer",
+                                    fontSize: 12, lineHeight: 1,
+                                  }}>
+                                  {glyph}
+                                </button>
+                              );
+                            })()}
                             <button
-                              onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
-                              title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
+                              onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
                               style={{
                                 background: "transparent", border: "none",
-                                padding: "2px 2px", cursor: "pointer",
-                                fontSize: 13, lineHeight: 1,
-                              }}>
-                              {glyph}
+                                borderLeft: `1px solid ${C.line}33`,
+                                padding: "2px 6px 2px 5px", cursor: "pointer",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 10, fontWeight: 700,
+                                letterSpacing: "0.04em",
+                                color: regretColors[slot.regretScore],
+                              }}
+                              title={`Regret ${slot.regretScore}/5 · tap to cycle`}>
+                              R{slot.regretScore}
                             </button>
-                          );
-                        })()}
-                        {isTask && !slot.completedAt && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
-                            style={{
-                              background: "transparent", border: "none",
-                              padding: "2px 4px", cursor: "pointer",
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10, fontWeight: 700,
-                              letterSpacing: "0.04em",
-                              color: regretColors[slot.regretScore],
-                            }}
-                            title={`Regret ${slot.regretScore}/5 · tap to cycle`}>
-                            R{slot.regretScore}
-                          </button>
+                          </div>
                         )}
                         {(isTask || isRoutine) && !slot.completedAt && (() => {
                           // v05.05bt266 — Real-duration timer (MLP).
@@ -28433,37 +28695,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               title={running ? "Stop timer · captures actual time" : "Start timer"}
                               aria-label={running ? "Stop timer" : "Start timer"}
                               style={{
-                                padding: "5px 7px",
+                                padding: running ? "4px 7px" : "5px 7px",
                                 background: running ? `${C.accent}20` : "transparent",
                                 border: `1px solid ${running ? C.accent : C.mommy}55`,
                                 borderRadius: 4,
                                 cursor: "pointer",
                                 color: running ? C.accent : C.mommy,
-                                fontSize: 11, lineHeight: 1, fontWeight: 700,
-                                fontFamily: "inherit",
+                                fontSize: running ? 10 : 11,
+                                lineHeight: 1, fontWeight: 700,
+                                fontFamily: running ? "'JetBrains Mono', monospace" : "inherit",
+                                display: "inline-flex", alignItems: "center", gap: 3,
                               }}>
-                              {running ? "■" : "▶"}
+                              {running ? (
+                                <>⏸ {Math.max(1, Math.round((Date.now() - startedMs) / 60000))}m</>
+                              ) : "▶"}
                             </button>
                           );
                         })()}
-                        {isTask && !slot.completedAt && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditingTask(slot); }}
-                            title="Edit task"
-                            aria-label="Edit task"
-                            style={{
-                              padding: "6px 4px",
-                              background: "transparent",
-                              border: "none",
-                              cursor: "pointer",
-                              color: C.muted,
-                              fontSize: 13, lineHeight: 1,
-                              fontFamily: "inherit",
-                              opacity: 0.7,
-                            }}>
-                            ✎
-                          </button>
-                        )}
+                        {/* v05.05bt276 — ✎ pencil removed per chat: 'too
+                            many icons on the right side.' The task title
+                            itself is already clickable (bt140) and opens
+                            EditTaskModal. The redundant pencil dropped. */}
                         {isTask && !slot.completedAt && (
                           <div
                             onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
@@ -29276,13 +29528,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           onApply={(chunks) => applyChunks(splittingTask.id, chunks)}
         />
       )}
-      {nlPending && (
+      {nlPending && nlReviewOpen && (
         <NlReviewModal
           C={C}
           pending={nlPending}
           onChange={setNlPending}
-          onCancel={() => setNlPending(null)}
-          onCommit={commitNlPending}
+          onCancel={() => setNlReviewOpen(false)}
+          onCommit={() => { commitNlPending(); setNlReviewOpen(false); }}
         />
       )}
       {showSetup && (
@@ -29828,102 +30080,237 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
     5: { label: "Cannot push", color: "#A04848" },
   };
 
+  // v05.05bt276 — Multi-select for bulk operations. Per chat: 'remove
+  // items 1,2,4 and add items that couldn't fit.' Track which rows are
+  // checked.
+  const [selected, setSelected] = useState(new Set());
+  const toggleSelected = (idx) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+  const removeSelected = () => {
+    if (selected.size === 0) return;
+    onChange(pending.filter((_, i) => !selected.has(i)));
+    setSelected(new Set());
+  };
+
+  // v05.05bt276 — Draft persistence. Per chat: 'can accidentally click
+  // out of screen and lose what we were working on.' Save on every
+  // pending change; restore on modal mount if user discarded last time.
+  // (We don't auto-restore on first open since pending arrives populated
+  // from the parser. This is the "I closed by accident" recovery path.)
+  const draftKey = "ll:nlReviewDraft";
+  useEffect(() => {
+    try {
+      if (pending && pending.length > 0) {
+        localStorage.setItem(draftKey, JSON.stringify(pending));
+      } else {
+        localStorage.removeItem(draftKey);
+      }
+    } catch {}
+  }, [pending]);
+
+  // Parse free-text time → HH:MM, lenient like the main NL parser
+  const parseTimeFree = (txt) => {
+    if (!txt) return null;
+    const t = txt.trim().toLowerCase();
+    if (!t) return null;
+    if (/^noon$/.test(t)) return "12:00";
+    if (/^midnight$/.test(t)) return "00:00";
+    const m = t.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?$/);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2] || "0", 10);
+    const ampm = m[3];
+    if (ampm) {
+      const isPm = ampm.startsWith("p");
+      if (isPm && h !== 12) h += 12;
+      if (!isPm && h === 12) h = 0;
+    }
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  };
+  // Parse free-text duration → minutes
+  const parseDurFree = (txt) => {
+    if (!txt) return null;
+    const t = txt.trim().toLowerCase();
+    if (!t || t === "auto") return null;
+    const hMatch = t.match(/^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/);
+    if (hMatch) return Math.round(parseFloat(hMatch[1]) * 60);
+    const mMatch = t.match(/^(\d+)\s*(?:m|min|mins|minute|minutes)?\s*$/);
+    if (mMatch) return parseInt(mMatch[1], 10);
+    return null;
+  };
+
+  // Sort by parsed time. Unscheduled (no time) goes to bottom.
+  const sortByTime = () => {
+    const withIdx = pending.map((p, i) => ({ p, i }));
+    withIdx.sort((a, b) => {
+      const ta = a.p.scheduledTime || "99:99";
+      const tb = b.p.scheduledTime || "99:99";
+      return ta.localeCompare(tb);
+    });
+    onChange(withIdx.map(x => x.p));
+    setSelected(new Set());
+  };
+
   const update = (idx, patch) => {
     onChange(pending.map((p, i) => i === idx ? { ...p, ...patch } : p));
+  };
+  const updateTimeField = (idx, txt) => {
+    const parsed = parseTimeFree(txt);
+    update(idx, { scheduledTime: parsed, _timeText: txt });
+  };
+  const updateDurField = (idx, txt) => {
+    const parsed = parseDurFree(txt);
+    update(idx, { effortMin: parsed != null ? parsed : 30, _durText: txt });
   };
   const remove = idx => {
     onChange(pending.filter((_, i) => i !== idx));
   };
 
-  const selectStyle = {
-    padding: "6px 6px",
-    border: `1px solid ${C.line}55`, borderRadius: 6,
-    fontSize: 11, background: "#FBF5E9", color: C.ink,
-    fontFamily: "'JetBrains Mono', monospace", cursor: "pointer",
-    appearance: "auto",
-    minWidth: 0,
-  };
-
   return (
     <ModalShell C={C} onClose={onCancel} title={`Review ${pending.length} task${pending.length !== 1 ? "s" : ""}`} placement="center">
-      {/* v05.05bt151 — Compact legend explaining what each control does.
-          Was a "Priority scale" callout; now also covers focus + effort
-          so the user knows what they're setting in one line. */}
       <div style={{
         background: `${C.line}10`,
         border: `1px solid ${C.line}30`,
         borderRadius: 8, padding: "8px 10px",
         fontSize: 10, color: "#7C6B5A", lineHeight: 1.5,
-        marginBottom: 12,
+        marginBottom: 10,
         fontFamily: "'Cormorant Garamond', serif",
         fontStyle: "italic",
       }}>
-        Each row: title · effort · focus · priority. <strong style={{ color: C.gold, fontStyle: "normal" }}>1</strong> = tomorrow's fine · <strong style={{ color: C.gold, fontStyle: "normal" }}>3</strong> = slightly behind · <strong style={{ color: "#A04848", fontStyle: "normal" }}>5</strong> = cannot push.
+        Time + duration accept free text ("11am", "noon", "1h", "30m", "auto"). R: <strong style={{ color: C.gold, fontStyle: "normal" }}>1</strong>=tomorrow's fine · <strong style={{ color: C.gold, fontStyle: "normal" }}>3</strong>=slightly behind · <strong style={{ color: "#A04848", fontStyle: "normal" }}>5</strong>=cannot push.
       </div>
 
-      {/* v05.05bt151 — Single-line per task: title input + effort select +
-          focus select + regret select + × delete. All inline, no advanced
-          toggle. Title takes most of the room; the three selects are
-          fixed-width and compact. */}
-      {pending.map((p, idx) => (
-        <div key={idx} style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto auto auto auto",
-          gap: 4, marginBottom: 6, alignItems: "center",
+      {/* v05.05bt276 — Toolbar: sort + bulk remove */}
+      <div style={{
+        display: "flex", gap: 6, alignItems: "center", marginBottom: 8,
+        flexWrap: "wrap",
+      }}>
+        <button onClick={sortByTime} style={{
+          padding: "5px 10px",
+          background: "transparent",
+          border: `1px solid ${C.gold}66`, borderRadius: 6,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.1em", fontWeight: 700,
+          color: C.gold, cursor: "pointer", textTransform: "uppercase",
+        }} title="Reorder by scheduled time">↓ Sort by time</button>
+        {selected.size > 0 && (
+          <button onClick={removeSelected} style={{
+            padding: "5px 10px",
+            background: C.accent, color: "#FDFAF1",
+            border: "none", borderRadius: 6,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, letterSpacing: "0.1em", fontWeight: 700,
+            cursor: "pointer", textTransform: "uppercase",
+          }}>× Remove {selected.size}</button>
+        )}
+        <div style={{
+          marginLeft: "auto",
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 11, color: C.muted,
         }}>
-          <input
-            type="text"
-            value={p.title}
-            onChange={e => update(idx, { title: e.target.value })}
-            style={{
-              padding: "8px 10px",
-              border: `1px solid ${C.line}33`,
-              borderRadius: 6,
-              fontSize: 13, background: C.bg, color: C.ink,
-              fontFamily: "'Cormorant Garamond', serif",
-              minWidth: 0,
-            }}
-            placeholder={`Task ${idx + 1}`}
-          />
-          <select
-            value={p.effortMin}
-            onChange={e => update(idx, { effortMin: Number(e.target.value) })}
-            style={{ ...selectStyle, width: 56 }}
-            title="Effort">
-            {[15, 30, 45, 60, 90, 120].map(m => (
-              <option key={m} value={m}>{m < 60 ? `${m}m` : `${m / 60}h`}</option>
-            ))}
-          </select>
-          <select
-            value={p.focusLevel || "auto"}
-            onChange={e => update(idx, { focusLevel: e.target.value })}
-            style={{ ...selectStyle, width: 64 }}
-            title="Focus">
-            <option value="auto">auto</option>
-            <option value="deep">deep</option>
-            <option value="shallow">light</option>
-          </select>
-          <select
-            value={p.regretScore}
-            onChange={e => update(idx, { regretScore: Number(e.target.value) })}
-            style={{
-              ...selectStyle,
-              borderLeft: `3px solid ${regretMeta[p.regretScore].color}`,
-              fontWeight: 700, width: 42, textAlign: "center",
-            }}
-            title={regretMeta[p.regretScore].label}>
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-            <option value={4}>4</option>
-            <option value={5}>5</option>
-          </select>
-          <button onClick={() => remove(idx)} style={{
-            background: "transparent", border: "none", padding: 4,
-            color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1,
-          }} title="Remove this row">×</button>
+          {pending.length} task{pending.length !== 1 ? "s" : ""}
         </div>
-      ))}
+      </div>
+
+      {/* v05.05bt276 — Table-style rows: checkbox + title + time + dur + R + × */}
+      {pending.map((p, idx) => {
+        const isSel = selected.has(idx);
+        const timeVal = p._timeText !== undefined
+          ? p._timeText
+          : (p.scheduledTime || "");
+        const durVal = p._durText !== undefined
+          ? p._durText
+          : (p.effortMin && p.effortMin !== 30 ? `${p.effortMin}m` : "");
+        return (
+          <div key={idx} style={{
+            display: "grid",
+            gridTemplateColumns: "auto 1fr 64px 56px 44px auto",
+            gap: 4, marginBottom: 5, alignItems: "center",
+            padding: "4px 0",
+            borderBottom: idx === pending.length - 1 ? "none" : `1px solid ${C.line}15`,
+            background: isSel ? `${C.accent}10` : "transparent",
+          }}>
+            <input
+              type="checkbox"
+              checked={isSel}
+              onChange={() => toggleSelected(idx)}
+              style={{ cursor: "pointer", margin: "0 4px 0 0" }}
+              title="Select for bulk action"
+            />
+            <input
+              type="text"
+              value={p.title}
+              onChange={e => update(idx, { title: e.target.value })}
+              style={{
+                padding: "6px 8px",
+                border: `1px solid ${C.line}33`,
+                borderRadius: 5,
+                fontSize: 13, background: C.bg, color: C.ink,
+                fontFamily: "'Cormorant Garamond', serif",
+                minWidth: 0, width: "100%",
+              }}
+              placeholder={`Task ${idx + 1}`}
+            />
+            <input
+              type="text"
+              value={timeVal}
+              onChange={e => updateTimeField(idx, e.target.value)}
+              placeholder="time"
+              style={{
+                padding: "6px 6px",
+                border: `1px solid ${p.scheduledTime ? C.gold + "55" : C.line + "33"}`,
+                borderRadius: 5,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, background: C.bg, color: C.ink,
+                minWidth: 0, width: "100%",
+                textAlign: "center",
+              }}
+              title="Time (e.g. 11am, noon, 14:30)"
+            />
+            <input
+              type="text"
+              value={durVal}
+              onChange={e => updateDurField(idx, e.target.value)}
+              placeholder="auto"
+              style={{
+                padding: "6px 6px",
+                border: `1px solid ${C.line}33`,
+                borderRadius: 5,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, background: C.bg, color: C.ink,
+                minWidth: 0, width: "100%",
+                textAlign: "center",
+              }}
+              title="Duration (30m, 1h, auto)"
+            />
+            <select
+              value={p.regretScore}
+              onChange={e => update(idx, { regretScore: Number(e.target.value) })}
+              style={{
+                padding: "6px 4px",
+                border: `1px solid ${C.line}55`, borderRadius: 5,
+                borderLeft: `3px solid ${regretMeta[p.regretScore].color}`,
+                fontSize: 11, background: "#FBF5E9", color: C.ink,
+                fontFamily: "'JetBrains Mono', monospace", cursor: "pointer",
+                fontWeight: 700, textAlign: "center",
+                minWidth: 0, width: "100%",
+              }}
+              title={regretMeta[p.regretScore].label}>
+              {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <button onClick={() => remove(idx)} style={{
+              background: "transparent", border: "none", padding: "4px 6px",
+              color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1,
+            }} title="Remove this row">×</button>
+          </div>
+        );
+      })}
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <button onClick={() => onCommit()} disabled={pending.length === 0} style={{
