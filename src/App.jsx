@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt269";
+const APP_VERSION = "2026.05.05bt271";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -2549,6 +2549,25 @@ function SoleneHandoffInner() {
   const [docSummary, setDocSummary] = useState(null); // { generated, html, copyText }
   // Handoff note: { from, to, text, ts, acknowledged }
   const [handoffNote, setHandoffNote] = useState(null);
+  // v05.05bt270 — User-configurable typical handoff duration in hours.
+  // Per chat: 'thaw overnight should be ~10hr (working hours plus drop
+  // off and pick up) unless changed by user...custom hours should be in
+  // milk tab to prep bag volume.' Stored in localStorage. Used by both
+  // the overnight thaw prompt (to compute target oz) and the
+  // CaregiverPackCard duration default. Default 10 hours.
+  const [handoffHours, setHandoffHours] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ll:handoffHours");
+      if (raw) {
+        const n = parseInt(raw, 10);
+        if (!isNaN(n) && n >= 1 && n <= 24) return n;
+      }
+    } catch {}
+    return 10;
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:handoffHours", String(handoffHours)); } catch {}
+  }, [handoffHours]);
   // v05.05bt253/bt260 — Configurable morning-routine steps for the 5:30am
   // prompt. Per chat: 'Daddy will be the one doing it in weekdays
   // before dropping her off at daycare and he may need help remembering
@@ -6187,6 +6206,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             snoozeUntil: new Date(Date.now() + 30 * 60000).toISOString(),
             silent: true,
           })}
+          handoffHours={handoffHours}
           activePump={activePump}
           onStartPump={(type = "standard") => setActivePump({
             startedAt: new Date().toISOString(),
@@ -6374,6 +6394,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setMommyMaintenanceCal={setMommyMaintenanceCal}
             pumpPlan={pumpPlan}
             setPumpPlan={setPumpPlan}
+            handoffHours={handoffHours}
+            setHandoffHours={setHandoffHours}
           />
         )}
         {tab === "doctor" && (
@@ -9862,7 +9884,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -10070,8 +10092,10 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     if (!isWorkdayTomorrow && !onsite) return null;
     // Need freezer bags to thaw
     if (!Array.isArray(freezerItems) || freezerItems.length === 0) return null;
-    // Already enough fridge stock? Use 8oz as a sensible default for ~8h
-    const targetOz = 8;
+    // v05.05bt270 — Target oz scales with user's typical handoff hours.
+    // Default ~1oz/hour (sensible baseline for 3-6mo); user can adjust
+    // via the milk tab setting.
+    const targetOz = Math.max(4, (handoffHours || 10));
     if ((fridgeOz || 0) >= targetOz) return null;
     // Marked thawing tonight?
     const todayStart = new Date(now); todayStart.setHours(15, 0, 0, 0);
@@ -10619,7 +10643,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             }}>thaw overnight</span>
           </div>
           <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, marginBottom: 8 }}>
-            Onsite tomorrow → fridge has <strong>{thawInfo.currentFridgeOz}oz</strong>, target ~{thawInfo.targetOz}oz.
+            Tomorrow is a workday ({handoffHours || 10}h handoff) → fridge has <strong>{thawInfo.currentFridgeOz}oz</strong>, target ~{thawInfo.targetOz}oz.
             Move <strong>{thawInfo.pickedOz}oz</strong> from freezer to fridge to thaw overnight.
           </div>
           {thawInfo.picks.length > 0 && (
@@ -24287,6 +24311,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // In-memory state so it resets on re-analyze (and on page refresh,
   // which is a reasonable 'fresh look').
   const [tradePanelDismissed, setTradePanelDismissed] = useState(false);
+  // v05.05bt271 — Routine timer state. Per chat: 'routine tasks should
+  // also have the play button.' Keyed by routine-id + today's date so
+  // timers reset overnight. localStorage-backed within the day so
+  // refreshes don't lose state. Map<routineId, {startedAt: ISO, actualMin?: number}>
+  const routineTimersKey = `ll:routineTimers:${currentUser}:${todayISO}`;
+  const [routineTimers, setRoutineTimers] = useState(() => {
+    try {
+      const raw = localStorage.getItem(routineTimersKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch {}
+    return {};
+  });
+  useEffect(() => {
+    try { localStorage.setItem(routineTimersKey, JSON.stringify(routineTimers)); } catch {}
+  }, [routineTimers, routineTimersKey]);
+  // Reset state when day changes
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(routineTimersKey);
+      setRoutineTimers(raw ? JSON.parse(raw) || {} : {});
+    } catch { setRoutineTimers({}); }
+  }, [routineTimersKey]);
   useEffect(() => { setDriftDismissed(false); }, [todayISO]); // reset daily
   const [brainDumpText, setBrainDumpText] = useState("");
   // v05.05bt133 — drawerItems moved below myTasks declaration to
@@ -27459,22 +27508,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }}>
                             {(() => {
                               // v05.05bt266 — Show actual time vs estimate.
-                              // Running: 'running · 12m' so user can see elapsed.
+                              // v05.05bt271 — Extended to routines.
+                              // Running: '⏱ 12m' so user sees elapsed.
                               // Completed with actualMin: 'X est · Y actual' + ⚠ for 50%+ overruns.
-                              if (isTask && slot.actualStartedAt && !slot.completedAt) {
-                                const elapsedMin = Math.max(1, Math.round((Date.now() - new Date(slot.actualStartedAt).getTime()) / 60000));
+                              const rtTimer = isRoutine ? routineTimers[slot.id] : null;
+                              const isRunning = isTask
+                                ? (slot.actualStartedAt && !slot.completedAt)
+                                : (rtTimer && rtTimer.startedAt && !rtTimer.actualMin);
+                              const actualMin = isTask ? slot.actualMin : (rtTimer && rtTimer.actualMin);
+                              const startedAt = isTask ? slot.actualStartedAt : (rtTimer && rtTimer.startedAt);
+                              if ((isTask || isRoutine) && isRunning && startedAt) {
+                                const elapsedMin = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
                                 return (
                                   <span style={{ color: C.accent, fontWeight: 700 }}>
                                     ⏱ {elapsedMin}m
                                   </span>
                                 );
                               }
-                              if (isTask && slot.actualMin && slot.completedAt) {
-                                const est = slot.effortMin || slot.durationMin;
-                                const overran = slot.actualMin > est * 1.5;
+                              if ((isTask || isRoutine) && actualMin) {
+                                const est = isTask ? (slot.effortMin || slot.durationMin) : slot.durationMin;
+                                const overran = actualMin > est * 1.5;
                                 return (
                                   <span>
-                                    {fmtDurationHM(est)} est · <span style={{ color: overran ? C.accent : C.muted, fontWeight: 600 }}>{fmtDurationHM(slot.actualMin)} actual{overran ? " ⚠" : ""}</span>
+                                    {fmtDurationHM(est)} est · <span style={{ color: overran ? C.accent : C.muted, fontWeight: 600 }}>{fmtDurationHM(actualMin)} actual{overran ? " ⚠" : ""}</span>
                                   </span>
                                 );
                               }
@@ -28055,40 +28111,61 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             R{slot.regretScore}
                           </button>
                         )}
-                        {isTask && !slot.completedAt && (() => {
+                        {(isTask || isRoutine) && !slot.completedAt && (() => {
                           // v05.05bt266 — Real-duration timer (MLP).
-                          // Per chat: tiny play button per task, tap to
-                          // start, tap stop to capture actualMin +
-                          // auto-complete. No popups, no auto-shift —
-                          // just the feedback loop. Phase 2 can add
-                          // popups + similar-task estimation if it
-                          // proves useful.
-                          const running = !!slot.actualStartedAt;
-                          const startedMs = running ? new Date(slot.actualStartedAt).getTime() : null;
+                          // v05.05bt271 — Extended to routines too.
+                          // Tasks store actualMin on the task object.
+                          // Routines store in localStorage (routineTimers
+                          // map, per-day). Both share the same button.
+                          const rtKey = slot.id;
+                          const rtTimer = isRoutine ? routineTimers[rtKey] : null;
+                          const running = isTask
+                            ? !!slot.actualStartedAt
+                            : !!(rtTimer && rtTimer.startedAt && !rtTimer.actualMin);
+                          const startedMs = running
+                            ? (isTask
+                                ? new Date(slot.actualStartedAt).getTime()
+                                : new Date(rtTimer.startedAt).getTime())
+                            : null;
                           const onClickTimer = (e) => {
                             e.stopPropagation();
-                            if (!running) {
-                              // Start: stamp actualStartedAt
-                              setTasks(prev => prev.map(t =>
-                                t.id === slot.id ? { ...t, actualStartedAt: new Date().toISOString() } : t
-                              ));
+                            if (isTask) {
+                              if (!running) {
+                                setTasks(prev => prev.map(t =>
+                                  t.id === slot.id ? { ...t, actualStartedAt: new Date().toISOString() } : t
+                                ));
+                              } else {
+                                const elapsedMs = Date.now() - startedMs;
+                                const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
+                                setTasks(prev => prev.map(t =>
+                                  t.id === slot.id
+                                    ? { ...t, actualMin, actualStartedAt: null, completedAt: new Date().toISOString() }
+                                    : t
+                                ));
+                              }
                             } else {
-                              // Stop: compute actualMin + auto-complete
-                              const elapsedMs = Date.now() - startedMs;
-                              const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
-                              setTasks(prev => prev.map(t =>
-                                t.id === slot.id
-                                  ? { ...t, actualMin, actualStartedAt: null, completedAt: new Date().toISOString() }
-                                  : t
-                              ));
+                              // Routine: write to routineTimers
+                              if (!running) {
+                                setRoutineTimers(prev => ({
+                                  ...prev,
+                                  [rtKey]: { startedAt: new Date().toISOString() }
+                                }));
+                              } else {
+                                const elapsedMs = Date.now() - startedMs;
+                                const actualMin = Math.max(1, Math.round(elapsedMs / 60000));
+                                setRoutineTimers(prev => ({
+                                  ...prev,
+                                  [rtKey]: { startedAt: prev[rtKey]?.startedAt || new Date().toISOString(), actualMin, completedAt: new Date().toISOString() }
+                                }));
+                              }
                             }
                           };
                           return (
                             <button
                               type="button"
                               onClick={onClickTimer}
-                              title={running ? "Stop timer · captures actual time + completes" : "Start timer"}
-                              aria-label={running ? "Stop task timer" : "Start task timer"}
+                              title={running ? "Stop timer · captures actual time" : "Start timer"}
+                              aria-label={running ? "Stop timer" : "Start timer"}
                               style={{
                                 padding: "5px 7px",
                                 background: running ? `${C.accent}20` : "transparent",
@@ -30948,8 +31025,14 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
 // the caregiver will have her, plus a 20% buffer. Then pick bags from
 // inventory in expiry-priority order: rt first (shortest safe window),
 // then fridge, then freezer (which would need to be thawed first).
-function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
-  const [hours, setHours] = useState(4);
+function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHours, setHandoffHours }) {
+  // v05.05bt270 — Hours synced with saved handoffHours setting (default 10).
+  const [hours, setHours] = useState(() => handoffHours || 10);
+  useEffect(() => { setHours(handoffHours || 10); }, [handoffHours]);
+  const onPickHours = (h) => {
+    setHours(h);
+    if (typeof setHandoffHours === "function") setHandoffHours(h);
+  };
   // Average daily oz over last 14 days
   const ms14d = 14 * 24 * 60 * 60 * 1000;
   const cutoff = now.getTime() - ms14d;
@@ -31079,11 +31162,11 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
       </div>
 
       {/* Duration picker */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, color: C.muted }}>For</span>
-        <div style={{ display: "flex", gap: 4 }}>
-          {[2, 4, 6, 8, 12].map(h => (
-            <button key={h} onClick={() => setHours(h)} style={{
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {[2, 4, 6, 8, 10, 12].map(h => (
+            <button key={h} onClick={() => onPickHours(h)} style={{
               padding: "6px 10px",
               background: hours === h ? viewerColor : "transparent",
               color: hours === h ? "#FDFAF1" : C.ink,
@@ -31094,6 +31177,13 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
             }}>{h}h</button>
           ))}
         </div>
+      </div>
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontStyle: "italic", fontSize: 11, color: C.muted,
+        marginBottom: 14, marginLeft: 36, lineHeight: 1.4,
+      }}>
+        Saved as your typical handoff · used for the overnight thaw prompt
       </div>
 
       {avgDailyOz === null ? (
@@ -31203,7 +31293,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor }) {
   );
 }
 
-function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveToFreezer, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal, pumpPlan, setPumpPlan }) {
+function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveToFreezer, removeInventory, emptyLocation, editBottle, addBottle, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, hoursRunway, lastPump, nextPumpAt, now, todayCalories, mommyMaintenanceCal, setMommyMaintenanceCal, pumpPlan, setPumpPlan, handoffHours, setHandoffHours }) {
   // Viewer color for chrome that's about inventory management (which both
   // parents do) rather than active pumping or lactation calories (which
   // are Mommy-specific). Daddy adds bottles, picks bottles, manages the
@@ -31225,6 +31315,8 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
       <CaregiverPackCard
         C={C} inventory={inventory} events={events} now={now}
         viewerColor={viewerColor}
+        handoffHours={handoffHours}
+        setHandoffHours={setHandoffHours}
       />
 
       {/* v05.05bt57 — PumpGoalsCard replaces the previous standalone
