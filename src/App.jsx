@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt271";
+const APP_VERSION = "2026.05.05bt273";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6361,6 +6361,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             showRoutineEditor={showRoutineEditor} setShowRoutineEditor={setShowRoutineEditor}
             showOptimizer={showOptimizer} setShowOptimizer={setShowOptimizer}
             tradeRequests={tradeRequests} openSendTrade={setShowSendTrade}
+            appointments={appointments}
           />
         )}
         {tab === "bank" && (
@@ -16212,7 +16213,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask }) {
 }
 
 
-function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
+function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, tasks, setTasks, parentAway, setParentAway, pumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments }) {
   const [showAdd, setShowAdd] = useState(false);
   // v05.05bt248 — Default-start date for the add-meeting modal so tapping
   // "+ Add commitment" on the TOMORROW DayPlanCard pre-fills tomorrow's
@@ -16344,6 +16345,8 @@ function ShiftsView({ C, shifts, setShifts, meetings, setMeetings, now, onsite, 
           showRoutineEditor={showRoutineEditor} setShowRoutineEditor={setShowRoutineEditor}
           showOptimizer={showOptimizer} setShowOptimizer={setShowOptimizer}
             tradeRequests={tradeRequests} openSendTrade={openSendTrade}
+            appointments={appointments}
+            timeBank={timeBank}
         />
       )}
 
@@ -21119,7 +21122,18 @@ function parseOneNlTask(text) {
   title = title.replace(/\s+/g, " ").trim();
 
   if (!title) return null;
-  return { title, effortMin, scheduledTime, recurringRule };
+  // v05.05bt272 — Email cadence detection. Per chat: 'respond to emails X
+  // hours, parse it out to 15 minute cadences so that I am not spending
+  // all day just doing emails.' If the title mentions email/emails and
+  // the user requested ≥30min, mark for cadence splitting. The actual
+  // split happens at task-creation time so the chunks become independent
+  // (no sequence dependency — they should distribute, not block each
+  // other).
+  let cadence = null;
+  if (effortMin >= 30 && /\bemail|\bemails|\binbox\b/i.test(title)) {
+    cadence = 15;
+  }
+  return { title, effortMin, scheduledTime, recurringRule, cadence };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -23860,7 +23874,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, now, currentUser, parentAway, pumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -24135,18 +24149,74 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const endDrag = (drop) => {
     const moveId = draggingIdRef.current;
     if (moveId && drop) {
+      // v05.05bt273 — Sequence-order check. Per chat: 'if we have a
+      // sequence of task that says x then y then z…then 3/3 cannot
+      // come before 1/3.' If the dragged task is part of a sequence,
+      // verify the new time doesn't violate the chain. Block the move
+      // if it does (toast warning briefly).
+      const me = (tasks || []).find(t => t.id === moveId);
+      const proposedTime = drop.kind === "free"
+        ? `${String(drop.start.getHours()).padStart(2, "0")}:${String(drop.start.getMinutes()).padStart(2, "0")}`
+        : (drop.kind === "task" && drop.id !== moveId
+            ? (tasks || []).find(t => t.id === drop.id)?.scheduledTime
+            : null);
+      if (me && me.sequenceId && proposedTime) {
+        const siblings = (tasks || []).filter(t => t.sequenceId === me.sequenceId && t.id !== me.id && t.scheduledTime);
+        const toMin = (hhmm) => {
+          const [h, m] = hhmm.split(":").map(Number);
+          return h * 60 + (m || 0);
+        };
+        const proposedMin = toMin(proposedTime);
+        const myIdx = me.sequenceIndex ?? 0;
+        // Latest predecessor's end must be ≤ proposed; earliest successor's start must be ≥ proposed + effort
+        const myEffort = me.effortMin || 30;
+        let violatedBy = null;
+        for (const s of siblings) {
+          const sIdx = s.sequenceIndex ?? 0;
+          const sMin = toMin(s.scheduledTime);
+          const sEffort = s.effortMin || 30;
+          if (sIdx < myIdx) {
+            // Predecessor — its end (sMin + sEffort) must be ≤ proposed
+            if (sMin + sEffort > proposedMin) {
+              violatedBy = { sibling: s, kind: "before" };
+              break;
+            }
+          } else if (sIdx > myIdx) {
+            // Successor — its start must be ≥ proposed + myEffort
+            if (sMin < proposedMin + myEffort) {
+              violatedBy = { sibling: s, kind: "after" };
+              break;
+            }
+          }
+        }
+        if (violatedBy) {
+          // Block the move + flash a warning
+          setSequenceViolation({
+            taskTitle: me.title,
+            siblingTitle: violatedBy.sibling.title,
+            kind: violatedBy.kind,
+            ts: Date.now(),
+          });
+          cancelLongPress();
+          setDraggingId(null);
+          draggingIdRef.current = null;
+          setDragOffset({ x: 0, y: 0 });
+          setDropTargetKey(null);
+          return;
+        }
+      }
       if (drop.kind === "free") {
         const hh = String(drop.start.getHours()).padStart(2, "0");
         const mm = String(drop.start.getMinutes()).padStart(2, "0");
         moveTaskToTime(moveId, `${hh}:${mm}`);
         flashMoved(moveId);
       } else if (drop.kind === "task" && drop.id !== moveId) {
-        const me = myTasks.find(t => t.id === moveId);
+        const meTask = myTasks.find(t => t.id === moveId);
         const other = myTasks.find(t => t.id === drop.id);
-        if (me && other) {
-          const oldTime = me.scheduledTime;
+        if (meTask && other) {
+          const oldTime = meTask.scheduledTime;
           setTasks(prev => prev.map(t => {
-            if (t.id === me.id) return { ...t, scheduledTime: other.scheduledTime };
+            if (t.id === meTask.id) return { ...t, scheduledTime: other.scheduledTime };
             if (t.id === other.id) return { ...t, scheduledTime: oldTime };
             return t;
           }));
@@ -24161,6 +24231,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     setDragOffset({ x: 0, y: 0 });
     setDropTargetKey(null);
   };
+  const [sequenceViolation, setSequenceViolation] = useState(null);
+  useEffect(() => {
+    if (!sequenceViolation) return;
+    const t = setTimeout(() => setSequenceViolation(null), 4000);
+    return () => clearTimeout(t);
+  }, [sequenceViolation]);
 
   const getPointerCoords = (e) => {
     if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -24305,6 +24381,36 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return { count, earliest };
   }, [tasks, currentUser, now, todayISO]);
   const [driftDismissed, setDriftDismissed] = useState(false);
+  // v05.05bt273 — Overlap detection. Per chat: 'there should be an alert
+  // or something with overlapping times. For example I have one task
+  // ending at 9:15 and another starting at 9p. That's an issue.'
+  // Scans all SCHEDULED tasks (mine, with scheduledTime) for any pair
+  // where one's [start, end) intersects another's. Doesn't include
+  // routines (they're library entries on a fixed timeline) — only the
+  // tasks the user explicitly scheduled.
+  const overlapWarnings = useMemo(() => {
+    const myScheduled = (tasks || [])
+      .filter(t => t.ownerName === currentUser && !t.completedAt && t.scheduledTime)
+      .filter(t => !t.scheduledDate || t.scheduledDate === todayISO)
+      .map(t => {
+        const [h, m] = (t.scheduledTime || "0:0").split(":").map(Number);
+        const start = new Date(now);
+        start.setHours(h, m || 0, 0, 0);
+        const end = new Date(start.getTime() + (t.effortMin || 30) * 60000);
+        return { id: t.id, title: t.title, start, end };
+      })
+      .sort((a, b) => a.start - b.start);
+    const overlaps = [];
+    for (let i = 0; i < myScheduled.length; i++) {
+      for (let j = i + 1; j < myScheduled.length; j++) {
+        if (myScheduled[j].start < myScheduled[i].end) {
+          overlaps.push({ a: myScheduled[i], b: myScheduled[j] });
+        }
+      }
+    }
+    return overlaps;
+  }, [tasks, currentUser, now, todayISO]);
+  const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
   // v05.05bt264 — Panel-level trade-ideas dismissal. Per chat: 'the whole
   // panel should be dismissed if user wants to not request trade - it
   // can pop up again when reanalyze if there's still some valuable trade.'
@@ -24546,12 +24652,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       });
     }
 
-    // v05.05bt163 — Visual day ends at lights-out (no open blocks
-    // after bedtime). Bedtime routine itself still renders as the last
-    // row (and remains bold mauve per bt159).
-    const visualDayEnd = lightsOut
-      ? new Date(lightsOut.getTime() + 15 * 60000)
-      : dayEnd;
+    // v05.05bt163 — Visual day ends at lights-out (no open blocks after).
+    // v05.05bt273 — Hard cap at midnight of the reference date. Per chat:
+    // 'how come it goes past midnight. for today, it should stop at the
+    // end of the day and not show tomorrow's times unless in the tomorrow
+    // tab.' If lightsOut crosses midnight (unusual late-night setup),
+    // we still cap so the today view doesn't bleed into tomorrow.
+    const midnightCap = new Date(referenceDate);
+    midnightCap.setHours(23, 59, 0, 0);
+    const lightsOutPlus = lightsOut ? new Date(lightsOut.getTime() + 15 * 60000) : null;
+    const visualDayEnd = lightsOutPlus && lightsOutPlus < midnightCap
+      ? lightsOutPlus
+      : midnightCap;
 
     // v05.05bt181 — Insert high-confidence predicted feed windows
     // (≥4/7d sample) as visible 'feed' rows during the user's solo
@@ -24617,7 +24729,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           })
       : [];
 
-    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...scheduledTasks, ...feedPredictions, ...pumpReminders], dayStart, visualDayEnd);
+    // v05.05bt272 — Doctor appointments as scheduler blockers. Per chat:
+    // 'scheduler also look for doctor appointment.' Treats appointments
+    // (Solène's pediatric visits, etc.) like meetings — block the
+    // scheduler from placing tasks during that window. Mommy-only since
+    // appointments are tracked in her doctor view.
+    const apptItems = (Array.isArray(appointments) ? appointments : [])
+      .map(a => {
+        try {
+          const start = new Date(a.dateTime);
+          if (isNaN(start.getTime())) return null;
+          if (isoDate(start) !== isoDate(today)) return null;
+          const durMin = a.durationMin || 60; // default 1h
+          const end = new Date(start.getTime() + durMin * 60000);
+          return {
+            id: `appt-${a.id}`,
+            kind: "meeting", // treat as meeting for scheduler purposes
+            title: `🩺 ${a.title || "Appointment"}${a.doctor ? ` · ${a.doctor}` : ""}`,
+            start, end,
+            durationMin: durMin,
+          };
+        } catch { return null; }
+      })
+      .filter(Boolean);
+
+    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...apptItems, ...scheduledTasks, ...feedPredictions, ...pumpReminders], dayStart, visualDayEnd);
     // v05.05bt228 — Visually split free rows at shift boundaries so each
     // visual row has a single owner. Per chat: when a mixed-duty block
     // appears, the timeline should show two rows (one per owner half)
@@ -24662,7 +24798,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       return result;
     };
     return splitFreeAtBoundaries(rawTimeline);
-  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan]);
+  }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan, appointments]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -25269,14 +25405,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       effortMin: p.effortMin,
       regretScore: p.regretScore,
       focusLevel: p.focusLevel === "auto" ? inferFocusLevel(p.title) : normalizeFocus(p.focusLevel),
-      // v05.05bt157 — Auto-infer category. User can override later.
       category: p.category || inferCategory(p.title),
-      // v05.05bt171 — Carry sequence metadata if parser detected
-      // a "then"/"→" chain. Scheduler uses these to enforce order.
       sequenceId: p.sequenceId || null,
       sequenceIndex: typeof p.sequenceIndex === "number" ? p.sequenceIndex : null,
       sequenceTotal: p.sequenceTotal || null,
-      // v05.05bt160 — Tag to the selected day (today/tomorrow).
+      // v05.05bt272 — Carry cadence from parser. Triggers email-style
+      // 15-min-chunk explosion in the for-loop below (independent
+      // chunks, NOT a sequence — so they distribute across the day).
+      cadence: p.cadence || null,
       scheduledDate: referenceISO,
       ownerName: currentUser,
       scheduledTime: p.scheduledTime || null,
@@ -25302,6 +25438,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     let newTasks = [];
     const splitNotices = [];
     for (const t of rawNewTasks) {
+      // v05.05bt272 — Cadence override: produce INDEPENDENT 15-min
+      // chunks (no sequenceId) so the scheduler distributes them
+      // across the day rather than back-to-back. Bypasses splitLongTask
+      // entirely. Only applies when no fixed time is set and total
+      // effort > cadence.
+      if (t.cadence && t.cadence > 0 && !t.scheduledTime && t.effortMin > t.cadence) {
+        const chunkMin = t.cadence;
+        const n = Math.ceil(t.effortMin / chunkMin);
+        const chunks = Array.from({ length: n }, (_, idx) => ({
+          ...t,
+          id: idx === 0 ? t.id : `${t.id}_c${idx}`,
+          effortMin: chunkMin,
+          // Carry a non-sequencing flag so render can show "1/N" badge
+          cadenceIndex: idx,
+          cadenceTotal: n,
+          sequenceId: null,
+        }));
+        newTasks.push(...chunks);
+        splitNotices.push({ id: t.id, title: t.title, parts: chunks.map(() => chunkMin), cadence: true });
+        continue;
+      }
       const chunks = splitLongTask(t, maxBlockMin);
       newTasks.push(...chunks);
       if (chunks.length > 1) {
@@ -26858,6 +27015,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       lineHeight: 1,
                     }}>×</button>
                 </div>
+                {/* v05.05bt272 — Time bank context. If partner owes you,
+                    these trades are essentially free (you're cashing in
+                    owed time). */}
+                {(() => {
+                  const balanceMin = (timeBank && timeBank.balance) || 0;
+                  if (balanceMin <= 15) return null; // ignore tiny balances
+                  const partner = currentUser === "Mommy" ? "Daddy" : "Mommy";
+                  const h = Math.floor(balanceMin / 60);
+                  const m = balanceMin % 60;
+                  const balanceStr = h > 0
+                    ? (m > 0 ? `${h}h ${m}m` : `${h}h`)
+                    : `${m}m`;
+                  return (
+                    <div style={{
+                      marginBottom: 8,
+                      padding: "6px 8px",
+                      background: `${C.gold}10`,
+                      border: `1px solid ${C.gold}55`,
+                      borderRadius: 6,
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontSize: 11.5, color: C.ink, lineHeight: 1.45,
+                    }}>
+                      ✦ {partner} owes you <strong style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal" }}>{balanceStr}</strong> — these trades essentially cash in owed time.
+                    </div>
+                  );
+                })()}
                 {tradeSuggestions.map((t, i) => {
                   const hours = Math.floor(t.deepMin / 60);
                   const mins = t.deepMin % 60;
@@ -26950,6 +27133,88 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               </div>
             )}
+            {/* v05.05bt273 — Sequence violation toast. */}
+            {sequenceViolation && (
+              <div style={{
+                background: `${C.accent}14`,
+                border: `1.5px solid ${C.accent}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 12,
+                fontSize: 12.5, color: C.ink, lineHeight: 1.45,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, letterSpacing: "0.18em", color: C.accent, fontWeight: 800,
+                  marginBottom: 4,
+                }}>↳ SEQUENCE</div>
+                Can't drop <strong>{sequenceViolation.taskTitle}</strong> {sequenceViolation.kind === "before" ? "before" : "after"} its sibling <strong>{sequenceViolation.siblingTitle}</strong> — sequence order must hold.
+              </div>
+            )}
+
+            {/* v05.05bt273 — Overlap warning. Tasks scheduled to
+                overlap each other = real correctness problem. */}
+            {!isTomorrow && overlapWarnings.length > 0 && (
+              <div style={{
+                background: `${C.accent}14`,
+                border: `1.5px solid ${C.accent}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 12,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, letterSpacing: "0.18em",
+                    color: C.accent, fontWeight: 800,
+                  }}>⚠ OVERLAP</div>
+                  <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{overlapWarnings.length}</span>{" "}
+                    {overlapWarnings.length === 1 ? "pair of tasks" : "pairs of tasks"} overlap{overlapWarnings.length === 1 ? "s" : ""} in time.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOverlapBannerExpanded(v => !v)}
+                    style={{
+                      padding: "5px 9px",
+                      background: "transparent",
+                      border: `1px solid ${C.accent}66`, borderRadius: 6,
+                      color: C.accent, cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                      textTransform: "uppercase",
+                    }}>{overlapBannerExpanded ? "Hide" : "Show"}</button>
+                </div>
+                {overlapBannerExpanded && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.accent}33` }}>
+                    {overlapWarnings.map((w, i) => (
+                      <div key={i} style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 12.5, color: C.ink, lineHeight: 1.5,
+                        marginBottom: i === overlapWarnings.length - 1 ? 0 : 4,
+                      }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>
+                          {fmtTimeShort(w.a.start)}–{fmtTimeShort(w.a.end)}
+                        </span>{" "}
+                        <strong>{w.a.title}</strong> overlaps{" "}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>
+                          {fmtTimeShort(w.b.start)}–{fmtTimeShort(w.b.end)}
+                        </span>{" "}
+                        <strong>{w.b.title}</strong>
+                      </div>
+                    ))}
+                    <div style={{
+                      marginTop: 8,
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontSize: 11.5, color: C.muted,
+                    }}>
+                      Tap a task above to edit time/duration. Re-analyze will reshuffle unpinned tasks around fixed ones.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* v05.05bt181 — Drift banner. Shows when tasks have
                 blown past their planned end time. Tap re-slot to push
                 them into remaining free time (respects pinned). */}
@@ -27414,6 +27679,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         : isDropTarget ? `${C.mommy}0a`
                         : justMoved ? `${C.gold}1c`
                         : isFree ? `${C.gold}08`
+                        : isMeeting ? "#8B7AA814" // v05.05bt273 — meeting purple tint so it pops
                         : "transparent",
                       // v05.05bt188 — Owner-colored thin boundary per chat
                       // ('thin boundary line of the same color around
