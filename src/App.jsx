@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt306";
+const APP_VERSION = "2026.05.05bt310";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -58,11 +58,11 @@ const APP_CHANGELOG = [
   { version: "2026.05.05bt193", summary: "Two surfaces. (1) Nap badge: inside the isFree branch of the row title render, after '+ Open · tap to fill', new IIFE computes the best predictedNap overlap (filter sampleSize >=4, compute overlap minutes, pick max). If overlap >= 30 min, renders a mauve pill: 'mommy1a bg, mommy55 border, mono 8.5px weight 800 letter-spacing 0.12em, '💤 NAP · X/7d' caps. (2) Why-here expander: new expandedReasonTaskId state (taskId | null) in TodayTaskPlanCard. Inside the row title group (immediately after the ADJ routine badge), conditionally render a 'why here' / 'hide' italic-cormorant 11px dotted-underline button for isTask && !completedAt. onClick toggles expandedReasonTaskId between slot.id and null. After the title-block closing div, conditionally render a reasoning panel when expandedReasonTaskId === slot.id: calls _applyLowEnergyCap(effectiveBlockProfile(...)) to get the profile, renders WHY THIS SLOT mono eyebrow + Cormorant 11.5 reasons list (focus-colored bullet, ink text) + a focus-match line that explains task-focus vs slot-focus alignment (sage check when matched, coral cross when deep-task in shallow-slot) + a high-regret note (if regretScore >= 4). All reasoning data is derived live from the same effectiveBlockProfile helper the free blocks use — no separate logic. SCOPING: 2 isolated inserts in row render, 1 state addition. Zero changes to scheduler, schema, palette, modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt192", summary: "Three layout changes. (1) Runway-first reorder. Python-driven swap of two adjacent JSX blocks inside the TodayTaskPlanCard render: bt181 drift banner block (lines 22700-22740 pre-swap) was placed BEFORE the bt172 runway IIFE (lines 22741-22936); swapped to runway-first then drift. Verified via boundary line checks and esbuild. No behavioral changes; pure render-order swap. (2) Context box → glowing badge. The bt167 'one-line context' div (italic Cormorant 14px, 10/14 padding, gold-tinted bg with owner-colored left border, multi-line with whoHasPhrase + stats sub-line) replaced with a mono pill: inline-flex 6px gap, 4/10/4/8 padding, ${whoColor}14 bg, 1px ${whoColor}55 border, 999 radius, mono caps 9.5px weight 700 letter-spacing 0.14em, boxShadow with double-layer 0 0 12px -2px glow. Inner contents: 6×6 owner-color dot (boxShadow 0 0 6px for the 'glow' effect) + time in ink + caps whoHasPhrase. isTomorrow branch shows 'PLANNING TOMORROW' simple. Stats (slotted/unscheduled/lights-out) removed — runway card already surfaces these. (3) 'What fits here?' suggestion strip. Inside the free-block sub-line IIFE (after the reasons.map block), new IIFE: filter tasks where ownerName === currentUser && !completedAt && !scheduledTime && effortMin <= slot.durationMin; sort by (a) focus-level match desc, (b) regretScore desc, (c) effortMin asc; pick top candidate. If candidates.length > 0, render a dashed gold strip: ✦ FITS label + button-wrapped task title + duration + SLOT button. Tap title OR SLOT button → setTasks patch t.scheduledTime to the slot.start as HH:MM. e.stopPropagation prevents the wrapping row's onClick. If no candidates, returns null (no strip). SCOPING: 3 isolated edits in TodayTaskPlanCard render. Zero changes to scheduler, schema, palette, modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt191", summary: "Add-task FAB removed. The mauve circular '+' button (bottom: 88, right: 20, 56×56, fixed) wrapped in the inline-modal-state hide conditions has been deleted from TodayTaskPlanCard's render. Replaced with a comment explaining the removal and the alternate task-add entry points (free-block tap, ⋯ menu brain dump, structured add form). Zero state changes — setShowNlInput is still called from free-block onClick (bt168) and from the brain-dump menu item. Visual effect: only the central LOG button remains floating in the bottom area. Build verified clean via esbuild." },
-  { version: "2026.05.05bt190", summary: "Four UX fixes per screenshot feedback. (1) Free-block duration: removed `!isFree` gate on the duration sub-line in the time column. Shows for all kinds when durationMin > 0; styled in gold (fontWeight 700) for free, muted for others — gold-tints draw the eye to fillable slots. (2) Rail width: 7 → 4. Row left-padding 16 → 12 since the rail is thinner. (3) Modal bottom padding global bump: 4 standalone bottom-sheet components (EnergyCheckInModal, FocusQuizModal, TimeEditPopover [still defined but no longer mounted], PreviewBeforeCommitModal) updated from `calc(40px + env(safe-area-inset-bottom))` to `calc(96px + env(safe-area-inset-bottom))`. ModalShell's `calc(28px + env(...))` also bumped to `calc(96px + env(...))`. The 96px clears the iOS Safari tab bar height + breathing room. (4) Inline time/duration edit: new InlineTimeEditPanel component (NOT a modal, no useScrim) rendered as a row directly below the row being edited. Body: time-type input (100px wide) + 'for' italic separator + preset chip grid [15,30,45,60,90,120] + custom number input + 'Runs Xa–Yp' preview + Cancel/Save mono buttons. State local to component (start, duration). On Save, calls parent's onSave with {scheduledTime, effortMin} patch, clears inlineTimeEdit. In the timeline row-render loop, after each rows.push() of the regular row, conditionally rows.push(<InlineTimeEditPanel/>) if isTask && !completedAt && inlineTimeEdit === slot.id. TimeEditPopover modal-render gate removed from the App-level mount section (component definition retained but unused). SCOPING: 1 style condition, 2 number changes, 1 sed across 5 lines, 1 new component, 1 conditional push, 1 deletion. Zero changes to scheduler, schema, palette, other modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt190", summary: "Four UX fixes per screenshot feedback. (1) Free-block duration: removed `!isFree` gate on the duration sub-line in the time column. Shows for all kinds when durationMin > 0; styled in gold (fontWeight 700) for free, muted for others — gold-tints draw the eye to fillable slots. (2) Rail width: 7 → 4. Row left-padding 16 → 12 since the rail is thinner. (3) Modal bottom padding global bump: 4 standalone bottom-sheet components (EnergyCheckInModal, FocusQuizModal, TimeEditPopover [still defined but no longer mounted], PreviewBeforeCommitModal) updated from `calc(40px + env(safe-area-inset-bottom))` to `calc(132px + env(safe-area-inset-bottom))`. ModalShell's `calc(28px + env(...))` also bumped to `calc(96px + env(...))`. The 96px clears the iOS Safari tab bar height + breathing room. (4) Inline time/duration edit: new InlineTimeEditPanel component (NOT a modal, no useScrim) rendered as a row directly below the row being edited. Body: time-type input (100px wide) + 'for' italic separator + preset chip grid [15,30,45,60,90,120] + custom number input + 'Runs Xa–Yp' preview + Cancel/Save mono buttons. State local to component (start, duration). On Save, calls parent's onSave with {scheduledTime, effortMin} patch, clears inlineTimeEdit. In the timeline row-render loop, after each rows.push() of the regular row, conditionally rows.push(<InlineTimeEditPanel/>) if isTask && !completedAt && inlineTimeEdit === slot.id. TimeEditPopover modal-render gate removed from the App-level mount section (component definition retained but unused). SCOPING: 1 style condition, 2 number changes, 1 sed across 5 lines, 1 new component, 1 conditional push, 1 deletion. Zero changes to scheduler, schema, palette, other modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt189", summary: "Preview-before-commit modal. (1) New module-level parsePreviewCommand(text, previewTasks) helper. Lowercases input, finds tasks by exact/partial-match (case-insensitive), supports DELETE/REMOVE/DROP/SKIP, UNSCHEDULE/DEFER, MOVE TO TIME-OF-DAY (morning=09:00 / afternoon=13:00 / evening=18:00 / night=20:00), MOVE TO SPECIFIC TIME (parses 1-2 digit hour + optional minutes + optional am/pm, biases ambiguous 1-7 to PM), and SWAP A and/with/& B. Returns {success, newTasks, message}. (2) New PreviewBeforeCommitModal component: useScrim; bottom-sheet pattern (safe-area-inset-bottom padding, maxHeight + overflow); shows scheduled tasks sorted by time in mauve-bordered cards with title + duration + reason; unscheduled tasks in coral dashed cards under 'Couldn't fit' header; free-text input with Try button + stubbed AI button + result hint line; Cancel / Lock-in buttons. (3) commitNlPending modified: instead of setTasks(prev => [...prev, ...updatedNew]), set previewState({tasks, reasons}). Skip-preview shortcut: if length === 1 and task has explicit scheduledTime, commit directly (no preview). (4) New previewState useState in TodayTaskPlanCard (null | {tasks, reasons}). (5) Modal render gate in the standalone-modal section: onLockIn does setTasks append + setScheduleStatus banner build + auto-open unscheduled pile + clear previewState. onCancel just clears. onCommandApply calls parsePreviewCommand and on success updates previewState.tasks. (6) Scrim-bump useEffect now includes previewState so CentralLogButton hides while modal is open. SCOPING: 1 new module helper, 1 new component, 1 useState, 1 modal-render block, 1 useEffect dep extension, 1 commitNlPending branch change. Zero changes to scheduler, schema, palette, other modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt188", summary: "Boundary line + time-edit popover. (1) Row style: replaced single borderBottom with borderTop + borderRight + borderBottom each computed from owner color at +33 alpha (Mommy mauve, Daddy slate, joint gold, fallback line+1a). Drop-target overrides preserved (top dashed mauve when isDropTarget && isFree; bottom mauve+50 when isDropTarget). marginBottom 3 added for inter-row gap. borderRadius `0 4px 4px 0` so the right side rounds while the left edge stays flush against the rail. Resolved an inadvertent duplicate borderTop key from the merge. (2) New TimeEditPopover component: useScrim, bottom-sheet pattern (full inset overlay, flex-end alignment, paddingBottom calc(40 + env(safe-area-inset-bottom)), maxHeight calc(100dvh - 40px), overflowY auto). Body: start time (type=time controlled input), duration (3-col grid of [15,30,45,60,90,120] preset chips + custom number input below), end-time preview line, Cancel/Save buttons. fmtDuration helper handles minute-to-Xh Ym formatting. fmtTime helper for the runs-X-to-Y line. (3) Inline time edit input REMOVED from row render; replaced with the unconditional time-text div that still calls setInlineTimeEdit(slot.id) on click. (4) New TimeEditPopover render gate in TodayTaskPlanCard's modal-render section: when inlineTimeEdit is set, find matching task by id, render popover with onSave that maps setTasks with patch ({scheduledTime, effortMin}). (5) The inline-modal useEffect bumped: now also fires for inlineTimeEdit so CentralLogButton hides while editing time. SCOPING: 1 new component, 1 new modal-mount block, ~10 lines of style changes on row, 1 useEffect dep update. Zero changes to scheduler, schema (existing fields), palette. Build verified clean via esbuild (had 1 duplicate-key warning that was fixed before ship)." },
   { version: "2026.05.05bt187", summary: "Owner-dot removal + rail width bump. (1) Inside the time-column branch of the row render (the non-edit-mode `else` arm), removed the inline-block 7px circle span that rendered the owner color next to the time text. Removed the display:flex + alignItems + gap:6 + the surrounding wrapping that supported it. Time text now renders plain. (2) Rail style: width 3 → 7. Removed alpha suffix `cc` from the isFree and onsite-fallback branches so all owner colors render at full opacity. Task branch unchanged (was already fully opaque). (3) Row grid padding: '9px 8px 9px 12px' → '9px 8px 9px 16px' to give the wider rail 5px breathing room before content. SCOPING: 1 element removal, 3 string-literal changes. Build verified clean via esbuild." },
-  { version: "2026.05.05bt186b", summary: "Safe-area padding on standalone bottom-sheet modals. (1) EnergyCheckInModal inner card: added `paddingBottom: 'calc(96px + env(safe-area-inset-bottom))'` to override the base `padding: '16px 18px 24px'` shorthand. Also added `maxHeight: 'calc(100dvh - 40px)'` + `overflowY: 'auto'` so the content scrolls if it ever overflows. (2) FocusQuizModal inner card: same paddingBottom override added; maxHeight was already in place at 'calc(100dvh - 24px)'. (3) ModalShell already had `calc(28px + env(safe-area-inset-bottom, 0px))` from bt56 so it's unaffected. SCOPING: 2 inline style additions. Build verified clean via esbuild." },
+  { version: "2026.05.05bt186b", summary: "Safe-area padding on standalone bottom-sheet modals. (1) EnergyCheckInModal inner card: added `paddingBottom: 'calc(132px + env(safe-area-inset-bottom))'` to override the base `padding: '16px 18px 24px'` shorthand. Also added `maxHeight: 'calc(100dvh - 40px)'` + `overflowY: 'auto'` so the content scrolls if it ever overflows. (2) FocusQuizModal inner card: same paddingBottom override added; maxHeight was already in place at 'calc(100dvh - 24px)'. (3) ModalShell already had `calc(28px + env(safe-area-inset-bottom, 0px))` from bt56 so it's unaffected. SCOPING: 2 inline style additions. Build verified clean via esbuild." },
   { version: "2026.05.05bt186a", summary: "TDZ hotfix on bt186. Moved the bt186 inline-modal useEffect from line ~20013 (before state decls) to line ~20322 (after all referenced state declarations). Same effect body and dependency array; only the position changed. Build verified clean via esbuild." },
   { version: "2026.05.05bt186", summary: "Modal-scrim infrastructure. (1) New module-level _modalCount counter + _modalListeners Set + _bumpModalCount(delta). (2) New useScrim() hook calls _bumpModalCount(+1) on mount, -1 on unmount via useEffect cleanup. (3) New useModalOpen() hook subscribes to _modalListeners and re-renders when the count crosses zero. (4) CentralLogButton calls useModalOpen() at the top and returns null when truthy — no FAB rendered while any modal is open. (5) ModalShell calls useScrim() at top so every modal that goes through this wrapper auto-registers (covers commitment forms, log pickers, family code, etc.). (6) FocusQuizModal, EnergyCheckInModal each call useScrim(). (7) Inline modal toggles inside TodayTaskPlanCard (showBrainDump, showSetup, showNlInput, showAddForm, editingTask, editingRoutine, splittingTask, movePickerForTask, showActionsMenu) registered via a useEffect that bumps the count whenever any are truthy. (8) App-level showLogger gets its own useEffect bump for the same reason. SCOPING: 1 new module-level helper block + 1 ModalShell line + 2 modal-component lines + 1 useEffect in TodayTaskPlanCard + 1 useEffect in App. Zero changes to palette, scheduler, modal internals, or other surfaces. Build verified clean via esbuild." },
   { version: "2026.05.05bt185", summary: "Meeting diagnostic + dayTimeline filter robustness. (1) Inserted a new mini-diagnostic line under the runway-card stretches count: filters today's meetings inline using isoDate match + parent/currentUser check + isTimeBankRedemption skip; sums durations via end - start. Renders '<N> meetings booked · <fmtHM> total' only when N > 0. Italic Cormorant 12px, mono N + duration. (2) dayTimeline's todayMeetings filter switched from `start.toDateString() !== today.toDateString()` to `isoDate(start) !== isoDate(today)`. Same semantic but uses the existing isoDate helper for consistency with how dates are compared elsewhere in the codebase. Behavior preserved; reduces fragility on locale edge cases. SCOPING: 1 inline insertion in runway card, 1 line change in dayTimeline filter. Zero changes to scheduler, schema, modals, or anywhere else. Build verified clean via esbuild." },
@@ -6121,6 +6121,16 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             </button>
           );
         })()}
+        {/* v05.05bt307 — Caregiver window banner. Per chat: 'caregiver
+            handoff should be near the top where handoff info typically
+            is.' Sits right above OnDutyCard so it lives in the same
+            visual region as parent-shift handoff signaling. */}
+        {currentUser !== "Caregiver" && (
+          <CaregiverWindowBanner
+            C={C} events={events} addEvent={addEvent}
+            now={now} currentUser={currentUser}
+          />
+        )}
         <OnDutyCard
           C={C} mode={mode}
           onDuty={onDuty}
@@ -6133,6 +6143,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           lastWake={lastWake}
           lastWakeConfirmed={lastWakeConfirmed}
           events={events}
+          addEvent={addEvent}
           now={now}
           totalSafeOz={totalSafeOz}
           rtSafeOz={rtSafeOz}
@@ -9898,7 +9909,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -10277,6 +10288,97 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         />
       )}
 
+      {/* v05.05bt310 — Active caregiver window takes over the on-duty
+          display. Per chat: 'shouldnt on duty now be Caregiver and
+          then the box next to it says x time until handoff back to
+          Mommy/Daddy and then have the take back option close by?'
+          When a caregiver window is active, the rest of the card body
+          collapses to a simple caregiver-mode card. */}
+      {(() => {
+        const cgWin = getActiveOrUpcomingCaregiverWindow(events, now);
+        if (!cgWin || cgWin.state !== "active") return null;
+        const endMs = cgWin.end;
+        const minLeft = endMs ? Math.max(0, Math.round((endMs - now.getTime()) / 60000)) : null;
+        const h = minLeft != null ? Math.floor(minLeft / 60) : null;
+        const m = minLeft != null ? minLeft % 60 : null;
+        const dur = minLeft == null ? "ongoing"
+          : h > 0 ? `${h}h ${m}m`
+          : `${m}m`;
+        const backToParent = onDuty?.parent || "Mommy";
+        const backColor = backToParent === "Daddy" ? C.daddy : C.mommy;
+        return (
+          <>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              fontSize: 10, letterSpacing: "0.18em",
+              textTransform: "uppercase", color: "#5C7D55",
+              fontWeight: 700, marginBottom: 6,
+            }}>
+              <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#7B9B6E" }} />
+              Caregiver has Solène
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: 48, fontWeight: 500, lineHeight: 1,
+                letterSpacing: "-0.02em",
+                color: "#7B9B6E",
+              }}>Caregiver</div>
+              <div style={{
+                background: "rgba(123, 155, 110, 0.16)",
+                color: "#5C7D55",
+                padding: "6px 12px", borderRadius: 8,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 12, fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 6,
+                marginBottom: 2,
+              }}>
+                <Timer size={13} style={{ flexShrink: 0 }} />
+                <span>
+                  {dur} until handoff back to <span style={{ color: backColor, fontWeight: 700 }}>{backToParent}</span>
+                </span>
+              </div>
+            </div>
+            <div style={{
+              marginTop: 12,
+              display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+            }}>
+              <button
+                onClick={() => {
+                  if (!addEvent || !cgWin.event) return;
+                  if (cgWin.event.type === "caregiver_window") {
+                    addEvent({
+                      ...cgWin.event,
+                      actualEndTs: new Date(now).toISOString(),
+                      _patchOf: cgWin.event.ts,
+                    });
+                  } else {
+                    addEvent({
+                      type: "caregiver_handoff_end",
+                      ts: new Date(now).toISOString(),
+                      ownerName: currentUser,
+                    });
+                  }
+                }}
+                style={{
+                  padding: "9px 14px",
+                  background: "#7B9B6E", color: "#fff",
+                  border: "none", borderRadius: 8,
+                  fontSize: 11.5, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: "0.10em",
+                  cursor: "pointer",
+                }}>↩ TAKE BACK NOW</button>
+              <span style={{
+                fontSize: 11, color: C.muted, fontStyle: "italic",
+                fontFamily: "'Cormorant Garamond', serif",
+              }}>events logged in this window are quarantined from predictions</span>
+            </div>
+          </>
+        );
+      })()}
+      {!(getActiveOrUpcomingCaregiverWindow(events, now)?.state === "active") && (
+        <>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: C.muted, fontWeight: 500, marginBottom: 6 }}>
         <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: parentColor }} />
         On duty now
@@ -10319,6 +10421,8 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         <Clock size={11} />
         <span>{fmtShiftRange(onDuty.shift)}</span>
       </div>
+        </>
+      )}
 
       {/* Sleep check-in prompt */}
       {sleepInfo && (
@@ -12599,90 +12703,8 @@ function NowView({ C, mode, now, events, addEvent, lastFeed, lastPump, nextPumpA
 
   return (
     <div style={{ marginTop: 14 }}>
-      {/* v05.05bt304 — Per chat: 'the handoff to caregiver should be in
-          the now page so it is prominent.' Was placed in Mommy's Day
-          scheduler in bt303 — now lives here at the top of Now so
-          either parent can hand off without leaving the home tab.
-          Events logged during the window are flagged unreliable for
-          predictions (predictFeed/NapWindows already filter them). */}
-      {currentUser !== "Caregiver" && (() => {
-        const active = getActiveCaregiverHandoff(events);
-        if (active) {
-          const startTs = new Date(active.ts).getTime();
-          const minSince = Math.max(0, Math.floor((now.getTime() - startTs) / 60000));
-          const hr = Math.floor(minSince / 60);
-          const mn = minSince % 60;
-          const dur = hr > 0 ? `${hr}h ${mn}m` : `${mn}m`;
-          return (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "12px 14px",
-              background: "rgba(123, 155, 110, 0.16)",
-              border: "1.5px solid rgba(123, 155, 110, 0.55)",
-              borderRadius: 12,
-              marginBottom: 14,
-            }}>
-              <span style={{ fontSize: 20, lineHeight: 1 }}>🤝</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 16, fontStyle: "italic",
-                  color: C.ink, lineHeight: 1.25,
-                }}>Caregiver has Solène · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{dur}</strong></div>
-                <div style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, color: "#5C7D55", fontWeight: 700,
-                  letterSpacing: "0.14em", marginTop: 3,
-                }}>EVENTS LOGGED IN THIS WINDOW EXCLUDED FROM PREDICTIONS</div>
-              </div>
-              <button
-                onClick={() => {
-                  if (!addEvent) return;
-                  addEvent({
-                    type: "caregiver_handoff_end",
-                    ts: new Date().toISOString(),
-                    ownerName: currentUser,
-                  });
-                }}
-                style={{
-                  padding: "8px 14px",
-                  background: "#7B9B6E", color: "#fff",
-                  border: "none", borderRadius: 8,
-                  fontSize: 11, fontWeight: 700,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  letterSpacing: "0.10em",
-                  cursor: "pointer", flexShrink: 0,
-                }}>↩ TAKE BACK</button>
-            </div>
-          );
-        }
-        return (
-          <button
-            onClick={() => {
-              if (!addEvent) return;
-              addEvent({
-                type: "caregiver_handoff_start",
-                ts: new Date().toISOString(),
-                ownerName: currentUser,
-              });
-            }}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              background: "rgba(123, 155, 110, 0.06)",
-              border: "1.5px dashed rgba(123, 155, 110, 0.55)",
-              borderRadius: 12, marginBottom: 14,
-              cursor: "pointer", textAlign: "center",
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 15,
-              color: "#5C7D55",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}>
-            <span style={{ fontSize: 18 }}>🤝</span>
-            Hand off Solène to caregiver
-          </button>
-        );
-      })()}
+      {/* v05.05bt307 — Caregiver banner moved up to App level (above
+          OnDutyCard) so it sits with handoff/shift signaling. */}
       {/* IN-MEETING banner — shown when the current viewer is in an active
           commitment. Lets them tap "I'm back early" the moment the meeting
           ends, which truncates the meeting record to now. The partner
@@ -13742,6 +13764,36 @@ function TimelineEvent({ ev, C, now }) {
             background: typeColor, borderRadius: 2, marginRight: 8, verticalAlign: "middle",
           }} />
           {label}
+          {/* v05.05bt308 — Per chat: 'option to show who logged what
+              event.' Small attribution pill after label. Color-coded by
+              logger: M=mauve, D=daddy blue, C=sage. Hidden if no
+              ownerName recorded (legacy events). */}
+          {ev.ownerName && (
+            <span
+              title={`Logged by ${ev.ownerName}`}
+              style={{
+                marginLeft: 8,
+                display: "inline-block",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 8.5, fontWeight: 800,
+                letterSpacing: "0.06em",
+                padding: "1px 5px", borderRadius: 3,
+                verticalAlign: "middle",
+                background:
+                  ev.ownerName === "Mommy" ? `${C.mommy}1c`
+                  : ev.ownerName === "Daddy" ? `${C.daddy}1c`
+                  : "rgba(123, 155, 110, 0.18)",
+                color:
+                  ev.ownerName === "Mommy" ? C.mommy
+                  : ev.ownerName === "Daddy" ? C.daddy
+                  : "#5C7D55",
+              }}>
+              {ev.ownerName === "Mommy" ? "M"
+                : ev.ownerName === "Daddy" ? "D"
+                : ev.ownerName === "Caregiver" ? "C"
+                : ev.ownerName.slice(0, 1).toUpperCase()}
+            </span>
+          )}
         </span>
         <span style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace" }}>
           {fmtElapsed(minutesAgo(ev.ts))}
@@ -20232,50 +20284,301 @@ function suggestTaskChunks(task) {
 // duty as 'active feeding · not work time', and surfaces the 30 min
 // after each feed as a calm-play light-work pocket. Same rolling
 // 7-day pattern + 30-min bucketing + ≥3 occurrences threshold.
-// v05.05bt303 — Caregiver-handoff windows. Per chat: 'on days baby is
-// handed off to caregiver for that duration of time, there will be no
-// accurate data so that should not be pulled into predictions.'
-// Windows are captured as paired events (caregiver_handoff_start /
-// caregiver_handoff_end). Active session = a start without a matching
-// end. getCaregiverWindows returns intervals [{start, end}], pairing
-// each start with the chronologically-next end. Unpaired start at the
-// tail → uses `now` as the open end (treated as still-active).
+// v05.05bt303/307 — Caregiver-handoff windows. Per chat (bt307):
+// 'need to know ahead of time what is the anticipated time baby will
+// be with caregiver and the anticipated pick up time' — so we
+// captured planned start + end on a single event of type
+// "caregiver_window". The event shape:
+//   { type: "caregiver_window", ts: <plannedStartISO>,
+//     endTs: <plannedEndISO>, actualEndTs?: <ISO when taken back early>,
+//     ownerName }
+// getCaregiverWindows returns [{start, end}] for prediction quarantine
+// AND for the scheduler rail (so a planned window starting in 2 hrs
+// already grays-out the schedule during that span).
+// Backwards-compat: legacy start/end pair events from bt303 still
+// honored if present.
 function getCaregiverWindows(events, now) {
-  const sorted = (events || [])
+  const out = [];
+  const list = events || [];
+  // New model: planned windows
+  for (const e of list) {
+    if (e.type !== "caregiver_window") continue;
+    const start = new Date(e.ts).getTime();
+    const plannedEnd = e.endTs ? new Date(e.endTs).getTime() : null;
+    const actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
+    // Effective end = earliest of actual (if set) and planned.
+    let end = plannedEnd;
+    if (actualEnd && (!end || actualEnd < end)) end = actualEnd;
+    if (!end) end = (now ? now.getTime() : Date.now());
+    if (end > start) out.push({ start, end });
+  }
+  // Legacy model: paired start/end events
+  const legacy = list
     .filter(e => e.type === "caregiver_handoff_start" || e.type === "caregiver_handoff_end")
     .map(e => ({ ...e, _ts: new Date(e.ts).getTime() }))
     .sort((a, b) => a._ts - b._ts);
-  const windows = [];
   let openStart = null;
-  for (const e of sorted) {
+  for (const e of legacy) {
     if (e.type === "caregiver_handoff_start") {
       if (!openStart) openStart = e._ts;
-    } else {
-      if (openStart) {
-        windows.push({ start: openStart, end: e._ts });
-        openStart = null;
-      }
+    } else if (openStart) {
+      out.push({ start: openStart, end: e._ts });
+      openStart = null;
     }
   }
-  if (openStart) windows.push({ start: openStart, end: (now ? now.getTime() : Date.now()) });
-  return windows;
+  if (openStart) out.push({ start: openStart, end: (now ? now.getTime() : Date.now()) });
+  return out;
 }
-function getActiveCaregiverHandoff(events) {
-  const sorted = (events || [])
+// Returns the currently-active window OR an upcoming (later today) window,
+// or null. Active = now within [start, end]. Upcoming = start > now & today.
+function getActiveOrUpcomingCaregiverWindow(events, now) {
+  const nowMs = now ? now.getTime() : Date.now();
+  const todayEnd = (() => {
+    const d = now ? new Date(now) : new Date();
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  })();
+  // New model first
+  let best = null;
+  for (const e of (events || [])) {
+    if (e.type !== "caregiver_window") continue;
+    const start = new Date(e.ts).getTime();
+    const plannedEnd = e.endTs ? new Date(e.endTs).getTime() : null;
+    const actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
+    let end = plannedEnd;
+    if (actualEnd && (!end || actualEnd < end)) end = actualEnd;
+    // Skip windows already fully past
+    if (end && end <= nowMs) continue;
+    // Active (now within window)
+    if (start <= nowMs && (!end || nowMs < end)) {
+      return { event: e, start, end, state: "active" };
+    }
+    // Upcoming today
+    if (start > nowMs && start <= todayEnd) {
+      if (!best || start < best.start) best = { event: e, start, end, state: "upcoming" };
+    }
+  }
+  if (best) return best;
+  // Legacy fallback: unmatched start event = active
+  const list = (events || [])
     .filter(e => e.type === "caregiver_handoff_start" || e.type === "caregiver_handoff_end")
     .sort((a, b) => new Date(a.ts) - new Date(b.ts));
   let last = null;
-  for (const e of sorted) {
+  for (const e of list) {
     if (e.type === "caregiver_handoff_start") last = e;
     else last = null;
   }
-  return last; // null or the open start event
+  if (last) {
+    return {
+      event: last, start: new Date(last.ts).getTime(),
+      end: null, state: "active",
+    };
+  }
+  return null;
+}
+// Legacy alias kept for any callers still referencing the old name.
+function getActiveCaregiverHandoff(events) {
+  const res = getActiveOrUpcomingCaregiverWindow(events, new Date());
+  return res && res.state === "active" ? res.event : null;
 }
 function isInCaregiverWindow(tsMs, windows) {
   for (const w of windows) {
     if (tsMs >= w.start && tsMs < w.end) return true;
   }
   return false;
+}
+
+// v05.05bt307 — Caregiver window banner. Per chat: 'caregiver handoff
+// should be near the top where handoff info typically is and change
+// from handoff to daddy to something along the lines that baby is
+// with caregiver and i click take back when i pick her up to resume
+// shift. there needs to be a way to resolve this on the scheduler
+// where the rail coloring picks back up so in order to plan, we will
+// need to know ahead of time what is the anticipated time baby will
+// be with caregiver and the anticpate pick up time.'
+function CaregiverWindowBanner({ C, events, addEvent, now, currentUser }) {
+  const [showPlanner, setShowPlanner] = React.useState(false);
+  const win = getActiveOrUpcomingCaregiverWindow(events, now);
+  const fmt = (ms) => {
+    const d = new Date(ms);
+    const h = d.getHours(), m = d.getMinutes();
+    const h12 = ((h + 11) % 12) + 1;
+    return `${h12}${m ? `:${String(m).padStart(2,"0")}` : ""}${h < 12 ? "a" : "p"}`;
+  };
+  // v05.05bt310 — Active state is now rendered INSIDE OnDutyCard.
+  // This banner is for upcoming + inactive only.
+  if (win && win.state === "active") return null;
+  // Upcoming state
+  if (win && win.state === "upcoming") {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "10px 14px",
+        background: "rgba(184, 155, 122, 0.16)",
+        border: "1.5px solid rgba(184, 155, 122, 0.55)",
+        borderRadius: 12,
+        marginBottom: 12,
+      }}>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>🤝</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 15, fontStyle: "italic",
+            color: C.ink, lineHeight: 1.25,
+          }}>Caregiver window planned · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{fmt(win.start)}{win.end ? `–${fmt(win.end)}` : ""}</strong></div>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, color: C.gold, fontWeight: 700,
+            letterSpacing: "0.14em", marginTop: 3,
+          }}>SCHEDULER WILL GRAY THE RAIL DURING THIS WINDOW</div>
+        </div>
+      </div>
+    );
+  }
+  // Inactive: plan button
+  return (
+    <>
+      <button
+        onClick={() => setShowPlanner(true)}
+        style={{
+          width: "100%",
+          padding: "10px 14px",
+          background: "rgba(123, 155, 110, 0.06)",
+          border: "1.5px dashed rgba(123, 155, 110, 0.55)",
+          borderRadius: 12, marginBottom: 12,
+          cursor: "pointer", textAlign: "center",
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 14,
+          color: "#5C7D55",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}>
+        <span style={{ fontSize: 16 }}>🤝</span>
+        Plan caregiver window
+      </button>
+      {showPlanner && (
+        <CaregiverWindowPlanner
+          C={C} now={now} currentUser={currentUser}
+          onSave={(startISO, endISO) => {
+            if (addEvent) {
+              addEvent({
+                type: "caregiver_window",
+                ts: startISO,
+                endTs: endISO,
+                ownerName: currentUser,
+              });
+            }
+            setShowPlanner(false);
+          }}
+          onClose={() => setShowPlanner(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// v05.05bt307 — Planner modal for caregiver window. Captures planned
+// drop-off + planned pick-up time. Defaults: start = now rounded to
+// next 15-min, end = +4hr.
+function CaregiverWindowPlanner({ C, now, currentUser, onSave, onClose }) {
+  const roundUp15 = (d) => {
+    const m = d.getMinutes();
+    const add = (15 - (m % 15)) % 15;
+    const out = new Date(d);
+    out.setMinutes(m + add, 0, 0);
+    return out;
+  };
+  const dStart = roundUp15(now || new Date());
+  const dEnd = new Date(dStart.getTime() + 4 * 60 * 60 * 1000);
+  const toLocalInput = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const [startVal, setStartVal] = React.useState(toLocalInput(dStart));
+  const [endVal, setEndVal] = React.useState(toLocalInput(dEnd));
+  const save = () => {
+    const startISO = new Date(startVal).toISOString();
+    const endISO = new Date(endVal).toISOString();
+    if (new Date(endVal) <= new Date(startVal)) return;
+    onSave(startISO, endISO);
+  };
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(0,0,0,0.42)",
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+    }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 520,
+        background: C.paper, borderRadius: "14px 14px 0 0",
+        padding: "18px 18px calc(132px + env(safe-area-inset-bottom))",
+        maxHeight: "calc(100dvh - 40px)",
+        overflowY: "auto",
+      }}>
+        <div style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 22, fontStyle: "italic", fontWeight: 500,
+          color: C.ink, marginBottom: 4,
+        }}>Plan caregiver window</div>
+        <div style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, color: "#5C7D55", fontWeight: 700,
+          letterSpacing: "0.14em", marginBottom: 14,
+        }}>SCHEDULER WILL GRAY THE RAIL DURING THIS WINDOW</div>
+        <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: C.muted, letterSpacing: "0.12em",
+            textTransform: "uppercase", fontWeight: 700, marginBottom: 4,
+          }}>Drop-off</div>
+          <input
+            type="datetime-local"
+            value={startVal}
+            onChange={(e) => setStartVal(e.target.value)}
+            style={{
+              width: "100%", padding: "10px 12px",
+              border: `1px solid ${C.line}55`, borderRadius: 6,
+              background: C.paper, color: C.ink, fontSize: 14,
+              fontFamily: "inherit",
+            }}
+          />
+        </label>
+        <label style={{ display: "block", marginBottom: 16 }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, color: C.muted, letterSpacing: "0.12em",
+            textTransform: "uppercase", fontWeight: 700, marginBottom: 4,
+          }}>Pick-up</div>
+          <input
+            type="datetime-local"
+            value={endVal}
+            onChange={(e) => setEndVal(e.target.value)}
+            style={{
+              width: "100%", padding: "10px 12px",
+              border: `1px solid ${C.line}55`, borderRadius: 6,
+              background: C.paper, color: C.ink, fontSize: 14,
+              fontFamily: "inherit",
+            }}
+          />
+        </label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={save} disabled={new Date(endVal) <= new Date(startVal)} style={{
+            flex: 1,
+            background: new Date(endVal) > new Date(startVal) ? "#7B9B6E" : C.line,
+            color: "#fff", border: "none", borderRadius: 8,
+            padding: "11px", fontSize: 13, fontWeight: 600,
+            cursor: new Date(endVal) > new Date(startVal) ? "pointer" : "not-allowed",
+            fontFamily: "inherit",
+          }}>Save window</button>
+          <button onClick={onClose} style={{
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}55`, borderRadius: 8,
+            padding: "11px 16px", fontSize: 13, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function predictFeedWindows(events, now) {
@@ -21870,7 +22173,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
           background: C.paper,
           borderRadius: "20px 20px 0 0",
           padding: "16px 18px 24px",
-          paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+          paddingBottom: "calc(132px + env(safe-area-inset-bottom))",
           maxHeight: "calc(100dvh - 40px)",
           overflowY: "auto",
         }}>
@@ -22240,7 +22543,7 @@ function TimeEditPopover({ C, task, onClose, onSave }) {
         background: C.paper,
         borderRadius: "20px 20px 0 0",
         padding: "16px 18px 24px",
-        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(132px + env(safe-area-inset-bottom))",
         maxHeight: "calc(100dvh - 40px)",
         overflowY: "auto",
       }}>
@@ -22550,7 +22853,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
         background: C.paper,
         borderRadius: "20px 20px 0 0",
         padding: "16px 18px 24px",
-        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(132px + env(safe-area-inset-bottom))",
         maxHeight: "calc(100dvh - 40px)",
         overflowY: "auto",
       }}>
@@ -23037,7 +23340,7 @@ function FocusQuizModal({ C, focusProfile, onClose, onSave, onClear }) {
         background: C.paper,
         borderRadius: "20px 20px 0 0",
         padding: "16px 18px 24px",
-        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(132px + env(safe-area-inset-bottom))",
         maxHeight: "calc(100dvh - 24px)", overflowY: "auto",
       }}>
         <div style={{ width: 36, height: 4, background: C.line, borderRadius: 2, margin: "0 auto 14px" }} />
@@ -23419,7 +23722,7 @@ function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
         background: C.paper,
         borderRadius: "20px 20px 0 0",
         padding: "16px 18px 24px",
-        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(132px + env(safe-area-inset-bottom))",
         maxHeight: "calc(100dvh - 40px)",
         overflowY: "auto",
       }}>
@@ -25156,14 +25459,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             const totalMin = Math.round(h * 60);
             start.setHours(0, 0, 0, 0);
             start.setMinutes(totalMin);
-            const end = new Date(start.getTime() + 20 * 60000);
+            const end = new Date(start.getTime() + 60 * 60000);
             return {
               id: `pump-reminder-${i}`,
               kind: "pump_reminder",
               // v05.05bt274 — Emoji prefix so immovable items read at a glance
               title: "🍼 Pump session",
               start, end,
-              durationMin: 20,
+              durationMin: 60,
             };
           })
       : [];
@@ -27524,7 +27827,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                     <span style={{
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9, letterSpacing: "0.22em",
+                      fontSize: 10.5, letterSpacing: "0.12em",
                       textTransform: "uppercase",
                       color: C.daddy, fontWeight: 700,
                     }}>↔ Trade ideas</span>
@@ -27649,7 +27952,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           <div style={{
                             marginTop: 4,
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9, letterSpacing: "0.18em",
+                            fontSize: 10.5, letterSpacing: "0.10em",
                             color: C.daddy, fontWeight: 700,
                           }}>↔ Tap to send request</div>
                         )}
@@ -27681,7 +27984,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               }}>
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.18em",
+                  fontSize: 10.5, letterSpacing: "0.10em",
                   color: C.accent, fontWeight: 800,
                 }}>↳ R5 WAITING</div>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
@@ -27701,7 +28004,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     border: "none", borderRadius: 6,
                     cursor: "pointer",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                    fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
                     textTransform: "uppercase",
                   }}>Free up space</button>
               </div>
@@ -27719,7 +28022,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               }}>
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.18em", color: C.accent, fontWeight: 800,
+                  fontSize: 10.5, letterSpacing: "0.10em", color: C.accent, fontWeight: 800,
                   marginBottom: 4,
                 }}>↳ SEQUENCE</div>
                 Can't drop <strong>{sequenceViolation.taskTitle}</strong> {sequenceViolation.kind === "before" ? "before" : "after"} its sibling <strong>{sequenceViolation.siblingTitle}</strong> — sequence order must hold.
@@ -27739,7 +28042,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, letterSpacing: "0.18em",
+                    fontSize: 10.5, letterSpacing: "0.10em",
                     color: C.accent, fontWeight: 800,
                   }}>⚠ OVERLAP</div>
                   <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
@@ -27756,7 +28059,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       border: `1px solid ${C.accent}`, borderRadius: 6,
                       cursor: "pointer",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                      fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
                       textTransform: "uppercase",
                     }}>Auto-fix</button>
                   <button
@@ -27768,7 +28071,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       border: `1px solid ${C.accent}66`, borderRadius: 6,
                       color: C.accent, cursor: "pointer",
                       fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 9.5, letterSpacing: "0.12em", fontWeight: 700,
+                      fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
                       textTransform: "uppercase",
                     }}>{overlapBannerExpanded ? "Hide" : "Show"}</button>
                 </div>
@@ -27816,7 +28119,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               }}>
                 <div style={{
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.18em",
+                  fontSize: 10.5, letterSpacing: "0.10em",
                   color: C.accent, fontWeight: 800,
                 }}>↳ DRIFT</div>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
@@ -28141,6 +28444,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       if (workStartMs > slot.start.getTime() && workStartMs < slot.end.getTime()) cutSet.add(workStartMs);
                       if (workEndMs > slot.start.getTime() && workEndMs < slot.end.getTime()) cutSet.add(workEndMs);
                     }
+                    // v05.05bt307 — Add caregiver window boundaries to
+                    // cuts so rail splits cleanly at drop-off/pick-up.
+                    for (const w of getCaregiverWindows(events, now)) {
+                      if (w.start > slot.start.getTime() && w.start < slot.end.getTime()) cutSet.add(w.start);
+                      if (w.end > slot.start.getTime() && w.end < slot.end.getTime()) cutSet.add(w.end);
+                    }
                     for (const parent of ["Mommy", "Daddy"]) {
                       const shifts = effectiveActiveShifts?.[parent] || [];
                       for (const s of shifts) {
@@ -28158,6 +28467,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       const midT = (cuts[i] + cuts[i + 1]) / 2;
                       const midDate = new Date(midT);
                       const slotHr = midDate.getHours() + midDate.getMinutes() / 60;
+                      // v05.05bt307 — Caregiver window overrides shift
+                      // ownership. Per chat: 'there needs to be a way
+                      // to resolve this on the scheduler where the rail
+                      // coloring picks back up.' Inside a planned (or
+                      // active) caregiver window, no parent is on duty
+                      // — render owner=null + sage tint flag.
+                      const _cgInWindow = isInCaregiverWindow(midT, getCaregiverWindows(events, now));
+                      if (_cgInWindow) {
+                        segs.push({ owner: null, caregiver: true, startMs: cuts[i], endMs: cuts[i + 1], coveringFor: null });
+                        continue;
+                      }
                       // v05.05bt296 — During onsite work hours, no parent
                       // is on duty (daycare / grandparents / school
                       // covers). Skip shift lookup, segOwner = null.
@@ -28975,11 +29295,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     const segColor = s.owner === "Daddy" ? C.daddy
                                       : s.owner === "joint" ? C.gold
                                       : s.owner === "Mommy" ? C.mommy
+                                      : s.caregiver ? "#7B9B6E"
                                       : C.muted;
                                     const whoLabel = s.owner === currentUser ? "you have Solène"
                                       : s.owner === "Mommy" ? "Mommy has Solène"
                                       : s.owner === "Daddy" ? "Daddy has Solène"
                                       : s.owner === "joint" ? "joint shift"
+                                      : s.caregiver ? "caregiver has Solène"
                                       : "grandparents have Solène";
                                     return (
                                       <div key={i} style={{
@@ -29655,7 +29977,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       <div style={{ padding: "6px 4px 8px 6px", borderRight: `1px solid ${C.line}22` }}>
                         <div style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 8.5, letterSpacing: "0.18em", fontWeight: 700,
+                          fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
                           color: C.mommy, textTransform: "uppercase",
                           padding: "3px 5px 5px",
                         }}>Scheduled · {scheduled.length}</div>
@@ -29671,7 +29993,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       <div style={{ padding: "6px 6px 8px 4px" }}>
                         <div style={{
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 8.5, letterSpacing: "0.18em", fontWeight: 700,
+                          fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
                           color: C.gold, textTransform: "uppercase",
                           padding: "3px 5px 5px",
                         }}>Unscheduled · {unscheduled.length}</div>
@@ -30275,7 +30597,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           })()}
           <div style={{
             display: "flex", gap: 8,
-            position: "sticky", bottom: -8, zIndex: 3,
+            position: "sticky", bottom: 0, zIndex: 3,
             background: C.paper,
             paddingTop: 10, paddingBottom: 10,
             marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
@@ -30931,7 +31253,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
           off the top and the bottom.' */}
       <div style={{
         display: "flex", gap: 8,
-        position: "sticky", bottom: -8, zIndex: 3,
+        position: "sticky", bottom: 0, zIndex: 3,
         background: C.paper,
         paddingTop: 10, paddingBottom: 10,
         marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
@@ -31466,7 +31788,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
           while scrolling through a long list. */}
       <div style={{
         display: "flex", gap: 8, marginTop: 14,
-        position: "sticky", bottom: -8, zIndex: 3,
+        position: "sticky", bottom: 0, zIndex: 3,
         background: C.paper,
         paddingTop: 8, paddingBottom: 8,
         marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
@@ -32059,7 +32381,7 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
   // Assumed session duration when seeding from autoSpaced (no real
   // data yet). Used only for the initial baseline; once any pumps are
   // logged, their actual durationMin drives the math.
-  const DEFAULT_SESSION_HRS = 0.5;
+  const DEFAULT_SESSION_HRS = 1.0;
 
   const autoSpaced = useMemo(() => {
     const overnight = recoveryActive ? [26.0] : [];
@@ -35147,7 +35469,7 @@ function ModalShell({ C, onClose, title, children, placement }) {
         </div>
         <div style={{
           flex: 1, overflowY: "auto",
-          paddingBottom: `calc(96px + env(safe-area-inset-bottom, 0px))`,
+          paddingBottom: `calc(132px + env(safe-area-inset-bottom, 0px))`,
           // Inertial scroll on iOS so the modal body feels native.
           WebkitOverflowScrolling: "touch",
         }}>
