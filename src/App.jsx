@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt303";
+const APP_VERSION = "2026.05.05bt306";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6306,6 +6306,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           <NowView
             C={C} mode={mode} now={now}
             events={events}
+            addEvent={addEvent}
             removeEvent={removeEvent}
             lastFeed={lastFeed}
             lastPump={lastPump}
@@ -12557,7 +12558,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
   );
 }
 
-function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, inventory, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, shifts, baseShifts, swaps, meetings, todayCalories, lastBath, lastSkincare, todayDailyContent, loadingDaily, currentUser, myActiveCommitment, onEndCommitmentEarly, onOpenCommitmentLog, onDispute, onsite, onStartOnsite, onUpdateEta, onArrivedHome }) {
+function NowView({ C, mode, now, events, addEvent, lastFeed, lastPump, nextPumpAt, inventory, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, shifts, baseShifts, swaps, meetings, todayCalories, lastBath, lastSkincare, todayDailyContent, loadingDaily, currentUser, myActiveCommitment, onEndCommitmentEarly, onOpenCommitmentLog, onDispute, onsite, onStartOnsite, onUpdateEta, onArrivedHome }) {
   const [rhythmFilter, setRhythmFilter] = useState("all");
   const [verseExpanded, setVerseExpanded] = useState(false);
   const [frenchExpanded, setFrenchExpanded] = useState(false);
@@ -12598,6 +12599,90 @@ function NowView({ C, mode, now, events, lastFeed, lastPump, nextPumpAt, invento
 
   return (
     <div style={{ marginTop: 14 }}>
+      {/* v05.05bt304 — Per chat: 'the handoff to caregiver should be in
+          the now page so it is prominent.' Was placed in Mommy's Day
+          scheduler in bt303 — now lives here at the top of Now so
+          either parent can hand off without leaving the home tab.
+          Events logged during the window are flagged unreliable for
+          predictions (predictFeed/NapWindows already filter them). */}
+      {currentUser !== "Caregiver" && (() => {
+        const active = getActiveCaregiverHandoff(events);
+        if (active) {
+          const startTs = new Date(active.ts).getTime();
+          const minSince = Math.max(0, Math.floor((now.getTime() - startTs) / 60000));
+          const hr = Math.floor(minSince / 60);
+          const mn = minSince % 60;
+          const dur = hr > 0 ? `${hr}h ${mn}m` : `${mn}m`;
+          return (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "12px 14px",
+              background: "rgba(123, 155, 110, 0.16)",
+              border: "1.5px solid rgba(123, 155, 110, 0.55)",
+              borderRadius: 12,
+              marginBottom: 14,
+            }}>
+              <span style={{ fontSize: 20, lineHeight: 1 }}>🤝</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 16, fontStyle: "italic",
+                  color: C.ink, lineHeight: 1.25,
+                }}>Caregiver has Solène · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{dur}</strong></div>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, color: "#5C7D55", fontWeight: 700,
+                  letterSpacing: "0.14em", marginTop: 3,
+                }}>EVENTS LOGGED IN THIS WINDOW EXCLUDED FROM PREDICTIONS</div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!addEvent) return;
+                  addEvent({
+                    type: "caregiver_handoff_end",
+                    ts: new Date().toISOString(),
+                    ownerName: currentUser,
+                  });
+                }}
+                style={{
+                  padding: "8px 14px",
+                  background: "#7B9B6E", color: "#fff",
+                  border: "none", borderRadius: 8,
+                  fontSize: 11, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: "0.10em",
+                  cursor: "pointer", flexShrink: 0,
+                }}>↩ TAKE BACK</button>
+            </div>
+          );
+        }
+        return (
+          <button
+            onClick={() => {
+              if (!addEvent) return;
+              addEvent({
+                type: "caregiver_handoff_start",
+                ts: new Date().toISOString(),
+                ownerName: currentUser,
+              });
+            }}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              background: "rgba(123, 155, 110, 0.06)",
+              border: "1.5px dashed rgba(123, 155, 110, 0.55)",
+              borderRadius: 12, marginBottom: 14,
+              cursor: "pointer", textAlign: "center",
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 15,
+              color: "#5C7D55",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}>
+            <span style={{ fontSize: 18 }}>🤝</span>
+            Hand off Solène to caregiver
+          </button>
+        );
+      })()}
       {/* IN-MEETING banner — shown when the current viewer is in an active
           commitment. Lets them tap "I'm back early" the moment the meeting
           ends, which truncates the meeting record to now. The partner
@@ -16244,7 +16329,14 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
   // overriding C inside ShiftsView, every component rendered here
   // (sub-tabs, banners, TodayTaskPlanCard, AllTasksView) inherits the
   // dusk palette without per-component threading.
-  const C = schedulerDarkMode ? PALETTES.dusk : receivedC;
+  // v05.05bt305 — Readability pass per chat: 'i have a really hard
+  // time reading things clearly... font is very thin and faint and
+  // often times have to strain.' schedulerC overrides muted color
+  // to a darker warm taupe so secondary text (eyebrows, sub-lines,
+  // meta) actually has contrast against the cream paper. In dark
+  // mode the dusk palette is already calibrated, so leave its muted
+  // untouched.
+  const C = schedulerDarkMode ? PALETTES.dusk : { ...receivedC, muted: "#5C4D40" };
   const schedulerC = C;
   const [showAdd, setShowAdd] = useState(false);
   // v05.05bt248 — Default-start date for the add-meeting modal so tapping
@@ -27158,94 +27250,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   )}
 
-                  {/* v05.05bt303 — Caregiver handoff banner. Per chat:
-                      'option on the Now where either mommy or daddy can
-                      hand it off to caregiver.' Two states:
-                        Inactive → small mauve link 'Hand off to caregiver'
-                        Active → sage banner 'Caregiver has Solène · 1h 23m'
-                                  + Take back button. While active, events
-                                  logged during the window are flagged
-                                  unreliable for predictions (already
-                                  wired in predictFeed/NapWindows). */}
-                  {!isTomorrow && currentUser !== "Caregiver" && (() => {
-                    const active = getActiveCaregiverHandoff(events);
-                    if (active) {
-                      const startTs = new Date(active.ts).getTime();
-                      const minSince = Math.max(0, Math.floor((now.getTime() - startTs) / 60000));
-                      const hr = Math.floor(minSince / 60);
-                      const mn = minSince % 60;
-                      const dur = hr > 0 ? `${hr}h ${mn}m` : `${mn}m`;
-                      return (
-                        <div style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "8px 12px",
-                          background: "rgba(123, 155, 110, 0.14)",
-                          border: "1.5px solid rgba(123, 155, 110, 0.5)",
-                          borderRadius: 10,
-                          marginBottom: 12,
-                        }}>
-                          <span style={{ fontSize: 16, lineHeight: 1 }}>🤝</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontFamily: "'Cormorant Garamond', serif",
-                              fontSize: 14, fontStyle: "italic",
-                              color: C.ink, lineHeight: 1.25,
-                            }}>Caregiver has Solène · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>{dur}</strong></div>
-                            <div style={{
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 9, color: "#7B9B6E", fontWeight: 700,
-                              letterSpacing: "0.14em", marginTop: 2,
-                            }}>EVENTS LOGGED IN THIS WINDOW EXCLUDED FROM PREDICTIONS</div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              if (!addEvent) return;
-                              addEvent({
-                                type: "caregiver_handoff_end",
-                                ts: new Date().toISOString(),
-                                ownerName: currentUser,
-                              });
-                            }}
-                            style={{
-                              padding: "6px 12px",
-                              background: "#7B9B6E", color: "#fff",
-                              border: "none", borderRadius: 6,
-                              fontSize: 11, fontWeight: 700,
-                              fontFamily: "'JetBrains Mono', monospace",
-                              letterSpacing: "0.10em",
-                              cursor: "pointer",
-                            }}>↩ TAKE BACK</button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <button
-                        onClick={() => {
-                          if (!addEvent) return;
-                          addEvent({
-                            type: "caregiver_handoff_start",
-                            ts: new Date().toISOString(),
-                            ownerName: currentUser,
-                          });
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "6px 12px",
-                          background: "transparent",
-                          border: `1px dashed ${C.line}66`,
-                          borderRadius: 8,
-                          marginBottom: 12,
-                          cursor: "pointer", textAlign: "center",
-                          fontFamily: "'Cormorant Garamond', serif",
-                          fontStyle: "italic", fontSize: 12.5,
-                          color: C.muted,
-                          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        }}>
-                        <span style={{ fontSize: 13 }}>🤝</span>
-                        Hand off Solène to caregiver
-                      </button>
-                    );
-                  })()}
+                  {/* v05.05bt304 — Caregiver handoff moved to the Now
+                      page per chat ('should be in the now page so it
+                      is prominent'). */}
                 </div>
               );
             })()}
@@ -28417,7 +28424,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             return undefined;
                           })()}
                           style={{
-                            fontSize: 11, lineHeight: 1.15,
+                            fontSize: 12.5, lineHeight: 1.2, fontWeight: 600,
                             cursor: (isTask && !slot.completedAt) || isRoutine || isPumpReminder ? "pointer" : "default",
                           }}
                           title={
@@ -28640,20 +28647,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 : undefined}
                             style={{
                             fontFamily: "'Cormorant Garamond', serif",
-                            // v05.05bt159 — Bedtime row stands out: bold,
-                            // larger, mauve (the day-ender deserves emphasis).
-                            fontSize: isFree ? 14
-                              : (slot.id === "bedtime") ? 17
-                              : 15,
+                            // v05.05bt305 — Per chat readability pass:
+                            // bumped sizes 14→15 / 15→17 / 17→19. Bumped
+                            // weight 400→500 for routines, 500→600 for
+                            // tasks so the serif body holds up at phone
+                            // distance.
+                            fontSize: isFree ? 15
+                              : (slot.id === "bedtime") ? 19
+                              : 17,
                             fontStyle: (slot.id === "bedtime") ? "normal"
                               : (isFree || isRoutine) ? "italic"
                               : "normal",
                             fontWeight: (slot.id === "bedtime") ? 700
-                              : isRoutine ? 400
-                              : 500,
+                              : isRoutine ? 500
+                              : 600,
                             color: (slot.id === "bedtime") ? C.mommy
-                              : isFree ? "#7C6B5A"
-                              : isRoutine ? "#6B5F50"
+                              : isFree ? "#5C4D3A"
+                              : isRoutine ? "#4A4034"
                               : C.ink,
                             lineHeight: 1.2, flex: 1, minWidth: 0,
                             letterSpacing: (slot.id === "bedtime") ? "0.01em" : "-0.005em",
@@ -29515,7 +29525,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       <span style={{
                         flex: 1, color: C.ink,
                         fontFamily: "'Cormorant Garamond', serif",
-                        fontSize: 12.5, lineHeight: 1.3,
+                        fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
                         // v05.05bt285 — Allow text to wrap (was nowrap+ellipsis)
                         whiteSpace: "normal",
                         wordBreak: "break-word",
@@ -32886,6 +32896,20 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
                 letterSpacing: "0.10em", textTransform: "uppercase",
                 cursor: "pointer",
               }}>↺ Regenerate today's plan</button>
+            {/* v05.05bt306 — Anchor pump schedule. Per chat: 'i am
+                pumping now from 9:30a to 10:00a and i want to start
+                the 3-hr cadence based on this anchor.' User picks an
+                anchor time + cadence; sessions are generated forward
+                from that point through wake-end. Default anchor = last
+                pump event end, fallback to now. */}
+            <AnchorPumpEditor
+              C={C}
+              now={now}
+              events={events}
+              wakeEnd={wakeEnd}
+              todayKey={todayKey}
+              setPumpPlan={setPumpPlan}
+            />
             {/* v05.05bt293 — Per chat: 'add dummy data so I can see it
                 before deploying.' Loads 7 demo pump sessions starting
                 30min from now at 2.5hr cadence so the user can verify
@@ -32917,6 +32941,126 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
         )}
       </div>
     </Section>
+  );
+}
+
+// v05.05bt306 — Anchor pump schedule editor. Per chat: 'is there a
+// way to set the pump cadence and when to start the cadence ... i am
+// pumping now from 9:30a to 10:00a and i want to start the 3-hr
+// cadence based on this anchor.'
+function AnchorPumpEditor({ C, now, events, wakeEnd, todayKey, setPumpPlan }) {
+  // Default anchor: last pump event's end time. If none today, use now.
+  const lastPump = (events || [])
+    .filter(e => e.type === "pump")
+    .sort((a, b) => new Date(b.ts) - new Date(a.ts))[0];
+  const defaultAnchor = (() => {
+    if (lastPump) {
+      const endTs = new Date(lastPump.ts).getTime() + ((lastPump.durationMin || 30) * 60000);
+      const d = new Date(endTs);
+      // Only use if it's today
+      if (d.toDateString() === now.toDateString()) {
+        return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+      }
+    }
+    return `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  })();
+  const [anchorTime, setAnchorTime] = useState(defaultAnchor);
+  const [cadenceHrs, setCadenceHrs] = useState(3);
+  const apply = () => {
+    const [h, m] = anchorTime.split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+    const startFrac = h + m / 60;
+    const cad = Math.max(1.5, Math.min(6, Number(cadenceHrs) || 3));
+    const sessions = [];
+    let t = startFrac;
+    while (t <= wakeEnd + 0.5) {
+      sessions.push(Math.round(t * 100) / 100);
+      t += cad;
+    }
+    setPumpPlan(p => ({
+      ...(p || {}),
+      manualSessions: sessions,
+      manualSessionsDate: todayKey,
+    }));
+  };
+  return (
+    <div style={{
+      padding: "10px 12px",
+      background: `${C.mommy}0a`,
+      border: `1px solid ${C.mommy}33`,
+      borderRadius: 6,
+    }}>
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 10, letterSpacing: "0.12em",
+        textTransform: "uppercase", color: C.mommy, fontWeight: 700,
+        marginBottom: 8,
+      }}>↳ Anchor cadence to a session</div>
+      <div style={{
+        fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 10,
+        fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif",
+      }}>
+        Set the start time of your next (or current) session — Little Ledger generates the rest forward at your chosen cadence.
+      </div>
+      <div style={{
+        display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+        marginBottom: 10,
+      }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, letterSpacing: "0.12em",
+            color: C.muted, fontWeight: 700, textTransform: "uppercase",
+          }}>Start at</span>
+          <input
+            type="time"
+            value={anchorTime}
+            onChange={(e) => setAnchorTime(e.target.value || "08:00")}
+            style={{
+              background: C.paper, color: C.ink,
+              border: `1px solid ${C.line}55`, borderRadius: 4,
+              padding: "5px 7px", fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, letterSpacing: "0.12em",
+            color: C.muted, fontWeight: 700, textTransform: "uppercase",
+          }}>Every</span>
+          <input
+            type="number"
+            step="0.25"
+            min="1.5"
+            max="6"
+            value={cadenceHrs}
+            onChange={(e) => setCadenceHrs(e.target.value)}
+            style={{
+              width: 56,
+              background: C.paper, color: C.ink,
+              border: `1px solid ${C.line}55`, borderRadius: 4,
+              padding: "5px 7px", fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          />
+          <span style={{ fontSize: 12, color: C.muted }}>hr</span>
+        </label>
+      </div>
+      <button
+        onClick={apply}
+        style={{
+          width: "100%",
+          background: C.mommy, color: "#fff",
+          border: "none", borderRadius: 6,
+          padding: "8px 10px",
+          fontSize: 11, fontWeight: 700,
+          fontFamily: "'JetBrains Mono', monospace",
+          letterSpacing: "0.10em", textTransform: "uppercase",
+          cursor: "pointer",
+        }}>↳ Apply anchor</button>
+    </div>
   );
 }
 
