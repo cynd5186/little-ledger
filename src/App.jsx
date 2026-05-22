@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt310";
+const APP_VERSION = "2026.05.05bt315";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6173,15 +6173,33 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           myActiveCommitment={myActiveCommitment}
           onEndCommitmentEarly={endCommitmentEarly}
           handoffNote={handoffNote}
-          /* v05.05bt109 — when partner is out of town, handoff is
-             paused: no takeover banner, no tag-in button, no note
-             prompt. handoffPaused is true only during the active away
-             window (from <= now <= until, or open-ended if no until). */
-          handoffPaused={!!(parentAway
-            && new Date(parentAway.from) <= now
-            && (!parentAway.until || new Date(parentAway.until) >= now))}
-          tripParent={parentAway?.parent || null}
-          tripUntil={parentAway?.until || null}
+          /* v05.05bt109/313 — when partner is out of town OR caregiver
+             has Solène, handoff is paused: no takeover banner, no
+             tag-in button, no note prompt. handoffPaused is true
+             during the active away window OR an active caregiver
+             window. Per chat: 'under caregiver, all the shifts
+             adjustment can be paused and annotated with why it has
+             been paused.' */
+          handoffPaused={(() => {
+            const tripActive = !!(parentAway
+              && new Date(parentAway.from) <= now
+              && (!parentAway.until || new Date(parentAway.until) >= now));
+            const cgWin = getActiveOrUpcomingCaregiverWindow(events, now);
+            const cgActive = !!(cgWin && cgWin.state === "active");
+            return tripActive || cgActive;
+          })()}
+          tripParent={(() => {
+            const cgWin = getActiveOrUpcomingCaregiverWindow(events, now);
+            if (cgWin && cgWin.state === "active") return "Caregiver";
+            return parentAway?.parent || null;
+          })()}
+          tripUntil={(() => {
+            const cgWin = getActiveOrUpcomingCaregiverWindow(events, now);
+            if (cgWin && cgWin.state === "active" && cgWin.end) {
+              return new Date(cgWin.end).toISOString();
+            }
+            return parentAway?.until || null;
+          })()}
           onAckNote={() => {
             setNoteArchive(prev => [
               { ...handoffNote, acknowledged: true, ackedAt: new Date().toISOString() },
@@ -6386,6 +6404,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             tradeRequests={tradeRequests} openSendTrade={setShowSendTrade}
             appointments={appointments}
             schedulerDarkMode={schedulerDarkMode} setSchedulerDarkMode={setSchedulerDarkMode}
+            setTab={setTab}
           />
         )}
         {tab === "bank" && (
@@ -16375,7 +16394,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -16541,6 +16560,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             schedulerDarkMode={schedulerDarkMode} setSchedulerDarkMode={setSchedulerDarkMode}
             setScheduleSubTab={setScheduleSubTab}
             openAllTasksModal={() => setAllTasksModalOpen(true)}
+            setTab={setTab}
         />
       )}
 
@@ -20876,16 +20896,28 @@ function applyBedtimeCascade(routines, lightsOutDate, today) {
   const out = [];
   for (const r of routines) {
     if (r.id === "last-pump") continue;
+    // v05.05bt312 — Respect explicit user overrides. Per chat: 'when i
+    // adjust the time for the routine task from 30 min to 60 min, it
+    // shows 60 min selected but the duration does not update on the
+    // task card.' The cascade was overwriting the user's override.
+    // If routine.overridden (user-set time or duration via
+    // RoutineOverrideSheet), skip the cascade re-anchor — user wins.
+    if (r.overridden) { out.push(r); continue; }
     if (r.id === "shutdown") {
       const end = new Date(lightsOutDate);
-      const start = new Date(end.getTime() - 30 * 60000);
-      out.push({ ...r, start, end, durationMin: 30, overridden: true });
+      const dur = r.durationMin || 30;
+      const start = new Date(end.getTime() - dur * 60000);
+      out.push({ ...r, start, end, durationMin: dur, overridden: true });
       continue;
     }
     if (r.id === "mommy-pm") {
-      const end = new Date(lightsOutDate.getTime() - 30 * 60000); // ends where shutdown begins
-      const start = new Date(end.getTime() - 30 * 60000);
-      out.push({ ...r, start, end, durationMin: 30, overridden: true });
+      // Shutdown ends at lightsOut, default 30m. Anchor mommy-pm to
+      // end where shutdown starts. Preserve user's durationMin.
+      const shutdownDur = 30; // bedtime default
+      const end = new Date(lightsOutDate.getTime() - shutdownDur * 60000);
+      const dur = r.durationMin || 30;
+      const start = new Date(end.getTime() - dur * 60000);
+      out.push({ ...r, start, end, durationMin: dur, overridden: true });
       continue;
     }
     // v05.05bt163 — Cascade solene-bed too if its default time would
@@ -21088,6 +21120,16 @@ function buildDayTimeline(items, dayStart, dayEnd) {
   };
 
   for (const item of sorted) {
+    // v05.05bt313 — Per chat (#7 Pump-aware scheduler): pumps are
+    // wearable, so they DON'T carve free blocks. Tasks can slot
+    // during pump times — the wearable-pump unification (bt312)
+    // then visually merges pump + task into one row. Treat pump
+    // as a "soft" item that pushes onto the timeline but doesn't
+    // advance the free-block cursor.
+    if (item.kind === "pump_reminder") {
+      out.push(item);
+      continue;
+    }
     const gapMin = (item.start - cursor) / 60000;
     if (gapMin >= 30) {
       pushFreeChunks(cursor, item.start);
@@ -24407,7 +24449,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -24941,6 +24983,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return () => clearTimeout(t);
   }, [todayISO, dailyEnergy, energyShownKey]);
   const lowEnergy = !!(dailyEnergy && dailyEnergy.date === todayISO && dailyEnergy.rating <= 2);
+  // v05.05bt312 — EOD auto-unschedule sweep. Per chat: 'unschedule
+  // anything at the end of the day that did not get done.' Once
+  // per day, after lights-out, strip scheduledTime + pinned from
+  // any incomplete tasks scheduled for today so tomorrow starts
+  // clean. Tracked via localStorage flag so we don't sweep twice.
+  useEffect(() => {
+    const eodSweptKey = `ll:eodSwept:${todayISO}:${currentUser}`;
+    let swept = false;
+    try { swept = localStorage.getItem(eodSweptKey) === "1"; } catch {}
+    if (swept) return;
+    const referenceMidnight = new Date(now); referenceMidnight.setHours(0,0,0,0);
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, referenceMidnight);
+    if (!lightsOut) return;
+    if (now.getTime() < lightsOut.getTime()) return;
+    // Past lights-out → sweep
+    setTasks(prev => prev.map(t => {
+      if (t.ownerName !== currentUser) return t;
+      if (t.completedAt) return t;
+      if (!t.scheduledTime) return t;
+      if (t.scheduledDate && t.scheduledDate !== todayISO) return t;
+      return { ...t, scheduledTime: null, pinned: false };
+    }));
+    try { localStorage.setItem(eodSweptKey, "1"); } catch {}
+  }, [now, todayISO, currentUser, todaySetup?.wakeTime, todaySetup?.sleepHrs]);
   // v05.05bt181 — Drift detection. A task is "behind" when its planned
   // end time (scheduledTime + effortMin) has passed by ≥15 min AND
   // it's not marked complete. Surfaces a banner that prompts a
@@ -24999,6 +25065,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // is currently showing the picker (slot key = start ms). Tap "fits"
   // expands the candidate list; tap a specific candidate to slot it.
   const [fitsPickerSlotKey, setFitsPickerSlotKey] = useState(null);
+  // v05.05bt313 — Per chat: 'Manual override of fits here suggestion.'
+  // Toggle that flips the picker candidates from "tasks that fit by
+  // duration" to "all unscheduled tasks" so the user can force-slot
+  // an oversized task. Picker takes responsibility for the overflow.
+  const [showAllInFitsPicker, setShowAllInFitsPicker] = useState(false);
   // v05.05bt274 — High-priority unscheduled detection. Per chat: 'R5s
   // should definitely be prioritized - I don't understand how those
   // don't get scheduled and a lower R score does.' If there are R5 (or
@@ -25495,7 +25566,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       })
       .filter(Boolean);
 
-    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...apptItems, ...scheduledTasks, ...feedPredictions, ...pumpReminders], dayStart, visualDayEnd);
+    // v05.05bt312 — Wearable pump unification. Per chat: 'pump
+    // sessions that occur during another task — since it is a wearable
+    // pump — needs to be better shown/represented.' For each task that
+    // fully eclipses a pump_reminder, attach the pump as
+    // _overlappingPumps metadata and DROP the standalone pump block
+    // so the row reads as one task with a sub-line showing pumping.
+    const filteredPumpReminders = [];
+    const tasksWithPumps = scheduledTasks.map(t => ({ ...t, _overlappingPumps: [] }));
+    for (const pr of pumpReminders) {
+      let eclipsed = false;
+      for (const t of tasksWithPumps) {
+        if (!t.start || !t.end) continue;
+        // Task fully contains the pump session (start ≤ pump.start, end ≥ pump.end)
+        if (t.start.getTime() <= pr.start.getTime() && t.end.getTime() >= pr.end.getTime()) {
+          t._overlappingPumps.push({
+            start: pr.start, end: pr.end, durationMin: pr.durationMin,
+          });
+          eclipsed = true;
+          break;
+        }
+      }
+      if (!eclipsed) filteredPumpReminders.push(pr);
+    }
+    const rawTimeline = buildDayTimeline([...routines, ...bedtimeRoutines, ...todayMeetings, ...apptItems, ...tasksWithPumps, ...feedPredictions, ...filteredPumpReminders], dayStart, visualDayEnd);
     // v05.05bt228 — Visually split free rows at shift boundaries so each
     // visual row has a single owner. Per chat: when a mixed-duty block
     // appears, the timeline should show two rows (one per owner half)
@@ -25841,6 +25935,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         const effectiveStart = (minStart && minStart > blockNextAvail) ? minStart : blockNextAvail;
         const remainingFromEffective = (blockEnd - effectiveStart) / 60000;
         if (remainingFromEffective < task.effortMin) continue;
+        // v05.05bt311 — Work/home boundary. Per chat: 'stop scheduling
+        // work things past 5p since i am trying to have work/home
+        // balance unless i specifically request it to be added.'
+        // Work-category tasks land only in blocks starting before 17:00,
+        // unless explicitly pinned to a later time (pinned tasks
+        // already bypass assignTaskTimes — they keep their scheduledTime
+        // and aren't requeued).
+        if (task.category === "work") {
+          const startHr = effectiveStart.getHours() + effectiveStart.getMinutes() / 60;
+          if (startHr >= 17) continue;
+        }
         // Compute alignment score
         const blockFocus = normalizeFocus(b.focusLevel);
         // v05.05bt243 — requireDeep is a hard filter: task MUST land in
@@ -27492,43 +27597,84 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           fontSize: 14, fontWeight: 600, cursor: "pointer",
                           fontFamily: "inherit", lineHeight: 1,
                         }}
-                        title="More actions">⋯</button>
+                        title="Settings · menu">≡</button>
                       {showActionsMenu && (
                         <div style={{
                           position: "absolute", top: "calc(100% + 4px)", right: 0,
                           background: "#FBF5E9",
                           border: `1px solid ${C.line}55`,
-                          borderRadius: 10, padding: 4, minWidth: 200,
+                          borderRadius: 10, padding: 4, minWidth: 240,
                           boxShadow: "0 8px 24px -8px rgba(61, 49, 40, 0.18)",
                           zIndex: 10,
+                          maxHeight: "70vh", overflowY: "auto",
                         }}>
+                          {/* v05.05bt314 — Per chat: 'Consolidate settings
+                              into ≡ menu.' Items grouped into sections
+                              with subtle gold uppercase headers. Single
+                              entry point for all scheduler-side controls.
+                              Pump-card settings linked but not duplicated
+                              (open Milk tab to access). */}
                           {[
-                            { icon: "⚙", label: "Today's setup", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
-                            { icon: "◆", label: focusProfile ? "Focus profile · retake" : "Focus profile · take quiz", onClick: () => { setShowFocusQuiz(true); setShowActionsMenu(false); } },
-                            { icon: "↻", label: "Routines · edit defaults", onClick: () => { setShowRoutineEditor(true); setShowActionsMenu(false); } },
-                            { icon: "✦", label: "Optimize today's shape", onClick: () => { setShowOptimizer(true); setShowActionsMenu(false); } },
+                            { section: "Today's plan" },
+                            { icon: "⚙", label: "Today's setup · wake / sleep / mode", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
                             { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
-                            { icon: "✎", label: "Brain dump", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
+                            { icon: "✦", label: "Optimize today's shape", onClick: () => { setShowOptimizer(true); setShowActionsMenu(false); } },
+                            { section: "You" },
+                            { icon: "◆", label: focusProfile ? "Focus profile · retake quiz" : "Focus profile · take quiz", onClick: () => { setShowFocusQuiz(true); setShowActionsMenu(false); } },
+                            { section: "Routines & tasks" },
+                            { icon: "↻", label: "Routines · edit defaults", onClick: () => { setShowRoutineEditor(true); setShowActionsMenu(false); } },
+                            { icon: "✎", label: "Brain dump · quick capture", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
+                            { section: "Pump & milk" },
+                            { icon: "🍼", label: "Pump settings → Milk tab", onClick: () => { if (setTab) setTab("inventory"); setShowActionsMenu(false); }, hint: "Cadence, anchor, target oz, freezer buffer" },
+                            { section: "Display & export" },
+                            { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                             { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
-                            { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Dark mode · on" : "Dark mode · off", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
-                          ].map(item => (
-                            <button key={item.label}
-                              onClick={item.onClick}
-                              disabled={item.disabled}
-                              style={{
-                                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                                padding: "10px 12px",
-                                background: "transparent",
-                                border: "none", borderRadius: 6,
-                                cursor: item.disabled ? "not-allowed" : "pointer",
-                                opacity: item.disabled ? 0.4 : 1,
-                                fontFamily: "inherit", fontSize: 13,
-                                color: C.ink, textAlign: "left",
-                              }}>
-                              <span style={{ color: C.gold, width: 16, textAlign: "center" }}>{item.icon}</span>
-                              {item.label}
-                            </button>
-                          ))}
+                          ].map((item, idx) => {
+                            if (item.section) {
+                              return (
+                                <div key={`section-${idx}`} style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 9.5, letterSpacing: "0.14em",
+                                  textTransform: "uppercase",
+                                  color: C.gold, fontWeight: 700,
+                                  padding: idx === 0 ? "6px 12px 4px" : "10px 12px 4px",
+                                  borderTop: idx === 0 ? "none" : `1px solid ${C.line}22`,
+                                  marginTop: idx === 0 ? 0 : 4,
+                                }}>{item.section}</div>
+                              );
+                            }
+                            return (
+                              <button key={item.label}
+                                onClick={item.onClick}
+                                disabled={item.disabled}
+                                style={{
+                                  width: "100%",
+                                  display: "flex", gap: 10,
+                                  padding: item.hint ? "8px 12px 10px" : "10px 12px",
+                                  background: "transparent",
+                                  border: "none", borderRadius: 6,
+                                  cursor: item.disabled ? "not-allowed" : "pointer",
+                                  opacity: item.disabled ? 0.4 : (item.muted ? 0.72 : 1),
+                                  fontFamily: "inherit", fontSize: 13,
+                                  color: C.ink, textAlign: "left",
+                                  flexDirection: item.hint ? "column" : "row",
+                                  alignItems: item.hint ? "flex-start" : "center",
+                                }}>
+                                <span style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+                                  <span style={{ color: C.gold, width: 16, textAlign: "center" }}>{item.icon}</span>
+                                  {item.label}
+                                </span>
+                                {item.hint && (
+                                  <span style={{
+                                    fontSize: 10.5, color: C.muted,
+                                    fontStyle: "italic",
+                                    marginLeft: 26, marginTop: 1,
+                                    fontFamily: "'Cormorant Garamond', serif",
+                                  }}>{item.hint}</span>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -28626,26 +28772,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       display: "grid",
                       gridTemplateColumns: "54px 1fr auto",
                       gap: 10, padding: "9px 8px 9px 12px",
-                      // v05.05bt301 — Per chat: 'I don't like mauve [for
-                      // routines/pumps] because it may be confusing
-                      // with dad vs mom shift. Make it a new color but
-                      // really need that contrast.' New warm-brown
-                      // band #8B6F4E for routines + pumps — distinct
-                      // from all parent rails (mauve / daddy blue /
-                      // gold joint) and meeting lavender / appointment
-                      // coral. Reads as 'fixed/immovable' without
-                      // competing with shift colors.
-                      background:
-                        isDropTarget && isFree ? `${C.mommy}10`
-                        : isDropTarget ? `${C.mommy}0a`
-                        : justMoved ? `${C.gold}1c`
-                        : slot.id === "bedtime" ? `#8B6F4E55`
-                        : isFree ? `${C.gold}08`
-                        : isMeeting ? "#8B7AA838"
-                        : isPumpReminder ? `#8B6F4E55`
-                        : slot.kind === "appointment" ? `#A04F4F2E`
-                        : isRoutine ? `#8B6F4E45`
-                        : "transparent",
+                      // v05.05bt301/315 — Per chat (bt315): 'can the
+                      // routine blocks be colored a different color —
+                      // i dont like the color it is currently...maybe
+                      // just make it that rail color?' Routines + pump
+                      // sessions now use the owner's rail color at low
+                      // alpha so the body harmonizes with the rail
+                      // edge. Different from regular shift tasks
+                      // (those are transparent) so routines still pop
+                      // as 'fixed/immovable.'
+                      background: (() => {
+                        if (isDropTarget && isFree) return `${C.mommy}10`;
+                        if (isDropTarget) return `${C.mommy}0a`;
+                        if (justMoved) return `${C.gold}1c`;
+                        const ownerTint = owner === "Mommy" ? `${C.mommy}1f`
+                          : owner === "Daddy" ? `${C.daddy}1f`
+                          : owner === "joint" ? `${C.gold}28`
+                          : `${C.muted}1c`;
+                        if (slot.id === "bedtime") return owner === "Mommy" ? `${C.mommy}33` : ownerTint;
+                        if (isFree) return `${C.gold}08`;
+                        if (isMeeting) return "#8B7AA838";
+                        if (isPumpReminder) return ownerTint;
+                        if (slot.kind === "appointment") return `#A04F4F2E`;
+                        if (isRoutine) return ownerTint;
+                        return "transparent";
+                      })(),
                       // v05.05bt280 — Bedtime: thick double-border above as HARD STOP marker
                       ...(slot.id === "bedtime" ? {
                         borderTop: `3px double ${C.mommy}`,
@@ -29033,6 +29184,38 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 </>
                               )
                             ) : slot.title}
+                            {/* v05.05bt312 — Wearable pump unification.
+                                Per chat: 'pump sessions that occur
+                                during another task — since it is a
+                                wearable pump — needs to be better
+                                shown/represented.' Inline brown badge
+                                shows 'pumping HH–HH' if a pump session
+                                is fully eclipsed by this task. */}
+                            {isTask && Array.isArray(slot._overlappingPumps) && slot._overlappingPumps.length > 0 && (
+                              <span style={{
+                                marginLeft: 8,
+                                padding: "2px 7px",
+                                background: "#8B6F4E26",
+                                border: "1px solid #8B6F4E66",
+                                borderRadius: 4,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9.5, fontWeight: 800,
+                                letterSpacing: "0.10em",
+                                color: "#6B5238",
+                                textTransform: "uppercase",
+                                verticalAlign: 2,
+                                whiteSpace: "nowrap",
+                              }} title="Wearable pump session overlaps this task — pump and work together">
+                                {slot._overlappingPumps.map(p => {
+                                  const fmt = (d) => {
+                                    const h = d.getHours(), m = d.getMinutes();
+                                    const h12 = ((h + 11) % 12) + 1;
+                                    return m === 0 ? `${h12}${h >= 12 ? "p" : "a"}` : `${h12}:${String(m).padStart(2,"0")}${h >= 12 ? "p" : "a"}`;
+                                  };
+                                  return `🍼 ${fmt(p.start)}–${fmt(p.end)}`;
+                                }).join(" · ")}
+                              </span>
+                            )}
                             {isTask && recentlyMovedIds.has(slot.id) && (
                               <span style={{
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -29398,8 +29581,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   .filter(t => t.ownerName === currentUser
                                             && !t.completedAt
                                             && !t.scheduledTime
-                                            && (t.effortMin || 30) <= slot.durationMin)
+                                            && (showAllInFitsPicker || (t.effortMin || 30) <= slot.durationMin))
                                   .sort((a, b) => {
+                                    // v05.05bt313 — In show-all mode,
+                                    // fitting tasks still surface first.
+                                    const aFits = (a.effortMin || 30) <= slot.durationMin ? 0 : 1;
+                                    const bFits = (b.effortMin || 30) <= slot.durationMin ? 0 : 1;
+                                    if (aFits !== bFits) return aFits - bFits;
                                     const aFocusMatch = normalizeFocus(a.focusLevel) === profile.focusLevel ? 1 : 0;
                                     const bFocusMatch = normalizeFocus(b.focusLevel) === profile.focusLevel ? 1 : 0;
                                     if (bFocusMatch !== aFocusMatch) return bFocusMatch - aFocusMatch;
@@ -29498,7 +29686,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                           key={c.id}
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setTasks(prev => prev.map(t => t.id === c.id ? { ...t, scheduledTime: slotTime, scheduledDate: todayISO, _couldNotFit: false } : t));
+                                            // v05.05bt312 — Per chat:
+                                            // 'when there is an open
+                                            // task and i click on it
+                                            // to fill it, i expect the
+                                            // task to land there but
+                                            // sometimes it adds it to
+                                            // another open space.'
+                                            // Auto-pin tap-to-fill so
+                                            // reanalyze can't move it.
+                                            setTasks(prev => prev.map(t => t.id === c.id ? { ...t, scheduledTime: slotTime, scheduledDate: todayISO, _couldNotFit: false, pinned: true } : t));
                                             setFitsPickerSlotKey(null);
                                           }}
                                           style={{
@@ -29567,6 +29764,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                           scheduledDate: todayISO,
                                           ownerName: currentUser,
                                           scheduledTime: slotTime,
+                                          // v05.05bt312 — Auto-pin so reanalyze doesn't move it.
+                                          pinned: true,
                                           createdAt: new Date().toISOString(),
                                           completedAt: null,
                                         };
@@ -29613,6 +29812,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                           fontSize: 9, letterSpacing: "0.1em", fontWeight: 700,
                                         }}>ADD</button>
                                     </form>
+                                    {/* v05.05bt313 — Show-all override
+                                        per chat: 'Manual override of
+                                        "fits here" suggestion.' Toggle
+                                        flips between strict-fit and
+                                        all-unscheduled (overrides the
+                                        duration filter — user takes
+                                        responsibility for the overflow). */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowAllInFitsPicker(v => !v);
+                                      }}
+                                      style={{
+                                        marginTop: 6, padding: "4px 6px",
+                                        background: "transparent", border: "none",
+                                        cursor: "pointer", textAlign: "center",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, letterSpacing: "0.10em",
+                                        textTransform: "uppercase", fontWeight: 700,
+                                        color: showAllInFitsPicker ? C.mommy : C.muted,
+                                        width: "100%",
+                                      }}>
+                                      {showAllInFitsPicker ? "✓ Showing all · tap to fit-only" : "Show all unscheduled · override fit"}
+                                    </button>
                                   </div>
                                 );
                               })()}
@@ -29790,7 +30013,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 ? todayTasks.filter(t => !t.completedAt && t.scheduledTime)
                 : [];
               const unscheduled = [...unscheduledBase, ...rollovers]
-                .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0));
+                // v05.05bt311 — Per chat: 'order wont fit items first
+                // since that must have been important but couldnt get
+                // scheduled.' Won't-fit (red badge) shoots to the top
+                // of unscheduled, then regret desc.
+                .sort((a, b) => {
+                  const aFit = a._couldNotFit ? 0 : 1;
+                  const bFit = b._couldNotFit ? 0 : 1;
+                  if (aFit !== bFit) return aFit - bFit;
+                  return (b.regretScore || 0) - (a.regretScore || 0);
+                });
               // v05.05bt294 — Don't hide the pile when empty. Per chat:
               // 'What happened to my like table wit schedule ba
                // unscheduled divided?' — pile was disappearing on
@@ -29831,18 +30063,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontFamily: "inherit", padding: 0,
                         minWidth: 0,
                       }}>
-                      {side === "scheduled" && t.scheduledTime && (
-                        <span style={{
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 9.5, color: C.muted, fontWeight: 600,
-                          minWidth: 32, flexShrink: 0, marginTop: 2,
-                        }}>{(() => {
-                          const [h, m] = t.scheduledTime.split(":").map(Number);
-                          const ap = h >= 12 ? "p" : "a";
-                          let h12 = h % 12; if (h12 === 0) h12 = 12;
-                          return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
-                        })()}</span>
-                      )}
+                      {/* v05.05bt311 — Per chat: 'under sched vs.
+                          unsched box, is it really helpful to have the
+                          time there for the scheduled tasks when you
+                          have the breakdown of the day above?' Time
+                          dropped from pile — already visible in the
+                          timeline above. */}
                       <span style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }}>{flGlyph}</span>
                       <span style={{
                         flex: 1, color: C.ink,
@@ -30981,6 +31207,8 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
   // deprioritizes so must-do tasks always land first. If room remains
   // after non-stretch fills, stretch goals slot in.
   const [stretchGoal, setStretchGoal] = useState(!!task.stretchGoal);
+  // v05.05bt311 — Collapse secondary fields behind Advanced toggle.
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const regretLabels = {
     1: "Tomorrow's fine", 2: "Prefer today",
@@ -31067,6 +31295,30 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
           }}>{opt.l}</button>
         ))}
       </div>
+      {/* v05.05bt311 — Per chat: 'when you click on a task, that pop
+          up detailed entry is way too much and looks daunting and
+          cumbersome.' Secondary fields (category, pin, require-deep,
+          recurring, stretch) collapsed behind an Advanced toggle.
+          Default closed. Essentials (title, regret, focus, time +
+          duration) remain visible by default. */}
+      <button
+        onClick={() => setShowAdvanced(v => !v)}
+        style={{
+          width: "100%",
+          background: "transparent", color: C.muted,
+          border: `1px dashed ${C.line}55`, borderRadius: 6,
+          padding: "8px 10px", marginBottom: 12,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.10em", textTransform: "uppercase",
+          cursor: "pointer", textAlign: "left",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+        <span>Advanced · category · pin · recurring</span>
+        <span style={{ fontSize: 13 }}>{showAdvanced ? "▴" : "▾"}</span>
+      </button>
+      {showAdvanced && (
+      <>
       {/* v05.05bt157 — Category picker (work / personal / auto). Used
           as scheduler tiebreaker. Optional — leave empty for no
           preference. Auto-inferred at creation time but you can correct
@@ -31230,6 +31482,8 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
           {stretchGoal ? "Stretch goal — slots if room" : "Mark as stretch goal"}
         </span>
       </button>
+      </>
+      )}
       <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
         How bad if not done today?
       </div>
