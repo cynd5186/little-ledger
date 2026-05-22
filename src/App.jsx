@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt315";
+const APP_VERSION = "2026.05.05bt318";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6131,6 +6131,56 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             now={now} currentUser={currentUser}
           />
         )}
+        {/* v05.05bt318 — Per chat (#12): 'Had bottle a and b in the
+            fridge and I think when expiration time hit bottle a
+            disappeared and had no idea. I need a pop up alert and
+            sound so I don't miss it when it's 15 min away from
+            expiry to either move, use or discard.' Sticky red-coral
+            banner appears when any bottle is within 15 min of its
+            hard expiry. Lists the bottle(s) so user can take action.
+            Sound is skipped here (browser autoplay restrictions); the
+            visual banner is unmissable. */}
+        {(() => {
+          const nowMs = now.getTime();
+          const impending = (inventory || []).filter(b => {
+            if (!b.expiresAt || b.usedAt || b.discardedAt) return false;
+            const expMs = new Date(b.expiresAt).getTime();
+            const dt = expMs - nowMs;
+            return dt > 0 && dt < 15 * 60 * 1000;
+          });
+          if (impending.length === 0) return null;
+          return (
+            <div style={{
+              padding: "10px 14px", marginBottom: 12,
+              background: `${C.accent}1c`,
+              border: `2px solid ${C.accent}`,
+              borderRadius: 12,
+              animation: "ll-ledger-pulse 1.8s ease-in-out infinite",
+            }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, letterSpacing: "0.14em",
+                textTransform: "uppercase", fontWeight: 800,
+                color: C.accent, marginBottom: 4,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                🔔 BOTTLE EXPIRING SOON
+              </div>
+              {impending.map(b => {
+                const expMs = new Date(b.expiresAt).getTime();
+                const minLeft = Math.max(0, Math.round((expMs - nowMs) / 60000));
+                return (
+                  <div key={b.id} style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 14, color: C.ink, lineHeight: 1.35,
+                  }}>
+                    <strong>{b.label || `${b.oz}oz bottle`}</strong> · expires in {minLeft}m — use, move, or discard now
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         <OnDutyCard
           C={C} mode={mode}
           onDuty={onDuty}
@@ -20836,9 +20886,19 @@ function getWearablePumpWindows(pumpPlan, now) {
 // Day end 11:30p (per user). Some optional, some joint, some onsite-only.
 const DEFAULT_MOMMY_ROUTINES = [
   { id: "am",           title: "AM routine",            time: "07:00", durationMin: 60, onsiteDurationMin: 90, kind: "routine" },
+  // v05.05bt318 — Per chat (#13): 'I forget to add meals — breakfast
+  // I usually take on the go but need to know if I should put it.
+  // Dinner should be shortly after cooking and right before walking.
+  // Lunch is midday and I usually skip but sometimes not.' Added
+  // breakfast / lunch / dinner as routines (disabled by default so
+  // they don't take up space — user enables what they want via the
+  // Routine library editor). Mealtimes are tied to existing anchors.
+  { id: "breakfast",    title: "Breakfast",             time: "07:30", durationMin: 15, disabled: true, optional: true, category: "meal", kind: "routine" },
+  { id: "lunch",        title: "Lunch",                 time: "12:30", durationMin: 30, disabled: true, optional: true, category: "meal", kind: "routine" },
   { id: "commute-in",   title: "Commute in",            time: "08:30", durationMin: 30, onsiteOnly: true,      kind: "routine" },
   { id: "commute-out",  title: "Commute home",          time: "17:00", durationMin: 35, onsiteOnly: true,      kind: "routine" },
   { id: "cook",         title: "Cooking",               time: "18:00", durationMin: 60, optional: true,        kind: "routine" },
+  { id: "dinner",       title: "Dinner",                time: "19:00", durationMin: 30, disabled: true, optional: true, category: "meal", kind: "routine" },
   { id: "workout",      title: "Walk · workout",        time: "19:30", durationMin: 45, optional: true,        kind: "routine" },
   { id: "solene-bed",   title: "Solène bedtime",        time: "21:00", durationMin: 60, joint: true,           kind: "routine" },
   { id: "shutdown",     title: "Shut down house",       time: "22:00", durationMin: 30,                        kind: "routine" },
@@ -21572,11 +21632,18 @@ function computeTradeSuggestions({ activeShifts, focusProfile, now, currentUser,
 
 function parseNaturalLanguageTasks(text) {
   if (!text || !text.trim()) return [];
+  // v05.05bt316 — Period as delimiter per chat ('Delimiter need to add
+  // is a period'). Ellipsis (…/...) preserved via \u0001 placeholder
+  // so it doesn't get split. Time/decimal contexts (e.g. "9:30", "3.5
+  // hr") protected by skipping periods immediately followed/preceded
+  // by a digit.
   const normalized = text
     .replace(/…/g, "...")
-    .replace(/\.\.+/g, "\u0001");
+    .replace(/\.\.+/g, "\u0001")
+    .replace(/(\d)\.(\d)/g, "$1\u0002$2"); // protect decimals like "3.5"
   let segments = normalized
-    .split(/[,;\n\u0001]/)
+    .split(/[,;.\n\u0001]/)
+    .map(s => s.replace(/\u0002/g, "."))  // restore decimals
     .map(s => s.trim())
     .filter(Boolean);
   if (segments.length === 1 && segments[0].length > 25) {
@@ -24971,14 +25038,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return d.toISOString().slice(0, 10);
   }, [now]);
   const energyShownKey = `ll:energyCheckShownAt:${currentUser}`;
+  // v05.05bt316 — Per chat: 'The morning check in keeps popping up if
+  // I go away from the main scheduler screen and come back again to
+  // it.' Root cause: setTimeout writes the localStorage flag at +800ms
+  // AFTER firing setShowEnergyCheckIn. If the user navigates away
+  // before 800ms elapses, the cleanup (clearTimeout) runs and the
+  // flag is never written → on remount, condition passes again and
+  // the popup re-fires.
+  // Fix: write the flag IMMEDIATELY on the effect entry (after guards
+  // pass) BEFORE the setTimeout. Even if user navigates away early,
+  // the flag is set so the popup won't re-trigger this day. Also a
+  // useRef session guard so a fast back-and-forth doesn't spam the
+  // popup before localStorage settles.
+  const energyTriggeredThisSessionRef = useRef(false);
   useEffect(() => {
+    if (energyTriggeredThisSessionRef.current) return;
     if (dailyEnergy && dailyEnergy.date === todayISO) return; // already saved
     let shownToday = false;
     try { shownToday = localStorage.getItem(energyShownKey) === todayISO; } catch {}
     if (shownToday) return; // already shown (possibly dismissed) today
+    // Mark as shown FIRST, before any UI flicker:
+    energyTriggeredThisSessionRef.current = true;
+    try { localStorage.setItem(energyShownKey, todayISO); } catch {}
     const t = setTimeout(() => {
       setShowEnergyCheckIn(true);
-      try { localStorage.setItem(energyShownKey, todayISO); } catch {}
     }, 800);
     return () => clearTimeout(t);
   }, [todayISO, dailyEnergy, energyShownKey]);
@@ -25238,20 +25321,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // v05.05bt133 — drawerItems moved below myTasks declaration to
   // avoid temporal-dead-zone reference error.
   const addBrainDump = () => {
-    if (!brainDumpText.trim()) return;
-    const newItem = {
+    const text = brainDumpText.trim();
+    if (!text) return;
+    // v05.05bt318 — Per chat: 'Brain dump does not have a delimiter
+    // and just grabs it as one text. Should parse it out.' Run the
+    // same NL parser used for the inline add. Each parsed task lands
+    // as a draft (drawer:true) so it appears in the All Tasks modal
+    // and the unscheduled pile.
+    const parsed = parseNaturalLanguageTasks(text);
+    const created = parsed.length > 0 ? parsed : [{ title: text }];
+    const newItems = created.map(p => ({
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
-      title: brainDumpText.trim(),
-      effortMin: 30,
+      title: p.title,
+      effortMin: p.effortMin || 30,
       regretScore: 3,
-      focusLevel: "medium",
+      focusLevel: inferFocusLevel(p.title),
+      category: inferCategory(p.title),
       createdAt: new Date().toISOString(),
       completedAt: null,
-      scheduledTime: null,
+      scheduledTime: p.scheduledTime || null,
       ownerName: currentUser,
-      drawer: true,
-    };
-    setTasks(prev => [...prev, newItem]);
+      drawer: !p.scheduledTime, // if NL had a time, it's already scheduled
+      sequenceId: p.sequenceId,
+      sequenceIndex: p.sequenceIndex,
+      sequenceTotal: p.sequenceTotal,
+    }));
+    setTasks(prev => [...prev, ...newItems]);
     setBrainDumpText("");
     setShowBrainDump(false);
   };
@@ -25633,7 +25728,56 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       }
       return result;
     };
-    return splitFreeAtBoundaries(rawTimeline);
+    // v05.05bt317 — Per chat: 'overlaps should be adjusted by the app
+    // and not the user. if you see something overlaps then make a
+    // call on how the times should be adjusted and just make that
+    // alert.' Post-process: walk the timeline in order; if any task
+    // starts BEFORE the previous item ends, shift it forward. Only
+    // tasks get shifted (immovables — routines, meetings, pumps,
+    // appointments — stay put). The task gets _shiftedByOverlap = N
+    // (minutes) so the row can badge "↻ shifted +Xm".
+    const autoResolveOverlaps = (items) => {
+      const sorted = [...items].sort((a, b) => a.start - b.start);
+      const out = [];
+      let prevEnd = null;
+      let prevTitle = null;
+      for (const item of sorted) {
+        if (!item.start || !item.end) { out.push(item); continue; }
+        // Free blocks and pumps (soft) don't enforce overlap shifts
+        if (item.kind === "free" || item.kind === "pump_reminder") {
+          out.push(item);
+          continue;
+        }
+        if (prevEnd && item.start < prevEnd) {
+          // Overlap. If item is a task, shift it forward to prevEnd.
+          if (item.kind === "task") {
+            const dur = item.end.getTime() - item.start.getTime();
+            const shiftMs = prevEnd.getTime() - item.start.getTime();
+            const newStart = new Date(prevEnd);
+            const newEnd = new Date(newStart.getTime() + dur);
+            out.push({
+              ...item,
+              start: newStart, end: newEnd,
+              _shiftedByOverlap: Math.round(shiftMs / 60000),
+              _shiftedAfter: prevTitle,
+            });
+            if (newEnd > prevEnd) prevEnd = newEnd;
+            prevTitle = item.title;
+            continue;
+          }
+          // Immovable-vs-immovable overlap: leave both as-is so the
+          // user can see the collision. resolveRoutineOverlaps already
+          // handles routine-vs-routine.
+        }
+        out.push(item);
+        if (item.end > (prevEnd || new Date(0))) {
+          prevEnd = item.end;
+          prevTitle = item.title;
+        }
+      }
+      return out;
+    };
+    return autoResolveOverlaps(splitFreeAtBoundaries(rawTimeline));
   }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan, appointments]);
 
   // Derive available blocks today: off-duty windows from the current
@@ -25970,6 +26114,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         } else {
           score = 1; // deep-in-shallow last resort
         }
+        // v05.05bt318 — Per chat (#7 Context switching). Research:
+        // task-switching costs 10-25min in lost productivity per
+        // switch (Mark/Iqbal/Sproull). To minimize switches, give
+        // same-category continuations a small score bonus so two
+        // work tasks back-to-back stay together rather than being
+        // interleaved with a personal task. Tie-breaker only —
+        // doesn't override regret/focus/duration. b._lastCategory
+        // is set below after a successful placement.
+        if (b._lastCategory && task.category && b._lastCategory === task.category) {
+          score += 3;
+        }
         // v05.05bt275 — 9-5 work-hour bias. Per chat: 'from 9-5,
         // prioritize work tasks over house tasks.' House/personal/
         // errand tasks get a penalty during 9am-5pm so they prefer
@@ -25998,6 +26153,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         // acceptable v1 tradeoff. (Future: split blocks on gap.)
         const newUsedMin = ((foundStart - foundBlock.start) / 60000) + task.effortMin;
         foundBlock.usedMin = newUsedMin;
+        // v05.05bt318 — Remember which category was placed last in
+        // this block so the next placement scoring can prefer
+        // same-category continuations (context-switch bias).
+        if (task.category) foundBlock._lastCategory = task.category;
         // Update sequence constraint for next member
         if (task.sequenceId) {
           sequenceConstraint[task.sequenceId] = new Date(foundStart.getTime() + task.effortMin * 60000);
@@ -26021,6 +26180,37 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           reasons[task.id] = `higher-regret tasks took all blocks of ${task.effortMin}m+`;
         }
       }
+    }
+    // v05.05bt317 — Per chat: 'R5s should definitely be prioritized -
+    // I dont understand how those dont get scheduled and a lower R
+    // score does…even if it has to fit in my not optimal focus time,
+    // if it has to get done then it has to get done.'
+    // Fallback pass: any R5 task left unscheduled gets force-slotted
+    // into the largest available block, even if it overflows. Tagged
+    // with _forcedAsR5 reason so the user knows. Stretch + sequenced
+    // tasks are excluded from this pass (sequence has its own ordering
+    // constraints; stretch is opt-in lower priority).
+    for (const task of queue) {
+      if (updates[task.id]) continue;
+      if (task.regretScore !== 5) continue;
+      if (task.stretchGoal) continue;
+      if (task.sequenceId) continue;
+      // Find the largest block with the most remaining space
+      let best = null;
+      let bestRoom = 0;
+      for (const b of blocks) {
+        const room = (b.start.getTime() + b.durationMin * 60000 - (b.start.getTime() + b.usedMin * 60000)) / 60000;
+        if (room > bestRoom) { bestRoom = room; best = b; }
+      }
+      if (!best) continue;
+      const forcedStart = new Date(best.start.getTime() + best.usedMin * 60000);
+      best.usedMin += task.effortMin;
+      updates[task.id] = `${String(forcedStart.getHours()).padStart(2,"0")}:${String(forcedStart.getMinutes()).padStart(2,"0")}`;
+      const h = forcedStart.getHours(), m = forcedStart.getMinutes();
+      const ap = h >= 12 ? "p" : "a";
+      let h12 = h % 12; if (h12 === 0) h12 = 12;
+      const clockStr = m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2,"0")}${ap}`;
+      reasons[task.id] = `↳ ${clockStr} · forced as R5 critical · ${task.effortMin > bestRoom ? `may overflow this ${Math.round(bestRoom)}m block` : "fit found"}`;
     }
     return { updates, reasons };
   };
@@ -27713,6 +27903,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 pick-existing and add-new (inline input in the fits
                 picker). Brain Dump in ⋯ menu remains for the no-time
                 quick-capture case. */}
+            {/* v05.05bt316 — Per chat: 'Need some way to intuitively add
+                task. I know clicking on one bloc allows you to do this
+                but may it be intuitive. User may think it's to only
+                add to that specific block.' Top-of-timeline pill that
+                opens the NL input — no slot context, just "add a task
+                somewhere today." */}
+            {currentUser === "Mommy" && !isTomorrow && (
+              <button
+                onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: `${C.mommy}10`,
+                  border: `1.5px dashed ${C.mommy}66`,
+                  borderRadius: 10, marginBottom: 12,
+                  cursor: "pointer", textAlign: "center",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 15,
+                  color: C.mommy, fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}>
+                <span style={{ fontSize: 17, lineHeight: 1, fontWeight: 700, fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}>+</span>
+                Add a task to today
+              </button>
+            )}
             {/* v05.05bt172 — Day-summary forecast card. Per chat:
                 "having a summary somewhere where you have x amount of
                 deep focus time available and x amount of long stretch
@@ -28791,7 +29006,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           : `${C.muted}1c`;
                         if (slot.id === "bedtime") return owner === "Mommy" ? `${C.mommy}33` : ownerTint;
                         if (isFree) return `${C.gold}08`;
-                        if (isMeeting) return "#8B7AA838";
+                        if (isMeeting) return "#8B7AA858";
                         if (isPumpReminder) return ownerTint;
                         if (slot.kind === "appointment") return `#A04F4F2E`;
                         if (isRoutine) return ownerTint;
@@ -29080,16 +29295,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 }}
                                 title="Remove from today's schedule (keeps task in unscheduled list)"
                                 style={{
-                                  padding: "5px 8px",
+                                  // v05.05bt316 — Per chat: 'unschedu
+                                  // button maybe shouldnt have the words
+                                  // becuase blends together with the
+                                  // other icons and hard to click on
+                                  // on a phone.' Icon-only with bumped
+                                  // tap target (32x32 minimum).
+                                  width: 32, height: 32,
+                                  padding: 0,
                                   background: "transparent",
                                   border: `1px solid ${C.gold}66`,
-                                  borderRadius: 4,
+                                  borderRadius: 6,
                                   color: C.gold, cursor: "pointer",
-                                  fontSize: 9.5, lineHeight: 1, fontWeight: 700,
-                                  fontFamily: "'JetBrains Mono', monospace",
-                                  letterSpacing: "0.08em",
-                                  display: "inline-flex", alignItems: "center", gap: 3,
-                                }}>↺ UNSCHED</button>
+                                  fontSize: 16, lineHeight: 1, fontWeight: 700,
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  flexShrink: 0,
+                                }}>↺</button>
                               <button
                                 type="button"
                                 onPointerDown={(e) => {
@@ -29224,6 +29445,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 letterSpacing: "0.08em",
                               }}>· moved</span>
                             )}
+                            {/* v05.05bt317 — Per chat: auto-resolved
+                                overlap badge. Shows when the scheduler
+                                shifted this task forward because it
+                                overlapped an earlier item. */}
+                            {isTask && slot._shiftedByOverlap > 0 && (
+                              <span
+                                title={`Auto-shifted +${slot._shiftedByOverlap}m to clear overlap${slot._shiftedAfter ? ` with "${slot._shiftedAfter}"` : ""}`}
+                                style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 9, color: C.accent,
+                                  fontWeight: 800, marginLeft: 6,
+                                  letterSpacing: "0.08em",
+                                  background: `${C.accent}14`,
+                                  padding: "1px 5px", borderRadius: 3,
+                                }}>↻ +{slot._shiftedByOverlap}m</span>
+                            )}
                             {/* v05.05bt277 — Coverage badge: this slice is
                                 a coverage adjustment (e.g. Mommy covering
                                 Daddy's meeting). Color matches the
@@ -29253,14 +29490,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 opacity: 0.85,
                               }}>→ {(slot.sequenceIndex ?? 0) + 1}/{slot.sequenceTotal}</span>
                             )}
-                            {/* v05.05bt175 — Pin badge: pinned tasks
-                                show a small 📌 in gold next to title. */}
+                            {/* v05.05bt175/318 — Pin badge: pinned tasks
+                                show a 📌 in gold. Now tap-to-unpin so
+                                you don't have to open the Edit modal
+                                for this common toggle. Tasks WITHOUT
+                                a pin can be pinned by tapping the
+                                hollow ○ that appears on hover/touch. */}
                             {isTask && slot.pinned && (
-                              <span style={{
-                                fontSize: 11, color: C.gold,
-                                marginLeft: 6, opacity: 0.95,
-                                verticalAlign: "middle",
-                              }} title="Pinned · won't move on Reanalyze">📌</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, pinned: false } : t));
+                                }}
+                                title="Tap to unpin (Reanalyze can move it)"
+                                style={{
+                                  background: "transparent", border: "none",
+                                  padding: "2px 4px", marginLeft: 4,
+                                  cursor: "pointer",
+                                  fontSize: 12, color: C.gold,
+                                  verticalAlign: "middle", lineHeight: 1,
+                                }}>📌</button>
                             )}
                             {/* v05.05bt196 — Recurring badge. Daily/weekly
                                 tasks show a small ↻ in mauve next to title. */}
@@ -29656,6 +29905,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   );
                                 }
                                 // Expanded picker
+                                // v05.05bt318 — Per chat: 'When tap to
+                                // fill an open task in the actual box,
+                                // should have drop down option with
+                                // two section tabs - something already
+                                // scheduled that I can move or
+                                // something unscheduled that I can add
+                                // or I can add something entirely new.'
+                                // Build movable list: tasks already
+                                // scheduled today at OTHER times that
+                                // fit duration (or all if show-all).
+                                const movable = (tasks || [])
+                                  .filter(t => t.ownerName === currentUser
+                                            && !t.completedAt
+                                            && t.scheduledTime
+                                            && t.scheduledTime !== slotTime
+                                            && (showAllInFitsPicker || (t.effortMin || 30) <= slot.durationMin))
+                                  .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
                                 return (
                                   <div style={{
                                     marginTop: 8, padding: "8px 10px",
@@ -29677,6 +29943,66 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
                                       }}>×</button>
                                     </div>
+                                    {/* Section: Move from elsewhere */}
+                                    {movable.length > 0 && (
+                                      <>
+                                        <div style={{
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                          fontSize: 8.5, color: C.muted, fontWeight: 700,
+                                          letterSpacing: "0.10em", textTransform: "uppercase",
+                                          marginBottom: 4, marginTop: 2,
+                                        }}>↳ Move from elsewhere · {movable.length}</div>
+                                        {movable.slice(0, 3).map(m => {
+                                          const fl = normalizeFocus(m.focusLevel);
+                                          const flGlyph = fl === "deep" ? "🧠" : "🍃";
+                                          const fromTime = (() => {
+                                            const [h, mm] = (m.scheduledTime || "").split(":").map(Number);
+                                            const ap = h >= 12 ? "p" : "a";
+                                            const h12 = ((h + 11) % 12) + 1;
+                                            return mm === 0 ? `${h12}${ap}` : `${h12}:${String(mm).padStart(2,"0")}${ap}`;
+                                          })();
+                                          return (
+                                            <button
+                                              key={m.id}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setTasks(prev => prev.map(t => t.id === m.id
+                                                  ? { ...t, scheduledTime: slotTime, pinned: true }
+                                                  : t));
+                                                setFitsPickerSlotKey(null);
+                                              }}
+                                              style={{
+                                                display: "flex", alignItems: "center", gap: 8,
+                                                width: "100%", padding: "6px 8px",
+                                                background: `${C.daddy}0a`,
+                                                border: `1px solid ${C.daddy}33`,
+                                                borderRadius: 4, marginBottom: 3,
+                                                cursor: "pointer", textAlign: "left",
+                                                fontFamily: "inherit",
+                                              }}>
+                                              <span style={{
+                                                fontFamily: "'JetBrains Mono', monospace",
+                                                fontSize: 9, color: C.daddy, fontWeight: 700,
+                                                letterSpacing: "0.08em", flexShrink: 0,
+                                              }}>{fromTime}→{slotTime.slice(0,5).replace(":","")}</span>
+                                              <span style={{ fontSize: 11, flexShrink: 0 }}>{flGlyph}</span>
+                                              <span style={{
+                                                flex: 1, color: C.ink,
+                                                fontFamily: "'Cormorant Garamond', serif",
+                                                fontSize: 13, fontStyle: "italic",
+                                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                              }}>{m.title}</span>
+                                            </button>
+                                          );
+                                        })}
+                                        <div style={{
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                          fontSize: 8.5, color: C.muted, fontWeight: 700,
+                                          letterSpacing: "0.10em", textTransform: "uppercase",
+                                          marginBottom: 4, marginTop: 8,
+                                        }}>↳ Or add unscheduled · {candidates.length}</div>
+                                      </>
+                                    )}
                                     {candidates.slice(0, topCount).map((c, idx) => {
                                       const fl = normalizeFocus(c.focusLevel);
                                       const flGlyph = fl === "deep" ? "🧠" : "🍃";
@@ -29905,16 +30231,28 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             title="Hold and drag to move"
                             aria-label="Drag to move task"
                             style={{
-                              padding: "8px 6px 8px 8px",
+                              // v05.05bt318 — Per chat: 'It may just be
+                              // easier to have that little symbol on the
+                              // side right to allow user to click and
+                              // drag and move to where they want it.'
+                              // Bigger, more visible grip — bordered
+                              // box so it reads as 'grab me' not as
+                              // decoration. Larger tap target (32x32).
+                              width: 32, height: 32,
+                              display: "inline-flex",
+                              alignItems: "center", justifyContent: "center",
                               cursor: "grab",
                               color: C.mommy,
-                              fontSize: 18, lineHeight: 1,
+                              fontSize: 16, lineHeight: 1,
                               fontFamily: "system-ui, sans-serif",
-                              letterSpacing: "-0.1em",
+                              letterSpacing: "-0.15em",
                               touchAction: "none",
                               userSelect: "none",
-                              opacity: 0.7,
                               fontWeight: 700,
+                              background: `${C.mommy}10`,
+                              border: `1px solid ${C.mommy}55`,
+                              borderRadius: 6,
+                              flexShrink: 0,
                             }}>
                             ⋮⋮
                           </div>
@@ -31076,6 +31414,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       {showSetup && (
         <TodaySetupSheet
           C={C} now={now}
+          isTomorrow={isTomorrow}
+          referenceDate={referenceDate}
           onClose={() => setShowSetup(false)}
           todaySetup={todaySetup} setTodaySetup={setTodaySetup}
           onsite={onsite} setOnsite={setOnsite}
@@ -32077,7 +32417,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
 // Cooking and workout default ON for the day; user toggles OFF to skip.
 // Meetings render in the timeline as MEETING blocks and block time
 // from auto-scheduling. Persisted per-date so each new day starts fresh.
-function TodaySetupSheet({ C, now, onClose, todaySetup, setTodaySetup, onsite, setOnsite, meetings, currentUser }) {
+function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetup, setTodaySetup, onsite, setOnsite, meetings, currentUser }) {
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const todayKey = today.toISOString().slice(0, 10);
 
@@ -32122,9 +32462,41 @@ function TodaySetupSheet({ C, now, onClose, todaySetup, setTodaySetup, onsite, s
   };
 
   return (
-    <ModalShell C={C} onClose={onClose} title="Today's Setup">
+    <ModalShell C={C} onClose={onClose} title={isTomorrow ? "Tomorrow's Setup" : "Today's Setup"}>
+      {/* v05.05bt317 — Per chat: 'When planning tomorrow - the mode wfh
+          or onsite and when to wake up and such should apply to
+          tomorrow if in the tomorrow tab or today if in the today tab
+          or let the user know what it is applying to.' Header label
+          tells the user which day this setup covers. The scheduler
+          already reads todaySetup based on `setupApplies = date === todayKey`,
+          and saves write date = today's key. For tomorrow, scoping
+          tomorrow's setup is a follow-up build (needs a separate
+          tomorrowSetup state); for now we make the day scope visible
+          so the user isn't surprised. */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px", marginBottom: 12,
+        background: `${isTomorrow ? C.daddy : C.mommy}1a`,
+        border: `1px solid ${isTomorrow ? C.daddy : C.mommy}55`,
+        borderRadius: 8,
+      }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.12em",
+          textTransform: "uppercase", fontWeight: 700,
+          color: isTomorrow ? C.daddy : C.mommy,
+        }}>Applies to</span>
+        <span style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 15, fontStyle: "italic",
+          color: C.ink,
+        }}>
+          {isTomorrow ? "Tomorrow" : "Today"}
+          {referenceDate && ` · ${new Date(referenceDate).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
+        </span>
+      </div>
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: 1.5, fontStyle: "italic" }}>
-        Set what applies to today — the scheduler uses this to pick the right blocks.
+        Set what applies to {isTomorrow ? "tomorrow" : "today"} — the scheduler uses this to pick the right blocks.
       </div>
 
       {/* Mode */}
