@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt318";
+const APP_VERSION = "2026.05.05bt320";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -24531,6 +24531,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // v05.05bt114 — natural-language quick-add state
   const [nlText, setNlText] = useState("");
   const [showNlInput, setShowNlInput] = useState(false);
+  // v05.05bt319 — Per chat: 'the set priority + focus before adding
+  // should be somewhere more obvious when freewriting to add a task.'
+  // Visible default pickers above the NL textarea. Applied to every
+  // parsed task at commit time (the parser's own scheduled-time still
+  // takes precedence, of course). Defaults: R3 / auto.
+  const [nlDefaultRegret, setNlDefaultRegret] = useState(3);
+  const [nlDefaultFocus, setNlDefaultFocus] = useState("auto");
   // v05.05bt115 — after NL parse, pause to ask per-task regret/focus
   // before committing. nlPending = array of { title, effortMin,
   // scheduledTime, regretScore, focusLevel } in review state, or null.
@@ -25974,8 +25981,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     if (parsed.length === 0) return;
     const pending = parsed.map(p => ({
       ...p,
-      regretScore: 3,
-      focusLevel: "auto",
+      regretScore: nlDefaultRegret,
+      focusLevel: nlDefaultFocus,
     }));
     commitNlPending(pending);
   };
@@ -25992,8 +25999,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }
     setNlPending(parsed.map(p => ({
       ...p,
-      regretScore: 3,
-      focusLevel: "auto",
+      regretScore: nlDefaultRegret,
+      focusLevel: nlDefaultFocus,
     })));
     setNlReviewOpen(true);
   };
@@ -27077,12 +27084,98 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 marginBottom: 10, resize: "vertical", lineHeight: 1.5,
               }}
             />
+            {/* v05.05bt319 — Visible default-priority + default-focus
+                pickers below the textarea. Per chat: 'the set priority
+                + focus before adding should be somewhere more obvious
+                when freewriting to add a task.' These apply to every
+                parsed task on commit. Per-task overrides still work
+                via the review modal (set priority + focus before
+                adding link below). */}
+            <div style={{
+              marginBottom: 12, padding: "10px 12px",
+              background: `${C.gold}0a`,
+              border: `1px solid ${C.gold}33`,
+              borderRadius: 8,
+            }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
+                color: C.muted, fontWeight: 700, marginBottom: 6,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                Default for this batch
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
+                <span style={{
+                  fontSize: 10, color: C.muted, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: "0.10em", marginRight: 4, minWidth: 56,
+                }}>PRIORITY</span>
+                {[1, 2, 3, 4, 5].map(n => {
+                  const regretColors = { 1: C.muted, 2: C.muted, 3: C.gold, 4: "#C18D7A", 5: "#A04848" };
+                  const isActive = nlDefaultRegret === n;
+                  return (
+                    <button key={n}
+                      onClick={() => setNlDefaultRegret(n)}
+                      title={["", "Tomorrow's fine", "Prefer today", "Slightly behind", "Significantly behind", "Cannot push"][n]}
+                      style={{
+                        flex: 1, minWidth: 32,
+                        background: isActive ? regretColors[n] : "transparent",
+                        color: isActive ? "#fff" : C.ink,
+                        border: `1px solid ${isActive ? regretColors[n] : C.line + "55"}`,
+                        borderRadius: 6, padding: "8px 4px",
+                        fontSize: 13, fontWeight: 700,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        cursor: "pointer",
+                      }}>R{n}</button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                <span style={{
+                  fontSize: 10, color: C.muted, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: "0.10em", marginRight: 4, minWidth: 56,
+                }}>FOCUS</span>
+                {[
+                  { v: "auto",    l: "Auto",    glyph: "✨", color: C.muted },
+                  { v: "deep",    l: "Deep",    glyph: "🧠", color: "#B85040" },
+                  { v: "shallow", l: "Shallow", glyph: "🍃", color: "#7B9B6E" },
+                ].map(opt => {
+                  const isActive = nlDefaultFocus === opt.v;
+                  return (
+                    <button key={opt.v}
+                      onClick={() => setNlDefaultFocus(opt.v)}
+                      style={{
+                        flex: 1, minWidth: 64,
+                        background: isActive ? opt.color : "transparent",
+                        color: isActive ? "#fff" : C.ink,
+                        border: `1px solid ${isActive ? opt.color : C.line + "55"}`,
+                        borderRadius: 6, padding: "8px 4px",
+                        fontSize: 12, fontWeight: 600,
+                        cursor: "pointer", fontFamily: "inherit",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                      }}>
+                      <span>{opt.glyph}</span>
+                      <span>{opt.l}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {nlDefaultFocus === "auto" && (
+                <div style={{
+                  fontSize: 10, color: C.muted, fontStyle: "italic",
+                  marginTop: 6, fontFamily: "'Cormorant Garamond', serif",
+                }}>
+                  Auto = inferred from task keywords (write/draft/code → deep · email/check → shallow)
+                </div>
+              )}
+            </div>
             <div style={{
               fontFamily: "'Cormorant Garamond', serif",
               fontSize: 12, color: "#7C6B5A", fontStyle: "italic",
               marginBottom: 12, lineHeight: 1.5,
             }}>
-              Separate tasks with commas or "and". Recognizes "30 min", "an hour", "half hour", and times like "at 11am" or "2:30pm". New tasks default to medium regret/focus — tap any after to fine-tune.
+              Separate tasks with commas, periods, or "and". Recognizes "30 min", "an hour", "half hour", and times like "at 11am" or "2:30pm".
             </div>
             {nlText.trim() && (() => {
               const preview = parseNaturalLanguageTasks(nlText);
@@ -32378,15 +32471,20 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
         );
       })}
 
-      {/* v05.05bt284 — Sticky footer so commit + cancel stay reachable
-          while scrolling through a long list. */}
+      {/* v05.05bt284/320 — Sticky footer so commit + cancel stay
+          reachable while scrolling. Per chat: 'when setting the
+          priorities, the add slots button is in the way of the list.'
+          Added background opacity + stronger top border + a small
+          gap above. Also pushed marginTop up so the sticky footer
+          doesn't visually merge into the last task row. */}
       <div style={{
-        display: "flex", gap: 8, marginTop: 14,
+        display: "flex", gap: 8, marginTop: 18,
         position: "sticky", bottom: 0, zIndex: 3,
         background: C.paper,
-        paddingTop: 8, paddingBottom: 8,
+        paddingTop: 10, paddingBottom: 10,
         marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
-        borderTop: `1px solid ${C.line}33`,
+        borderTop: `2px solid ${C.line}55`,
+        boxShadow: "0 -8px 12px -8px rgba(61, 49, 40, 0.10)",
       }}>
         <button onClick={() => onCommit()} disabled={pending.length === 0} style={{
           flex: 1, background: pending.length > 0 ? C.mommy : C.line, color: "#fff",
@@ -34399,39 +34497,12 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
         </div>
       </Section>
 
-      <Section C={C} title="Breast milk · live runway">
-        <div style={{
-          background: lowAlert ? `${C.accent}15` : C.paper,
-          border: lowAlert ? `1px solid ${C.accent}` : `1px solid ${C.line}15`,
-          borderRadius: 14, padding: 18,
-        }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-            <BigStat C={C} label="Room temp" value={`${rtSafeOz.toFixed(1)} oz`} />
-            <BigStat C={C} label="Fridge" value={`${fridgeOz.toFixed(1)} oz`} />
-            <BigStat C={C} label="Total safe" value={`${totalSafeOz.toFixed(1)} oz`} accent />
-          </div>
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px dashed ${C.line}22` }}>
-            <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, marginBottom: 4 }}>
-              Projected runway
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500 }}>
-                {feedsRunway} feed{feedsRunway === 1 ? "" : "s"}
-              </span>
-              <span style={{ fontSize: 12, color: C.muted }}>· ~{hoursRunway}h coverage</span>
-            </div>
-            {lowAlert && (
-              <div style={{
-                marginTop: 10, padding: 10, background: C.accent, color: "#fff",
-                borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <Bell size={14} />
-                <span>{feedsRunway === 0 ? "Formula needed before next feed" : "Mom should pump or have formula ready"}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </Section>
+      {/* v05.05bt320 — Per chat: 'can now remove live runway panel for
+          the breast milk.' The 3-panel inventory below (RT/fridge/
+          freezer) now shows total oz + feeds-remaining per panel, so
+          the standalone runway card was redundant. Low-stock alerting
+          carries forward via the bottle expiry banner (bt318) + the
+          OnDutyCard's milk readout. */}
 
       <Section C={C} title="In stock">
         {/* Add bottle button — always visible. Useful for: catching up after
@@ -34491,15 +34562,91 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
               </button>
             )}
           </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {valid.map(item => (
-              <InventoryRow key={item.id} item={item} C={C}
-                onMoveToFridge={() => moveToFridge(item.id)}
-                onMoveToFreezer={() => moveToFreezer(item.id)}
-                onEdit={() => editBottle && editBottle(item.id)}
-                onRemove={() => removeInventory(item.id)} />
-            ))}
-          </div>
+          {/* v05.05bt320 — Per chat: 'under the inventory, let's make
+              it into a panel divided into threes RT, fridge, and
+              freezer and summarize under each the total oz under each
+              and how many feeds it can withhold... so can now remove
+              live runway panel.' Three location panels stacked, each
+              with a header showing total oz + feeds remaining. */}
+          {(() => {
+            const TYPICAL_FEED = 5; // module-level TYPICAL_FEED_OZ
+            const byLoc = {
+              rt: valid.filter(b => b.location === "rt"),
+              fridge: valid.filter(b => b.location === "fridge"),
+              freezer: valid.filter(b => b.location === "freezer"),
+            };
+            const sumOz = (arr) => arr.reduce((s, b) => s + (b.oz || 0), 0);
+            const panels = [
+              { key: "rt", label: "Room temperature", tone: C.accent, items: byLoc.rt, hint: "Safe ≤ 6hr from pump" },
+              { key: "fridge", label: "Fridge", tone: C.daddy, items: byLoc.fridge, hint: "Safe ≤ 4 days" },
+              { key: "freezer", label: "Freezer", tone: "#5C7D55", items: byLoc.freezer, hint: "Safe ≤ 6 months" },
+            ];
+            return (
+              <div style={{ display: "grid", gap: 10 }}>
+                {panels.map(p => {
+                  const totalOz = sumOz(p.items);
+                  const feedsLeft = Math.floor(totalOz / TYPICAL_FEED);
+                  return (
+                    <div key={p.key} style={{
+                      border: `1.5px solid ${p.tone}55`,
+                      borderRadius: 10,
+                      background: `${p.tone}08`,
+                      padding: "10px 12px",
+                    }}>
+                      <div style={{
+                        display: "flex", alignItems: "baseline",
+                        justifyContent: "space-between", marginBottom: 4,
+                        gap: 8, flexWrap: "wrap",
+                      }}>
+                        <div>
+                          <div style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, letterSpacing: "0.14em",
+                            textTransform: "uppercase", fontWeight: 700,
+                            color: p.tone,
+                          }}>{p.label}</div>
+                          <div style={{
+                            fontSize: 10.5, color: C.muted,
+                            fontStyle: "italic", marginTop: 2,
+                            fontFamily: "'Cormorant Garamond', serif",
+                          }}>{p.hint}</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{
+                            fontFamily: "'Cormorant Garamond', serif",
+                            fontSize: 22, fontWeight: 600,
+                            color: C.ink, lineHeight: 1.1,
+                          }}>{totalOz.toFixed(1)}<span style={{ fontSize: 12, color: C.muted, marginLeft: 2 }}>oz</span></div>
+                          <div style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, color: C.muted,
+                            letterSpacing: "0.08em",
+                          }}>≈ {feedsLeft} feed{feedsLeft === 1 ? "" : "s"}</div>
+                        </div>
+                      </div>
+                      {p.items.length === 0 ? (
+                        <div style={{
+                          fontSize: 11.5, color: C.muted, fontStyle: "italic",
+                          padding: "8px 0", textAlign: "center",
+                          fontFamily: "'Cormorant Garamond', serif",
+                        }}>empty</div>
+                      ) : (
+                        <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                          {p.items.map(item => (
+                            <InventoryRow key={item.id} item={item} C={C}
+                              onMoveToFridge={() => moveToFridge(item.id)}
+                              onMoveToFreezer={() => moveToFreezer(item.id)}
+                              onEdit={() => editBottle && editBottle(item.id)}
+                              onRemove={() => removeInventory(item.id)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </>)}
         {/* v05.05bt83 — expired bottles section. Previously expired bottles
             were silently filtered out, which meant adding a bottle with a
@@ -34507,32 +34654,13 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
             backdate presets) appeared to do nothing — bottle was in state
             but invisible. Now surface them so the user can see what they
             added and either edit the date or remove. */}
-        {expired.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <div style={{
-              fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase",
-              color: C.accent, fontWeight: 700, marginBottom: 6,
-              display: "flex", alignItems: "center", gap: 6,
-            }}>
-              ⚠ past safe window ({expired.length})
-            </div>
-            <div style={{
-              fontSize: 11, color: C.muted, fontStyle: "italic", lineHeight: 1.5, marginBottom: 8,
-            }}>
-              These bottles are past their safe window for their storage location. Tap to edit (fix the time / move to freezer) or remove.
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {expired.map(item => (
-                <div key={item.id} style={{ opacity: 0.85 }}>
-                  <InventoryRow item={item} C={C}
-                    onMoveToFreezer={() => moveToFreezer(item.id)}
-                    onEdit={() => editBottle && editBottle(item.id)}
-                    onRemove={() => removeInventory(item.id)} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* v05.05bt320 — Per chat: 'under milk lets remove "past safe
+            window"'. Expired bottles still exist in state — they're
+            just not surfaced as a separate section anymore. The
+            existing expiry-alert banner (bt318, 15min before hard
+            limit) handles proactive notification, and bottles past
+            their window can still be removed from the All Tasks
+            modal or directly via the entry. */}
       </Section>
 
       {/* Supply analytics — moved here from Wellness in v05.05ax. These
