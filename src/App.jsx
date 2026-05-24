@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt350";
+const APP_VERSION = "2026.05.05bt352";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -1067,6 +1067,21 @@ function fmtHours(hours) {
   return fmtDuration(hours * 60);
 }
 
+// v05.05bt351 — Per chat: 'under milk - freezer timer should be in
+// days or weeks not hours.' Hours/minutes don't make sense for
+// 6-month freezer items. Smart auto-format: ≥6mo → mo, ≥1mo → mo, ≥1wk
+// → wk, ≥1d → d, else fall through to fmtHours (h/m for fresh items).
+function fmtSmartDuration(hours) {
+  if (hours == null || isNaN(hours)) return "—";
+  if (hours < 24) return fmtHours(hours);
+  const days = hours / 24;
+  if (days < 7) return `${Math.round(days)}d`;
+  const weeks = days / 7;
+  if (weeks < 4.5) return `${Math.round(weeks)}w`;
+  const months = days / 30.44;
+  return `${Math.round(months * 10) / 10}mo`;
+}
+
 // Note categories for observations
 const NOTE_CATEGORIES = [
   { v: "sleep", l: "Sleep", emoji: "😴", color: "#7C5C84" },
@@ -1874,12 +1889,18 @@ const PALETTES = {
   // Pushed muted close to ink: #ECD7CD → #F0E4D8 in Mommy palette
   // and #B6BFCE → #D0D6E1 in Daddy. Combined with fontWeight bumps
   // on the worst-offender italic captions (handled at render sites).
-  cadence:       { bg: "#181318", ink: "#F3EBDD", paper: "#211B21", panel: "#211B21", accent: "#B7848C", soft: "#2B232B", muted: "#F0E4D8", line: "#E6CFC7",
-                   mommy: "#D4A0A0", daddy: "#7B8FAB", gold: "#E6CFC7" },
-  cadenceDaddy:  { bg: "#0E121C", ink: "#E8E8E8", paper: "#161D29", panel: "#161D29", accent: "#8B7A5C", soft: "#1A2130", muted: "#D0D6E1", line: "#6E7C93",
-                   mommy: "#A88299", daddy: "#6E84A8", gold: "#8B7A5C" },
-  cadenceDusk:   { bg: "#0E090E", ink: "#F3EBDD", paper: "#17111A", panel: "#17111A", accent: "#B7848C", soft: "#211B21", muted: "#EBD5C9", line: "#E6CFC7",
-                   mommy: "#D4A0A0", daddy: "#7B8FAB", gold: "#E6CFC7" },
+  // v05.05bt351 — Per chat: 'i love B, C and D' (mockup picks).
+  // Cadence shifts from Champagne Blush plum to Inky Lavender —
+  // near-black base (#070510), warm cream ink, lavender accent.
+  // Paper texture + gradient outer ring layered on via global CSS
+  // and App-wrapper insertion (see FontImports + App render).
+  // Daddy variant uses slate-blue base for parallel symmetry.
+  cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#B8A8C8", line: "#C6B0DB",
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8" },
+  cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#B0BCCC", line: "#8B9BBC",
+                   mommy: "#A88299", daddy: "#8B9BBC", gold: "#C4A886" },
+  cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#B8A8C8", line: "#C6B0DB",
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -2461,6 +2482,20 @@ function SoleneHandoffInner() {
   useEffect(() => {
     try { localStorage.setItem("ll:cadenceScope", cadenceScope); } catch {}
   }, [cadenceScope]);
+  // v05.05bt351 — Per chat: 'maybe useful to have a zoom feature
+  // where everything can be scaled to accommodate visually impaired.'
+  // 1.0 (default) / 1.15 (large) / 1.30 (extra large). Stored locally;
+  // applied via inline zoom on the App wrapper so it stacks with the
+  // existing desktop-zoom media queries.
+  const [fontScale, setFontScale] = useState(() => {
+    try {
+      const v = parseFloat(localStorage.getItem("ll:fontScale"));
+      return (v >= 1 && v <= 1.5) ? v : 1.0;
+    } catch { return 1.0; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:fontScale", String(fontScale)); } catch {}
+  }, [fontScale]);
   const [events, setEvents] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -2796,6 +2831,21 @@ function SoleneHandoffInner() {
     try { localStorage.setItem("ll:devicePersona", next); } catch {}
   };
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
+  // v05.05bt351 — Expose existing fontScale (declared above near
+  // events) to a window global so ProfileSwitcherModal can read +
+  // toggle without prop-drilling. Also apply via document zoom
+  // so the entire app scales for accessibility.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try {
+      document.documentElement.style.setProperty("--ll-font-scale", String(fontScale));
+      document.documentElement.style.fontSize = `${100 * fontScale}%`;
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.__llFontScale = fontScale;
+      window.__llSetFontScale = setFontScale;
+    }
+  }, [fontScale]);
   // v05.05bt344 — Caregiver planner state hoisted from OnDutyCard
   // because mounting inside the card with overflow:hidden ancestors
   // can produce silent click failures in some browsers. Lifted to
@@ -3585,11 +3635,17 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     const prevBody = document.body.style.backgroundColor;
     document.documentElement.style.backgroundColor = C.bg;
     document.body.style.backgroundColor = C.bg;
+    // v05.05bt351 — Set/clear body data attribute that triggers the
+    // Cadence paper-texture overlay (defined in FontImports). Only
+    // Cadence sees the texture; family mode stays clean.
+    if (isCadence) document.body.setAttribute("data-cadence-texture", "1");
+    else document.body.removeAttribute("data-cadence-texture");
     return () => {
       document.documentElement.style.backgroundColor = prevHtml;
       document.body.style.backgroundColor = prevBody;
+      document.body.removeAttribute("data-cadence-texture");
     };
-  }, [C.bg]);
+  }, [C.bg, isCadence]);
 
   // Compute effective shifts: base shifts → auto-projected for commitments → onsite override
   // Since projection happens later in the file, we declare the layered logic to use it
@@ -5619,8 +5675,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     if (!takeover) return;
     if (baseOnDuty.parent !== takeover.coveringParent) return;
     const ageMs = Date.now() - new Date(takeover.startedAt).getTime();
-    const EIGHT_HOURS = 8 * 60 * 60 * 1000;
-    if (ageMs < EIGHT_HOURS) return;
+    // v05.05bt172/351 — Per chat (bt351): 'daddy randomly shows
+    // covering mommy onsite when it is not true.' Likely cause: a
+    // stale takeover sticking around between sessions. Tightened
+    // from 8h → 4h. Most real impromptu takeovers are <2h; 4h is
+    // still well past typical patterns and catches debris faster.
+    const STALE_THRESHOLD = 4 * 60 * 60 * 1000;
+    if (ageMs < STALE_THRESHOLD) return;
 
     const startMs = new Date(takeover.startedAt).getTime();
     const mins = Math.max(1, Math.floor((Date.now() - startMs) / 60000));
@@ -5698,12 +5759,27 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       transition: "background 1.5s ease, color 1.5s ease",
       paddingBottom: 130,
       position: "relative",
+      // v05.05bt351 — User-controlled zoom for accessibility.
+      // 1.0 default · 1.15 large · 1.30 extra-large. Multiplies with
+      // existing desktop media-query zoom (so 1.30 on a 1100px+ laptop
+      // is 1.30 * 1.35 = 1.755 effective). zoom is non-standard but
+      // widely supported (Chrome, Safari, Edge); Firefox falls back
+      // to text-scale via CSS in print only — acceptable since the
+      // primary target is iOS Safari + desktop Safari/Chrome.
+      zoom: fontScale,
       // v05.05bt43 — overflow:hidden REMOVED. It was causing fixed-position
       // children (TabBar, CentralLogButton) to scroll with content on iOS
       // Safari instead of pinning to the viewport. The fixed view-tint
       // overlays inside don't need parent clipping — they're already
       // viewport-anchored via position:fixed and clipped by the viewport.
     }}>
+      {/* v05.05bt351 — Cadence gradient outer ring. Fixed-position
+          pseudo-frame at the viewport edge, only when in Cadence.
+          variant attribute switches the gradient direction for
+          Mommy vs Daddy. */}
+      {isCadence && (
+        <div id="ll-cadence-ring" data-variant={currentUser === "Daddy" ? "daddy" : "mommy"} />
+      )}
       {/* Per-user view tint — drastically stronger for cross-room recognition.
           v05.05bb: Daddy's blue wash is much more present so Mommy can tell
           at a glance which view he's on. We push the alpha up further on
@@ -9249,6 +9325,61 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
         </div>
       )}
 
+      {/* v05.05bt351 — Zoom control. Per chat: 'maybe useful to have
+          a zoom feature where everything can be scaled to accommodate
+          visually impaired and things adjust accordingly.' Three
+          levels cycle through; setting persists to localStorage. */}
+      {typeof window !== "undefined" && window.__llFontScale != null && (
+        <div style={{
+          marginTop: 12, padding: 12,
+          background: C.paper,
+          border: `1px solid ${C.line}33`,
+          borderRadius: 10,
+        }}>
+          <div style={{
+            fontSize: 9.5, letterSpacing: "0.20em", textTransform: "uppercase",
+            fontWeight: 700, color: C.muted, marginBottom: 8,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            Text size · accessibility
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            {[
+              { v: 1.0, label: "Default", size: 12 },
+              { v: 1.15, label: "Larger", size: 14 },
+              { v: 1.30, label: "Largest", size: 16 },
+            ].map(opt => {
+              const active = Math.abs((window.__llFontScale || 1.0) - opt.v) < 0.01;
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => {
+                    if (window.__llSetFontScale) window.__llSetFontScale(opt.v);
+                  }}
+                  style={{
+                    padding: "10px 8px",
+                    background: active ? C.mommy : "transparent",
+                    color: active ? C.bg : C.ink,
+                    border: `1px solid ${active ? C.mommy : C.line + "33"}`,
+                    borderRadius: 8,
+                    fontSize: opt.size, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}>
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{
+            marginTop: 8,
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 11.5, color: C.muted, lineHeight: 1.4,
+          }}>
+            Applies to the whole app. Re-open this modal if the size doesn't change after tapping.
+          </div>
+        </div>
+      )}
+
       {/* Clear stuck takeover — only when one is active */}
       {takeover && (
         <div style={{
@@ -9934,6 +10065,52 @@ function FontImports() {
         margin: 0; padding: 0;
         background: inherit;
         overflow-x: hidden;
+      }
+      /* v05.05bt351 — Per chat: 'i love B, C and D' (mockup picks).
+         Cadence gets the "rich-people paper" texture from Mode A but
+         on the new inky-lavender base. Two layered fixed overlays:
+         (1) subtle dot grain via radial-gradient on 4px grid, (2)
+         crossed diagonal washes for thread-paper feel. Both tagged
+         to body[data-cadence-texture="1"] so they only fire in
+         Cadence mode, never bleeding into family mode. */
+      body[data-cadence-texture="1"]::before {
+        content: ""; position: fixed; inset: 0;
+        background-image:
+          radial-gradient(circle at 0.5px 0.5px, rgba(220, 200, 230, 0.03) 0.5px, transparent 0.5px);
+        background-size: 4px 4px;
+        pointer-events: none;
+        z-index: 1;
+      }
+      body[data-cadence-texture="1"]::after {
+        content: ""; position: fixed; inset: 0;
+        background-image:
+          repeating-linear-gradient(135deg,
+            transparent 0,
+            transparent 8px,
+            rgba(255,255,255,0.008) 8px,
+            rgba(255,255,255,0.008) 9px),
+          repeating-linear-gradient(45deg,
+            transparent 0,
+            transparent 11px,
+            rgba(200,180,220,0.006) 11px,
+            rgba(200,180,220,0.006) 12px);
+        pointer-events: none;
+        z-index: 1;
+      }
+      /* v05.05bt351 — Gradient outer ring for Cadence. Renders as a
+         pinned 2px-thick frame at the viewport edge via a fixed
+         pseudo-wrapper with border-image. Only fires in Cadence.
+         Mommy: blush → lavender → smoke-blue. Daddy: slate → lavender
+         → blush (inverted via the cadence-ring-daddy variant). */
+      #ll-cadence-ring {
+        position: fixed; inset: 0;
+        pointer-events: none;
+        z-index: 9999;
+        border: 2px solid transparent;
+        border-image: linear-gradient(135deg, #d0a8c0 0%, #c6b0db 50%, #8b9bbc 100%) 1;
+      }
+      #ll-cadence-ring[data-variant="daddy"] {
+        border-image: linear-gradient(135deg, #6c84a8 0%, #8b9bbc 50%, #c6b0db 100%) 1;
       }
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
@@ -12151,7 +12328,22 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             );
           })() : (
             <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
-              ≈ {feedsRunway} feed{feedsRunway === 1 ? "" : "s"} runway
+              {/* v05.05bt351 — Per chat: 'convert number of feeds also
+                  to number of days this could sustain baby.' Daily
+                  feed count is feeds per 24h (24h / typical interval).
+                  Days = feedsRunway / feedsPerDay. */}
+              ≈ {feedsRunway} feed{feedsRunway === 1 ? "" : "s"}
+              {(() => {
+                const feedsPerDay = Math.max(1, 24 / TYPICAL_FEED_INTERVAL_HRS);
+                const days = feedsRunway / feedsPerDay;
+                if (days >= 1) {
+                  const whole = Math.floor(days);
+                  const half = days - whole >= 0.5;
+                  return ` · ~${whole}${half ? ".5" : ""}d`;
+                }
+                if (days > 0) return ` · <1d`;
+                return "";
+              })()}
             </div>
           )}
         </button>
@@ -16532,6 +16724,32 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
   // Each user-facing group (LIMS · 35 / GRANT · 1 / etc.) is
   // collapsible; collapsed state persisted in-session.
   const [viewMode, setViewMode] = useState("category");
+  // v05.05bt351 — Per chat: 'now instead of a long list we have
+  // categories and can filter by regret score and deep work.' Two
+  // filter chips at the top of the category view: high-regret-only
+  // (R≥4) and deep-only.
+  const [regretHighOnly, setRegretHighOnly] = useState(false);
+  const [deepOnly, setDeepOnly] = useState(false);
+  // v05.05bt351 — Per chat: 'Group-level bulk select.' Set of task IDs
+  // currently flagged for bulk action (delete only for now).
+  const [bulkSelected, setBulkSelected] = useState(new Set());
+  const onBulkSelect = (ids) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      // If all already selected, deselect them; otherwise select all.
+      const allIn = ids.every(id => next.has(id));
+      if (allIn) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
+  };
+  const onClearBulk = () => setBulkSelected(new Set());
+  const onBulkDelete = () => {
+    if (bulkSelected.size === 0) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete ${bulkSelected.size} task${bulkSelected.size === 1 ? "" : "s"}? This can't be undone.`)) return;
+    setTasks(prev => prev.filter(t => !bulkSelected.has(t.id)));
+    setBulkSelected(new Set());
+  };
   // v05.05bt349/350 — Per chat: 'Collapse categories by default.'
   // Switched from collapsedGroups (start expanded) to expandedGroups
   // (start collapsed). Counts are visible in headers so user can scan
@@ -16580,6 +16798,9 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       const q = search.trim().toLowerCase();
       if (!t.title.toLowerCase().includes(q)) return false;
     }
+    // v05.05bt351 — Regret-≥4 and deep-only chips.
+    if (regretHighOnly && (t.regretScore || 0) < 4) return false;
+    if (deepOnly && normalizeFocus(t.focusLevel) !== "deep") return false;
     return true;
   });
 
@@ -16733,6 +16954,42 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         </div>
       </div>
 
+      {/* v05.05bt351 — Bulk-action bar. Appears when ≥1 task selected
+          via the group-level "select all" chip. */}
+      {bulkSelected.size > 0 && (
+        <div style={{
+          position: "sticky", top: 0, zIndex: 5,
+          background: `${C.accent}1a`,
+          border: `1.5px solid ${C.accent}66`,
+          borderRadius: 10,
+          padding: "8px 12px",
+          marginBottom: 10,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, letterSpacing: "0.14em",
+            fontWeight: 700, color: C.accent, textTransform: "uppercase",
+          }}>{bulkSelected.size} selected</span>
+          <span style={{ flex: 1 }} />
+          <button onClick={onClearBulk} style={{
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}33`,
+            borderRadius: 6, padding: "5px 10px",
+            fontSize: 11, fontWeight: 500, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>Cancel</button>
+          <button onClick={onBulkDelete} style={{
+            background: C.accent, color: "#fff",
+            border: "none", borderRadius: 6,
+            padding: "5px 12px",
+            fontSize: 11, fontWeight: 700, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: "0.12em", textTransform: "uppercase",
+          }}>Delete {bulkSelected.size}</button>
+        </div>
+      )}
+
       {/* Search */}
       <input
         type="text"
@@ -16776,9 +17033,59 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         ))}
       </div>
 
-      {/* v05.05bt349 — Group-by toggle (only meaningful on ALL filter
-          with no search). Lets the user switch between category-style
-          (LIMS · 35 / GRANT · 1 / etc.) and the legacy status grouping. */}
+      {/* v05.05bt351 — Quick filter chips. Regret ≥4 and deep-only.
+          Per chat: 'now instead of a long list we have categories
+          and can filter by regret score and deep work.' Always
+          visible; chips toggle the filter on/off. */}
+      <div style={{
+        display: "flex", gap: 6, marginBottom: 10, alignItems: "center",
+        flexWrap: "wrap",
+      }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 8.5, letterSpacing: "0.22em",
+          color: C.muted, fontWeight: 700,
+          textTransform: "uppercase",
+        }}>Filter</span>
+        <button onClick={() => setRegretHighOnly(v => !v)} style={{
+          background: regretHighOnly ? `${C.accent}22` : "transparent",
+          color: regretHighOnly ? C.accent : C.muted,
+          border: `1px solid ${regretHighOnly ? C.accent + "66" : C.line + "33"}`,
+          borderRadius: 6, padding: "3px 9px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+          cursor: "pointer", textTransform: "uppercase",
+        }} title="Show only tasks with regret ≥ 4">
+          R≥4 {regretHighOnly ? "✓" : ""}
+        </button>
+        <button onClick={() => setDeepOnly(v => !v)} style={{
+          background: deepOnly ? `${FOCUS_COLOR.deep}22` : "transparent",
+          color: deepOnly ? FOCUS_COLOR.deep : C.muted,
+          border: `1px solid ${deepOnly ? FOCUS_COLOR.deep + "66" : C.line + "33"}`,
+          borderRadius: 6, padding: "3px 9px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+          cursor: "pointer", textTransform: "uppercase",
+        }} title="Show only deep-focus tasks">
+          🧠 deep {deepOnly ? "✓" : ""}
+        </button>
+        {(regretHighOnly || deepOnly) && (
+          <button onClick={() => { setRegretHighOnly(false); setDeepOnly(false); }} style={{
+            marginLeft: 2, background: "transparent",
+            color: C.muted, border: "none",
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 11.5,
+            cursor: "pointer",
+          }}>clear</button>
+        )}
+        <span style={{
+          marginLeft: "auto",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9.5, color: C.muted, opacity: 0.7,
+        }}>{filtered.length}</span>
+      </div>
+
+      {/* v05.05bt349 — Group-by toggle */}
       {filter === "all" && !search.trim() && (
         <div style={{
           display: "flex", gap: 6, marginBottom: 14,
@@ -16882,6 +17189,31 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               }}>{g.items.length}</span>
+              {/* v05.05bt351 — Group-level bulk select. Per chat:
+                  'Group-level bulk select — tap group header → select
+                  all in group → multi-delete.' Tap the bulk-select
+                  chip to toggle every task in the group into the
+                  selectedTaskIds set; the bulk-delete bar (App level)
+                  then handles deletion. */}
+              {!g.isDone && typeof onBulkSelect === "function" && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onBulkSelect(g.items.map(t => t.id));
+                  }}
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9, letterSpacing: "0.10em",
+                    fontWeight: 700, color: C.muted,
+                    background: "transparent",
+                    border: `1px dashed ${C.line}55`,
+                    borderRadius: 4, padding: "1px 6px",
+                    cursor: "pointer", textTransform: "uppercase",
+                  }}
+                  title={`Select all ${g.items.length} in ${g.label} for bulk-delete`}>
+                  ↓ select all
+                </span>
+              )}
               <span style={{ flex: 1, height: 1, background: `${g.color}33` }} />
             </button>
           )}
@@ -16890,6 +17222,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               : t._status === "draft" ? "#C18D7A"
               : t._status === "unscheduled" ? C.muted
               : C.mommy;
+            const isSelected = bulkSelected.has(t.id);
             return (
               <div key={t.id}
                 onClick={() => onEditTask(t)}
@@ -16901,6 +17234,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   borderBottom: `1px solid ${C.line}22`,
                   alignItems: "center",
                   cursor: "pointer",
+                  background: isSelected ? `${C.accent}10` : "transparent",
                 }}>
                 <div style={{
                   position: "absolute",
@@ -27158,6 +27492,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // nothing.
     const pending = Array.isArray(pendingOverride) ? pendingOverride : nlPending;
     if (!pending || pending.length === 0) return;
+    // v05.05bt351 — Per chat: 'when i click on open to fill and fill
+    // in a task, it does not add it to where i clicked on and
+    // instead randomly adds it someowhere in the scheduler.' When
+    // the NL input was opened by tapping a free block, the block's
+    // start time was staged into draftScheduledTime — but the parsed
+    // task arrived with scheduledTime: null (no explicit time in the
+    // text), so the scheduler placed it wherever was best, not where
+    // the user tapped. Fix: if draftScheduledTime is set AND the
+    // first parsed task lacks an explicit time, pin it to the tapped
+    // slot. Other tasks fall through to the scheduler. Clear the
+    // draft after consuming so subsequent NL adds don't get glued
+    // to the same block.
+    const pinFromTap = (draftScheduledTime || "").trim();
     const baseTs = Date.now();
     const rawNewTasks = pending.map((p, i) => ({
       id: `task_${baseTs}_${i}_${Math.random().toString(36).slice(2, 5)}`,
@@ -27176,7 +27523,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       cadence: p.cadence || null,
       scheduledDate: referenceISO,
       ownerName: currentUser,
-      scheduledTime: p.scheduledTime || null,
+      scheduledTime: p.scheduledTime || (i === 0 && pinFromTap ? pinFromTap : null),
+      pinned: !!(p.scheduledTime || (i === 0 && pinFromTap)),
       // v05.05bt199 — Carry NL-detected recurring rule ('every day',
       // 'weekly on monday', etc.) through to the task.
       recurringRule: p.recurringRule || null,
@@ -27248,6 +27596,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
     setNlText("");
     setNlPending(null);
+    // v05.05bt351 — Clear the tapped-block pin so subsequent NL adds
+    // don't get glued to that same time accidentally.
+    setDraftScheduledTime("");
+    setDraftEffort(30);
     // v05.05bt337 — Per chat: 'when adding task then after added dont
     // scroll up.' Capture scroll position before the NL panel
     // collapses (showNlInput false reflows the DOM tree below the
@@ -28521,37 +28873,36 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, (() => { const d = new Date(now); d.setHours(0,0,0,0); return d; })());
 
               // who-has phrasing
-              // v05.05bt350 — Per chat: 'now slider is showing at
-              // grandparents when there is no caregiver tag. and lets
-              // put caregiver or something more discreet to show when
-              // i am at work and in my boss lady role and someone
-              // accidentally sees my app on my screen.' In Cadence
-              // mode, the phrasing is genericized so a colleague
-              // glancing at the screen sees neutral labels. Onsite
-              // phrasing also tightened to require explicit caregiver
-              // tag — onsite alone (no active caregiver window) no
-              // longer claims grandparents.
+              // v05.05bt350/351 — Per chat (bt351): 'when i am WFH and
+              // there is daddy on duty vs. mommy on duty then i do
+              // want that now slider to say who is on duty so i dont
+              // see #2 working as you intended.' Walked back the
+              // blanket Cadence discretion. Discreet phrasing ONLY
+              // when onsite (at work, colleagues might glance). WFH
+              // in Cadence still shows "Mommy on duty" / "Daddy on
+              // duty" — boss-mode is visual theme, not full redaction.
               const isCadence = productMode === "solo" && (cadenceScope === "all" || true);
+              const beDiscreet = isCadence && !!onsite;
               const activeCaregiverWin = getActiveOrUpcomingCaregiverWindow(events, now);
               const caregiverActive = activeCaregiverWin && activeCaregiverWin.state === "active";
               let whoHasPhrase = null;
               let whoColor = C.muted;
               if (isTomorrow) {
-                whoHasPhrase = isCadence ? "tomorrow" : `tomorrow's plan`;
+                whoHasPhrase = beDiscreet ? "tomorrow" : `tomorrow's plan`;
                 whoColor = C.mommy;
               } else if (currentOwner === "Mommy") {
-                whoHasPhrase = isCadence ? "self" : "you have Solène";
+                whoHasPhrase = beDiscreet ? "self" : "you have Solène";
                 whoColor = C.mommy;
               } else if (currentOwner === "Daddy") {
-                whoHasPhrase = isCadence ? "covered" : "Daddy has Solène — your time";
+                whoHasPhrase = beDiscreet ? "covered" : "Daddy has Solène — your time";
                 whoColor = C.daddy;
               } else if (currentOwner === "joint") {
-                whoHasPhrase = isCadence ? "joint" : "together with Solène";
+                whoHasPhrase = beDiscreet ? "joint" : "together with Solène";
                 whoColor = C.gold;
               } else if (caregiverActive) {
-                whoHasPhrase = isCadence ? "covered" : "Solène with caregiver";
+                whoHasPhrase = beDiscreet ? "covered" : "Solène with caregiver";
                 whoColor = C.gold;
-              } else if (onsite && !isCadence) {
+              } else if (onsite && !beDiscreet) {
                 whoHasPhrase = "Solène with caregiver";
                 whoColor = C.gold;
               }
@@ -28780,97 +29131,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 pick-existing and add-new (inline input in the fits
                 picker). Brain Dump in ⋯ menu remains for the no-time
                 quick-capture case. */}
-            {/* v05.05bt324 — Per chat: 'the overlap fix shouldnt be
-                shifting or moving things ... should also be an undo
-                button if user doesnt like what app did.' Global undo
-                pill appears when ANY task was auto-shifted by the
-                overlap resolver. One tap restores all shifted tasks
-                to their original times (and pins them so the shift
-                can't re-apply). Each task already has its own per-row
-                undo via the badge — this is the bulk-undo. */}
-            {(() => {
-              const shifted = dayTimeline.filter(s => s.kind === "task" && s._shiftedByOverlap > 0 && s._originalStart);
-              if (shifted.length === 0) return null;
-              const totalShift = shifted.reduce((sum, s) => sum + (s._shiftedByOverlap || 0), 0);
-              return (
-                <button
-                  onClick={() => {
-                    setTasks(prev => prev.map(t => {
-                      const m = shifted.find(s => s.id === t.id);
-                      if (!m || !m._originalStart) return t;
-                      const orig = m._originalStart;
-                      const hh = String(orig.getHours()).padStart(2, "0");
-                      const mm = String(orig.getMinutes()).padStart(2, "0");
-                      return { ...t, scheduledTime: `${hh}:${mm}`, pinned: true };
-                    }));
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: `${C.accent}1c`,
-                    border: `1.5px solid ${C.accent}`,
-                    borderRadius: 10, marginBottom: 12,
-                    cursor: "pointer", textAlign: "left",
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 8,
-                  }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: 10, letterSpacing: "0.14em",
-                      textTransform: "uppercase", fontWeight: 800,
-                      color: C.accent,
-                    }}>↻ {shifted.length} task{shifted.length === 1 ? "" : "s"} auto-shifted</div>
-                    <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
-                      fontStyle: "italic", fontSize: 13,
-                      color: C.ink, marginTop: 2, lineHeight: 1.3,
-                    }}>
-                      Pushed forward {totalShift}m total to clear overlaps. Tap to undo all + pin originals.
-                    </div>
-                  </div>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9.5, letterSpacing: "0.12em",
-                    fontWeight: 800, color: C.accent,
-                  }}>UNDO ALL</span>
-                </button>
-              );
-            })()}
-            {/* v05.05bt316/350 — Top-of-timeline pill that opens the
-                NL input. Per chat (bt350): 'the add task for today
-                long button can disappear now because we have the log
-                button able to do that now.' Hidden in Cadence (boss
-                mode) — central log button's Plan tab is the primary
-                entry. Family mode keeps the button since the log
-                button still shows the legacy baby-only picker. */}
-            {currentUser === "Mommy" && !isTomorrow && !(productMode === "solo") && (
-              <button
-                onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  background: `${C.mommy}10`,
-                  border: `1.5px dashed ${C.mommy}66`,
-                  borderRadius: 10, marginBottom: 12,
-                  cursor: "pointer", textAlign: "center",
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 15,
-                  color: C.mommy, fontWeight: 600,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}>
-                <span style={{ fontSize: 17, lineHeight: 1, fontWeight: 700, fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}>+</span>
-                Add a task to today
-              </button>
-            )}
+            {/* v05.05bt324/351 — Global undo for auto-shifted tasks
+                moved BELOW the runway per bt351 chat: 'today's runway
+                panel should be at the top always (under the today/
+                tomorrow pill) and then all other notifications should
+                be below that.' Render is reused in-place below the
+                runway. */}
+            {/* v05.05bt316/350/351 — Top-of-timeline pill that opens
+                the NL input. Per chat (bt350): 'the add task for
+                today long button can disappear now because we have
+                the log button able to do that now.' Hidden in
+                Cadence (boss mode) — central log button's Plan tab
+                is the primary entry. Family mode keeps the button.
+                Moved below the runway per bt351 chat: 'todays runway
+                panel should be that the top always.' */}
+            {/* RUNWAY MOVED ABOVE — Add-task pill rendered after runway */}
             {/* v05.05bt172 — Day-summary forecast card. Per chat:
                 "having a summary somewhere where you have x amount of
                 deep focus time available and x amount of long stretch
                 etc." Aggregates dayTimeline free-block focus levels +
                 durations into a quick "runway" snapshot, then compares
                 to total task-effort to surface "fits / overcommitted".
-                Placed below the context so it's the first thing the
-                user reads before scanning the timeline. */}
+                Placed FIRST below the header per bt351 chat: 'todays
+                runway panel should be at the top always.' */}
             {currentUser === "Mommy" && !isTomorrow && dayTimeline.length > 0 && (() => {
               // v05.05bt280 — Per chat: 'we lost the runway completely now.'
               // Previously returned null when futureFree empty; now always
@@ -29096,6 +29379,77 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               );
             })()}
+            {/* v05.05bt324/351 — Auto-shift undo banner moved here
+                (below runway, above add-task pill). */}
+            {(() => {
+              const shifted = dayTimeline.filter(s => s.kind === "task" && s._shiftedByOverlap > 0 && s._originalStart);
+              if (shifted.length === 0) return null;
+              const totalShift = shifted.reduce((sum, s) => sum + (s._shiftedByOverlap || 0), 0);
+              return (
+                <button
+                  onClick={() => {
+                    setTasks(prev => prev.map(t => {
+                      const m = shifted.find(s => s.id === t.id);
+                      if (!m || !m._originalStart) return t;
+                      const orig = m._originalStart;
+                      const hh = String(orig.getHours()).padStart(2, "0");
+                      const mm = String(orig.getMinutes()).padStart(2, "0");
+                      return { ...t, scheduledTime: `${hh}:${mm}`, pinned: true };
+                    }));
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    background: `${C.accent}1c`,
+                    border: `1.5px solid ${C.accent}`,
+                    borderRadius: 10, marginBottom: 12,
+                    cursor: "pointer", textAlign: "left",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 8,
+                  }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, letterSpacing: "0.14em",
+                      textTransform: "uppercase", fontWeight: 800,
+                      color: C.accent,
+                    }}>↻ {shifted.length} task{shifted.length === 1 ? "" : "s"} auto-shifted</div>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontSize: 13,
+                      color: C.ink, marginTop: 2, lineHeight: 1.3,
+                    }}>
+                      Pushed forward {totalShift}m total to clear overlaps. Tap to undo all + pin originals.
+                    </div>
+                  </div>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, letterSpacing: "0.12em",
+                    fontWeight: 800, color: C.accent,
+                  }}>UNDO ALL</span>
+                </button>
+              );
+            })()}
+            {/* v05.05bt316/350/351 — Add-task pill, now BELOW runway. */}
+            {currentUser === "Mommy" && !isTomorrow && !(productMode === "solo") && (
+              <button
+                onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: `${C.mommy}10`,
+                  border: `1.5px dashed ${C.mommy}66`,
+                  borderRadius: 10, marginBottom: 12,
+                  cursor: "pointer", textAlign: "center",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 15,
+                  color: C.mommy, fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}>
+                <span style={{ fontSize: 17, lineHeight: 1, fontWeight: 700, fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}>+</span>
+                Add a task to today
+              </button>
+            )}
             {/* v05.05bt211 — Trade suggestions. Surfaces 1-2 windows
                 where Daddy could take baby duty and unlock significant
                 deep focus for the user. Informational for v1 — tap
@@ -32805,6 +33159,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           C={C}
           preview={previewState}
           onLockIn={() => {
+            // v05.05bt351 — Per chat: 'when you hit confirmation
+            // button, i hate how i have to do a lot of scrolling
+            // to find where i last left off.' Capture scroll
+            // position before the modal closes so the user stays
+            // anchored to the slot they were inspecting.
+            const scrollY = (typeof window !== "undefined") ? window.scrollY : 0;
             setTasks(prev => [...prev, ...previewState.tasks]);
             const slotted = previewState.tasks.filter(t => t.scheduledTime).length;
             const unscheduled = previewState.tasks.length - slotted;
@@ -32820,6 +33180,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             });
             if (unscheduled > 0) setShowUnscheduled(true);
             setPreviewState(null);
+            if (typeof window !== "undefined") {
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  window.scrollTo({ top: scrollY, behavior: "instant" });
+                });
+              });
+            }
           }}
           onCancel={() => setPreviewState(null)}
           onCommandApply={(cmd) => {
@@ -35884,7 +36251,15 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
               { key: "freezer", label: "Freezer", tone: "#5C7D55", items: byLoc.freezer, hint: "Safe ≤ 6 months" },
             ];
             return (
-              <div style={{ display: "grid", gap: 10 }}>
+              <div style={{
+                // v05.05bt351 — Per chat: 'i wanted it to be one
+                // single panel split in left middle and right to
+                // avoid taking more vertical space.' RT / Fridge /
+                // Freezer side-by-side. Stacks on narrow screens.
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 10,
+              }}>
                 {panels.map(p => {
                   const totalOz = sumOz(p.items);
                   const feedsLeft = Math.floor(totalOz / TYPICAL_FEED);
@@ -36160,7 +36535,7 @@ function InventoryRow({ item, C, onMoveToFridge, onMoveToFreezer, onRemove, onEd
           fontFamily: "'JetBrains Mono', monospace", marginTop: 1,
           display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
         }}>
-          <span>{fmtHours(remHrs)} left · pumped {fmtElapsed(minutesAgo(item.pumpedAt))}</span>
+          <span>{fmtSmartDuration(remHrs)} left · pumped {fmtElapsed(minutesAgo(item.pumpedAt))}</span>
           {(() => {
             const cm = circadianMilkType(item.pumpedAt);
             if (!cm) return null;
