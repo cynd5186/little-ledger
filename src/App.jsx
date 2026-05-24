@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt352";
+const APP_VERSION = "2026.05.05bt353";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6501,6 +6501,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           lastWakeConfirmed={lastWakeConfirmed}
           events={events}
           addEvent={addEvent}
+          setEventsRaw={setEvents}
           now={now}
           totalSafeOz={totalSafeOz}
           rtSafeOz={rtSafeOz}
@@ -10513,7 +10514,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -10948,19 +10949,38 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             }}>
               <button
                 onClick={() => {
-                  if (!addEvent || !cgWin.event) return;
-                  if (cgWin.event.type === "caregiver_window") {
-                    addEvent({
-                      ...cgWin.event,
-                      actualEndTs: new Date(now).toISOString(),
-                      _patchOf: cgWin.event.ts,
-                    });
-                  } else {
-                    addEvent({
-                      type: "caregiver_handoff_end",
-                      ts: new Date(now).toISOString(),
-                      ownerName: currentUser,
-                    });
+                  if (!cgWin.event) return;
+                  // v05.05bt352 — Per chat: 'even if i take back from
+                  // caregiver, it immediately reverts back to caregiver
+                  // having baby.' The _patchOf model was fragile —
+                  // patch event could lose its link on cloud sync, or
+                  // the resolver could iterate the original before the
+                  // patch existed. Simpler: directly setEvents-map to
+                  // stamp actualEndTs onto the original. setEvents is
+                  // exposed via props as setEventsRaw (added below for
+                  // this purpose); fall back to addEvent legacy path
+                  // if not available.
+                  const nowIso = new Date(now).toISOString();
+                  if (typeof setEventsRaw === "function" && cgWin.event.type === "caregiver_window") {
+                    setEventsRaw(prev => prev.map(ev =>
+                      ev.id === cgWin.event.id
+                        ? { ...ev, actualEndTs: nowIso }
+                        : ev
+                    ));
+                  } else if (addEvent) {
+                    if (cgWin.event.type === "caregiver_window") {
+                      addEvent({
+                        ...cgWin.event,
+                        actualEndTs: nowIso,
+                        _patchOf: cgWin.event.ts,
+                      });
+                    } else {
+                      addEvent({
+                        type: "caregiver_handoff_end",
+                        ts: nowIso,
+                        ownerName: currentUser,
+                      });
+                    }
                   }
                 }}
                 style={{
@@ -16954,41 +16974,9 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         </div>
       </div>
 
-      {/* v05.05bt351 — Bulk-action bar. Appears when ≥1 task selected
-          via the group-level "select all" chip. */}
-      {bulkSelected.size > 0 && (
-        <div style={{
-          position: "sticky", top: 0, zIndex: 5,
-          background: `${C.accent}1a`,
-          border: `1.5px solid ${C.accent}66`,
-          borderRadius: 10,
-          padding: "8px 12px",
-          marginBottom: 10,
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10, letterSpacing: "0.14em",
-            fontWeight: 700, color: C.accent, textTransform: "uppercase",
-          }}>{bulkSelected.size} selected</span>
-          <span style={{ flex: 1 }} />
-          <button onClick={onClearBulk} style={{
-            background: "transparent", color: C.muted,
-            border: `1px solid ${C.line}33`,
-            borderRadius: 6, padding: "5px 10px",
-            fontSize: 11, fontWeight: 500, cursor: "pointer",
-            fontFamily: "inherit",
-          }}>Cancel</button>
-          <button onClick={onBulkDelete} style={{
-            background: C.accent, color: "#fff",
-            border: "none", borderRadius: 6,
-            padding: "5px 12px",
-            fontSize: 11, fontWeight: 700, cursor: "pointer",
-            fontFamily: "'JetBrains Mono', monospace",
-            letterSpacing: "0.12em", textTransform: "uppercase",
-          }}>Delete {bulkSelected.size}</button>
-        </div>
-      )}
+      {/* v05.05bt351/352 — Bulk action bar removed alongside the
+          select-all chip per bt352 chat. Single-row delete is via
+          EditTaskModal's delete button. */}
 
       {/* Search */}
       <input
@@ -17189,31 +17177,11 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               }}>{g.items.length}</span>
-              {/* v05.05bt351 — Group-level bulk select. Per chat:
-                  'Group-level bulk select — tap group header → select
-                  all in group → multi-delete.' Tap the bulk-select
-                  chip to toggle every task in the group into the
-                  selectedTaskIds set; the bulk-delete bar (App level)
-                  then handles deletion. */}
-              {!g.isDone && typeof onBulkSelect === "function" && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onBulkSelect(g.items.map(t => t.id));
-                  }}
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, letterSpacing: "0.10em",
-                    fontWeight: 700, color: C.muted,
-                    background: "transparent",
-                    border: `1px dashed ${C.line}55`,
-                    borderRadius: 4, padding: "1px 6px",
-                    cursor: "pointer", textTransform: "uppercase",
-                  }}
-                  title={`Select all ${g.items.length} in ${g.label} for bulk-delete`}>
-                  ↓ select all
-                </span>
-              )}
+              {/* v05.05bt351/352 — Per chat (bt352): 'i dont like the
+                  select all.' Group-level bulk-select chip removed.
+                  Individual row taps still open EditTaskModal as
+                  before; deletion goes through EditTaskModal's
+                  delete button. */}
               <span style={{ flex: 1, height: 1, background: `${g.color}33` }} />
             </button>
           )}
@@ -26025,12 +25993,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // popup before localStorage settles.
   const energyTriggeredThisSessionRef = useRef(false);
   useEffect(() => {
+    // v05.05bt352 — Per chat: 'lets comment out the morning check-in
+    // for today as i dont think i find it super helpful.' Auto-open
+    // effect short-circuits. State + modal definition kept in source
+    // so it can be re-enabled by removing this guard if she ever
+    // wants it back.
+    return;
+    // eslint-disable-next-line no-unreachable
     if (energyTriggeredThisSessionRef.current) return;
     if (dailyEnergy && dailyEnergy.date === todayISO) return; // already saved
     let shownToday = false;
     try { shownToday = localStorage.getItem(energyShownKey) === todayISO; } catch {}
     if (shownToday) return; // already shown (possibly dismissed) today
-    // Mark as shown FIRST, before any UI flicker:
     energyTriggeredThisSessionRef.current = true;
     try { localStorage.setItem(energyShownKey, todayISO); } catch {}
     const t = setTimeout(() => {
@@ -31660,65 +31634,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             );
                           }
                           if (isFree && !isPast) {
-                            const isPeak = blockFocus === "deep";
-                            const label = isPeak ? "TRADE WINDOW" : "OPEN";
-                            const tone = isPeak ? C.mommy : C.muted;
-                            // v05.05bt350 — Per chat: 'clicking on
-                            // trade window does nothing but pulls up
-                            // the add task dialog so either remove
-                            // or its a request to daddy dialog.'
-                            // Made TRADE WINDOW peak chip a real
-                            // button → opens the SendTradeRequest
-                            // modal. OPEN (non-peak) chip stays
-                            // informational (the row itself opens NL
-                            // input).
-                            if (isPeak && typeof openSendTrade === "function") {
-                              const durMs = slot.end.getTime() - slot.start.getTime();
-                              const fmt = (d) => {
-                                const h = d.getHours(), m = d.getMinutes();
-                                const h12 = ((h + 11) % 12) + 1;
-                                return `${h12}${m ? `:${String(m).padStart(2,"0")}` : ""}${h < 12 ? "a" : "p"}`;
-                              };
-                              return (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openSendTrade({
-                                      start: slot.start.getHours() * 60 + slot.start.getMinutes(),
-                                      end: slot.end.getHours() * 60 + slot.end.getMinutes(),
-                                      deepMin: Math.round(durMs / 60000),
-                                      label: `${fmt(slot.start)}-${fmt(slot.end)}`,
-                                    });
-                                  }}
-                                  title="Ask Daddy to cover this window"
-                                  style={{
-                                    fontFamily: "'JetBrains Mono', monospace",
-                                    fontSize: 8.5, letterSpacing: "0.14em",
-                                    fontWeight: 800, textTransform: "uppercase",
-                                    color: C.bg, background: tone,
-                                    padding: "2px 5px",
-                                    border: `1px solid ${tone}`,
-                                    borderRadius: 2,
-                                    marginRight: 4,
-                                    whiteSpace: "nowrap",
-                                    cursor: "pointer",
-                                  }}>{label} ↗</button>
-                              );
-                            }
-                            return (
-                              <span style={{
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 8.5, letterSpacing: "0.14em",
-                                fontWeight: 800, textTransform: "uppercase",
-                                color: isPeak ? C.bg : tone,
-                                background: isPeak ? tone : "transparent",
-                                padding: "2px 5px",
-                                border: `1px solid ${tone}`,
-                                borderRadius: 2,
-                                marginRight: 4,
-                                whiteSpace: "nowrap",
-                              }}>{label}</span>
-                            );
+                            // v05.05bt350/352 — Per chat (bt352): 'i
+                            // thought i said to remove the trade
+                            // window button on the open task cards
+                            // and just leave the trade alerts on the
+                            // top.' Per-row TRADE WINDOW chip removed.
+                            // The TRADE IDEAS card above the timeline
+                            // is now the only trade-request entry
+                            // point. OPEN chip on non-peak free
+                            // blocks also dropped (row title already
+                            // says "+ Open · tap to fill").
+                            return null;
                           }
                           return null;
                         })()}
@@ -31948,24 +31874,57 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 const fl = normalizeFocus(t.focusLevel);
                 const flGlyph = fl === "deep" ? "🧠" : "🍃";
                 const done = !!t.completedAt;
+                // v05.05bt352 — Per chat: 'i should be able to uncheck
+                // a box in case i checked it by accident...also i
+                // should be able to change the regret score and the
+                // focus mode by clicking on it and changing it right
+                // there.' Inline rotation handlers for the three
+                // per-task fields.
+                const cycleRegret = (e) => {
+                  e.stopPropagation();
+                  setTasks(prev => prev.map(x =>
+                    x.id === t.id
+                      ? { ...x, regretScore: ((x.regretScore || 3) % 5) + 1 }
+                      : x
+                  ));
+                };
+                const cycleFocus = (e) => {
+                  e.stopPropagation();
+                  setTasks(prev => prev.map(x => {
+                    if (x.id !== t.id) return x;
+                    const cur = normalizeFocus(x.focusLevel);
+                    const next = cur === "deep" ? "shallow" : "deep";
+                    return { ...x, focusLevel: next };
+                  }));
+                };
                 return (
                   <div style={{
                     display: "flex", alignItems: "flex-start", gap: 5,
                     width: "100%", padding: "5px 6px",
                     borderBottom: `1px solid ${C.line}15`,
                   }}>
-                    {/* v05.05bt285 — Inline checkbox to cross off */}
+                    {/* v05.05bt285/352 — Inline checkbox. Bigger touch
+                        target (was 14px → 22px), explicit preventDefault
+                        + stopPropagation to dodge mobile-tap race. */}
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleComplete(t.id); }}
+                      onPointerDown={(e) => { e.stopPropagation(); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        toggleComplete(t.id);
+                      }}
                       style={{
-                        width: 14, height: 14, borderRadius: "50%",
+                        width: 22, height: 22, borderRadius: "50%",
                         border: `1.5px solid ${done ? "#7B9B6E" : C.line + "66"}`,
                         background: done ? "#7B9B6E" : "transparent",
                         cursor: "pointer", flexShrink: 0, padding: 0,
-                        marginTop: 2,
+                        marginTop: 1,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 9, lineHeight: 1,
+                        color: "#fff", fontSize: 13, lineHeight: 1,
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
                       }}
+                      title={done ? "Done — tap to mark not done" : "Tap to mark done"}
                       aria-label={done ? "Mark not done" : "Mark done"}>
                       {done ? "✓" : ""}
                     </button>
@@ -31979,18 +31938,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontFamily: "inherit", padding: 0,
                         minWidth: 0,
                       }}>
-                      {/* v05.05bt311 — Per chat: 'under sched vs.
-                          unsched box, is it really helpful to have the
-                          time there for the scheduled tasks when you
-                          have the breakdown of the day above?' Time
-                          dropped from pile — already visible in the
-                          timeline above. */}
-                      <span style={{ fontSize: 11, flexShrink: 0, marginTop: 1 }}>{flGlyph}</span>
+                      {/* v05.05bt352 — Per chat: 'lets stay consistent
+                          with the icons for deep vs. shallow work and
+                          always put the icon in front of the regret
+                          score.' Focus glyph now lives ahead of the
+                          title as before — but inline-tappable to
+                          cycle deep↔shallow without opening edit. */}
+                      <span
+                        onClick={cycleFocus}
+                        title={`${fl === "deep" ? "Deep" : "Shallow"} focus · tap to flip`}
+                        style={{
+                          fontSize: 13, flexShrink: 0, marginTop: 0,
+                          cursor: "pointer", padding: "0 2px",
+                        }}>{flGlyph}</span>
                       <span style={{
                         flex: 1, color: C.ink,
                         fontFamily: "'Cormorant Garamond', serif",
                         fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
-                        // v05.05bt285 — Allow text to wrap (was nowrap+ellipsis)
                         whiteSpace: "normal",
                         wordBreak: "break-word",
                         textDecoration: done ? "line-through" : "none",
@@ -32006,11 +31970,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             letterSpacing: "0.08em",
                           }}>↻ ROLLOVER</span>
                         )}
-                        {/* v05.05bt291 — Won't-fit indicator for tasks
-                            that couldn't be placed during reanalyze.
-                            Per chat: 'if it cannot fit, then can we
-                            make a note in the pile table below so it
-                            can quickly be spotted.' */}
                         {side === "unscheduled" && t._couldNotFit && (
                           <span style={{
                             marginLeft: 5,
@@ -32023,49 +31982,51 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }} title={t._couldNotFitReason || "no block fit during reanalyze"}>✗ WON'T FIT</span>
                         )}
                       </span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, fontWeight: 700, flexShrink: 0,
-                        marginTop: 2,
-                        color: regretColors[t.regretScore || 3],
-                        opacity: done ? 0.5 : 1,
-                      }}>R{t.regretScore || 3}</span>
+                      {/* v05.05bt352 — Regret score tappable to cycle.
+                          Per chat: 'i should be able to change the
+                          regret score by clicking on it.' Always
+                          rendered after the focus glyph + title to
+                          keep the visual cadence consistent. */}
+                      <span
+                        onClick={cycleRegret}
+                        title={`Regret ${t.regretScore || 3}/5 · tap to cycle`}
+                        style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, fontWeight: 700, flexShrink: 0,
+                          marginTop: 1, padding: "1px 6px",
+                          color: regretColors[t.regretScore || 3],
+                          opacity: done ? 0.5 : 1,
+                          background: `${regretColors[t.regretScore || 3]}14`,
+                          borderRadius: 4,
+                          cursor: "pointer",
+                        }}>R{t.regretScore || 3}</span>
                     </button>
-                    {/* v05.05bt291/346/348 — Per chat (bt348):
-                        'i dont like that border around the x button -
-                        and let me select multiple tasks to delete
-                        together instead of just one at a time.'
-                        Replaced the bordered two-tap × with a
-                        borderless toggle: tap once → row enters
-                        selection set (visual highlight + bulk action
-                        bar appears at top of pile). Tap again to
-                        deselect. Bulk delete handled by the bar. */}
+                    {/* v05.05bt352 — Single-tap delete. Per chat:
+                        'i should be able to click on the X under the
+                        task pile.' Restored direct delete behaviour;
+                        the multi-select pattern was confusing. */}
                     <button
+                      onPointerDown={(e) => { e.stopPropagation(); }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedDelete(prev => {
-                          const next = new Set(prev);
-                          if (next.has(t.id)) next.delete(t.id);
-                          else next.add(t.id);
-                          return next;
-                        });
+                        e.preventDefault();
+                        setTasks(prev => prev.filter(x => x.id !== t.id));
                       }}
-                      title={selectedDelete.has(t.id) ? "Tap to unselect" : "Tap to select for delete"}
-                      aria-label="Select for delete"
+                      title="Delete task"
+                      aria-label="Delete task"
                       style={{
                         background: "transparent",
-                        color: selectedDelete.has(t.id) ? "#B85040" : `${C.muted}`,
-                        border: "none",
+                        color: C.muted, border: "none",
                         padding: "4px 8px",
-                        fontSize: selectedDelete.has(t.id) ? 17 : 15,
-                        fontWeight: 700, lineHeight: 1,
+                        fontSize: 18, fontWeight: 700, lineHeight: 1,
                         cursor: "pointer", fontFamily: "inherit",
                         flexShrink: 0,
-                        minWidth: 32, minHeight: 32,
-                        opacity: selectedDelete.has(t.id) ? 1 : 0.55,
-                        transition: "all 0.12s",
+                        minWidth: 36, minHeight: 36,
+                        opacity: 0.6,
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
                       }}>
-                      {selectedDelete.has(t.id) ? "●" : "×"}
+                      ×
                     </button>
                   </div>
                 );
@@ -32105,59 +32066,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       rows are selected via × tap. Sticky-top inside the
                       expanded pile so it's reachable while scrolling
                       long lists. */}
-                  {taskPileExpanded && selectedDelete.size > 0 && (
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      gap: 8, padding: "8px 12px",
-                      background: `#B85040`,
-                      color: "#fff",
-                      borderTop: `1px solid ${C.line}22`,
-                      borderBottom: `1px solid ${C.line}22`,
-                    }}>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11, fontWeight: 700,
-                        letterSpacing: "0.06em",
-                      }}>
-                        {selectedDelete.size} selected
-                      </span>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          onClick={() => setSelectedDelete(new Set())}
-                          style={{
-                            background: "transparent",
-                            border: `1px solid rgba(255,255,255,0.4)`,
-                            color: "#fff",
-                            borderRadius: 5,
-                            padding: "4px 10px",
-                            fontSize: 11, fontWeight: 600,
-                            fontFamily: "inherit",
-                            cursor: "pointer",
-                          }}>
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => {
-                            const ids = Array.from(selectedDelete);
-                            ids.forEach(id => deleteTask(id));
-                            setSelectedDelete(new Set());
-                          }}
-                          style={{
-                            background: "#fff",
-                            color: "#B85040",
-                            border: "none",
-                            borderRadius: 5,
-                            padding: "4px 12px",
-                            fontSize: 11, fontWeight: 800,
-                            fontFamily: "inherit",
-                            cursor: "pointer",
-                            letterSpacing: "0.06em",
-                          }}>
-                          DELETE {selectedDelete.size}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {/* v05.05bt348/352 — Bulk delete bar removed. Per
+                      chat (bt352): 'i should be able to click on the
+                      X under the task pile' and 'i dont like the
+                      select all.' Reverted to single-tap × delete. */}
                   {taskPileExpanded && (
                     <>
                     {/* v05.05bt295/344 — Bulk add entry. Per chat:
@@ -32228,10 +32140,52 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             fontStyle: "italic", fontSize: 11.5,
                             color: C.muted,
                           }}>backlog clear ✓</div>
-                        ) : unscheduled.map(t => {
-                          const isRollover = pastLightsOut && !!t.scheduledTime && !t.completedAt;
-                          return <TaskRow key={t.id} t={t} side="unscheduled" isRollover={isRollover} />;
-                        })}
+                        ) : (() => {
+                          // v05.05bt352 — Per chat: 'in my task pile
+                          // unscheduled, i would still like it to be
+                          // divided by categories so maybe draw a
+                          // line between each different category so
+                          // i can see it visually.' Group by
+                          // taskGroup, render a thin category header
+                          // before each cluster. Sort matches existing
+                          // unscheduled sort (won't-fit first, regret
+                          // desc) WITHIN each category. Categories
+                          // ordered by count desc; UNCATEGORIZED last.
+                          const buckets = new Map();
+                          for (const t of unscheduled) {
+                            const key = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
+                            if (!buckets.has(key)) buckets.set(key, []);
+                            buckets.get(key).push(t);
+                          }
+                          const groupList = Array.from(buckets.entries()).map(([k, items]) => ({
+                            key: k, items,
+                            isUncat: k === "UNCATEGORIZED",
+                          }));
+                          groupList.sort((a, b) => {
+                            if (a.isUncat !== b.isUncat) return a.isUncat ? 1 : -1;
+                            return b.items.length - a.items.length;
+                          });
+                          return groupList.map((g, gi) => (
+                            <div key={g.key}>
+                              <div style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                padding: gi === 0 ? "4px 5px 2px" : "10px 5px 2px",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9, letterSpacing: "0.18em",
+                                fontWeight: 700, color: C.muted,
+                                textTransform: "uppercase",
+                                borderTop: gi === 0 ? "none" : `1px dashed ${C.line}33`,
+                              }}>
+                                <span>{g.key}</span>
+                                <span style={{ opacity: 0.6 }}>· {g.items.length}</span>
+                              </div>
+                              {g.items.map(t => {
+                                const isRollover = pastLightsOut && !!t.scheduledTime && !t.completedAt;
+                                return <TaskRow key={t.id} t={t} side="unscheduled" isRollover={isRollover} />;
+                              })}
+                            </div>
+                          ));
+                        })()}
                       </div>
                     </div>
                     </>
