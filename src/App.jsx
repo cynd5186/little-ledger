@@ -15,12 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt379";
+const APP_VERSION = "2026.05.05bt380";
 const APP_BUILD_NOTES = [
-  "EDIT-TASK MODAL SHRUNK + INLINE QUICK-CATEGORIZE IN TASK PILE. Per chat: 'when i click on tasks to edit it and it brings up the pop up dialog... that dialog is so big i cannot even see the top of the box nor the bottom of it. can we redesign this to also be more user friendly. in the task pile i should be able to click on a task and right there and then categorize it or at least drag and drop it or move it to the approporiate ctegory'.\n\n(1) MODAL SIZE FIX. Root cause: ModalShell's body had paddingBottom: 'calc(132px + safe-area)' regardless of placement. The 132px was sized for bottom-sheet modals to clear the iOS tab bar, but center-placement modals (like EditTaskModal) sit in the middle of the viewport with no tab-bar overlap — that 132px just pushed Save/Delete out of view and made the modal feel like it extended off both ends of the screen. New behavior: paddingBottom is now 'calc(16px + safe-area)' for center placement, retained at 132px for bottom-sheet. Also slimmed center mode: outer padding 8/18/0 → 6/16/0, title font 26 → 22, title margin-bottom 18 → 10. The sticky Save/Delete footer inside EditTaskModal had its own padding tightened (10/10 → 8/6, marginTop 4 → 2). Net: modal now visibly fits inside the viewport.\n\n(2) INLINE QUICK-CATEGORIZE. Tapping a task row in the pile used to jump straight to the (too-tall) EditTaskModal. Now it expands an inline quick-action panel directly below the row with three move-target buttons matching the three pile sections:\n  • ● Scheduled (mauve) — paired with a time input + 'Slot' button\n  • ◐ Today (gold) — clears time, sets scheduledDate to today\n  • ○ Backlog (muted) — clears both time and date\nThe button matching the task's current section gets active styling so the user can see where it lives. An italic 'Edit details ↗' link still opens the full modal for power tweaks (focus, regret, recurring, etc.). The X button retains its existing 2-tap delete/unschedule behavior; checkbox still toggles complete.\n\nSCOPING: 1 ModalShell padding tweak (~6 small property changes inside the inner card + body), 1 sticky footer style tweak in EditTaskModal, 1 new state pair in TodayTaskPlanCard (pileQuickActionId + pileQuickTimeDraft), 1 new toggle helper, 3 new move helpers inside TaskRow, 1 row onClick rewire (setEditingTask → toggleQuickAction), 1 fragment wrap + ~140-line inline panel render. Zero changes to task schema, scheduler, palette, drag handlers, other modals. Drag-and-drop NOT added (per chat 'or at least click') since the click-to-pick pattern is more reliable on iOS PWA. Build verified clean via esbuild.",
+  "BOTTLE PRE-SELECT + TASK PILE UX BATCH 1. Per chat (massive 18-item dump): focusing this build on the highest-impact fixes that don't need investigation. (1) BOTTLE PICKER PRE-SELECT. The inline tile panel's per-bottle buttons were calling onPickBottle(zone, bottleId) but the App handler ignored the bottleId, so the picker always opened with the oldest bottle pre-selected. New App-level bottlePickerInitialId state + threaded through to UseBottleModal via initialBottleId prop. Modal seeds selectedId and oz from the matching bottle when provided, falls back to oldest-first otherwise. Cleared on close alongside loc. (2) TAP-OUTSIDE DISMISS FOR PILE × PROMPT. Per chat: 'how about if i accidentally hit it and i dont want to delete then i should be able to click anywhere else on the screen and that delete prompt disappears.' useEffect on pilePendingActionId attaches a document-level pointerdown listener (50ms after arming, so the same tap that armed doesn't immediately clear). Listener checks closest('[data-pile-delete-btn]') and only clears when the tap is NOT on the × button itself — so the second tap can still commit. The × button got the data attribute. (3) INLINE EDIT TASK NAME. Per chat: 'i should also be able to edit task name right there and then on the task pile.' Reused the existing inlineTitleEdit / commitInlineTitle helpers (already wired into the scheduled-timeline render). Added a small ✎ button next to the title in the pile TaskRow that sets inlineTitleEdit = t.id and closes the quick-action panel. When edit mode is active, the title span renders as an autofocused <input> that commits on blur / Enter and cancels on Escape. (4) REGRET SORT DEBOUNCE. Per chat: 'when i am changing regret scores maybe give it some time before it gets resorted because if i am going from a 1 to a 5 then it moves suddenly on me and i end up changing another task instead by accident.' New regretSortFrozen state + armRegretFreeze helper. cycleRegret() sets it true + 2s timeout to clear. backlog sort and unscheduledTodayBucket sort both gated: comparator returns 0 while frozen, preserving input-array order. Badge value updates immediately so the user sees progress; positions hold until the user stops tapping. (5) PLAN FROM QUEUE PROMINENCE. Per chat: 'the plan for queue also needs to be more prominent because i didnt realize it was there.' Was a 12.5px italic gold link buried under the sections. Now a 11px bold uppercase mono CTA with mauve-tinted bg, ☑ glyph, and an italic 'pick from all unscheduled →' hint on the right. Reads as a primary affordance.\n\nDISCOVERED ALREADY IN PLACE: bottle inline use/edit/discard infrastructure (armBottleDiscard, onQuickUseBottle/onEditBottle/onDiscardBottle plumbing through OnDutyCard → MilkPanel, full inline action buttons in renderExpanded), tappable empty pile sections (all three sections already render dashed buttons that open the NL input).\n\nDEFERRED (not yet investigated): pump timer wrongly turning green when overdue (need to inspect cadence math); top panel sticky/frozen (need to find which header); notifications dismissible (find each toast); routine/predicted task visual differentiation (bigger system change); white outer border and residual glow in schedule (need to inspect); clock icon on 'use this bottle next' panel restyling; 'pinned' rename + arrow +Xm explanation (unclear what specific glyph user is referring to); PWA shortcut icon update (text instructions in chat response, not code). \"Today\" header was checked — already left-aligned in current code; user may be referring to a different element.\n\nSCOPING: 1 new App-level state (bottlePickerInitialId) + matching threading through 1 modal prop, 1 useState init refactor in UseBottleModal, 1 useEffect for tap-outside dismiss + 1 data attribute on the × button, ~40-line input/button JSX addition to TaskRow for rename, 1 new state pair + 1 helper for regret freeze + 2 sort comparator gates, 1 button restyle. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt379", summary: "EditTaskModal size fix + inline quick-categorize in task pile. (1) ModalShell body paddingBottom dropped from 132px to 16px for center placement (was always 132px regardless of placement; the 132px was the iOS tab-bar clearance for bottom-sheets and made center modals visibly extend off-screen). Center mode also got smaller outer padding (8/18/0 → 6/16/0), smaller title font (26 → 22), smaller title margin (18 → 10). EditTaskModal sticky footer paddingTop/Bottom tightened (10/10 → 8/6) and marginTop reduced (4 → 2). (2) New pileQuickActionId + pileQuickTimeDraft state. toggleQuickAction(taskId) toggles between null and the tapped id; tapping another row collapses the first. TaskRow's title-area onClick rewired from setEditingTask(t) to toggleQuickAction(t.id). New per-task helpers moveToScheduled(timeStr), moveToToday(), moveToBacklog() patch scheduledTime + scheduledDate + pinned to match the target section. curSection derivation marks the active button. Inline panel renders inside a React.Fragment below the row when pileQuickActionId matches: 3-col section button row + always-visible time input row (auto-seeded from t.scheduledTime, 'Slot' button commits to Scheduled) + Edit details ↗ link (closes panel, opens full modal) + close link. Panel uses gold-tinted left border + faint gold background so it visually attaches to its row. Build verified clean via esbuild." },
+  { version: "2026.05.05bt380", summary: "Bottle picker pre-select + task pile UX batch 1. (1) Pre-select tapped bottle in UseBottleModal: new App state bottlePickerInitialId, passed to modal via initialBottleId prop, modal seeds selectedId + oz from it; was opening to oldest regardless of which bottle the user tapped in the inline panel. (2) Tap-outside dismiss for pile × delete prompt: useEffect on pilePendingActionId attaches doc-level pointerdown listener (50ms delay) that clears unless the target is inside [data-pile-delete-btn]; × button got the data attribute so the second tap still commits. (3) Inline edit task name on pile: TaskRow title now has a small ✎ button that sets inlineTitleEdit = t.id (reusing existing infrastructure from the timeline render); title span becomes autofocused <input> while editing, commits on blur/Enter, cancels on Esc. Opening rename also closes the quick-action panel. (4) Regret sort debounce: new regretSortFrozen state + armRegretFreeze helper armed on each cycleRegret; backlog and unscheduledTodayBucket sorts return 0 while frozen, preserving order. 2s window resets on each cycle. (5) Plan-from-queue button promoted: was small italic gold link buried under sections, now bold uppercase mono CTA with mauve tint + ☑ glyph + italic hint. Deferred items listed in build notes. Build verified clean via esbuild." },
   { version: "2026.05.05bt228", summary: "Visual split of free rows at shift boundaries. (1) Inside the dayTimeline useMemo, captured buildDayTimeline output as rawTimeline. (2) New post-processing helper splitFreeAtBoundaries(items) walks the timeline: for each item where kind !== 'free' OR start/end missing, passes through unchanged. For each free item, collects shift-boundary timestamps from activeShifts.Mommy + activeShifts.Daddy that fall strictly within [item.start, item.end]. If no internal cuts, passes through unchanged. Otherwise generates one sub-item per [cut[i], cut[i+1]] range. Sub-items with durationMin < 5 are dropped (slivers). (3) useMemo returns splitFreeAtBoundaries(rawTimeline). SCOPING: 1 helper + 1 final return wrap inside the existing dayTimeline useMemo. Zero changes to buildDayTimeline, scheduler, schema, palette, modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt227", summary: "Mixed-duty block sub-line breakdown (dormant after bt228 since each visual row is single-owner now, but kept for edge cases). railSegments refactored to include startMs/endMs. isMixedOwner = railSegments.length > 1. Open-block sub-line IIFE branches on isMixedOwner: when true, computes per-segment effectiveBlockProfile, surfaces breakdown bullets with owner-colored time ranges. Build verified clean via esbuild." },
   { version: "2026.05.05bt226", summary: "Past-free-block render as closed. (1) Added isPast + isPastFree derivation in row scope: isPast = !isTomorrow && slot.end <= now. isPastFree = isFree && isPast. (2) Free-block onClick handler gated on !isPast. (3) Title block rewrite inside the isFree ternary: past → muted-italic '✕ Closed · time has passed'; not-past → original gold open-label span + nap-badge IIFE. (4) Row cursor + opacity updated for past free rows (0.55 fade)." },
@@ -2726,6 +2726,15 @@ function SoleneHandoffInner() {
   const [showNoteArchive, setShowNoteArchive] = useState(false);
   const [showFinishPump, setShowFinishPump] = useState(false);
   const [bottlePickerLoc, setBottlePickerLoc] = useState(null); // 'rt' | 'fridge' | null
+  // v05.05bt380 — Per chat: 'tapping RT bottles or fridge bottles should
+  // also be able to use or deplete a bottle and log that as a feed. it
+  // used to be there and now it is changed so can we resume the way
+  // that functioned before.' Inline panel was opening the picker but
+  // ignoring the bottleId argument, so user always landed on the oldest
+  // bottle's selection rather than the one they tapped. This tracks the
+  // intended initial selection; UseBottleModal reads it via initialBottleId
+  // prop and seeds selectedId from it. Cleared on close alongside loc.
+  const [bottlePickerInitialId, setBottlePickerInitialId] = useState(null);
   const [editingBottleId, setEditingBottleId] = useState(null);
   // v05.05bt73: preset location for ADD-mode of EditBottleModal. Set when
   // the user taps "+ Add a bottle to fridge/freezer" in UseBottleModal —
@@ -3711,6 +3720,31 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         date.setHours(Math.floor(remH), Math.round((remH - Math.floor(remH)) * 60), 0, 0);
         return date;
       };
+      // v05.05bt380 — Per chat: 'if i am at a 3hr cadence and i have
+      // not logged a pump then i am OVERDUE - it seems like the timer
+      // just resets and becomes green.' Root cause: the loop above
+      // picks the next FUTURE planned session, ignoring whether the
+      // user actually logged a pump for the most recent past one.
+      // After 30 min grace the picker jumped to the next plan slot
+      // (typically 2-3h away) so the tile flipped green even though
+      // the user was overdue. Fix: before returning a future-planned
+      // session, sanity-check against lastPump. If the last logged
+      // pump is older than PUMP_INTERVAL_HRS, we're overdue — fall
+      // through to the interval-based fallback which produces a
+      // past-time and correctly reads as overdue. If there's no
+      // lastPump at all (first pump of the day) we let the plan
+      // drive the first session.
+      if (lastPump) {
+        const lastStart = lastPump.mode === "start"
+          ? new Date(lastPump.ts)
+          : new Date(new Date(lastPump.ts).getTime() - (lastPump.durationMin || 30) * 60000);
+        const hoursSinceLast = (now.getTime() - lastStart.getTime()) / 3600000;
+        if (hoursSinceLast >= PUMP_INTERVAL_HRS) {
+          // Overdue — show lastPump + interval (in the past) so the
+          // tile colors red and minsToNextPump is negative.
+          return new Date(lastStart.getTime() + PUMP_INTERVAL_HRS * 3600000);
+        }
+      }
       // Try today's sessions first — pick first one not yet past (with grace)
       for (const h of sorted) {
         const dt = buildAt(h);
@@ -6682,7 +6716,36 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               originalParent: takeover.originalParent,
             });
           }}
-          onPickBottle={(loc) => setBottlePickerLoc(loc)}
+          onPickBottle={(loc, bottleId) => {
+            // v05.05bt380 — Accept a bottleId so the inline panel can
+            // pre-select a specific bottle when opening the picker.
+            setBottlePickerLoc(loc);
+            setBottlePickerInitialId(bottleId || null);
+          }}
+          // v05.05bt380 — Per chat: 'tapping RT bottles or fridge
+          // bottles should also be able to use or deplete a bottle
+          // and log that as a feed. it used to be there.' bt378's
+          // inline tile-expand removed direct access to use/edit/
+          // discard for individual bottles; these handlers thread
+          // those actions back into the expanded panel so the user
+          // doesn't have to open the full picker to do quick ops.
+          onQuickUseBottle={(bottleId) => {
+            const bottle = liveInventory.find(b => b.id === bottleId);
+            if (!bottle) return;
+            const source = bottle.location === "freezer" ? "BM-thawed" : "BM";
+            const fromBottles = [{
+              oz: Number(bottle.oz),
+              pumpedAt: bottle.pumpedAt instanceof Date ? bottle.pumpedAt.toISOString() : bottle.pumpedAt,
+              location: bottle.location,
+              bottleLabel: bottle.bottleLabel || null,
+            }];
+            addEvent({ type: "feed", oz: Number(bottle.oz), source, ts: new Date(), fromBottles });
+            setInventory(prev => prev.filter(b => b.id !== bottleId));
+          }}
+          onEditBottle={(bottleId) => setEditingBottleId(bottleId)}
+          onDiscardBottle={(bottleId) => {
+            setInventory(prev => prev.filter(b => b.id !== bottleId));
+          }}
           onQuickLog={(eventType) => {
             // Quick-log from quadrants: tile tap opens the LOG sheet
             // pre-set to the given event type. Lets the user one-tap
@@ -7871,7 +7934,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           location={bottlePickerLoc}
           inventory={liveInventory.filter(i => !i.expired && i.location === bottlePickerLoc)}
           now={now}
-          onClose={() => setBottlePickerLoc(null)}
+          initialBottleId={bottlePickerInitialId}
+          onClose={() => { setBottlePickerLoc(null); setBottlePickerInitialId(null); }}
           onUse={({ bottleId, oz, isFullBottle }) => {
             // v05.05bt55 — guard against missing bottleId. If somehow the
             // picker fired without a selection, refuse to deduct — better
@@ -7987,16 +8051,22 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   );
 }
 
-function UseBottleModal({ C, location, inventory, now, onClose, onUse, onMoveToFridge, onMoveToFreezer, onDiscardBottle, onEditBottle, onAddBottle, onLogAnyway }) {
+function UseBottleModal({ C, location, inventory, now, initialBottleId, onClose, onUse, onMoveToFridge, onMoveToFreezer, onDiscardBottle, onEditBottle, onAddBottle, onLogAnyway }) {
   // Sort: oldest first within location (use-up order)
   const sorted = [...inventory].sort((a, b) => new Date(a.pumpedAt) - new Date(b.pumpedAt));
   // Single-bottle mode (default) is for feeding — pick one bottle, log a feed.
   // Multi-bottle mode is for cleanup — select several, then bulk discard or
   // bulk move to fridge. Switching modes resets selection.
   const [mode, setMode] = useState("use"); // "use" | "manage"
-  const [selectedId, setSelectedId] = useState(sorted[0]?.id || null);
+  // v05.05bt380 — Pre-select the bottle passed via initialBottleId
+  // (set by the inline tile panel when the user taps a specific
+  // bottle's "more / open picker" affordance). Falls back to
+  // oldest-first if not provided. Also seeds oz from the chosen
+  // bottle so the picker opens ready to log.
+  const initialBottle = (initialBottleId && sorted.find(b => b.id === initialBottleId)) || sorted[0];
+  const [selectedId, setSelectedId] = useState(initialBottle?.id || null);
   const [multiSelected, setMultiSelected] = useState(new Set()); // for "manage"
-  const [oz, setOz] = useState(sorted[0]?.oz || 4);
+  const [oz, setOz] = useState(initialBottle?.oz || 4);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [bulkConfirm, setBulkConfirm] = useState(null); // "discard" | "move" | null
   // v05.05bt21: "Bottle not in list — log anyway" inline form state.
@@ -10530,7 +10600,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -11713,6 +11783,9 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         onStartPump={onStartPump}
         onEndActivePump={onEndActivePump}
         onPickBottle={onPickBottle}
+        onQuickUseBottle={onQuickUseBottle}
+        onEditBottle={onEditBottle}
+        onDiscardBottle={onDiscardBottle}
         onJustLogPump={onQuickLog ? () => onQuickLog("pump") : undefined}
         now={now}
       />
@@ -11734,7 +11807,7 @@ function fmtPredictedNextFeed(lastFeed, now) {
 }
 
 // Milk panel: shown on both parents' on-duty card
-function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle, onJustLogPump }) {
+function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, onJustLogPump }) {
   const isMom = currentUser === "Mommy";
   // Chrome that's not specifically about Mommy (lactation) but still inside
   // MilkPanel — bottle markers, "last bottle" tile, etc. — should follow
@@ -11749,6 +11822,21 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   // Tracks which zone (rt|fridge|freezer) has its detail panel
   // expanded; null = all collapsed.
   const [milkZoneExpanded, setMilkZoneExpanded] = useState(null);
+  // v05.05bt380 — 2-tap discard for the inline panel's × button. Same
+  // arm-then-commit pattern as the task pile × so an accidental tap
+  // never destroys data. Auto-clears after 3.5s.
+  const [bottleDiscardArmedId, setBottleDiscardArmedId] = useState(null);
+  const bottleDiscardTimerRef = useRef(null);
+  const armBottleDiscard = (id) => {
+    if (bottleDiscardTimerRef.current) clearTimeout(bottleDiscardTimerRef.current);
+    setBottleDiscardArmedId(id);
+    bottleDiscardTimerRef.current = setTimeout(() => setBottleDiscardArmedId(null), 3500);
+  };
+  const clearBottleDiscard = () => {
+    if (bottleDiscardTimerRef.current) clearTimeout(bottleDiscardTimerRef.current);
+    bottleDiscardTimerRef.current = null;
+    setBottleDiscardArmedId(null);
+  };
   // Power pump chooser modal state — opens when user taps the pump tile
   // and there's no active session yet. Skipped if user just wants standard
   // (tap → standard); we only show the chooser if they explicitly long-tap
@@ -11852,7 +11940,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           }}>
             <div style={{
               fontSize: 22, lineHeight: 1, color: bColor, flexShrink: 0, marginTop: 2,
-            }}>{isRisky ? "⚠" : "⏰"}</div>
+            }}>{isRisky ? "⚠" : "●"}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
                 fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase",
@@ -12541,34 +12629,104 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                   </span>
                 </div>
               )}
-              {visible.map(b => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => onPickBottle && onPickBottle(zone, b.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "6px 4px",
-                    borderBottom: `1px solid ${C.line}10`,
-                    background: "transparent", border: "none",
-                    borderRadius: 0,
-                    cursor: "pointer", textAlign: "left",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontSize: 13, color: C.ink,
-                    touchAction: "manipulation",
-                    WebkitTapHighlightColor: "transparent",
-                  }}>
-                  <span style={{ fontSize: 13 }}>🍼</span>
-                  <span style={{ flex: 1 }}>{(b.oz || 0).toFixed(1)} oz{b.bottleLabel ? ` · ${b.bottleLabel}` : ""}</span>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, color: b.remaining != null && b.remaining < (isFreezer ? 168 : 2) ? C.accent : C.muted,
-                  }}>
-                    {isFreezer ? fmtSmartDuration(b.remaining) : fmtHours(b.remaining)}
-                  </span>
-                </button>
-              ))}
+              {visible.map(b => {
+                const isArmed = bottleDiscardArmedId === b.id;
+                // v05.05bt380 — Bottle row rebuilt as a flex row of
+                // [info | use | edit | discard] so the user can act
+                // on a bottle without opening a separate modal. Per
+                // chat: 'Should be able to discard and edit bottles
+                // too. All of the previous functionality for the
+                // bottle inventory is gone.' Tapping the info area
+                // (oz + time) runs onQuickUseBottle (logs feed at
+                // full oz + deducts the bottle) — restoring the
+                // 'tap to use' shortcut that existed pre-bt378.
+                return (
+                  <div
+                    key={b.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      padding: "4px 2px 4px 0",
+                      borderBottom: `1px solid ${C.line}10`,
+                    }}>
+                    <button
+                      type="button"
+                      onClick={() => onQuickUseBottle && onQuickUseBottle(b.id)}
+                      title="Tap to log this bottle as a feed"
+                      style={{
+                        flex: 1, minWidth: 0,
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "4px 6px",
+                        background: "transparent", border: "none",
+                        borderRadius: 4,
+                        cursor: "pointer", textAlign: "left",
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 13, color: C.ink,
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}>
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>🍼</span>
+                      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {(b.oz || 0).toFixed(1)} oz{b.bottleLabel ? ` · ${b.bottleLabel}` : ""}
+                      </span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, flexShrink: 0,
+                        color: b.remaining != null && b.remaining < (isFreezer ? 168 : 2) ? C.accent : C.muted,
+                      }}>
+                        {isFreezer ? fmtSmartDuration(b.remaining) : fmtHours(b.remaining)}
+                      </span>
+                    </button>
+                    {/* Edit button — opens EditBottleModal for this bottle. */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); clearBottleDiscard(); onEditBottle && onEditBottle(b.id); }}
+                      title="Edit bottle"
+                      aria-label="Edit bottle"
+                      style={{
+                        flexShrink: 0, padding: "5px 7px",
+                        background: "transparent",
+                        border: `1px solid ${C.line}33`,
+                        borderRadius: 4,
+                        cursor: "pointer", color: C.muted,
+                        fontSize: 11, lineHeight: 1,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}>✎</button>
+                    {/* Discard with 2-tap confirm. First tap arms (label
+                        flips to red 'discard?'), second tap commits. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isArmed) {
+                          clearBottleDiscard();
+                          onDiscardBottle && onDiscardBottle(b.id);
+                        } else {
+                          armBottleDiscard(b.id);
+                        }
+                      }}
+                      title={isArmed ? "Tap again to confirm" : "Discard bottle"}
+                      aria-label="Discard bottle"
+                      style={{
+                        flexShrink: 0,
+                        padding: isArmed ? "4px 7px" : "5px 8px",
+                        background: isArmed ? C.accent : "transparent",
+                        border: isArmed ? "none" : `1px solid ${C.accent}33`,
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        color: isArmed ? "#fff" : C.accent,
+                        fontSize: isArmed ? 9 : 13, lineHeight: 1,
+                        fontFamily: isArmed ? "'JetBrains Mono', monospace" : "inherit",
+                        fontWeight: 700,
+                        letterSpacing: isArmed ? "0.08em" : "0",
+                        textTransform: isArmed ? "uppercase" : "none",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}>{isArmed ? "discard?" : "×"}</button>
+                  </div>
+                );
+              })}
               {/* Overflow indicator for freezer — opens the full picker
                   modal where all bottles are listed + bulk actions are
                   available. */}
@@ -12595,16 +12753,26 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 type="button"
                 onClick={() => onPickBottle && onPickBottle(zone)}
                 style={{
-                  marginTop: 6, padding: "4px 8px",
-                  background: "transparent",
-                  border: `1px dashed ${C.line}44`,
-                  borderRadius: 4,
+                  // v05.05bt380 — Per chat: 'it is hard to see what
+                  // comes up when you just make it a new dotted line
+                  // box underneath freezer.' Was: dashed line+44 +
+                  // transparent bg + muted color. Now: solid gold
+                  // border + faint gold bg + gold text so the affordance
+                  // is obvious. Same treatment for all three zones since
+                  // visibility was a consistent issue.
+                  marginTop: 8, padding: "8px 10px",
+                  background: `${C.gold}10`,
+                  border: `1px solid ${C.gold}66`,
+                  borderRadius: 6,
                   cursor: "pointer",
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 11.5,
-                  color: C.muted,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, letterSpacing: "0.12em",
+                  fontWeight: 700, textTransform: "uppercase",
+                  color: C.gold,
                   width: "100%",
-                }}>+ add to {label.toLowerCase()}</button>
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}>+ add bottle to {label.toLowerCase()}</button>
             </div>
           );
         };
@@ -27373,6 +27541,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     pilePendingActionTimerRef.current = null;
     setPilePendingActionId(null);
   };
+  // v05.05bt380 — Per chat: 'for the tasks that are clicked on to delete
+  // the only option is delete or nothing... how about if i accidentally
+  // hit it and i dont want to delete then i should be able to click
+  // anywhere else on the screen and that delete prompt disappears.'
+  // Add a document-level pointerdown listener while armed. The × button
+  // is tagged with data-pile-delete-btn so we can identify it and skip
+  // clearing when the user taps it (the second tap commits the delete).
+  // Listener attaches via setTimeout(50ms) so the same pointerup that
+  // armed the action doesn't immediately clear it.
+  useEffect(() => {
+    if (!pilePendingActionId) return;
+    const handler = (e) => {
+      if (e.target && e.target.closest && e.target.closest("[data-pile-delete-btn]")) return;
+      clearPileAction();
+    };
+    const tid = setTimeout(() => {
+      document.addEventListener("pointerdown", handler);
+    }, 50);
+    return () => {
+      clearTimeout(tid);
+      document.removeEventListener("pointerdown", handler);
+    };
+  }, [pilePendingActionId]);
   // v05.05bt379 — Per chat: 'in the task pile i should be able to
   // click on a task and right there and then categorize it or at
   // least drag and drop it or move it to the approporiate ctegory.'
@@ -27384,6 +27575,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // so opening another row collapses the first.
   const [pileQuickActionId, setPileQuickActionId] = useState(null);
   const [pileQuickTimeDraft, setPileQuickTimeDraft] = useState("");
+  // v05.05bt380 — Per chat: 'when i am changing regret scores maybe
+  // give it some time before it gets resorted because if i am going
+  // from a 1 to a 5 then it moves suddenly on me and i end up
+  // changing another task instead by accident.' Freeze all pile
+  // sorts for 2s after any regret cycle. The badge updates
+  // immediately (so the user sees the new value) but row positions
+  // hold. Each subsequent cycle within the window resets the timer.
+  const [regretSortFrozen, setRegretSortFrozen] = useState(false);
+  const regretSortFreezeTimerRef = useRef(null);
+  const armRegretFreeze = () => {
+    if (regretSortFreezeTimerRef.current) clearTimeout(regretSortFreezeTimerRef.current);
+    setRegretSortFrozen(true);
+    regretSortFreezeTimerRef.current = setTimeout(() => {
+      setRegretSortFrozen(false);
+      regretSortFreezeTimerRef.current = null;
+    }, 2000);
+  };
   const toggleQuickAction = (taskId) => {
     setPileQuickActionId(prev => {
       if (prev === taskId) {
@@ -30122,13 +30330,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       pill maybe move to the right side of the
                       panel?' */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 10 }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
                       <h1 style={{
                         fontFamily: "'Cormorant Garamond', serif",
                         fontStyle: "italic", fontWeight: 500,
                         fontSize: 30, color: C.ink,
                         margin: 0, lineHeight: 1.05,
                         letterSpacing: "-0.015em",
+                        textAlign: "left",
                       }}>{
                         isTomorrow ? "Tomorrow"
                         : productMode === "solo" ? "Today"
@@ -30139,6 +30348,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontSize: 10, letterSpacing: "0.14em",
                         fontWeight: 600, color: C.muted,
                         textTransform: "uppercase", marginTop: 3,
+                        textAlign: "left",
                       }}>
                         {referenceDate.toLocaleDateString(undefined, {
                           weekday: "short", month: "short", day: "numeric",
@@ -33693,6 +33903,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 : [];
               const unscheduledTodayBucket = [...unscheduledBase, ...rollovers]
                 .sort((a, b) => {
+                  if (regretSortFrozen) return 0;
                   const aFit = a._couldNotFit ? 0 : 1;
                   const bFit = b._couldNotFit ? 0 : 1;
                   if (aFit !== bFit) return aFit - bFit;
@@ -33711,7 +33922,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               const backlog = myTasks
                 .filter(t => !t.scheduledTime && !t.scheduledDate)
                 .filter(t => !t.completedAt || isCompletedToday(t))
-                .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0));
+                .sort((a, b) => regretSortFrozen ? 0 : (b.regretScore || 0) - (a.regretScore || 0));
               // Back-compat: code below still refers to "unscheduled".
               // Map it to forToday so existing render paths stay working.
               const unscheduled = forToday;
@@ -33737,6 +33948,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     const next = (cur + 1) % 6;
                     return { ...x, regretScore: next };
                   }));
+                  // v05.05bt380 — Freeze pile sorting for 2s so the row
+                  // doesn't jump while the user cycles through values.
+                  armRegretFreeze();
                 };
                 const cycleFocus = (e) => {
                   e.stopPropagation();
@@ -33876,7 +34090,69 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         minWidth: 0,
                         textAlign: "left",
                       }}>
-                        {t.title}
+                        {/* v05.05bt380 — Per chat: 'i should also be
+                            able to edit task name right there and
+                            then on the task pile.' Reuses the
+                            existing inlineTitleEdit infrastructure
+                            (already wired into the timeline render):
+                            when this task's id is the active inline
+                            edit, the title becomes an autofocused
+                            input that commits on blur / Enter and
+                            cancels on Escape. Tap-to-enter is on a
+                            small ✎ button rendered after the title
+                            so the row's main click can still expand
+                            the quick-action panel without conflict. */}
+                        {inlineTitleEdit === t.id ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            defaultValue={t.title}
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={(e) => commitInlineTitle(t.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitInlineTitle(t.id, e.currentTarget.value);
+                              else if (e.key === "Escape") setInlineTitleEdit(null);
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "2px 6px",
+                              background: C.bg, color: C.ink,
+                              border: `1px solid ${C.mommy}66`,
+                              borderRadius: 4,
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
+                              fontStyle: "italic",
+                            }}
+                          />
+                        ) : (
+                          <>
+                          {t.title}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineTitleEdit(t.id);
+                              // Close any open quick-action panel
+                              // when entering rename mode so the row
+                              // doesn't show two affordances at once.
+                              setPileQuickActionId(null);
+                            }}
+                            title="Rename"
+                            aria-label="Rename task"
+                            style={{
+                              marginLeft: 5,
+                              padding: "0 4px",
+                              background: "transparent", border: "none",
+                              cursor: "pointer",
+                              fontSize: 11, color: C.muted,
+                              opacity: 0.55,
+                              fontFamily: "inherit",
+                              touchAction: "manipulation",
+                              WebkitTapHighlightColor: "transparent",
+                              verticalAlign: "baseline",
+                            }}>✎</button>
+                          </>
+                        )}
                         {/* v05.05bt376 — Per chat: 'for things that are
                             scheduled, can you update the time beside
                             the task (ie today at X time).' Inline time
@@ -33976,6 +34252,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         second tap commits. */}
                     <button
                       type="button"
+                      data-pile-delete-btn="1"
                       onPointerUp={handleX}
                       title={isPendingAction
                         ? "Tap again to confirm"
@@ -34268,22 +34545,40 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       type="button"
                       onClick={() => setPlanPickerOpen(true)}
                       style={{
-                        width: "100%", padding: "8px 14px",
-                        background: "transparent",
+                        /* v05.05bt380 — Per chat: 'the plan for queue
+                           also needs to be more prominent because i
+                           didnt realize it was there.' Was: transparent
+                           bg, italic small text, low-contrast. Now:
+                           solid mauve-tinted bg, bold mono uppercase
+                           label, bigger font + chevron so it reads as
+                           a primary action rather than a footnote. */
+                        width: "100%", padding: "12px 14px",
+                        background: `${C.mommy}15`,
                         border: "none",
-                        borderTop: `1px solid ${C.line}22`,
+                        borderTop: `1px solid ${C.mommy}33`,
                         cursor: "pointer", textAlign: "left",
-                        fontFamily: "'Cormorant Garamond', serif",
-                        fontStyle: "italic", fontSize: 12.5,
-                        color: C.gold,
-                        display: "flex", alignItems: "center", gap: 6,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11, fontWeight: 700,
+                        letterSpacing: "0.12em", textTransform: "uppercase",
+                        color: C.mommy,
+                        display: "flex", alignItems: "center", gap: 8,
+                        justifyContent: "space-between",
                         touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
                       }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          fontFamily: "'Inter', sans-serif",
+                          fontSize: 15, fontWeight: 700,
+                        }}>☑</span>
+                        Plan from queue
+                      </span>
                       <span style={{
-                        fontFamily: "'Inter', sans-serif",
-                        fontSize: 14, fontWeight: 600,
-                      }}>☑</span>
-                      Plan from queue · pick from all unscheduled
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontSize: 12,
+                        textTransform: "none", letterSpacing: 0,
+                        opacity: 0.75, fontWeight: 400,
+                      }}>pick from all unscheduled →</span>
                     </button>
                     {/* v05.05bt363 — Per chat: 'In scheduled vs
                         unscheduled pile up need a better way to fix
@@ -34326,13 +34621,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         </button>
                         {scheduledExpanded && (
                           scheduled.length === 0 ? (
-                            <div style={{
-                              padding: "8px 5px",
-                              fontFamily: "'Cormorant Garamond', serif",
-                              fontStyle: "italic", fontSize: 11.5,
-                              color: C.muted,
-                              textAlign: "left",
-                            }}>nothing slotted yet</div>
+                            <button
+                              type="button"
+                              onClick={() => setShowNlInput(true)}
+                              style={{
+                                width: "100%",
+                                padding: "10px 8px",
+                                background: `${C.mommy}08`,
+                                border: `1px dashed ${C.mommy}55`,
+                                borderRadius: 6,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontStyle: "italic", fontSize: 12,
+                                color: C.mommy,
+                                cursor: "pointer",
+                                textAlign: "left",
+                                marginTop: 4,
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                              }}>+ tap to schedule a task</button>
                           ) : scheduled.map(t => <TaskRow key={t.id} t={t} side="scheduled" />)
                         )}
                       </div>
@@ -34424,12 +34730,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           );
                         })()}
                         {unscheduled.length === 0 ? (
-                          <div style={{
-                            padding: "8px 5px",
-                            fontFamily: "'Cormorant Garamond', serif",
-                            fontStyle: "italic", fontSize: 11.5,
-                            color: C.muted,
-                          }}>backlog clear ✓</div>
+                          <button
+                            type="button"
+                            onClick={() => setShowNlInput(true)}
+                            style={{
+                              width: "100%",
+                              padding: "10px 8px",
+                              background: `${C.gold}08`,
+                              border: `1px dashed ${C.gold}55`,
+                              borderRadius: 6,
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontStyle: "italic", fontSize: 12,
+                              color: C.gold,
+                              cursor: "pointer",
+                              textAlign: "left",
+                              marginTop: 4,
+                              touchAction: "manipulation",
+                              WebkitTapHighlightColor: "transparent",
+                            }}>+ tap to add a task for today</button>
                         ) : (() => {
                           // v05.05bt352/356 — Group + filter by category.
                           // Filter applied first; category dividers stay
@@ -34522,12 +34840,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         </button>
                         {backlogExpanded && (
                           backlog.length === 0 ? (
-                            <div style={{
-                              padding: "8px 5px",
-                              fontFamily: "'Cormorant Garamond', serif",
-                              fontStyle: "italic", fontSize: 11.5,
-                              color: C.muted,
-                            }}>nothing in backlog · brain-dump anything you want to remember</div>
+                            <button
+                              type="button"
+                              onClick={() => setShowBrainDump(true)}
+                              style={{
+                                width: "100%",
+                                padding: "10px 8px",
+                                background: `${C.line}10`,
+                                border: `1px dashed ${C.line}66`,
+                                borderRadius: 6,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontStyle: "italic", fontSize: 12,
+                                color: C.muted,
+                                cursor: "pointer",
+                                textAlign: "left",
+                                marginTop: 4,
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                              }}>+ tap to brain-dump · capture anything to remember</button>
                           ) : (
                             <>
                               {backlog.slice(0, 12).map(t => (
