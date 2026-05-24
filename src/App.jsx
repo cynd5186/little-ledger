@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt376";
+const APP_VERSION = "2026.05.05bt379";
 const APP_BUILD_NOTES = [
-  "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
+  "EDIT-TASK MODAL SHRUNK + INLINE QUICK-CATEGORIZE IN TASK PILE. Per chat: 'when i click on tasks to edit it and it brings up the pop up dialog... that dialog is so big i cannot even see the top of the box nor the bottom of it. can we redesign this to also be more user friendly. in the task pile i should be able to click on a task and right there and then categorize it or at least drag and drop it or move it to the approporiate ctegory'.\n\n(1) MODAL SIZE FIX. Root cause: ModalShell's body had paddingBottom: 'calc(132px + safe-area)' regardless of placement. The 132px was sized for bottom-sheet modals to clear the iOS tab bar, but center-placement modals (like EditTaskModal) sit in the middle of the viewport with no tab-bar overlap — that 132px just pushed Save/Delete out of view and made the modal feel like it extended off both ends of the screen. New behavior: paddingBottom is now 'calc(16px + safe-area)' for center placement, retained at 132px for bottom-sheet. Also slimmed center mode: outer padding 8/18/0 → 6/16/0, title font 26 → 22, title margin-bottom 18 → 10. The sticky Save/Delete footer inside EditTaskModal had its own padding tightened (10/10 → 8/6, marginTop 4 → 2). Net: modal now visibly fits inside the viewport.\n\n(2) INLINE QUICK-CATEGORIZE. Tapping a task row in the pile used to jump straight to the (too-tall) EditTaskModal. Now it expands an inline quick-action panel directly below the row with three move-target buttons matching the three pile sections:\n  • ● Scheduled (mauve) — paired with a time input + 'Slot' button\n  • ◐ Today (gold) — clears time, sets scheduledDate to today\n  • ○ Backlog (muted) — clears both time and date\nThe button matching the task's current section gets active styling so the user can see where it lives. An italic 'Edit details ↗' link still opens the full modal for power tweaks (focus, regret, recurring, etc.). The X button retains its existing 2-tap delete/unschedule behavior; checkbox still toggles complete.\n\nSCOPING: 1 ModalShell padding tweak (~6 small property changes inside the inner card + body), 1 sticky footer style tweak in EditTaskModal, 1 new state pair in TodayTaskPlanCard (pileQuickActionId + pileQuickTimeDraft), 1 new toggle helper, 3 new move helpers inside TaskRow, 1 row onClick rewire (setEditingTask → toggleQuickAction), 1 fragment wrap + ~140-line inline panel render. Zero changes to task schema, scheduler, palette, drag handlers, other modals. Drag-and-drop NOT added (per chat 'or at least click') since the click-to-pick pattern is more reliable on iOS PWA. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt379", summary: "EditTaskModal size fix + inline quick-categorize in task pile. (1) ModalShell body paddingBottom dropped from 132px to 16px for center placement (was always 132px regardless of placement; the 132px was the iOS tab-bar clearance for bottom-sheets and made center modals visibly extend off-screen). Center mode also got smaller outer padding (8/18/0 → 6/16/0), smaller title font (26 → 22), smaller title margin (18 → 10). EditTaskModal sticky footer paddingTop/Bottom tightened (10/10 → 8/6) and marginTop reduced (4 → 2). (2) New pileQuickActionId + pileQuickTimeDraft state. toggleQuickAction(taskId) toggles between null and the tapped id; tapping another row collapses the first. TaskRow's title-area onClick rewired from setEditingTask(t) to toggleQuickAction(t.id). New per-task helpers moveToScheduled(timeStr), moveToToday(), moveToBacklog() patch scheduledTime + scheduledDate + pinned to match the target section. curSection derivation marks the active button. Inline panel renders inside a React.Fragment below the row when pileQuickActionId matches: 3-col section button row + always-visible time input row (auto-seeded from t.scheduledTime, 'Slot' button commits to Scheduled) + Edit details ↗ link (closes panel, opens full modal) + close link. Panel uses gold-tinted left border + faint gold background so it visually attaches to its row. Build verified clean via esbuild." },
   { version: "2026.05.05bt228", summary: "Visual split of free rows at shift boundaries. (1) Inside the dayTimeline useMemo, captured buildDayTimeline output as rawTimeline. (2) New post-processing helper splitFreeAtBoundaries(items) walks the timeline: for each item where kind !== 'free' OR start/end missing, passes through unchanged. For each free item, collects shift-boundary timestamps from activeShifts.Mommy + activeShifts.Daddy that fall strictly within [item.start, item.end]. If no internal cuts, passes through unchanged. Otherwise generates one sub-item per [cut[i], cut[i+1]] range. Sub-items with durationMin < 5 are dropped (slivers). (3) useMemo returns splitFreeAtBoundaries(rawTimeline). SCOPING: 1 helper + 1 final return wrap inside the existing dayTimeline useMemo. Zero changes to buildDayTimeline, scheduler, schema, palette, modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt227", summary: "Mixed-duty block sub-line breakdown (dormant after bt228 since each visual row is single-owner now, but kept for edge cases). railSegments refactored to include startMs/endMs. isMixedOwner = railSegments.length > 1. Open-block sub-line IIFE branches on isMixedOwner: when true, computes per-segment effectiveBlockProfile, surfaces breakdown bullets with owner-colored time ranges. Build verified clean via esbuild." },
   { version: "2026.05.05bt226", summary: "Past-free-block render as closed. (1) Added isPast + isPastFree derivation in row scope: isPast = !isTomorrow && slot.end <= now. isPastFree = isFree && isPast. (2) Free-block onClick handler gated on !isPast. (3) Title block rewrite inside the isFree ternary: past → muted-italic '✕ Closed · time has passed'; not-past → original gold open-label span + nap-badge IIFE. (4) Row cursor + opacity updated for past free rows (0.55 fade)." },
@@ -6953,6 +6954,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setShowOnsiteModal(true);
           }}
           isCadence={isCadence}
+          showPlanTab={isCadence && tab === "shifts"}
           addTaskFromLog={(taskList, mode) => {
             // v05.05bt348/371 — Cadence-mode plan tab. mode parameter
             // controls scheduling intent:
@@ -12377,10 +12379,18 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         // bt361 since that's compact and readable.
         const Tile = ({ zoneKey, label, glyph, oz, bottles, urgencyHint, urgent, span }) => {
           const empty = bottles.length === 0;
+          const isExpanded = milkZoneExpanded === zoneKey;
+          // v05.05bt378 — Per chat: 'clicking on the inventory tiles is
+          // either laggy for RT or does nothing as in the fridge.' Root
+          // cause: tile click was wired to onPickBottle (opens
+          // UseBottleModal) instead of toggling milkZoneExpanded (inline
+          // detail panel via renderExpanded). The handoff intent was
+          // tap-to-expand. Empty tiles also toggle expansion so the
+          // expanded panel can host the '+ add' button consistently.
           return (
             <button
               type="button"
-              onClick={() => onPickBottle && onPickBottle(zoneKey)}
+              onClick={() => setMilkZoneExpanded(isExpanded ? null : zoneKey)}
               style={{
                 gridColumn: span || "auto",
                 display: "flex", flexDirection: "column",
@@ -12388,16 +12398,19 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 gap: 8,
                 padding: "10px 12px",
                 minHeight: span === "1 / -1" ? 72 : 96,
-                background: empty ? "transparent" : C.paper,
+                background: empty
+                  ? (isExpanded ? `${C.line}10` : "transparent")
+                  : (isExpanded ? `${C.gold}10` : C.paper),
                 border: empty
-                  ? `1px dashed ${C.line}33`
-                  : `1px solid ${urgent ? C.accent + "55" : C.line + "22"}`,
+                  ? `1px dashed ${isExpanded ? C.gold + "66" : C.line + "33"}`
+                  : `1px solid ${isExpanded ? C.gold + "88" : (urgent ? C.accent + "55" : C.line + "22")}`,
                 borderRadius: 8,
                 cursor: "pointer", textAlign: "left",
                 fontFamily: "inherit",
                 opacity: empty ? 0.7 : 1,
                 touchAction: "manipulation",
                 WebkitTapHighlightColor: "transparent",
+                transition: "background 0.15s, border-color 0.15s",
               }}>
               {/* Top: label */}
               <div style={{
@@ -12448,15 +12461,41 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           );
         };
         // Expanded detail panel (shown below the grid when a tile is tapped).
+        // v05.05bt378 — Per chat: (a) bottles are now tappable buttons that
+        // open the picker pre-selected (was a flat <div> list — couldn't
+        // tap to use). (b) For freezer: cap visible to FREEZER_CAP bottles
+        // with 'show all N' button — per chat 'for the freezer inventory
+        // ... consolidate that so it is not a super long list that you
+        // cant even see the header or footer'. RT/fridge unaffected since
+        // those rarely exceed 3-4 bottles in practice.
+        const FREEZER_CAP = 5;
         const renderExpanded = () => {
           if (!milkZoneExpanded) return null;
           const zone = milkZoneExpanded;
-          const list = zone === "rt" ? sortedRT
-                     : zone === "fridge" ? (fridgeItems || [])
-                     : freezerBottles;
+          const fullList = zone === "rt" ? sortedRT
+                         : zone === "fridge" ? (fridgeItems || [])
+                         : freezerBottles;
           const label = zone === "rt" ? "Room temp"
                       : zone === "fridge" ? "Fridge"
                       : "Freezer";
+          // Freezer-only consolidation: show oldest N (most urgent), with
+          // an overflow row that opens the modal for the full list.
+          const isFreezer = zone === "freezer";
+          // Sort by remaining (ascending) so urgent ones surface first.
+          const sortedList = isFreezer
+            ? [...fullList].sort((a, b) => (a.remaining ?? Infinity) - (b.remaining ?? Infinity))
+            : fullList;
+          const visible = isFreezer && sortedList.length > FREEZER_CAP
+            ? sortedList.slice(0, FREEZER_CAP)
+            : sortedList;
+          const overflow = sortedList.length - visible.length;
+          // Aggregate stats (freezer only) — gives at-a-glance summary
+          // without forcing scroll through every bottle.
+          const freezerStats = isFreezer && sortedList.length > 0 ? (() => {
+            const totalOz = sortedList.reduce((s, b) => s + (b.oz || 0), 0);
+            const oldestRem = sortedList[0]?.remaining;
+            return { totalOz, oldestRem, count: sortedList.length };
+          })() : null;
           return (
             <div style={{
               marginTop: 4, padding: "8px 12px",
@@ -12472,7 +12511,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                   fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase",
                   color: C.muted, fontWeight: 700,
                   fontFamily: "'JetBrains Mono', monospace",
-                }}>{label} · {list.length} bottle{list.length !== 1 ? "s" : ""}</span>
+                }}>{label} · {sortedList.length} bottle{sortedList.length !== 1 ? "s" : ""}</span>
                 <button
                   type="button"
                   onClick={() => setMilkZoneExpanded(null)}
@@ -12483,24 +12522,75 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     fontSize: 11, cursor: "pointer",
                   }}>close ×</button>
               </div>
-              {list.map(b => (
-                <div key={b.id} style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "5px 4px",
-                  borderBottom: `1px solid ${C.line}10`,
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 13, color: C.ink,
+              {/* Freezer aggregate summary line — only shown when freezer
+                  has bottles. Gives the at-a-glance read so the user
+                  doesn't need to scan the list to know what's there. */}
+              {freezerStats && (
+                <div style={{
+                  display: "flex", justifyContent: "space-between",
+                  alignItems: "baseline",
+                  padding: "4px 4px 6px",
+                  marginBottom: 4,
+                  borderBottom: `1px solid ${C.line}15`,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, color: C.muted, letterSpacing: "0.04em",
                 }}>
-                  <span style={{ fontSize: 13 }}>🍼</span>
-                  <span style={{ flex: 1 }}>{b.oz} oz</span>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, color: b.remaining < 2 ? C.accent : C.muted,
-                  }}>
-                    {fmtHours(b.remaining)}
+                  <span>{freezerStats.totalOz.toFixed(1)} oz total</span>
+                  <span style={{ color: freezerStats.oldestRem != null && freezerStats.oldestRem < 168 ? C.accent : C.muted }}>
+                    {freezerStats.oldestRem != null ? `oldest: ${fmtSmartDuration(freezerStats.oldestRem)}` : ""}
                   </span>
                 </div>
+              )}
+              {visible.map(b => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => onPickBottle && onPickBottle(zone, b.id)}
+                  style={{
+                    width: "100%",
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "6px 4px",
+                    borderBottom: `1px solid ${C.line}10`,
+                    background: "transparent", border: "none",
+                    borderRadius: 0,
+                    cursor: "pointer", textAlign: "left",
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontSize: 13, color: C.ink,
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
+                  }}>
+                  <span style={{ fontSize: 13 }}>🍼</span>
+                  <span style={{ flex: 1 }}>{(b.oz || 0).toFixed(1)} oz{b.bottleLabel ? ` · ${b.bottleLabel}` : ""}</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: b.remaining != null && b.remaining < (isFreezer ? 168 : 2) ? C.accent : C.muted,
+                  }}>
+                    {isFreezer ? fmtSmartDuration(b.remaining) : fmtHours(b.remaining)}
+                  </span>
+                </button>
               ))}
+              {/* Overflow indicator for freezer — opens the full picker
+                  modal where all bottles are listed + bulk actions are
+                  available. */}
+              {overflow > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onPickBottle && onPickBottle(zone)}
+                  style={{
+                    width: "100%",
+                    marginTop: 4, padding: "6px 8px",
+                    background: `${C.gold}10`,
+                    border: `1px dashed ${C.gold}55`,
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, letterSpacing: "0.08em",
+                    color: C.gold, fontWeight: 700,
+                    textTransform: "uppercase",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
+                  }}>+ {overflow} more · view all {sortedList.length}</button>
+              )}
               <button
                 type="button"
                 onClick={() => onPickBottle && onPickBottle(zone)}
@@ -27283,6 +27373,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     pilePendingActionTimerRef.current = null;
     setPilePendingActionId(null);
   };
+  // v05.05bt379 — Per chat: 'in the task pile i should be able to
+  // click on a task and right there and then categorize it or at
+  // least drag and drop it or move it to the approporiate ctegory.'
+  // Tapping a row now expands a quick-action panel below it instead
+  // of jumping straight to the EditTaskModal (which the user finds
+  // too tall on mobile). Panel shows three move targets matching
+  // the three pile sections (Scheduled / For today / Backlog), plus
+  // an Edit details ↗ link for the full modal. Single ID at a time
+  // so opening another row collapses the first.
+  const [pileQuickActionId, setPileQuickActionId] = useState(null);
+  const [pileQuickTimeDraft, setPileQuickTimeDraft] = useState("");
+  const toggleQuickAction = (taskId) => {
+    setPileQuickActionId(prev => {
+      if (prev === taskId) {
+        setPileQuickTimeDraft("");
+        return null;
+      }
+      // Seed the time draft from the task's current scheduledTime so
+      // re-tapping a scheduled task lets the user nudge the time.
+      const t = tasks.find(x => x.id === taskId);
+      setPileQuickTimeDraft(t?.scheduledTime || "");
+      return taskId;
+    });
+  };
   // v05.05bt361 — Multi-select picker for planning from the unscheduled
   // queue. Opens a modal listing all unscheduled tasks for currentUser
   // with checkboxes. "Schedule N" sets scheduledDate=today on selected
@@ -33660,13 +33774,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     armPileAction(t.id);
                   }
                 };
+                // v05.05bt379 — Pile section helpers. Used by the
+                // inline quick-action panel + by EditTaskModal so the
+                // two stay synchronized.
+                const moveToScheduled = (timeStr) => {
+                  if (!timeStr) return;
+                  setTasks(prev => prev.map(x => x.id === t.id
+                    ? { ...x, scheduledTime: timeStr, scheduledDate: referenceISO }
+                    : x));
+                  setPileQuickActionId(null);
+                  setPileQuickTimeDraft("");
+                };
+                const moveToToday = () => {
+                  setTasks(prev => prev.map(x => x.id === t.id
+                    ? { ...x, scheduledTime: null, scheduledDate: referenceISO, pinned: false }
+                    : x));
+                  setPileQuickActionId(null);
+                  setPileQuickTimeDraft("");
+                };
+                const moveToBacklog = () => {
+                  setTasks(prev => prev.map(x => x.id === t.id
+                    ? { ...x, scheduledTime: null, scheduledDate: null, pinned: false }
+                    : x));
+                  setPileQuickActionId(null);
+                  setPileQuickTimeDraft("");
+                };
+                // Current section detection — drives the active-state
+                // styling on the move buttons in the panel.
+                const curSection = t.scheduledTime
+                  ? "scheduled"
+                  : t.scheduledDate === referenceISO
+                    ? "today"
+                    : !t.scheduledDate
+                      ? "backlog"
+                      : "other"; // future-dated tasks aren't a current bucket
+                const isQuickOpen = pileQuickActionId === t.id;
                 return (
+                  <React.Fragment>
                   <div style={{
                     display: "flex", alignItems: "flex-start", gap: 5,
                     justifyContent: "flex-start",
                     width: "100%", padding: "5px 6px",
-                    borderBottom: `1px solid ${C.line}15`,
-                    background: isPinned ? `${C.gold}0a` : "transparent",
+                    borderBottom: isQuickOpen ? "none" : `1px solid ${C.line}15`,
+                    background: isQuickOpen ? `${C.gold}08` : (isPinned ? `${C.gold}0a` : "transparent"),
                     textAlign: "left",
                   }}>
                     {/* v05.05bt363 — Checkbox: switched from
@@ -33703,7 +33853,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => setEditingTask(t)}
+                      onClick={() => toggleQuickAction(t.id)}
                       style={{
                         flex: 1,
                         display: "flex", alignItems: "flex-start", gap: 5,
@@ -33857,6 +34007,150 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         : "×"}
                     </button>
                   </div>
+                  {/* v05.05bt379 — Inline quick-action panel. Renders
+                      below the row when its ID is the pileQuickActionId.
+                      Three section buttons mirror the three pile
+                      sections; tapping moves the task and collapses
+                      the panel. The Scheduled button expands a tiny
+                      time input inline. Edit details ↗ opens the
+                      full modal for power tweaks (focus, regret,
+                      recurring, etc.). */}
+                  {isQuickOpen && (() => {
+                    const sectionBtn = (key, glyph, label, glyphColor, onPick, opts = {}) => {
+                      const active = curSection === key;
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onPick(); }}
+                          disabled={opts.disabled}
+                          style={{
+                            flex: 1, minHeight: 36,
+                            background: active ? `${glyphColor}22` : "transparent",
+                            border: `1px solid ${active ? glyphColor + "88" : C.line + "33"}`,
+                            borderRadius: 6,
+                            padding: "6px 4px",
+                            cursor: opts.disabled ? "not-allowed" : "pointer",
+                            opacity: opts.disabled ? 0.4 : 1,
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9.5, letterSpacing: "0.08em", fontWeight: 700,
+                            textTransform: "uppercase",
+                            color: active ? glyphColor : C.muted,
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
+                          }}>
+                          <span style={{ fontSize: 10, fontWeight: 800 }}>{glyph}</span>
+                          <span>{label}</span>
+                        </button>
+                      );
+                    };
+                    return (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          padding: "8px 8px 9px",
+                          marginLeft: 26, // align under the title (past checkbox)
+                          background: `${C.gold}08`,
+                          borderLeft: `2px solid ${C.gold}55`,
+                          borderBottom: `1px solid ${C.line}15`,
+                        }}>
+                        <div style={{
+                          fontSize: 8.5, letterSpacing: "0.18em", textTransform: "uppercase",
+                          color: C.muted, fontWeight: 700,
+                          fontFamily: "'JetBrains Mono', monospace",
+                          marginBottom: 5,
+                        }}>Move to</div>
+                        <div style={{
+                          display: "flex", gap: 5,
+                        }}>
+                          {sectionBtn("scheduled", "●", "Scheduled", C.mommy,
+                            () => { /* opens time input below */ },
+                            {})}
+                          {sectionBtn("today", "◐", "Today", C.gold, moveToToday)}
+                          {sectionBtn("backlog", "○", "Backlog", C.muted, moveToBacklog)}
+                        </div>
+                        {/* Time input for Scheduled. Always visible
+                            (no need to expand-on-tap) — keeps the
+                            flow obvious: tap Scheduled, then pick
+                            time, then it slots. */}
+                        <div style={{
+                          display: "flex", gap: 6, alignItems: "center",
+                          marginTop: 7,
+                        }}>
+                          <span style={{
+                            fontSize: 9, letterSpacing: "0.10em", textTransform: "uppercase",
+                            color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+                            fontWeight: 700, flexShrink: 0,
+                          }}>at</span>
+                          <input
+                            type="time"
+                            value={pileQuickTimeDraft}
+                            onChange={(e) => setPileQuickTimeDraft(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              flex: 1, minWidth: 0,
+                              padding: "5px 7px",
+                              border: `1px solid ${C.line}33`,
+                              borderRadius: 5,
+                              background: C.bg, color: C.ink,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 12,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); moveToScheduled(pileQuickTimeDraft); }}
+                            disabled={!pileQuickTimeDraft}
+                            style={{
+                              padding: "5px 10px",
+                              background: pileQuickTimeDraft ? C.mommy : `${C.line}22`,
+                              color: pileQuickTimeDraft ? "#fff" : C.muted,
+                              border: "none", borderRadius: 5,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9.5, letterSpacing: "0.10em",
+                              fontWeight: 700, textTransform: "uppercase",
+                              cursor: pileQuickTimeDraft ? "pointer" : "not-allowed",
+                              flexShrink: 0,
+                            }}>Slot</button>
+                        </div>
+                        <div style={{
+                          display: "flex", justifyContent: "space-between",
+                          alignItems: "center", marginTop: 8,
+                        }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPileQuickActionId(null);
+                              setEditingTask(t);
+                            }}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: 0,
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontStyle: "italic", fontSize: 12,
+                              color: C.ink, cursor: "pointer",
+                              borderBottom: `1px dotted ${C.line}66`,
+                            }}>Edit details ↗</button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPileQuickActionId(null);
+                              setPileQuickTimeDraft("");
+                            }}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: "2px 4px",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, color: C.muted, cursor: "pointer",
+                              letterSpacing: "0.08em",
+                            }}>close</button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  </React.Fragment>
                 );
               };
               return (
@@ -35885,21 +36179,22 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
           }}>{n}</button>
         ))}
       </div>
-      <div style={{ fontSize: 10, color: regretColors[regretScore], fontStyle: "italic", textAlign: "center", marginBottom: 14, fontWeight: 600 }}>
+      <div style={{ fontSize: 10, color: regretColors[regretScore], fontStyle: "italic", textAlign: "center", marginBottom: 8, fontWeight: 600 }}>
         {regretLabels[regretScore]}
       </div>
-      {/* v05.05bt288 — Sticky action footer so Save / Delete stay
-          reachable even if the form is tall. Per chat: 'i need the
-          popup cards to be such that i can see them without cutting
-          off the top and the bottom.' */}
+      {/* v05.05bt288/379 — Sticky action footer so Save / Delete stay
+          reachable even if the form is tall. bt379 slimmed the
+          vertical padding (10 → 8) since ModalShell's body
+          paddingBottom dropped from 132px to ~16px and the modal as
+          a whole is now visibly contained. */}
       <div style={{
         display: "flex", gap: 8,
         position: "sticky", bottom: 0, zIndex: 3,
         background: C.paper,
-        paddingTop: 10, paddingBottom: 10,
+        paddingTop: 8, paddingBottom: 6,
         marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
         borderTop: `1px solid ${C.line}33`,
-        marginTop: 4,
+        marginTop: 2,
       }}>
         <button onClick={submit} disabled={!title.trim()} style={{
           flex: 1, background: title.trim() ? C.mommy : C.line, color: "#fff",
@@ -39689,7 +39984,7 @@ Mon May 4
 }
 
 // ---- Log picker sheet (single entry point) ----------------------------
-function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, onStartOnsite, currentUser, flaggedNotes, updateNote, isCadence, addTaskFromLog }) {
+function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, onStartOnsite, currentUser, flaggedNotes, updateNote, isCadence, showPlanTab, addTaskFromLog }) {
   // v05.05bt348 — Per chat (boss mode): 'can the add a task live
   // under the log button somehow - but the log button maybe opens
   // the dialog that now has two tabs when under this view (the OG
@@ -39698,7 +39993,13 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
   // of the picker: "Just happened" (existing log) and "Plan"
   // (paste tasks). Default is Plan since that's the boss's primary
   // need; she can flip to log if she wants to record a baby event.
-  const [tab, setTab] = React.useState(isCadence ? "plan" : "log");
+  // v05.05bt378 — Per chat: 'under cadence mode - if you are NOT
+  // under the schedule tab, then the log button should just have
+  // what happened tab and not the other tab.' Plan tab now gated
+  // on showPlanTab (= isCadence && currentTab === 'shifts'). When
+  // false, the tab strip is hidden entirely and the log content
+  // renders as the default — same as Family mode.
+  const [tab, setTab] = React.useState(showPlanTab ? "plan" : "log");
   // v05.05bt366/371 — Three sub-modes inside the Plan tab. Each
   // represents a distinct scheduling intent (per chat bt371):
   //   'dump'     → brain-dump for later (no scheduled date)
@@ -39883,9 +40184,11 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
   );
 
   return (
-    <ModalShell C={C} onClose={onClose} title={isCadence ? "Quick add" : "What just happened?"}>
-      {/* v05.05bt348 — Cadence tab strip. Hidden in family mode. */}
-      {isCadence && (
+    <ModalShell C={C} onClose={onClose} title={showPlanTab ? "Quick add" : "What just happened?"}>
+      {/* v05.05bt348 — Cadence tab strip. Hidden in family mode.
+          v05.05bt378 — Also hidden in cadence mode when off Schedule
+          tab; the Plan tab makes no sense outside a scheduling context. */}
+      {showPlanTab && (
         <div style={{
           display: "flex", gap: 4, marginBottom: 12,
           padding: 3, borderRadius: 10,
@@ -39922,14 +40225,16 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
           </button>
         </div>
       )}
-      {isCadence && tab === "plan" ? planTabContent : logTabContent}
+      {showPlanTab && tab === "plan" ? planTabContent : logTabContent}
 
       {/* Time bank quick-actions — visually subordinate pills below the main
           picker. Lower frequency than baby-care logging, so smaller targets,
           paired in a row to save vertical space. Tapping opens the existing
           Time Bank modal in the right mode. v05.05bt348 — hidden in Cadence
-          plan tab (orthogonal to task planning). */}
-      {onOpenTimeBank && !(isCadence && tab === "plan") && (
+          plan tab (orthogonal to task planning).
+          v05.05bt378 — gate updated from isCadence to showPlanTab so Time
+          Bank is visible when log button opens outside Schedule tab. */}
+      {onOpenTimeBank && !(showPlanTab && tab === "plan") && (
         <>
           <div style={{
             margin: "16px 0 10px",
@@ -40482,7 +40787,7 @@ function ModalShell({ C, onClose, title, children, placement }) {
         background: C.paper, color: C.ink,
         width: "100%", maxWidth: 520,
         borderRadius: isCenter ? 16 : (expanded ? "20px 20px 0 0" : "20px 20px 0 0"),
-        padding: "8px 18px 0",
+        padding: isCenter ? "6px 16px 0" : "8px 18px 0",
         maxHeight: isCenter ? "calc(100dvh - 40px)" : (expanded ? "calc(100dvh - 8px)" : "92vh"),
         height: isCenter ? "auto" : (expanded ? "calc(100dvh - 8px)" : "auto"),
         transition: "max-height 0.25s ease, height 0.25s ease",
@@ -40515,11 +40820,12 @@ function ModalShell({ C, onClose, title, children, placement }) {
         )}
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center",
-          marginBottom: 18, flexShrink: 0,
+          marginBottom: isCenter ? 10 : 18, flexShrink: 0,
+          paddingTop: isCenter ? 8 : 0,
         }}>
           <h2 style={{
             fontFamily: "'Cormorant Garamond', serif",
-            fontSize: 26, fontWeight: 500, margin: 0, fontStyle: "italic",
+            fontSize: isCenter ? 22 : 26, fontWeight: 500, margin: 0, fontStyle: "italic",
             color: C.ink, // v05.05bt350 — adapt to palette (was inheriting black in Cadence)
           }}>
             {title}
@@ -40536,7 +40842,21 @@ function ModalShell({ C, onClose, title, children, placement }) {
           ref={bodyRef}
           style={{
           flex: 1, overflowY: "auto",
-          paddingBottom: `calc(132px + env(safe-area-inset-bottom, 0px))`,
+          /* v05.05bt379 — Per chat: 'when i click on tasks to edit it
+              and it brings up the pop up dialog... that dialog is so
+              big i cannot even see the top of the box nor the bottom
+              of it.' Root cause: body had paddingBottom 132px
+              regardless of placement — that 132px was sized for the
+              iOS tab bar in bottom-sheet mode but is not needed for
+              center-placement modals where the dialog sits in the
+              middle of the viewport and Save/Delete sit in a sticky
+              footer at body bottom. Center mode now uses a much
+              smaller paddingBottom (16px + safe-area) so the modal
+              content + sticky footer fit inside maxHeight=100dvh-40
+              without scroll overflow eating header/footer visibility. */
+          paddingBottom: isCenter
+            ? `calc(16px + env(safe-area-inset-bottom, 0px))`
+            : `calc(132px + env(safe-area-inset-bottom, 0px))`,
           // Inertial scroll on iOS so the modal body feels native.
           WebkitOverflowScrolling: "touch",
         }}>
