@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt342";
+const APP_VERSION = "2026.05.05bt349";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -2718,6 +2718,18 @@ function SoleneHandoffInner() {
   // suggested while partner is unavailable. Does NOT affect time bank —
   // business trips are acknowledged reality, not coverage debt.
   const [parentAway, setParentAway] = useState(null);
+  // v05.05bt345 — Per chat: 'out of town under day plan under the
+  // shifts tab should disappear if that date has passed.' Auto-clear
+  // expired trips so stale data doesn't linger. Banner already
+  // visually hides expired trips (bt344), this also wipes state so
+  // no surface anywhere shows a trip that's over.
+  useEffect(() => {
+    if (!parentAway || !parentAway.until) return;
+    const untilMs = new Date(parentAway.until).getTime();
+    if (Number.isFinite(untilMs) && untilMs < Date.now()) {
+      setParentAway(null);
+    }
+  }, [parentAway]);
   // v05.05bt174 — Per-user focus profile from the Focus Quiz.
   // Shape: { deepHours: number[], lightHours: number[], dipHours: number[],
   //   protect: 'morning'|'evening'|'varies'|'whenever', meetingDecayMin: number,
@@ -2784,6 +2796,12 @@ function SoleneHandoffInner() {
     try { localStorage.setItem("ll:devicePersona", next); } catch {}
   };
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
+  // v05.05bt344 — Caregiver planner state hoisted from OnDutyCard
+  // because mounting inside the card with overflow:hidden ancestors
+  // can produce silent click failures in some browsers. Lifted to
+  // App level so the modal mounts at body root (alongside other
+  // modals) and the open-trigger button is just a setter call.
+  const [showCaregiverPlanner, setShowCaregiverPlanner] = useState(false);
   // v05.05bt214a — Caregiver persona can only access Now / Journal / Milk.
   // Bounce them to Now if they land on a parent-only tab (e.g., persona
   // persisted but tab state persisted from prior session). MUST live AFTER
@@ -6004,6 +6022,29 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               </span>
             </div>
           </div>
+          {/* v05.05bt347 — Per chat: 'under cadence mode - again
+              because i am a boss, maybe the scheduler make the
+              "viewing as mommy" more discreet - maybe just the circle
+              with the M instead of the whole pill?' In Cadence mode
+              the schedule is single-user; the partner-switcher pill
+              is visual noise. Render just the circle initial as a
+              small icon button. Tap still opens the profile switcher
+              (in case the user wants to flip to Daddy or open the
+              Cadence toggle from the modal). */}
+          {isCadence ? (
+            <button onClick={() => setShowProfileSwitcher(true)} style={{
+              background: currentUser === "Mommy" ? C.mommy : C.daddy,
+              color: "#fff", border: "none",
+              width: 32, height: 32, borderRadius: "50%",
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 17, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+              boxShadow: `0 2px 6px ${currentUser === "Mommy" ? C.mommy : C.daddy}55`,
+            }} title={`Signed in as ${currentUser}`} aria-label={`Profile · ${currentUser}`}>
+              {currentUser[0]}
+            </button>
+          ) : (
           <button onClick={() => setShowProfileSwitcher(true)} style={{
             background: currentUser === "Mommy" ? C.mommy : C.daddy,
             color: "#fff", border: "none",
@@ -6026,6 +6067,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 600, fontStyle: "italic" }}>{currentUser}</span>
             </span>
           </button>
+          )}
         </div>
       </div>
 
@@ -6553,6 +6595,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             // from the at-a-glance view straight into a focused logger.
             setLoggerType(eventType); setShowLogger(true);
           }}
+          onOpenCaregiverPlanner={() => setShowCaregiverPlanner(true)}
         />
         </>
         )}
@@ -6807,6 +6850,35 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setShowLogger(false);
             setLoggerType(null);
             setShowOnsiteModal(true);
+          }}
+          isCadence={isCadence}
+          addTaskFromLog={(taskList) => {
+            // v05.05bt348 — Cadence-mode plan tab. taskList is an
+            // array of {title, scheduledTime?, effortMin?, regretScore?,
+            // focusLevel?} freshly parsed from the user's input.
+            // Append to setTasks with ownerName + sane defaults. The
+            // scheduler picks them up on next Reanalyze (or right now
+            // if scheduledTime is set).
+            if (!Array.isArray(taskList) || taskList.length === 0) return;
+            const refIso = (() => {
+              const d = new Date(now); d.setHours(0,0,0,0);
+              return d.toISOString().slice(0, 10);
+            })();
+            const newTasks = taskList.map(t => ({
+              id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : `t_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+              title: t.title || "Untitled",
+              effortMin: t.effortMin || 30,
+              regretScore: t.regretScore || 3,
+              focusLevel: t.focusLevel || "auto",
+              taskGroup: inferTaskGroup(t.title), // v05.05bt349
+              scheduledTime: t.scheduledTime || null,
+              scheduledDate: refIso,
+              ownerName: currentUser,
+              createdAt: new Date(now).toISOString(),
+            }));
+            setTasks(prev => [...prev, ...newTasks]);
+            setShowLogger(false);
+            setLoggerType(null);
           }}
         />
       )}
@@ -7128,6 +7200,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             try { localStorage.setItem("ll:familyCodeSetupDismissed", "1"); } catch {}
             setShowFamilyCodeSetup(false);
           }}
+        />
+      )}
+
+      {/* v05.05bt344 — Caregiver planner at App level (hoisted from
+          OnDutyCard for reliable click handling). */}
+      {showCaregiverPlanner && (
+        <CaregiverWindowPlanner
+          C={C} now={now} currentUser={currentUser}
+          onSave={(startISO, endISO) => {
+            addEvent({
+              type: "caregiver_window",
+              ts: startISO,
+              endTs: endISO,
+              ownerName: currentUser,
+            });
+            setShowCaregiverPlanner(false);
+          }}
+          onClose={() => setShowCaregiverPlanner(false)}
         />
       )}
 
@@ -10233,7 +10323,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -10717,26 +10807,56 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 52, fontWeight: 500, lineHeight: 1, letterSpacing: "-0.02em", color: parentColor }}>
           {onDuty.parent}
         </div>
-        <div style={{
-          background: handoffPaused ? `${C.line}15`
-            : isUrgent ? C.accent : `${parentColor}22`,
-          color: handoffPaused ? C.muted
-            : isUrgent ? "#fff" : parentColor,
-          padding: "6px 12px", borderRadius: 8,
-          fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
-          display: "flex", alignItems: "center", gap: 6, marginBottom: 2,
-          maxWidth: "100%",
-          border: handoffPaused ? `1px dashed ${C.line}55` : "none",
-          fontStyle: handoffPaused ? "italic" : "normal",
-        }}>
-          <Timer size={13} style={{ flexShrink: 0 }} />
-          {handoffPaused ? (
-            <span>
-              handoff paused · {tripParent} away
-              {tripUntil && ` until ${new Date(tripUntil).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
-            </span>
-          ) : (
-            <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{next.parent}</span></span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{
+            background: handoffPaused ? `${C.line}15`
+              : isUrgent ? C.accent : `${parentColor}22`,
+            color: handoffPaused ? C.muted
+              : isUrgent ? "#fff" : parentColor,
+            padding: "6px 12px", borderRadius: 8,
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
+            display: "flex", alignItems: "center", gap: 6, marginBottom: 2,
+            maxWidth: "100%",
+            border: handoffPaused ? `1px dashed ${C.line}55` : "none",
+            fontStyle: handoffPaused ? "italic" : "normal",
+          }}>
+            <Timer size={13} style={{ flexShrink: 0 }} />
+            {handoffPaused ? (
+              <span>
+                handoff paused · {tripParent} away
+                {tripUntil && ` until ${new Date(tripUntil).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
+              </span>
+            ) : (
+              <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{next.parent}</span></span>
+            )}
+          </div>
+          {/* v05.05bt346 — Per chat: 'maybe instead of making the whole
+              button the button, we just have a tiny caregiver button
+              near the OG handoff button.' Restored the original
+              handoff pill (in next parent's color) and added a small
+              dedicated 🤝 button next to it for caregiver handoff. */}
+          {!handoffPaused && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (onOpenCaregiverPlanner) onOpenCaregiverPlanner(); }}
+              title="Hand off to caregiver instead"
+              aria-label="Plan caregiver handoff"
+              style={{
+                background: `${C.gold}1a`,
+                border: `1px solid ${C.gold}66`,
+                color: C.gold,
+                borderRadius: 8,
+                padding: "5px 8px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, fontWeight: 700,
+                letterSpacing: "0.06em",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 4,
+                lineHeight: 1, whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}>
+              🤝
+            </button>
           )}
         </div>
       </div>
@@ -16393,6 +16513,21 @@ function SundayRoutineCard({ C, events, now }) {
 function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack }) {
   const [filter, setFilter] = useState("all"); // all | scheduled | unscheduled | draft | done
   const [search, setSearch] = useState("");
+  // v05.05bt349 — Per chat: 'have a high priority work item list
+  // further subdivided by the TYPE of task — replicate in the app.'
+  // Two view modes for ALL filter: 'category' (Monday-style task
+  // groups, default) and 'status' (legacy scheduled/unscheduled split).
+  // Each user-facing group (LIMS · 35 / GRANT · 1 / etc.) is
+  // collapsible; collapsed state persisted in-session.
+  const [viewMode, setViewMode] = useState("category");
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   // v05.05bt152 — Two-tap delete state, scoped to this view only.
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const pendingDeleteTimerRef = useRef(null);
@@ -16431,8 +16566,13 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
     return true;
   });
 
+  // v05.05bt349 — Category-mode grouping. When viewMode === 'category'
+  // AND filter === 'all' (no specific status filter) AND no active
+  // search, render Monday.com-style groups. Otherwise fall through to
+  // the legacy status-based grouping.
+  const useCategoryGroups = viewMode === "category" && filter === "all" && !search.trim();
   // Group by status (for ALL filter, show groups; for specific filter just flat)
-  const groups = filter === "all"
+  const statusGroups = filter === "all"
     ? [
         { key: "scheduled", label: "Scheduled", color: C.mommy, items: filtered.filter(t => t._status === "scheduled") },
         { key: "unscheduled", label: "Unscheduled", color: C.muted, items: filtered.filter(t => t._status === "unscheduled") },
@@ -16441,17 +16581,78 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       ].filter(g => g.items.length > 0)
     : [{ key: filter, label: filter, color: C.mommy, items: filtered }];
 
-  // Sort within groups: scheduled by time asc, others by regret desc then createdAt asc
-  for (const g of groups) {
-    if (g.key === "scheduled") {
-      g.items.sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
-    } else if (g.key === "done") {
-      g.items.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-    } else {
-      g.items.sort((a, b) => {
-        if (b.regretScore !== a.regretScore) return (b.regretScore || 0) - (a.regretScore || 0);
+  // Build category groups: bucket tasks by taskGroup (or live-infer
+  // for legacy tasks that pre-date bt349 and have no field set),
+  // sort buckets by count desc then alphabetical, completed tasks
+  // get their own DONE bucket at the bottom.
+  const categoryGroupsBuilt = (() => {
+    if (!useCategoryGroups) return null;
+    const buckets = new Map();
+    let doneItems = [];
+    for (const t of filtered) {
+      if (t._status === "done") { doneItems.push(t); continue; }
+      const raw = t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED";
+      const key = String(raw).toUpperCase();
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(t);
+    }
+    // Sort within each bucket: regret desc, then focus deep>shallow,
+    // then created asc.
+    for (const items of buckets.values()) {
+      items.sort((a, b) => {
+        if ((b.regretScore || 0) !== (a.regretScore || 0)) {
+          return (b.regretScore || 0) - (a.regretScore || 0);
+        }
+        const fa = normalizeFocus(a.focusLevel) === "deep" ? 0 : 1;
+        const fb = normalizeFocus(b.focusLevel) === "deep" ? 0 : 1;
+        if (fa !== fb) return fa - fb;
         return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
       });
+    }
+    // Build sorted group list: count desc, then alphabetical for ties.
+    // UNCATEGORIZED always lands at the bottom regardless of count.
+    const entries = Array.from(buckets.entries())
+      .map(([key, items]) => ({
+        key,
+        label: key,
+        color: key === "UNCATEGORIZED" ? C.muted : C.mommy,
+        items,
+        isUncat: key === "UNCATEGORIZED",
+      }));
+    entries.sort((a, b) => {
+      if (a.isUncat !== b.isUncat) return a.isUncat ? 1 : -1;
+      if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+      return a.label.localeCompare(b.label);
+    });
+    if (doneItems.length > 0) {
+      doneItems.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+      entries.push({
+        key: "_DONE",
+        label: "Done · last 30 days",
+        color: "#7B9B6E",
+        items: doneItems,
+        isDone: true,
+      });
+    }
+    return entries;
+  })();
+
+  const groups = useCategoryGroups ? categoryGroupsBuilt : statusGroups;
+
+  // Sort within groups: scheduled by time asc, others by regret desc then createdAt asc.
+  // Category-mode groups already sort themselves above; skip them here.
+  if (!useCategoryGroups && groups) {
+    for (const g of groups) {
+      if (g.key === "scheduled") {
+        g.items.sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
+      } else if (g.key === "done") {
+        g.items.sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+      } else {
+        g.items.sort((a, b) => {
+          if (b.regretScore !== a.regretScore) return (b.regretScore || 0) - (a.regretScore || 0);
+          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        });
+      }
     }
   }
 
@@ -16534,7 +16735,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 
       {/* Filter chips */}
       <div style={{
-        display: "flex", gap: 5, marginBottom: 14,
+        display: "flex", gap: 5, marginBottom: 10,
         flexWrap: "wrap",
       }}>
         {filterChips.map(c => (
@@ -16558,6 +16759,65 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         ))}
       </div>
 
+      {/* v05.05bt349 — Group-by toggle (only meaningful on ALL filter
+          with no search). Lets the user switch between category-style
+          (LIMS · 35 / GRANT · 1 / etc.) and the legacy status grouping. */}
+      {filter === "all" && !search.trim() && (
+        <div style={{
+          display: "flex", gap: 6, marginBottom: 14,
+          alignItems: "center",
+        }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 8.5, letterSpacing: "0.22em",
+            color: C.muted, fontWeight: 700,
+            textTransform: "uppercase",
+          }}>Group by</span>
+          <button onClick={() => setViewMode("category")} style={{
+            background: viewMode === "category" ? `${userTint}22` : "transparent",
+            color: viewMode === "category" ? userTint : C.muted,
+            border: `1px solid ${viewMode === "category" ? userTint + "55" : C.line + "33"}`,
+            borderRadius: 6, padding: "3px 9px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+            cursor: "pointer", textTransform: "uppercase",
+          }}>Category</button>
+          <button onClick={() => setViewMode("status")} style={{
+            background: viewMode === "status" ? `${userTint}22` : "transparent",
+            color: viewMode === "status" ? userTint : C.muted,
+            border: `1px solid ${viewMode === "status" ? userTint + "55" : C.line + "33"}`,
+            borderRadius: 6, padding: "3px 9px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+            cursor: "pointer", textTransform: "uppercase",
+          }}>Status</button>
+          {useCategoryGroups && collapsedGroups.size > 0 && (
+            <button onClick={() => setCollapsedGroups(new Set())} style={{
+              marginLeft: "auto",
+              background: "transparent",
+              color: C.gold,
+              border: "none",
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 12,
+              cursor: "pointer",
+            }}>expand all</button>
+          )}
+          {useCategoryGroups && collapsedGroups.size === 0 && categoryGroupsBuilt && categoryGroupsBuilt.length > 1 && (
+            <button onClick={() => {
+              setCollapsedGroups(new Set(categoryGroupsBuilt.map(g => g.key)));
+            }} style={{
+              marginLeft: "auto",
+              background: "transparent",
+              color: C.muted,
+              border: "none",
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 12,
+              cursor: "pointer",
+            }}>collapse all</button>
+          )}
+        </div>
+      )}
+
       {/* Empty state */}
       {filtered.length === 0 && (
         <div style={{
@@ -16576,19 +16836,38 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       {groups.map(g => (
         <div key={g.key} style={{ marginBottom: 18 }}>
           {filter === "all" && (
-            <div style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9, letterSpacing: "0.26em", textTransform: "uppercase",
-              fontWeight: 700, color: g.color,
-              padding: "6px 4px", marginBottom: 4,
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
+            <button
+              onClick={() => toggleGroup(g.key)}
+              style={{
+                width: "100%",
+                background: "transparent", border: "none",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9.5, letterSpacing: "0.22em", textTransform: "uppercase",
+                fontWeight: 700, color: g.color,
+                padding: "8px 4px 6px", marginBottom: 4,
+                display: "flex", alignItems: "center", gap: 8,
+                cursor: "pointer", textAlign: "left",
+              }}>
+              <span style={{
+                display: "inline-block",
+                width: 10, fontSize: 10, opacity: 0.6,
+                transform: collapsedGroups.has(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.15s",
+              }}>▾</span>
               <span>{g.label}</span>
-              <span style={{ opacity: 0.55 }}>· {g.items.length}</span>
+              <span style={{
+                opacity: 0.85,
+                background: `${g.color}1f`,
+                color: g.color,
+                borderRadius: 4,
+                padding: "1px 6px",
+                fontSize: 9,
+                letterSpacing: "0.02em",
+              }}>{g.items.length}</span>
               <span style={{ flex: 1, height: 1, background: `${g.color}33` }} />
-            </div>
+            </button>
           )}
-          {g.items.map(t => {
+          {!collapsedGroups.has(g.key) && g.items.map(t => {
             const rail = t._status === "done" ? "#7B9B6E"
               : t._status === "draft" ? "#C18D7A"
               : t._status === "unscheduled" ? C.muted
@@ -20642,13 +20921,38 @@ function suggestTaskChunks(task) {
 function getCaregiverWindows(events, now) {
   const out = [];
   const list = events || [];
+  // v05.05bt347 — Per chat: 'i cannot "take back now" from caregiver
+  // so that button is not working.' Bug: when TAKE BACK NOW was
+  // tapped, a NEW event was appended with _patchOf pointing at the
+  // original ts, but this helper only inspected each event's OWN
+  // actualEndTs. The original event still had no actualEndTs → still
+  // showed as active. Fix: pre-build a patch map keyed by the
+  // original's ts ISO string, and apply each patch's actualEndTs
+  // when computing the effective end of the original.
+  const patchMap = new Map();
+  for (const e of list) {
+    if (e.type !== "caregiver_window") continue;
+    if (!e._patchOf) continue;
+    const key = e._patchOf;
+    const existing = patchMap.get(key);
+    // Latest-wins (in case multiple takes-back are logged).
+    if (!existing || new Date(e.ts).getTime() > new Date(existing.ts).getTime()) {
+      patchMap.set(key, e);
+    }
+  }
   // New model: planned windows
   for (const e of list) {
     if (e.type !== "caregiver_window") continue;
+    if (e._patchOf) continue; // skip patches themselves
     const start = new Date(e.ts).getTime();
     const plannedEnd = e.endTs ? new Date(e.endTs).getTime() : null;
-    const actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
-    // Effective end = earliest of actual (if set) and planned.
+    let actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
+    // Apply patch if present.
+    const patch = patchMap.get(e.ts);
+    if (patch && patch.actualEndTs) {
+      const patchMs = new Date(patch.actualEndTs).getTime();
+      if (!actualEnd || patchMs < actualEnd) actualEnd = patchMs;
+    }
     let end = plannedEnd;
     if (actualEnd && (!end || actualEnd < end)) end = actualEnd;
     if (!end) end = (now ? now.getTime() : Date.now());
@@ -20680,13 +20984,29 @@ function getActiveOrUpcomingCaregiverWindow(events, now) {
     d.setHours(23, 59, 59, 999);
     return d.getTime();
   })();
+  // v05.05bt347 — Build patch map (see getCaregiverWindows note).
+  const patchMap = new Map();
+  for (const e of (events || [])) {
+    if (e.type !== "caregiver_window" || !e._patchOf) continue;
+    const key = e._patchOf;
+    const existing = patchMap.get(key);
+    if (!existing || new Date(e.ts).getTime() > new Date(existing.ts).getTime()) {
+      patchMap.set(key, e);
+    }
+  }
   // New model first
   let best = null;
   for (const e of (events || [])) {
     if (e.type !== "caregiver_window") continue;
+    if (e._patchOf) continue; // skip patches themselves
     const start = new Date(e.ts).getTime();
     const plannedEnd = e.endTs ? new Date(e.endTs).getTime() : null;
-    const actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
+    let actualEnd = e.actualEndTs ? new Date(e.actualEndTs).getTime() : null;
+    const patch = patchMap.get(e.ts);
+    if (patch && patch.actualEndTs) {
+      const patchMs = new Date(patch.actualEndTs).getTime();
+      if (!actualEnd || patchMs < actualEnd) actualEnd = patchMs;
+    }
     let end = plannedEnd;
     if (actualEnd && (!end || actualEnd < end)) end = actualEnd;
     // Skip windows already fully past
@@ -22199,6 +22519,69 @@ function categoryRank(category) {
   return category === "work" ? 0 : category === "personal" ? 2 : 1;
 }
 
+// v05.05bt349 — User-facing task GROUPS (Monday.com-style). These are
+// distinct from the inferCategory helper above (which returns
+// work/personal for scheduler tiebreaking). Groups are what the user
+// sees in AllTasksView as collapsible sections — LIMS, GRANT, ADMIN,
+// MANUSCRIPT, etc. Per chat: 'have a high priority work item list
+// further subdivided by the TYPE of task — is there a way we can
+// replicate this on monday? ...in the app.'
+//
+// Default canonical set is seeded to match Cyndell's existing Monday
+// board (visible in screenshot). New custom groups added via the
+// EditTask picker are persisted under solene:customTaskGroups and
+// merge in alphabetically.
+const CANONICAL_TASK_GROUPS = [
+  "ADMINISTRATIVE",
+  "APPLIED MS",
+  "BD",
+  "COURSES",
+  "GRANT",
+  "HOUSE",
+  "LAB ACTIVITIES/RESEARCH",
+  "LAB MANAGEMENT",
+  "LIMS",
+  "MANUSCRIPT",
+  "ORDERING",
+  "PERSONAL",
+  "STUDENTS",
+  "TEAM MEETING",
+];
+// Inference: leading ALLCAPS prefix wins (Monday-style "LIMS: respond
+// to Riley"). Common variants normalized. Falls back to keyword
+// matching on scientist-task vocabulary, then null if unclear.
+function inferTaskGroup(title) {
+  if (!title) return null;
+  const trimmed = String(title).trim();
+  // Pattern 1: ALLCAPS prefix followed by colon/dash/space-and-word
+  const m = trimmed.match(/^([A-Z][A-Z\s\/]{1,28})[:\-]/);
+  if (m) {
+    let prefix = m[1].trim().toUpperCase().replace(/\s+/g, " ");
+    // Normalize common variants the user types
+    if (prefix === "ADMIN" || prefix === "ADMINISTRATAIVE") prefix = "ADMINISTRATIVE";
+    if (prefix === "MS") prefix = "MANUSCRIPT";
+    if (prefix === "TEAM" || prefix === "STANDUP") prefix = "TEAM MEETING";
+    if (prefix === "STUDENT") prefix = "STUDENTS";
+    if (prefix === "LAB" || prefix === "RESEARCH") prefix = "LAB ACTIVITIES/RESEARCH";
+    return prefix;
+  }
+  // Pattern 2: keyword fallback (case-insensitive)
+  const t = trimmed.toLowerCase();
+  if (/\b(lims|sop|deployment)\b/.test(t)) return "LIMS";
+  if (/\b(student|mentor|advisee)\b/.test(t)) return "STUDENTS";
+  if (/\b(manuscript|paper|draft|revis|submission|reviewer)\b/.test(t)) return "MANUSCRIPT";
+  if (/\b(grant|nih|nsf|proposal|specific aims|r01|r21)\b/.test(t)) return "GRANT";
+  if (/\b(team meeting|lab meeting|standup|1:1|one-on-one|all hands)\b/.test(t)) return "TEAM MEETING";
+  if (/\b(course|teach|syllabus|lecture|exam|homework)\b/.test(t)) return "COURSES";
+  if (/\b(order|purchase|reagent|consumable|requisition)\b/.test(t)) return "ORDERING";
+  if (/\b(experiment|assay|sample|hplc|lcms|standard curve|run)\b/.test(t)) return "LAB ACTIVITIES/RESEARCH";
+  if (/\b(calibration|maintenance|inventory|fume hood|biosafety|qualification)\b/.test(t)) return "LAB MANAGEMENT";
+  if (/\b(email|inbox|expense|reimburs|hr|approve|policy)\b/.test(t)) return "ADMINISTRATIVE";
+  if (/\b(diaper|feed|bath|bedtime|baby|solène|solene|stroller|daycare)\b/.test(t)) return "PERSONAL";
+  if (/\b(clean|laundry|kitchen|dishwasher|groceries|cook)\b/.test(t)) return "HOUSE";
+  return null;
+}
+
 // v05.05bt119 — scheduler-only visual primitives. Per chat: "let's work
 // on the aesthetic for the scheduler part to make it feel intentional
 // but also different from the rest of the baby only stuff." Mockup-
@@ -22325,13 +22708,19 @@ function ParentAwayBanner({ C, parentAway, now, onOpenEditor }) {
     && new Date(parentAway.from) <= now
     && (!parentAway.until || new Date(parentAway.until) >= now);
   const isUpcoming = parentAway && !isActiveAway && new Date(parentAway.from) > now;
+  // v05.05bt344 — Per chat: 'out of town under day plan under the
+  // shifts tab should disappear if that date has passed.' If
+  // parentAway has an until date in the past, treat as expired and
+  // hide the banner (render the empty 'mark someone out of town'
+  // affordance instead so the user can set a new trip).
+  const isExpired = parentAway && parentAway.until && new Date(parentAway.until) < now;
 
   const fmtDate = d => {
     const dd = new Date(d);
     return `${dd.toLocaleDateString(undefined, { weekday: "short" })} ${dd.getMonth() + 1}/${dd.getDate()}`;
   };
 
-  if (!parentAway) {
+  if (!parentAway || isExpired) {
     return (
       <button
         onClick={onOpenEditor}
@@ -25531,6 +25920,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // (was collapsed, user reported 'we lost the table'). Tap header to
   // collapse.
   const [taskPileExpanded, setTaskPileExpanded] = useState(true);
+  // v05.05bt348 — Per chat: 'let me select multiple tasks to delete
+  // together instead of just one at a time.' Multi-select set for the
+  // task pile. Tapping × on a row toggles membership; a bulk action
+  // bar appears at the top of the pile when set.size > 0.
+  const [selectedDelete, setSelectedDelete] = useState(new Set());
   // v05.05bt295 — Bulk add. Per chat: 'need way to bulk add.' Modal
   // takes a multi-line text area, one task per line. Each line is
   // parsed for an optional time hint ("at 9am", "@ 14:00", "9:30 ");
@@ -25575,6 +25969,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       regretScore: 3,
       focusLevel: inferFocusLevel(title),
       category: inferCategory(title),
+      taskGroup: inferTaskGroup(title), // v05.05bt349 — categorize for AllTasksView
       scheduledDate: todayISO,
       ownerName: currentUser,
       scheduledTime,
@@ -25640,6 +26035,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       regretScore: 3,
       focusLevel: inferFocusLevel(p.title),
       category: inferCategory(p.title),
+      taskGroup: inferTaskGroup(p.title), // v05.05bt349
       createdAt: new Date().toISOString(),
       completedAt: null,
       scheduledTime: p.scheduledTime || null,
@@ -26243,6 +26639,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       focusLevel: normalizeFocus(draftFocus),
       // v05.05bt157 — Auto-infer category from title.
       category: inferCategory(draftTitle.trim()),
+      // v05.05bt349 — Auto-infer Monday-style task group from title.
+      taskGroup: inferTaskGroup(draftTitle.trim()),
       // v05.05bt160 — Tag the task to the selected day (today/tomorrow).
       scheduledDate: referenceISO,
       ownerName: currentUser,
@@ -26815,6 +27213,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       regretScore: p.regretScore,
       focusLevel: p.focusLevel === "auto" ? inferFocusLevel(p.title) : normalizeFocus(p.focusLevel),
       category: p.category || inferCategory(p.title),
+      taskGroup: p.taskGroup || inferTaskGroup(p.title), // v05.05bt349
       sequenceId: p.sequenceId || null,
       sequenceIndex: typeof p.sequenceIndex === "number" ? p.sequenceIndex : null,
       sequenceTotal: p.sequenceTotal || null,
@@ -27390,10 +27789,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             medium (user can tap to edit afterward). */}
         {showNlInput && (
           <div style={{
-            background: "rgba(251, 245, 233, 0.7)",
+            // v05.05bt346 — Per chat: 'the tap to fill dialog is also
+            // not like the rest of the coloring in Cadence - that grey
+            // seems to be off.' Was hardcoded rgba(251,245,233,0.7) =
+            // 70%-opacity cream over warm-plum bg → reads as muddy grey
+            // in Cadence. Swap to C.paper (palette-adaptive surface):
+            // family stays cream-ish, Cadence becomes warm plum card.
+            background: C.paper,
             borderRadius: 12, padding: 16,
             marginBottom: 16, border: `1px solid ${C.mommy}26`,
-            boxShadow: "0 1px 0 rgba(255,255,255,0.4) inset",
+            boxShadow: `0 1px 0 ${C.line}22 inset`,
           }}>
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -28193,7 +28598,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontSize: 24, color: C.ink,
                         margin: 0, lineHeight: 1.05,
                         letterSpacing: "-0.015em",
-                      }}>{isTomorrow ? "Tomorrow" : "Mommy's Day"}</h1>
+                      }}>{
+                        isTomorrow ? "Tomorrow"
+                        // v05.05bt343 — Per chat: 'if i am at work
+                        // (so solo duty) and using this just as my
+                        // primary organizer ... i may not want my
+                        // colleagues to see "mommy day" - it is not
+                        // giving boss lady vibes.' In Cadence mode
+                        // the title becomes neutral "Today" — the
+                        // outer sub-tab "Mommy's Day" already names
+                        // the view, so this is also less redundant.
+                        // Family mode keeps "Mommy's Day" since the
+                        // inner h1 was the only place that named
+                        // the view in family.
+                        : productMode === "solo" ? "Today"
+                        : "Mommy's Day"
+                      }</h1>
                       <div style={{
                         display: "inline-flex", alignItems: "stretch",
                         background: `${C.line}15`,
@@ -29122,6 +29542,40 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 // contains now OR this slot is the first one at-or-after
                 // now). nowLineInserted guard prevents double-render.
                 let nowLineInserted = false;
+                // v05.05bt207/343/345 — Precompute the NOW anchor.
+                // The previous logic walked slots and checked
+                // containsNow / startsAtOrAfterNow inline, which had
+                // subtle off-by-end bugs (slot ending exactly at now
+                // failed both checks → NOW fell through to next slot
+                // and rendered "above" past). New: deterministic
+                // anchor.
+                //
+                //   activeNowIdx     = slot whose [start, end) contains now
+                //   lastPastIdx      = last slot whose end <= now
+                //   firstFutureIdx   = first slot whose start >= now
+                //   ANCHOR (after-row): activeNowIdx if >= 0, else lastPastIdx
+                //   ANCHOR (before-row): firstFutureIdx when activeNowIdx < 0
+                //                        AND lastPastIdx < 0
+                //
+                // After-row rendering preferred so that NOW visually
+                // sits BELOW whatever just happened, not above what's
+                // coming next.
+                const _nowMs = now.getTime();
+                const activeNowIdx = dayTimeline.findIndex(
+                  s => s.start.getTime() <= _nowMs && _nowMs < s.end.getTime()
+                );
+                let lastPastIdx = -1;
+                for (let i = 0; i < dayTimeline.length; i++) {
+                  if (dayTimeline[i].end.getTime() <= _nowMs) lastPastIdx = i;
+                }
+                const firstFutureIdx = dayTimeline.findIndex(
+                  s => s.start.getTime() > _nowMs
+                );
+                const afterRowAnchorIdx =
+                  activeNowIdx >= 0 ? activeNowIdx :
+                  lastPastIdx >= 0 ? lastPastIdx : -1;
+                const beforeRowAnchorIdx =
+                  afterRowAnchorIdx < 0 ? firstFutureIdx : -1;
                 const renderNowLine = (anchorKey) => {
                   const nowFmt = (() => {
                     const h = now.getHours(), m = now.getMinutes();
@@ -29185,16 +29639,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   if (slot.kind === "free" && dismissedFreeKeys.has(slot.start.getTime())) {
                     return;
                   }
-                  // v05.05bt207 — NOW line anchor FIRST, before any early
-                  // returns. Fires for whichever slot contains now OR is
-                  // the first one at-or-after now.
-                  if (!nowLineInserted) {
-                    const containsNow = slot.start.getTime() <= now.getTime() && now.getTime() < slot.end.getTime();
-                    const startsAtOrAfterNow = slot.start.getTime() >= now.getTime();
-                    if (containsNow || startsAtOrAfterNow) {
-                      nowLineInserted = true;
-                      renderNowLine(i);
-                    }
+                  // v05.05bt207/343/344/345 — NOW line BEFORE-row.
+                  // Fires only when activeNow + lastPast are both
+                  // unavailable (i.e., all slots entirely future).
+                  // Otherwise the AFTER-row check below handles it.
+                  if (!nowLineInserted && !isTomorrow && beforeRowAnchorIdx === i) {
+                    nowLineInserted = true;
+                    renderNowLine(i);
                   }
                   // v05.05bt194 — Past free blocks were unconditionally
                   // dropped, so 'show earlier' only revealed past
@@ -31032,6 +31483,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       />
                     );
                   }
+                  // v05.05bt343/344 — After-row NOW check: if this
+                  // slot CONTAINS now, render NOW just AFTER the row
+                  // (so the slider sits visually inside the active
+                  // block, not above it). Gate on !isTomorrow.
+                  // v05.05bt343/345 — NOW line AFTER-row anchor.
+                  // Renders right after the slot we precomputed
+                  // (either the one containing now, or the most
+                  // recent past slot). Visually positions NOW BELOW
+                  // whatever just happened, which feels accurate.
+                  if (!nowLineInserted && !isTomorrow && afterRowAnchorIdx === i) {
+                    nowLineInserted = true;
+                    renderNowLine(`after-${i}`);
+                  }
                 });
                 // v05.05bt207 — Post-bedtime fallback: if now is past
                 // every slot's end (e.g., it's 11:30p), nowLineInserted
@@ -31180,28 +31644,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         opacity: done ? 0.5 : 1,
                       }}>R{t.regretScore || 3}</span>
                     </button>
-                    {/* v05.05bt291 — Per chat: 'clicking on the X under
-                        the pile table does nothing.' Fix: bigger touch
-                        target + plain onClick (the previous
-                        onPointerDown was conflicting with iOS touch
-                        delegation in some cases). 36px tap area. */}
+                    {/* v05.05bt291/346/348 — Per chat (bt348):
+                        'i dont like that border around the x button -
+                        and let me select multiple tasks to delete
+                        together instead of just one at a time.'
+                        Replaced the bordered two-tap × with a
+                        borderless toggle: tap once → row enters
+                        selection set (visual highlight + bulk action
+                        bar appears at top of pile). Tap again to
+                        deselect. Bulk delete handled by the bar. */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm(`Delete "${t.title}" forever?`)) {
-                          deleteTask(t.id);
-                        }
+                        setSelectedDelete(prev => {
+                          const next = new Set(prev);
+                          if (next.has(t.id)) next.delete(t.id);
+                          else next.add(t.id);
+                          return next;
+                        });
                       }}
-                      title="Delete task forever"
-                      aria-label="Delete forever"
+                      title={selectedDelete.has(t.id) ? "Tap to unselect" : "Tap to select for delete"}
+                      aria-label="Select for delete"
                       style={{
-                        background: "transparent", border: "none",
-                        padding: "6px 10px", cursor: "pointer",
-                        color: C.accent, fontSize: 16, lineHeight: 1,
+                        background: "transparent",
+                        color: selectedDelete.has(t.id) ? "#B85040" : `${C.muted}`,
+                        border: "none",
+                        padding: "4px 8px",
+                        fontSize: selectedDelete.has(t.id) ? 17 : 15,
+                        fontWeight: 700, lineHeight: 1,
+                        cursor: "pointer", fontFamily: "inherit",
                         flexShrink: 0,
-                        minWidth: 36, minHeight: 32,
-                        opacity: 0.7,
-                      }}>✕</button>
+                        minWidth: 32, minHeight: 32,
+                        opacity: selectedDelete.has(t.id) ? 1 : 0.55,
+                        transition: "all 0.12s",
+                      }}>
+                      {selectedDelete.has(t.id) ? "●" : "×"}
+                    </button>
                   </div>
                 );
               };
@@ -31236,12 +31714,80 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       lineHeight: 1,
                     }}>{taskPileExpanded ? "▾" : "▸"}</span>
                   </button>
+                  {/* v05.05bt348 — Bulk delete bar. Appears when 1+
+                      rows are selected via × tap. Sticky-top inside the
+                      expanded pile so it's reachable while scrolling
+                      long lists. */}
+                  {taskPileExpanded && selectedDelete.size > 0 && (
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      gap: 8, padding: "8px 12px",
+                      background: `#B85040`,
+                      color: "#fff",
+                      borderTop: `1px solid ${C.line}22`,
+                      borderBottom: `1px solid ${C.line}22`,
+                    }}>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11, fontWeight: 700,
+                        letterSpacing: "0.06em",
+                      }}>
+                        {selectedDelete.size} selected
+                      </span>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          onClick={() => setSelectedDelete(new Set())}
+                          style={{
+                            background: "transparent",
+                            border: `1px solid rgba(255,255,255,0.4)`,
+                            color: "#fff",
+                            borderRadius: 5,
+                            padding: "4px 10px",
+                            fontSize: 11, fontWeight: 600,
+                            fontFamily: "inherit",
+                            cursor: "pointer",
+                          }}>
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            const ids = Array.from(selectedDelete);
+                            ids.forEach(id => deleteTask(id));
+                            setSelectedDelete(new Set());
+                          }}
+                          style={{
+                            background: "#fff",
+                            color: "#B85040",
+                            border: "none",
+                            borderRadius: 5,
+                            padding: "4px 12px",
+                            fontSize: 11, fontWeight: 800,
+                            fontFamily: "inherit",
+                            cursor: "pointer",
+                            letterSpacing: "0.06em",
+                          }}>
+                          DELETE {selectedDelete.size}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {taskPileExpanded && (
                     <>
-                    {/* v05.05bt295 — Bulk add entry. Per chat: 'need way
-                        to bulk add.' Tap to open a multi-line modal. */}
+                    {/* v05.05bt295/344 — Bulk add entry. Per chat:
+                        'isnt the bulk add tasks similar to the add
+                        task at the top - should we make that
+                        consistent?' Routed to the same NL form as
+                        the top "Add task" so both entry points use
+                        the same parser + preview. */}
                     <button
-                      onClick={() => setBulkAddOpen(true)}
+                      onClick={() => {
+                        setShowNlInput(true);
+                        try {
+                          if (typeof window !== "undefined") {
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        } catch {}
+                      }}
                       style={{
                         width: "100%", padding: "8px 14px",
                         background: "transparent",
@@ -32267,6 +32813,14 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
   // on task creation; user can override here. Used as a tiebreaker in
   // the scheduler (work claims morning blocks, personal falls to evening).
   const [category, setCategory] = useState(task.category || "");
+  // v05.05bt349 — User-facing task group (Monday-style). Auto-inferred
+  // on task creation from title prefix or keywords, can be overridden
+  // here. "" = inherit from inferTaskGroup(title) at render time.
+  const [taskGroup, setTaskGroup] = useState(task.taskGroup || "");
+  // v05.05bt349 — Custom-group input mode for when CANONICAL list
+  // doesn't have what the user wants.
+  const [showCustomGroup, setShowCustomGroup] = useState(false);
+  const [customGroupText, setCustomGroupText] = useState("");
   // v05.05bt114 — surfaces scheduledTime so user can correct or remove it
   const [scheduledTime, setScheduledTime] = useState(task.scheduledTime || "");
   // v05.05bt175 — Pin toggle. Pinned tasks keep their scheduledTime
@@ -32305,6 +32859,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
       regretScore: Number(regretScore),
       focusLevel,
       category: category || null,
+      taskGroup: taskGroup || null, // v05.05bt349 — null = re-infer at render
       scheduledTime: scheduledTime || null,
       pinned: pinned && !!scheduledTime, // can only pin if time set
       requireDeep: !!requireDeep,
@@ -32398,6 +32953,73 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
       </button>
       {showAdvanced && (
       <>
+      {/* v05.05bt349 — Task group picker (Monday-style). Determines
+          which group the task lives under in AllTasksView. Auto-
+          inferred at creation; user can override here. Canonical
+          list + custom write-in. Empty = re-infer from title. */}
+      <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 4 }}>
+        Group <span style={{ textTransform: "none", letterSpacing: "0", fontWeight: 400, opacity: 0.7 }}>
+          {!taskGroup && `· auto: ${inferTaskGroup(title) || "uncategorized"}`}
+        </span>
+      </div>
+      {!showCustomGroup ? (
+        <>
+          <select
+            value={taskGroup}
+            onChange={(e) => {
+              if (e.target.value === "__CUSTOM__") {
+                setShowCustomGroup(true);
+                setCustomGroupText("");
+              } else {
+                setTaskGroup(e.target.value);
+              }
+            }}
+            style={{
+              width: "100%", padding: "8px 10px", border: `1px solid ${C.line}33`,
+              borderRadius: 6, fontSize: 12.5, background: C.bg, color: C.ink,
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.04em",
+              marginBottom: 10,
+            }}>
+            <option value="">— Auto from title —</option>
+            {CANONICAL_TASK_GROUPS.map(g => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+            <option value="__CUSTOM__">+ Custom group…</option>
+          </select>
+        </>
+      ) : (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          <input
+            type="text"
+            value={customGroupText}
+            onChange={e => setCustomGroupText(e.target.value)}
+            placeholder="Group name (uppercase)"
+            autoFocus
+            style={{
+              flex: 1, padding: "8px 10px", border: `1px solid ${C.line}33`,
+              borderRadius: 6, fontSize: 12.5, background: C.bg, color: C.ink,
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "0.04em", textTransform: "uppercase",
+            }}
+          />
+          <button onClick={() => {
+            const v = customGroupText.trim().toUpperCase();
+            if (v) setTaskGroup(v);
+            setShowCustomGroup(false);
+          }} style={{
+            background: C.mommy, color: "#fff", border: "none",
+            borderRadius: 6, padding: "0 12px", fontSize: 11,
+            fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          }}>Use</button>
+          <button onClick={() => setShowCustomGroup(false)} style={{
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.line}33`, borderRadius: 6,
+            padding: "0 10px", fontSize: 11,
+            cursor: "pointer", fontFamily: "inherit",
+          }}>Cancel</button>
+        </div>
+      )}
       {/* v05.05bt157 — Category picker (work / personal / auto). Used
           as scheduler tiebreaker. Optional — leave empty for no
           preference. Auto-inferred at creation time but you can correct
@@ -32865,9 +33487,12 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
 
   return (
     <ModalShell C={C} onClose={onCancel} title={`Review ${pending.length} task${pending.length !== 1 ? "s" : ""}`} placement="center">
-      {/* v05.05bt284 — Sticky top: legend + toolbar + column headers stay
-          fixed while the row list scrolls. Solves the bt281-era
-          'cannot see top or bottom' complaint. */}
+      {/* v05.05bt284/348 — Sticky top: legend + toolbar + column headers
+          stay fixed while the row list scrolls. bt348 per chat:
+          'for the pagination instead it would help if the add slot
+          tasks and cancel buttons were at the top right instead.'
+          Primary actions are now anchored here, sticky-top, so they
+          stay visible during scroll without overlapping content. */}
       <div style={{
         position: "sticky",
         top: -8,
@@ -32877,6 +33502,31 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
         marginTop: -8,
         paddingBottom: 4,
       }}>
+      {/* v05.05bt348 — Primary actions, top right */}
+      <div style={{
+        display: "flex", gap: 8, justifyContent: "flex-end",
+        alignItems: "center", marginBottom: 8,
+      }}>
+        <button onClick={onCancel} style={{
+          background: "transparent", color: C.muted,
+          border: `1px solid ${C.line}33`,
+          borderRadius: 8, padding: "8px 14px",
+          fontSize: 12, fontWeight: 500, cursor: "pointer",
+          fontFamily: "inherit",
+        }}>
+          Cancel
+        </button>
+        <button onClick={() => onCommit()} disabled={pending.length === 0} style={{
+          background: pending.length > 0 ? C.mommy : C.line, color: "#fff",
+          border: "none", borderRadius: 8, padding: "8px 16px",
+          fontSize: 12.5, fontWeight: 700,
+          cursor: pending.length > 0 ? "pointer" : "not-allowed",
+          fontFamily: "inherit",
+          boxShadow: pending.length > 0 ? `0 1px 4px ${C.mommy}55` : "none",
+        }}>
+          Add + slot {pending.length}
+        </button>
+      </div>
       {/* v05.05bt281 — Compact legend + bulk-action toolbar */}
       <div style={{
         background: `${C.line}10`,
@@ -33116,41 +33766,6 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
           </div>
         );
       })}
-
-      {/* v05.05bt284/320 — Sticky footer so commit + cancel stay
-          reachable while scrolling. Per chat: 'when setting the
-          priorities, the add slots button is in the way of the list.'
-          Added background opacity + stronger top border + a small
-          gap above. Also pushed marginTop up so the sticky footer
-          doesn't visually merge into the last task row. */}
-      <div style={{
-        display: "flex", gap: 8, marginTop: 18,
-        position: "sticky", bottom: 0, zIndex: 3,
-        background: C.paper,
-        paddingTop: 10, paddingBottom: 10,
-        marginLeft: -2, marginRight: -2, paddingLeft: 2, paddingRight: 2,
-        borderTop: `2px solid ${C.line}55`,
-        boxShadow: "0 -8px 12px -8px rgba(61, 49, 40, 0.10)",
-      }}>
-        <button onClick={() => onCommit()} disabled={pending.length === 0} style={{
-          flex: 1, background: pending.length > 0 ? C.mommy : C.line, color: "#fff",
-          border: "none", borderRadius: 8, padding: "10px",
-          fontSize: 13, fontWeight: 600,
-          cursor: pending.length > 0 ? "pointer" : "not-allowed",
-          fontFamily: "inherit",
-        }}>
-          Add + slot {pending.length} task{pending.length !== 1 ? "s" : ""}
-        </button>
-        <button onClick={onCancel} style={{
-          background: "transparent", color: C.muted,
-          border: `1px solid ${C.line}33`,
-          borderRadius: 8, padding: "10px 14px",
-          fontSize: 13, fontWeight: 500, cursor: "pointer",
-          fontFamily: "inherit",
-        }}>
-          Cancel
-        </button>
-      </div>
     </ModalShell>
   );
 }
@@ -33162,12 +33777,20 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
 // Meetings render in the timeline as MEETING blocks and block time
 // from auto-scheduling. Persisted per-date so each new day starts fresh.
 function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetup, setTodaySetup, onsite, setOnsite, meetings, currentUser }) {
+  // v05.05bt344 — Per chat: 'todays setup dialog, you can only apply
+  // it to today and not tomorrow.' Use referenceDate (today or
+  // tomorrow based on dayView) as the setup key — when user is in
+  // tomorrow view + opens setup, edits write tomorrow's date key.
+  // When tomorrow rolls over, todaySetup.date === todayKey and the
+  // setup applies automatically.
+  const refDate = referenceDate || (() => { const d = new Date(now); d.setHours(0,0,0,0); return d; })();
+  const refKey = refDate.toISOString().slice(0, 10);
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const todayKey = today.toISOString().slice(0, 10);
 
-  const isToday = todaySetup?.date === todayKey;
-  const cookingToday  = isToday ? (todaySetup.cookingToday  ?? true) : true;
-  const workoutToday  = isToday ? (todaySetup.workoutToday  ?? true) : true;
+  const isForRef = todaySetup?.date === refKey;
+  const cookingToday  = isForRef ? (todaySetup.cookingToday  ?? true) : true;
+  const workoutToday  = isForRef ? (todaySetup.workoutToday  ?? true) : true;
   // v05.05bt158 — Wake time + sleep target. These are PERSISTENT across
   // days (unlike cooking/workout which reset). When the day rolls over
   // the date check resets cooking/workout to defaults; wake/sleep we
@@ -33177,7 +33800,7 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
 
   const update = (patch) => {
     setTodaySetup({
-      date: todayKey,
+      date: refKey,
       cookingToday: patch.cookingToday  ?? cookingToday,
       workoutToday: patch.workoutToday  ?? workoutToday,
       // Carry persistent fields through every update.
@@ -33187,12 +33810,12 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
     });
   };
 
-  // v05.05bt163 — Filter to ONLY meetings owned by the current user.
-  // Per chat: Setup sheet was showing Daddy's meetings in Mommy's view.
+  // v05.05bt163/344 — Filter to ONLY meetings owned by the current
+  // user AND on the reference date (today or tomorrow).
   const todayMeetings = (meetings || [])
     .filter(m => {
       try {
-        if (new Date(m.start).toDateString() !== now.toDateString()) return false;
+        if (new Date(m.start).toDateString() !== refDate.toDateString()) return false;
         const owner = m.parent || currentUser || "Mommy";
         return owner === currentUser;
       } catch { return false; }
@@ -36271,7 +36894,17 @@ Mon May 4
 }
 
 // ---- Log picker sheet (single entry point) ----------------------------
-function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, onStartOnsite, currentUser, flaggedNotes, updateNote }) {
+function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, lastPump, activeBfTimer, setActiveBfTimer, activeActivity, setActiveActivity, addNote, addMeeting, liveInventory, onOpenTimeBank, onOpenBulkImport, onStartOnsite, currentUser, flaggedNotes, updateNote, isCadence, addTaskFromLog }) {
+  // v05.05bt348 — Per chat (boss mode): 'can the add a task live
+  // under the log button somehow - but the log button maybe opens
+  // the dialog that now has two tabs when under this view (the OG
+  // what just happened tab) vs. Cadence tab where all my adds go
+  // under here?' In Cadence mode we render a tab strip at the top
+  // of the picker: "Just happened" (existing log) and "Plan"
+  // (paste tasks). Default is Plan since that's the boss's primary
+  // need; she can flip to log if she wants to record a baby event.
+  const [tab, setTab] = React.useState(isCadence ? "plan" : "log");
+  const [planText, setPlanText] = React.useState("");
   if (loggerType) {
     return (
       <ModalShell C={C} onClose={onClose} title={
@@ -36298,8 +36931,78 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
     );
   }
 
-  return (
-    <ModalShell C={C} onClose={onClose} title="What just happened?">
+  // v05.05bt348 — Plan tab content. Free-text textarea + Add button.
+  // Uses the module-level parseNaturalLanguageTasks helper so the
+  // same syntax that works in the inline NL form works here.
+  const planTabContent = (
+    <div style={{ display: "grid", gap: 12, paddingTop: 4 }}>
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontSize: 14, fontStyle: "italic", lineHeight: 1.5,
+        color: C.muted,
+      }}>
+        Paste or type tasks. One per line, comma-separated, or sentence-style.
+      </div>
+      <textarea
+        value={planText}
+        onChange={(e) => setPlanText(e.target.value)}
+        autoFocus
+        rows={6}
+        placeholder={`respond to emails 30 min at 11am\ncall mom for an hour\nprep meeting 90 min at 2pm`}
+        style={{
+          width: "100%", padding: "12px 14px",
+          borderRadius: 8, border: `1px solid ${C.gold}66`,
+          background: C.bg, color: C.ink,
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 15, lineHeight: 1.5,
+          resize: "vertical", minHeight: 120,
+          outline: "none",
+          boxSizing: "border-box",
+        }}
+      />
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontSize: 11.5, fontStyle: "italic", color: C.muted,
+        lineHeight: 1.4,
+      }}>
+        Time hints: "at 11am", "2:30pm", "noon". Duration: "30 min", "1h", "half hour".
+        Without a time, tasks go to your unscheduled pile.
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onClose} style={{
+          background: "transparent", color: C.muted,
+          border: `1px solid ${C.line}33`,
+          borderRadius: 8, padding: "10px 14px",
+          fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+          fontFamily: "inherit",
+        }}>
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            const parsed = parseNaturalLanguageTasks(planText);
+            if (!parsed || parsed.length === 0) return;
+            addTaskFromLog && addTaskFromLog(parsed);
+            setPlanText("");
+          }}
+          disabled={!planText.trim()}
+          style={{
+            background: planText.trim() ? C.mommy : C.line,
+            color: "#fff", border: "none",
+            borderRadius: 8, padding: "10px 18px",
+            fontSize: 13, fontWeight: 700,
+            cursor: planText.trim() ? "pointer" : "not-allowed",
+            fontFamily: "inherit",
+            boxShadow: planText.trim() ? `0 1px 4px ${C.mommy}55` : "none",
+          }}>
+          Add to plan
+        </button>
+      </div>
+    </div>
+  );
+
+  const logTabContent = (
+    <>
       <div style={{ display: "grid", gap: 10 }}>
         <PickerOption C={C} icon={<Milk size={22} />} label="Bottle feed" sub="oz, BM or formula" onClick={() => onPick("feed")} color={C.accent} />
         <PickerOption C={C} icon={<Baby size={22} />} label="Diaper" sub="pee, poo, both" onClick={() => onPick("diaper")} color="#B8956A" />
@@ -36309,16 +37012,58 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         <PickerOption C={C} icon={<Star size={22} />} label="Activity" sub="tummy time, reading, etc." onClick={() => onPick("activity")} color={C.gold} />
         <PickerOption C={C} icon={<MessageSquare size={22} />} label="Note / observation" sub="optional 🚩 to flag as concern" onClick={() => onPick("note")} color={C.accent} />
         <PickerOption C={C} icon={<Calendar size={22} />} label="Meeting / appointment" sub="auto-adjusts shifts · includes on-site" onClick={() => onPick("commitment")} color={C.ink} />
-        {/* "Going on-site" used to be a separate picker option but it's
-            really just a commitment flavor — moved into the commitment form
-            as a preset in v05.05bb. */}
       </div>
+    </>
+  );
+
+  return (
+    <ModalShell C={C} onClose={onClose} title={isCadence ? "Quick add" : "What just happened?"}>
+      {/* v05.05bt348 — Cadence tab strip. Hidden in family mode. */}
+      {isCadence && (
+        <div style={{
+          display: "flex", gap: 4, marginBottom: 12,
+          padding: 3, borderRadius: 10,
+          background: `${C.line}15`,
+          border: `1px solid ${C.line}22`,
+        }}>
+          <button onClick={() => setTab("plan")} style={{
+            flex: 1, padding: "9px 14px",
+            background: tab === "plan" ? C.mommy : "transparent",
+            color: tab === "plan" ? "#fff" : C.muted,
+            border: "none", borderRadius: 7,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700,
+            textTransform: "uppercase",
+            cursor: "pointer",
+            boxShadow: tab === "plan" ? `0 1px 4px ${C.mommy}55` : "none",
+            transition: "all 0.15s",
+          }}>
+            ✦ Plan
+          </button>
+          <button onClick={() => setTab("log")} style={{
+            flex: 1, padding: "9px 14px",
+            background: tab === "log" ? C.gold : "transparent",
+            color: tab === "log" ? "#fff" : C.muted,
+            border: "none", borderRadius: 7,
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 700,
+            textTransform: "uppercase",
+            cursor: "pointer",
+            boxShadow: tab === "log" ? `0 1px 4px ${C.gold}55` : "none",
+            transition: "all 0.15s",
+          }}>
+            ◔ Just happened
+          </button>
+        </div>
+      )}
+      {isCadence && tab === "plan" ? planTabContent : logTabContent}
 
       {/* Time bank quick-actions — visually subordinate pills below the main
           picker. Lower frequency than baby-care logging, so smaller targets,
           paired in a row to save vertical space. Tapping opens the existing
-          Time Bank modal in the right mode. */}
-      {onOpenTimeBank && (
+          Time Bank modal in the right mode. v05.05bt348 — hidden in Cadence
+          plan tab (orthogonal to task planning). */}
+      {onOpenTimeBank && !(isCadence && tab === "plan") && (
         <>
           <div style={{
             margin: "16px 0 10px",
@@ -36393,8 +37138,9 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
       {/* Bulk import — for catching up after a backlog. Single full-width
           pill, separate visual section so it doesn't compete with the time
           bank pair. Lowest-frequency action on this sheet, so smallest
-          target and dashed border to read as "occasional / utility". */}
-      {onOpenBulkImport && (
+          target and dashed border to read as "occasional / utility".
+          v05.05bt348 — hidden in Cadence plan tab. */}
+      {onOpenBulkImport && !(isCadence && tab === "plan") && (
         <>
           <div style={{
             margin: "14px 0 10px",
