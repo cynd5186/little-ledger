@@ -1,32 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- Rounded paper background. iOS will round again on top, but the
-       inner curve gives the icon presence even on Android/desktop where
-       it's not auto-rounded. -->
-  <rect width="512" height="512" rx="100" ry="100" fill="#FCF7EB"/>
-
-  <!-- Subtle paper warmth radial -->
-  <radialGradient id="warm" cx="0.5" cy="0.5" r="0.7">
-    <stop offset="0" stop-color="#F5EEE3" stop-opacity="0"/>
-    <stop offset="1" stop-color="#E8D7BC" stop-opacity="0.30"/>
-  </radialGradient>
-  <rect width="512" height="512" rx="100" ry="100" fill="url(#warm)"/>
-
-  <!-- Group the brand mark, scaled & centered. Source coords are 48x54;
-       we want the mark to fill comfortably with breathing room. Scale by
-       8x → 384x432, centered. -->
-  <g transform="translate(64, 40)">
-    <g transform="scale(8)">
-      <!-- gold star upper-right -->
-      <path d="M37 6 L38.4 9.6 L42 11 L38.4 12.4 L37 16 L35.6 12.4 L32 11 L35.6 9.6 Z" fill="#C49A3A"/>
-      <!-- swaddled baby — rose teardrop -->
-      <path d="M24 9 Q14 17 14 28 Q14 36 24 38 Q34 36 34 28 Q34 17 24 9 Z" fill="#C77893" opacity="0.92"/>
-      <!-- baby head — outline only -->
-      <circle cx="24" cy="14" r="3.2" fill="none" stroke="#FCF7EB" stroke-width="1.6"/>
-      <!-- open journal — two stroked curves -->
-      <path d="M4 40 Q14 35 24 39 Q34 35 44 40" stroke="#1F1B16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85"/>
-      <path d="M6 44 Q14 40 24 42 Q34 40 42 44" stroke="#1F1B16" stroke-width="1.4" stroke-linecap="round" fill="none" opacity="0.5"/>
-      <!-- heart bottom-right -->
-      <path d="M37 47 C35.5 45.5 33.5 46 33.5 47.5 C33.5 49 35.5 50.5 37 51.8 C38.5 50.5 40.5 49 40.5 47.5 C40.5 46 38.5 45.5 37 47 Z" fill="#C77893" opacity="0.75"/>
-    </g>
-  </g>
+  <!--
+    Little Ledger · Cadence icon
+    Italic monogram "ll" + small mauve dot.
+    Background: dark mauve gradient (paper → dusk).
+    Letterform: Cormorant Garamond italic (or fallback serif italic).
+    Accent: muted mauve dot (top-right).
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a2530"/>
+      <stop offset="100%" stop-color="#3a2d3e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e9d2a8"/>
+      <stop offset="100%" stop-color="#d4a24a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <text x="256" y="356"
+        font-family="'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif"
+        font-size="320"
+        font-style="italic"
+        font-weight="500"
+        fill="url(#gold)"
+        text-anchor="middle"
+        letter-spacing="-12">ll</text>
+  <circle cx="394" cy="143" r="14" fill="#c6a8c9" opacity="0.9"/>
 </svg>
