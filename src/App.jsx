@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt375";
+const APP_VERSION = "2026.05.05bt376";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -10111,45 +10111,16 @@ function FontImports() {
          crossed diagonal washes for thread-paper feel. Both tagged
          to body[data-cadence-texture="1"] so they only fire in
          Cadence mode, never bleeding into family mode. */
-      body[data-cadence-texture="1"]::before {
-        content: ""; position: fixed; inset: 0;
-        background-image:
-          radial-gradient(circle at 0.5px 0.5px, rgba(220, 200, 230, 0.03) 0.5px, transparent 0.5px);
-        background-size: 4px 4px;
-        pointer-events: none;
-        z-index: 1;
-      }
-      body[data-cadence-texture="1"]::after {
-        content: ""; position: fixed; inset: 0;
-        background-image:
-          repeating-linear-gradient(135deg,
-            transparent 0,
-            transparent 8px,
-            rgba(255,255,255,0.008) 8px,
-            rgba(255,255,255,0.008) 9px),
-          repeating-linear-gradient(45deg,
-            transparent 0,
-            transparent 11px,
-            rgba(200,180,220,0.006) 11px,
-            rgba(200,180,220,0.006) 12px);
-        pointer-events: none;
-        z-index: 1;
-      }
-      /* v05.05bt351 — Gradient outer ring for Cadence. Renders as a
-         pinned 2px-thick frame at the viewport edge via a fixed
-         pseudo-wrapper with border-image. Only fires in Cadence.
-         Mommy: blush → lavender → smoke-blue. Daddy: slate → lavender
-         → blush (inverted via the cadence-ring-daddy variant). */
-      #ll-cadence-ring {
-        position: fixed; inset: 0;
-        pointer-events: none;
-        z-index: 9999;
-        border: 2px solid transparent;
-        border-image: linear-gradient(135deg, #d0a8c0 0%, #c6b0db 50%, #8b9bbc 100%) 1;
-      }
-      #ll-cadence-ring[data-variant="daddy"] {
-        border-image: linear-gradient(135deg, #6c84a8 0%, #8b9bbc 50%, #c6b0db 100%) 1;
-      }
+      /* v05.05bt377 — Cadence body texture overlays neutered per
+         chat: 'still see that thin white line as the outermost
+         border that I want removed.' The ::before grain and
+         ::after diagonal washes use very low-alpha whites/lavenders
+         that on dark mode iOS Safari render as a subtle perceptible
+         edge against the safe-area inset. Disabled both; the
+         #ll-cadence-ring CSS rule below is also dead-code now and
+         removed to be thorough. */
+      body[data-cadence-texture="1"]::before { content: none; }
+      body[data-cadence-texture="1"]::after  { content: none; }
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
       input { font-family: inherit; }
@@ -12405,12 +12376,11 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         // Keeping the emoji bottles + tap-to-expand pattern from
         // bt361 since that's compact and readable.
         const Tile = ({ zoneKey, label, glyph, oz, bottles, urgencyHint, urgent, span }) => {
-          const expanded = milkZoneExpanded === zoneKey;
           const empty = bottles.length === 0;
           return (
             <button
               type="button"
-              onClick={() => setMilkZoneExpanded(expanded ? null : zoneKey)}
+              onClick={() => onPickBottle && onPickBottle(zoneKey)}
               style={{
                 gridColumn: span || "auto",
                 display: "flex", flexDirection: "column",
@@ -27282,6 +27252,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // sections for planning.' Backlog has its own collapsed-by-default
   // state since it can be long.
   const [backlogExpanded, setBacklogExpanded] = useState(false);
+  // v05.05bt376 — Per chat: 'i need to be able to collapse each
+  // section.' Per-section collapse for Scheduled + For Today too.
+  // Default expanded since these are typically short and most-
+  // relevant on first open.
+  const [scheduledExpanded, setScheduledExpanded] = useState(true);
+  const [forTodayExpanded, setForTodayExpanded] = useState(true);
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
   // kinda long so have the ability to filter as well by the
   // different categories.' Same chip pattern as fits picker.
@@ -31115,30 +31091,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 past the timeline directly to the task pile + end-of-
                 day section. Smooth-scrolls via the anchor on the
                 pile container. */}
-            <div style={{
-              display: "flex", justifyContent: "flex-end",
-              padding: "0 4px 4px",
-            }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof document === "undefined") return;
-                  const el = document.querySelector("[data-task-pile-anchor]");
-                  if (el && el.scrollIntoView) {
-                    el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }
-                }}
-                style={{
-                  background: "transparent", border: "none",
-                  padding: "4px 6px",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9, letterSpacing: "0.16em",
-                  textTransform: "uppercase", fontWeight: 700,
-                  color: C.muted, cursor: "pointer",
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
-                }}>↓ tasks</button>
-            </div>
+            {/* v05.05bt365/377 — Per chat (bt377): 'let's make the
+                jump to tasks inline with the arrow up earlier line.
+                And let's add the "jump to" verbiage so it's clear.'
+                Standalone link removed — both jump links now live
+                in a combined nav row inside the timeline rows. */}
             <div style={{ padding: "0", position: "relative" }}>
               {(() => {
                 const rows = [];
@@ -31172,19 +31129,80 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 ).length;
                 if (showEarlier && earlierCount > 0) {
                   rows.push(
-                    <button key="earlier-pill-hide"
-                      onClick={() => setShowEarlier(false)}
-                      style={{
-                        background: "transparent", border: "none",
-                        padding: "4px 4px 8px",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, letterSpacing: "0.20em",
-                        textTransform: "uppercase", fontWeight: 600,
-                        color: "rgba(124,107,90,0.55)",
-                        cursor: "pointer", textAlign: "left", width: "100%",
-                      }}>
-                      ↓ hide earlier ({earlierCount})
-                    </button>
+                    <div key="nav-strip-hide" style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "4px 4px 8px",
+                    }}>
+                      <button
+                        onClick={() => setShowEarlier(false)}
+                        style={{
+                          background: "transparent", border: "none",
+                          padding: "4px 6px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, letterSpacing: "0.20em",
+                          textTransform: "uppercase", fontWeight: 700,
+                          color: "rgba(124,107,90,0.65)",
+                          cursor: "pointer",
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                        }}>
+                        ↓ hide earlier ({earlierCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTaskPileExpanded(true);
+                          if (typeof document === "undefined") return;
+                          setTimeout(() => {
+                            const el = document.querySelector("[data-task-pile-anchor]");
+                            if (el && el.scrollIntoView) {
+                              el.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }, 50);
+                        }}
+                        style={{
+                          background: "transparent", border: "none",
+                          padding: "4px 6px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, letterSpacing: "0.16em",
+                          textTransform: "uppercase", fontWeight: 700,
+                          color: C.gold, cursor: "pointer",
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                        }}>↓ jump to tasks</button>
+                    </div>
+                  );
+                } else {
+                  // No earlier rows OR earlier collapsed → still render
+                  // the jump-to-tasks affordance, alone on the right.
+                  rows.push(
+                    <div key="nav-strip-tasks-only" style={{
+                      display: "flex", justifyContent: "flex-end", alignItems: "center",
+                      padding: "4px 4px 8px",
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTaskPileExpanded(true);
+                          if (typeof document === "undefined") return;
+                          setTimeout(() => {
+                            const el = document.querySelector("[data-task-pile-anchor]");
+                            if (el && el.scrollIntoView) {
+                              el.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }, 50);
+                        }}
+                        style={{
+                          background: "transparent", border: "none",
+                          padding: "4px 6px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, letterSpacing: "0.16em",
+                          textTransform: "uppercase", fontWeight: 700,
+                          color: C.gold, cursor: "pointer",
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                        }}>↓ jump to tasks</button>
+                    </div>
                   );
                 }
                 let earlierPillInserted = false;
@@ -31301,6 +31319,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   );
                 };
                 dayTimeline.forEach((slot, i) => {
+                  // v05.05bt377 — Fire NOW as soon as we pass the
+                  // anchor, even if the anchor slot itself got
+                  // filtered out by a later early-return. Sits at
+                  // the very top of forEach so it runs even for
+                  // slots that will be skipped.
+                  if (
+                    !nowLineInserted && !isTomorrow &&
+                    afterRowAnchorIdx >= 0 && i > afterRowAnchorIdx
+                  ) {
+                    nowLineInserted = true;
+                    renderNowLine(`before-${i}`);
+                  }
                   // v05.05bt321 — Skip user-dismissed free blocks.
                   // Per chat: 'should be able to cancel out of open
                   // tap fill if doesnt make sense to be there.'
@@ -31344,20 +31374,54 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   if (!showEarlier && !isCompletedTask && slot.end.getTime() < earlierCutoff) {
                     if (!earlierPillInserted && earlierCount > 0) {
                       earlierPillInserted = true;
+                      // Replace the bare "tasks-only" nav we pushed at
+                      // the top with a combined strip that has EARLIER
+                      // on the left + JUMP TO TASKS on the right.
+                      const tasksOnlyIdx = rows.findIndex(r => r && r.key === "nav-strip-tasks-only");
+                      if (tasksOnlyIdx >= 0) rows.splice(tasksOnlyIdx, 1);
                       rows.push(
-                        <button key="earlier-pill"
-                          onClick={() => setShowEarlier(true)}
-                          style={{
-                            background: "transparent", border: "none",
-                            padding: "4px 4px 8px",
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9, letterSpacing: "0.20em",
-                            textTransform: "uppercase", fontWeight: 600,
-                            color: "rgba(124,107,90,0.55)",
-                            cursor: "pointer", textAlign: "left", width: "100%",
-                          }}>
-                          ↑ earlier ({earlierCount})
-                        </button>
+                        <div key="nav-strip-show-earlier" style={{
+                          display: "flex", justifyContent: "space-between", alignItems: "center",
+                          padding: "4px 4px 8px",
+                        }}>
+                          <button
+                            onClick={() => setShowEarlier(true)}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: "4px 6px",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, letterSpacing: "0.20em",
+                              textTransform: "uppercase", fontWeight: 700,
+                              color: "rgba(124,107,90,0.65)",
+                              cursor: "pointer",
+                              touchAction: "manipulation",
+                              WebkitTapHighlightColor: "transparent",
+                            }}>
+                            ↑ jump to earlier ({earlierCount})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTaskPileExpanded(true);
+                              if (typeof document === "undefined") return;
+                              setTimeout(() => {
+                                const el = document.querySelector("[data-task-pile-anchor]");
+                                if (el && el.scrollIntoView) {
+                                  el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }
+                              }, 50);
+                            }}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: "4px 6px",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, letterSpacing: "0.16em",
+                              textTransform: "uppercase", fontWeight: 700,
+                              color: C.gold, cursor: "pointer",
+                              touchAction: "manipulation",
+                              WebkitTapHighlightColor: "transparent",
+                            }}>↓ jump to tasks</button>
+                        </div>
                       );
                     }
                     return;
@@ -33445,6 +33509,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   // (either the one containing now, or the most
                   // recent past slot). Visually positions NOW BELOW
                   // whatever just happened, which feels accurate.
+                  // v05.05bt343/345/377 — After-row NOW (preferred
+                  // placement when the anchor row actually rendered:
+                  // NOW sits just BELOW it). The "passing" check at
+                  // the top of forEach handles the case where the
+                  // anchor got filtered out.
                   if (!nowLineInserted && !isTomorrow && afterRowAnchorIdx === i) {
                     nowLineInserted = true;
                     renderNowLine(`after-${i}`);
@@ -33594,9 +33663,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 return (
                   <div style={{
                     display: "flex", alignItems: "flex-start", gap: 5,
+                    justifyContent: "flex-start",
                     width: "100%", padding: "5px 6px",
                     borderBottom: `1px solid ${C.line}15`,
                     background: isPinned ? `${C.gold}0a` : "transparent",
+                    textAlign: "left",
                   }}>
                     {/* v05.05bt363 — Checkbox: switched from
                         onClick+onTouchEnd dual-handler (was firing
@@ -33613,13 +33684,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         toggleComplete(t.id);
                       }}
                       style={{
-                        width: 28, height: 28, borderRadius: "50%",
+                        width: 20, height: 20, borderRadius: "50%",
                         border: `1.5px solid ${done ? "#7B9B6E" : C.line + "aa"}`,
                         background: done ? "#7B9B6E" : "transparent",
                         cursor: "pointer", flexShrink: 0, padding: 0,
-                        marginTop: 0,
+                        marginTop: 1,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 15, lineHeight: 1,
+                        color: "#fff", fontSize: 11, lineHeight: 1,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
                         WebkitAppearance: "none",
@@ -33653,8 +33724,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         textDecoration: done ? "line-through" : "none",
                         opacity: done ? 0.55 : 1,
                         minWidth: 0,
+                        textAlign: "left",
                       }}>
                         {t.title}
+                        {/* v05.05bt376 — Per chat: 'for things that are
+                            scheduled, can you update the time beside
+                            the task (ie today at X time).' Inline time
+                            display for tasks with a scheduledTime. */}
+                        {t.scheduledTime && (() => {
+                          const [h, m] = t.scheduledTime.split(":").map(Number);
+                          const ap = h >= 12 ? "p" : "a";
+                          const h12 = h % 12 || 12;
+                          const timeStr = m ? `${h12}:${String(m).padStart(2,"0")}${ap}` : `${h12}${ap}`;
+                          return (
+                            <span style={{
+                              marginLeft: 6,
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9.5, fontWeight: 700,
+                              letterSpacing: "0.04em",
+                              color: C.mommy, opacity: 0.85,
+                              whiteSpace: "nowrap",
+                            }}>
+                              · today at {timeStr}
+                            </span>
+                          );
+                        })()}
                         {isRollover && (
                           <span style={{
                             marginLeft: 5,
@@ -33912,40 +34006,73 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                       {/* SCHEDULED section */}
                       <div style={{ padding: "6px 4px 4px" }}>
-                        <div style={{
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
-                          color: C.mommy, textTransform: "uppercase",
-                          padding: "3px 5px 5px",
-                          display: "flex", alignItems: "center", gap: 6,
-                        }}>
+                        <button
+                          type="button"
+                          onClick={() => setScheduledExpanded(v => !v)}
+                          style={{
+                            width: "100%", background: "transparent",
+                            border: "none", padding: "3px 5px 5px",
+                            cursor: "pointer", textAlign: "left",
+                            fontFamily: "inherit",
+                            display: "flex", alignItems: "center", gap: 6,
+                            justifyContent: "flex-start",
+                          }}>
                           <span style={{ color: C.mommy, fontWeight: 800, fontSize: 10 }}>●</span>
-                          <span>Scheduled · {scheduled.length}</span>
-                        </div>
-                        {scheduled.length === 0 ? (
-                          <div style={{
-                            padding: "8px 5px",
-                            fontFamily: "'Cormorant Garamond', serif",
-                            fontStyle: "italic", fontSize: 11.5,
-                            color: C.muted,
-                          }}>nothing slotted yet</div>
-                        ) : scheduled.map(t => <TaskRow key={t.id} t={t} side="scheduled" />)}
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                            color: C.mommy, textTransform: "uppercase",
+                          }}>Scheduled · {scheduled.length}</span>
+                          <span style={{
+                            marginLeft: "auto",
+                            fontSize: 11, color: C.mommy, opacity: 0.5,
+                            transform: scheduledExpanded ? "rotate(90deg)" : "rotate(0)",
+                            transition: "transform 0.15s",
+                          }}>▸</span>
+                        </button>
+                        {scheduledExpanded && (
+                          scheduled.length === 0 ? (
+                            <div style={{
+                              padding: "8px 5px",
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontStyle: "italic", fontSize: 11.5,
+                              color: C.muted,
+                              textAlign: "left",
+                            }}>nothing slotted yet</div>
+                          ) : scheduled.map(t => <TaskRow key={t.id} t={t} side="scheduled" />)
+                        )}
                       </div>
                       {/* FOR TODAY section (formerly "Unscheduled") */}
                       <div style={{
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
                       }}>
-                        <div style={{
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
-                          color: C.gold, textTransform: "uppercase",
-                          padding: "3px 5px 5px",
-                          display: "flex", alignItems: "center", gap: 6,
-                        }}>
+                        <button
+                          type="button"
+                          onClick={() => setForTodayExpanded(v => !v)}
+                          style={{
+                            width: "100%", background: "transparent",
+                            border: "none", padding: "3px 5px 5px",
+                            cursor: "pointer", textAlign: "left",
+                            fontFamily: "inherit",
+                            display: "flex", alignItems: "center", gap: 6,
+                            justifyContent: "flex-start",
+                          }}>
                           <span style={{ color: C.gold, fontWeight: 800, fontSize: 10 }}>◐</span>
-                          <span>For today · {forToday.length}</span>
-                        </div>
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                            color: C.gold, textTransform: "uppercase",
+                          }}>For today · {forToday.length}</span>
+                          <span style={{
+                            marginLeft: "auto",
+                            fontSize: 11, color: C.gold, opacity: 0.5,
+                            transform: forTodayExpanded ? "rotate(90deg)" : "rotate(0)",
+                            transition: "transform 0.15s",
+                          }}>▸</span>
+                        </button>
+                        {forTodayExpanded && (
+                          <>
                         {/* v05.05bt356 — Category filter chips. Hidden
                             when only 1 category or pile is empty. */}
                         {unscheduled.length > 1 && (() => {
@@ -34063,6 +34190,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             </div>
                           ));
                         })()}
+                          </>
+                        )}
                       </div>
                       {/* v05.05bt373/374 — BACKLOG section. Brain-dump
                           items (tasks with no scheduledDate). Collapsed
@@ -35070,6 +35199,150 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           }}
         />
       )}
+      {/* v05.05bt361/376 — Plan-from-queue picker. Moved here from
+          TodaysPumpPlanCard scope (was causing ReferenceError on
+          schedule tab tap). Lists all unscheduled tasks; tap to toggle;
+          "Schedule N" sets scheduledDate=today on selected IDs +
+          triggers reanalyze. */}
+      {planPickerOpen && (() => {
+        const candidates = (tasks || [])
+          .filter(t => t.ownerName === currentUser && !t.completedAt && !t.scheduledTime)
+          .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0));
+        const selectedCount = planPickerSelected.size;
+        return (
+          <ModalShell C={C} onClose={() => { setPlanPickerOpen(false); setPlanPickerSelected(new Set()); }} title="Plan from queue">
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 13,
+              color: C.muted, marginBottom: 12, lineHeight: 1.45,
+            }}>
+              Pick tasks to schedule for today. The engine will slot them into open blocks based on focus, regret, and effort.
+            </div>
+            {candidates.length === 0 ? (
+              <div style={{
+                padding: "24px 14px", textAlign: "center",
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 13, color: C.muted,
+              }}>No unscheduled tasks in your queue.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
+                {candidates.map(t => {
+                  const checked = planPickerSelected.has(t.id);
+                  const fl = normalizeFocus(t.focusLevel);
+                  const flGlyph = fl === "deep" ? "🧠" : "🍃";
+                  const cat = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setPlanPickerSelected(prev => {
+                          const next = new Set(prev);
+                          if (next.has(t.id)) next.delete(t.id);
+                          else next.add(t.id);
+                          return next;
+                        });
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "8px 10px", width: "100%",
+                        background: checked ? `${C.mommy}1a` : "transparent",
+                        border: `1px solid ${checked ? C.mommy + "66" : C.line + "22"}`,
+                        borderRadius: 6,
+                        cursor: "pointer", textAlign: "left",
+                        fontFamily: "inherit",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}>
+                      <span style={{
+                        width: 22, height: 22, borderRadius: 4,
+                        border: `1.5px solid ${checked ? C.mommy : C.line + "88"}`,
+                        background: checked ? C.mommy : "transparent",
+                        color: "#fff", fontSize: 14, fontWeight: 700,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}>{checked ? "✓" : ""}</span>
+                      <span style={{ fontSize: 13 }}>{flGlyph}</span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, fontWeight: 700,
+                        color: regretColors[t.regretScore || 3],
+                      }}>R{t.regretScore || 3}</span>
+                      <span style={{
+                        flex: 1, fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 13.5, color: C.ink, lineHeight: 1.3,
+                      }}>{t.title}</span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9, color: C.muted, fontWeight: 700,
+                        letterSpacing: "0.06em", textTransform: "uppercase",
+                      }}>{cat}</span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, color: C.muted, fontWeight: 600,
+                      }}>{t.effortMin || 30}m</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {candidates.length > 0 && (
+              <div style={{
+                position: "sticky", bottom: 0,
+                background: C.bg,
+                padding: "10px 0 4px",
+                borderTop: `1px solid ${C.line}33`,
+                display: "flex", gap: 8, alignItems: "center",
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setPlanPickerSelected(new Set(candidates.map(t => t.id)))}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: C.muted, cursor: "pointer",
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 12,
+                  }}>select all</button>
+                <button
+                  type="button"
+                  onClick={() => setPlanPickerSelected(new Set())}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: C.muted, cursor: "pointer",
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 12,
+                  }}>clear</button>
+                <span style={{ flex: 1 }} />
+                <button
+                  type="button"
+                  disabled={selectedCount === 0}
+                  onClick={() => {
+                    const ids = new Set(planPickerSelected);
+                    setTasks(prev => prev.map(t => ids.has(t.id)
+                      ? { ...t, scheduledDate: todayISO, scheduledTime: null, pinned: false }
+                      : t));
+                    setPlanPickerOpen(false);
+                    setPlanPickerSelected(new Set());
+                    setTimeout(() => reanalyze(), 50);
+                  }}
+                  style={{
+                    background: selectedCount === 0 ? C.line + "33" : C.mommy,
+                    color: selectedCount === 0 ? C.muted : "#fff",
+                    border: "none", borderRadius: 6,
+                    padding: "8px 14px",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, fontWeight: 800,
+                    letterSpacing: "0.10em", textTransform: "uppercase",
+                    cursor: selectedCount === 0 ? "not-allowed" : "pointer",
+                    touchAction: "manipulation",
+                  }}>
+                  Schedule {selectedCount > 0 ? selectedCount : ""}
+                </button>
+              </div>
+            )}
+          </ModalShell>
+        );
+      })()}
       {previewState && (
         <PreviewBeforeCommitModal
           C={C}
@@ -37709,149 +37982,8 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
           </div>
         )}
       </div>
-      {/* v05.05bt361 — Multi-select plan picker. Lists all unscheduled
-          tasks for the user; tap to toggle; "Schedule N" sets
-          scheduledDate=today on selected IDs + triggers reanalyze. */}
-      {planPickerOpen && (() => {
-        const candidates = (tasks || [])
-          .filter(t => t.ownerName === currentUser && !t.completedAt && !t.scheduledTime)
-          .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0));
-        const selectedCount = planPickerSelected.size;
-        return (
-          <ModalShell C={C} onClose={() => { setPlanPickerOpen(false); setPlanPickerSelected(new Set()); }} title="Plan from queue">
-            <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 13,
-              color: C.muted, marginBottom: 12, lineHeight: 1.45,
-            }}>
-              Pick tasks to schedule for today. The engine will slot them into open blocks based on focus, regret, and effort.
-            </div>
-            {candidates.length === 0 ? (
-              <div style={{
-                padding: "24px 14px", textAlign: "center",
-                fontFamily: "'Cormorant Garamond', serif",
-                fontStyle: "italic", fontSize: 13, color: C.muted,
-              }}>No unscheduled tasks in your queue.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
-                {candidates.map(t => {
-                  const checked = planPickerSelected.has(t.id);
-                  const fl = normalizeFocus(t.focusLevel);
-                  const flGlyph = fl === "deep" ? "🧠" : "🍃";
-                  const cat = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setPlanPickerSelected(prev => {
-                          const next = new Set(prev);
-                          if (next.has(t.id)) next.delete(t.id);
-                          else next.add(t.id);
-                          return next;
-                        });
-                      }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        padding: "8px 10px", width: "100%",
-                        background: checked ? `${C.mommy}1a` : "transparent",
-                        border: `1px solid ${checked ? C.mommy + "66" : C.line + "22"}`,
-                        borderRadius: 6,
-                        cursor: "pointer", textAlign: "left",
-                        fontFamily: "inherit",
-                        touchAction: "manipulation",
-                        WebkitTapHighlightColor: "transparent",
-                      }}>
-                      <span style={{
-                        width: 22, height: 22, borderRadius: 4,
-                        border: `1.5px solid ${checked ? C.mommy : C.line + "88"}`,
-                        background: checked ? C.mommy : "transparent",
-                        color: "#fff", fontSize: 14, fontWeight: 700,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                      }}>{checked ? "✓" : ""}</span>
-                      <span style={{ fontSize: 13 }}>{flGlyph}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, fontWeight: 700,
-                        color: regretColors[t.regretScore || 3],
-                      }}>R{t.regretScore || 3}</span>
-                      <span style={{
-                        flex: 1, fontFamily: "'Cormorant Garamond', serif",
-                        fontSize: 13.5, color: C.ink, lineHeight: 1.3,
-                      }}>{t.title}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, color: C.muted, fontWeight: 700,
-                        letterSpacing: "0.06em", textTransform: "uppercase",
-                      }}>{cat}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, color: C.muted, fontWeight: 600,
-                      }}>{t.effortMin || 30}m</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {candidates.length > 0 && (
-              <div style={{
-                position: "sticky", bottom: 0,
-                background: C.bg,
-                padding: "10px 0 4px",
-                borderTop: `1px solid ${C.line}33`,
-                display: "flex", gap: 8, alignItems: "center",
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setPlanPickerSelected(new Set(candidates.map(t => t.id)))}
-                  style={{
-                    background: "transparent", border: "none",
-                    color: C.muted, cursor: "pointer",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 12,
-                  }}>select all</button>
-                <button
-                  type="button"
-                  onClick={() => setPlanPickerSelected(new Set())}
-                  style={{
-                    background: "transparent", border: "none",
-                    color: C.muted, cursor: "pointer",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 12,
-                  }}>clear</button>
-                <span style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  disabled={selectedCount === 0}
-                  onClick={() => {
-                    const ids = new Set(planPickerSelected);
-                    setTasks(prev => prev.map(t => ids.has(t.id)
-                      ? { ...t, scheduledDate: todayISO, scheduledTime: null, pinned: false }
-                      : t));
-                    setPlanPickerOpen(false);
-                    setPlanPickerSelected(new Set());
-                    // Trigger reanalyze on next tick so state has settled.
-                    setTimeout(() => reanalyze(), 50);
-                  }}
-                  style={{
-                    background: selectedCount === 0 ? C.line + "33" : C.mommy,
-                    color: selectedCount === 0 ? C.muted : "#fff",
-                    border: "none", borderRadius: 6,
-                    padding: "8px 14px",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11, fontWeight: 800,
-                    letterSpacing: "0.10em", textTransform: "uppercase",
-                    cursor: selectedCount === 0 ? "not-allowed" : "pointer",
-                    touchAction: "manipulation",
-                  }}>
-                  Schedule {selectedCount > 0 ? selectedCount : ""}
-                </button>
-              </div>
-            )}
-          </ModalShell>
-        );
-      })()}
+      {/* v05.05bt361 — Plan-picker modal moved to TodayTaskPlanCard
+          (bt376) — was in wrong scope here causing ReferenceError. */}
     </Section>
   );
 }
