@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt384";
+const APP_VERSION = "2026.05.05bt385";
 const APP_BUILD_NOTES = [
-  "INFINITE-RETRY LOOP IN DAILY-CONTENT FETCH — root cause of milk tile click 'not working', sticky header not latching, and general unresponsiveness. Per chat (with Chrome DevTools console screenshot): repeated 'Access to fetch at api.anthropic.com ... blocked by CORS policy' errors. The daily French/verse content useEffect fetches from api.anthropic.com directly from the browser, which is blocked by CORS (Anthropic's API doesn't permit cross-origin browser calls, plus there's no API key in the request). The useEffect's deps include loadingDaily, and on failure the catch ran setLoadingDaily(false) without writing anything to dailyContent[todayKey], so the effect re-fired → fetched → failed → looped indefinitely. Every iteration ran a network request + a React render cycle, starving the event loop. That's why single clicks felt dead but double-clicks sometimes worked (you happened to land between loop iterations). Fix: on failure, write a sentinel { failed: true, attemptedAt } into dailyContent[todayKey]. The existing early-exit check (`if (dailyContent[todayKey]) return`) now catches it on the next render, breaking the loop. The fetch will try once per day, fail once, and stop. NowView's consumer reads via optional chaining (todayDailyContent?.[tier]?.phrase) so the sentinel is harmless. The fetch itself isn't fixed — it can't be without a server-side proxy with the API key — but it's no longer thrashing the page. Build verified clean via esbuild.",
+  "STICKY HEADER FIX. Per chat (after bt384 deployed and milk tile clicks started working): 'header scrolls away so stickiness did not work'. Root cause: the global CSS had `overflow-x: hidden` on the html element (in the `html, body, #root` rule). Setting any overflow value on html promotes it to a scroll container, which moves the scrolling ancestor for position:sticky descendants away from the viewport. The bt356 zoom fix (don't apply zoom: 1.0 since zoom creates a stacking context) was correct but only addressed half the problem; html.overflow-x was the other half. Split the rule: html, body, #root get margin:0 + padding:0 + bg:inherit. body, #root get overflow-x:hidden separately. html now stays as the default viewport scroller and sticky elements latch to its top edge as designed. Horizontal escapes are still clipped at body + #root level. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt385", summary: "Sticky header fix. Split the `html, body, #root { overflow-x: hidden }` rule: overflow-x is now applied only to body + #root, not html. Setting overflow on the html element was promoting it to a scroll container and moving the scrolling ancestor for position:sticky descendants off the viewport, so the top banner wasn't latching. With html restored as the default scroller, the banner sticks to the top as intended. Horizontal-escape clipping preserved at body + #root level. Build verified clean via esbuild." },
   { version: "2026.05.05bt384", summary: "Daily-content fetch retry loop fixed (root cause of multiple UI bugs). The useEffect at App scope was fetching from api.anthropic.com directly, getting blocked by CORS, and looping forever because the catch block didn't update dailyContent — so the dep-driven effect kept re-firing. On failure we now write a {failed:true, attemptedAt} sentinel into dailyContent[todayKey] which the existing early-exit check catches. Loop stops after one failed attempt per day. The Anthropic API call itself is not fixed — it can't be from a browser without a server proxy with the API key — but the page is no longer thrashing. This was almost certainly the root cause of the milk tile single-click feeling dead (event handlers starved by the loop), sticky header not latching (constant re-renders disrupting layout), and general lag in the screenshot session. Build verified clean via esbuild." },
   { version: "2026.05.05bt383", summary: "Scrollbar styling. Added ::-webkit-scrollbar rules (8px wide, transparent track, semi-transparent taupe thumb) + Firefox scrollbar-width/scrollbar-color equivalents. Eliminates the macOS Chrome default light-gray scrollbar track that was reading as a thin white border on the right edge of the dark Cadence palette. Page bg now paints continuously to the viewport edge. Build verified clean via esbuild." },
   { version: "2026.05.05bt382", summary: "Milk tile reverted to opening UseBottleModal + softer NOW-line glow. (1) Tile onClick rewired from setMilkZoneExpanded(zoneKey) back to onPickBottle(zoneKey) — restores the pre-bt378 modal flow where use/edit/discard/move/log-anyway/bulk-manage have full room. Inline renderExpanded + Row component left as dormant code (no caller sets milkZoneExpanded). UseBottleModal initialBottleId pre-select (bt380) preserved for future callers. (2) @keyframes nl-now-pill-pulse and nl-now-line-pulse rewritten per mockup option B: dropped outer halo layers (was 3 stacked shadows including 0 0 22-44px outermost), halved alpha (0.4-0.7 → 0.22-0.35), kept inset highlight on pill and 2.4s pulse rate. Build verified clean via esbuild." },
@@ -10192,9 +10193,21 @@ function FontImports() {
          that needs to be addressed.' Browser defaults give html/body/
          #root a small margin/padding that the warm-plum theme can't
          cover. Reset them so the bg color reaches every edge. */
+      /* v05.05bt385 — overflow-x: hidden split off from html. Per chat:
+         'header scrolls away so stickiness did not work'. Setting any
+         overflow value on the html element (including overflow-x:hidden)
+         promotes html to a scroll container, which moves the scrolling
+         ancestor for position:sticky descendants away from the viewport.
+         The bt356 zoom fix wasn't enough on its own; this was the other
+         half of the sticky-positioning problem. Apply overflow-x:hidden
+         only to body + #root so horizontal escapes are still clipped,
+         but html stays as the default viewport scroller and sticky
+         elements latch to its top edge as designed. */
       html, body, #root {
         margin: 0; padding: 0;
         background: inherit;
+      }
+      body, #root {
         overflow-x: hidden;
       }
       /* v05.05bt351 — Per chat: 'i love B, C and D' (mockup picks).
