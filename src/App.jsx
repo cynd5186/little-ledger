@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt349";
+const APP_VERSION = "2026.05.05bt350";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -6879,6 +6879,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setTasks(prev => [...prev, ...newTasks]);
             setShowLogger(false);
             setLoggerType(null);
+            // v05.05bt350 — Per chat: 'when i add items to plan i don't
+            // see where they go.' Jump to schedule tab so the user
+            // sees their new tasks land in the task pile / day plan.
+            setTab("shifts");
           }}
         />
       )}
@@ -9922,6 +9926,15 @@ function FontImports() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
       * { box-sizing: border-box; }
+      /* v05.05bt350 — Per chat: 'weird white thin borders on the side
+         that needs to be addressed.' Browser defaults give html/body/
+         #root a small margin/padding that the warm-plum theme can't
+         cover. Reset them so the bg color reaches every edge. */
+      html, body, #root {
+        margin: 0; padding: 0;
+        background: inherit;
+        overflow-x: hidden;
+      }
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
       input { font-family: inherit; }
@@ -10519,16 +10532,15 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     if (currentUser !== "Mommy") return null;
     const hour = now.getHours();
     if (hour < 19 || hour >= 23) return null;
-    // v05.05bt269 — Trigger signal: tomorrow is a weekday (Mon-Fri). The
-    // bt268 'onsite' gate was too strict — required user to manually set
-    // onsite mode that day. Most working parents have a weekday handoff
-    // pattern regardless of onsite toggle. Onsite still triggers (covers
-    // weekend onsite days) via an OR.
+    // v05.05bt269/350 — Trigger signal: tomorrow is a weekday (Mon-Fri).
+    // Per chat (bt350): 'thaw overnight should just work for workdays
+    // and not weekends.' Strict — onsite override removed so it never
+    // fires on Fri→Sat or Sat→Sun transitions even if onsite stale.
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowDow = tomorrow.getDay(); // 0=Sun, 6=Sat
     const isWorkdayTomorrow = tomorrowDow >= 1 && tomorrowDow <= 5;
-    if (!isWorkdayTomorrow && !onsite) return null;
+    if (!isWorkdayTomorrow) return null;
     // Need freezer bags to thaw
     if (!Array.isArray(freezerItems) || freezerItems.length === 0) return null;
     // v05.05bt270 — Target oz scales with user's typical handoff hours.
@@ -16520,14 +16532,19 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
   // Each user-facing group (LIMS · 35 / GRANT · 1 / etc.) is
   // collapsible; collapsed state persisted in-session.
   const [viewMode, setViewMode] = useState("category");
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  // v05.05bt349/350 — Per chat: 'Collapse categories by default.'
+  // Switched from collapsedGroups (start expanded) to expandedGroups
+  // (start collapsed). Counts are visible in headers so user can scan
+  // without expanding.
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
   const toggleGroup = (key) => {
-    setCollapsedGroups(prev => {
+    setExpandedGroups(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   };
+  const isGroupOpen = (key) => expandedGroups.has(key);
   // v05.05bt152 — Two-tap delete state, scoped to this view only.
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const pendingDeleteTimerRef = useRef(null);
@@ -16700,16 +16717,16 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
           }}>← Back to Mommy's Day</button>
       )}
       {/* Header */}
-      <div style={{ marginBottom: 12, padding: "0 4px" }}>
+      <div style={{ marginBottom: 14, padding: "0 4px" }}>
         <h1 style={{
           fontFamily: "'Cormorant Garamond', serif",
-          fontStyle: "italic", fontWeight: 500, fontSize: 24,
+          fontStyle: "italic", fontWeight: 500, fontSize: 30,
           color: C.ink, margin: 0, lineHeight: 1.05,
         }}>All tasks across days</h1>
         <div style={{
-          marginTop: 3,
+          marginTop: 4,
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 10, color: C.muted,
+          fontSize: 11, color: C.muted,
           letterSpacing: "0.08em",
         }}>
           {totalCount} total · search · filter · done history
@@ -16748,7 +16765,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               border: `1px solid ${filter === c.key ? userTint : C.line + "55"}`,
               borderRadius: 999, padding: "4px 10px",
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9, fontWeight: 700,
+              fontSize: 10, fontWeight: 700,
               letterSpacing: "0.14em",
               cursor: "pointer",
               display: "inline-flex", alignItems: "center", gap: 5,
@@ -16791,21 +16808,8 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
             fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
             cursor: "pointer", textTransform: "uppercase",
           }}>Status</button>
-          {useCategoryGroups && collapsedGroups.size > 0 && (
-            <button onClick={() => setCollapsedGroups(new Set())} style={{
-              marginLeft: "auto",
-              background: "transparent",
-              color: C.gold,
-              border: "none",
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 12,
-              cursor: "pointer",
-            }}>expand all</button>
-          )}
-          {useCategoryGroups && collapsedGroups.size === 0 && categoryGroupsBuilt && categoryGroupsBuilt.length > 1 && (
-            <button onClick={() => {
-              setCollapsedGroups(new Set(categoryGroupsBuilt.map(g => g.key)));
-            }} style={{
+          {useCategoryGroups && expandedGroups.size > 0 && (
+            <button onClick={() => setExpandedGroups(new Set())} style={{
               marginLeft: "auto",
               background: "transparent",
               color: C.muted,
@@ -16814,6 +16818,19 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               fontStyle: "italic", fontSize: 12,
               cursor: "pointer",
             }}>collapse all</button>
+          )}
+          {useCategoryGroups && expandedGroups.size === 0 && categoryGroupsBuilt && categoryGroupsBuilt.length > 1 && (
+            <button onClick={() => {
+              setExpandedGroups(new Set(categoryGroupsBuilt.map(g => g.key)));
+            }} style={{
+              marginLeft: "auto",
+              background: "transparent",
+              color: C.gold,
+              border: "none",
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 12,
+              cursor: "pointer",
+            }}>expand all</button>
           )}
         </div>
       )}
@@ -16842,32 +16859,33 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 width: "100%",
                 background: "transparent", border: "none",
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9.5, letterSpacing: "0.22em", textTransform: "uppercase",
+                fontSize: 11, letterSpacing: "0.20em", textTransform: "uppercase",
                 fontWeight: 700, color: g.color,
-                padding: "8px 4px 6px", marginBottom: 4,
-                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 4px 8px", marginBottom: 4,
+                display: "flex", alignItems: "center", gap: 10,
                 cursor: "pointer", textAlign: "left",
               }}>
               <span style={{
                 display: "inline-block",
-                width: 10, fontSize: 10, opacity: 0.6,
-                transform: collapsedGroups.has(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
+                width: 12, fontSize: 12, opacity: 0.7,
+                transform: !isGroupOpen(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
                 transition: "transform 0.15s",
               }}>▾</span>
               <span>{g.label}</span>
               <span style={{
-                opacity: 0.85,
+                opacity: 0.95,
                 background: `${g.color}1f`,
                 color: g.color,
-                borderRadius: 4,
-                padding: "1px 6px",
-                fontSize: 9,
+                borderRadius: 5,
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 800,
                 letterSpacing: "0.02em",
               }}>{g.items.length}</span>
               <span style={{ flex: 1, height: 1, background: `${g.color}33` }} />
             </button>
           )}
-          {!collapsedGroups.has(g.key) && g.items.map(t => {
+          {(!useCategoryGroups || isGroupOpen(g.key)) && g.items.map(t => {
             const rail = t._status === "done" ? "#7B9B6E"
               : t._status === "draft" ? "#C18D7A"
               : t._status === "unscheduled" ? C.muted
@@ -23062,75 +23080,10 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
         )}
 
         {/* Free-text adjustment */}
-        <div style={{
-          padding: "12px 14px",
-          background: `${C.gold}0a`,
-          border: `1px solid ${C.gold}33`,
-          borderRadius: 8, marginBottom: 14,
-        }}>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10, color: C.muted, marginBottom: 6,
-            letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
-          }}>Tell me how to adjust</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-            <input
-              type="text"
-              value={cmd}
-              onChange={(e) => setCmd(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}
-              placeholder='e.g. "move review to morning"'
-              style={{
-                flex: 1,
-                fontFamily: "inherit", fontSize: 13, color: C.ink,
-                border: `1.5px solid ${C.line}33`,
-                borderRadius: 6, padding: "8px 10px",
-                background: C.paper,
-              }}
-            />
-            <button
-              onClick={handleApply}
-              disabled={!cmd.trim()}
-              style={{
-                padding: "8px 12px",
-                background: cmd.trim() ? C.mommy : C.line,
-                color: C.bg, border: "none", borderRadius: 6,
-                cursor: cmd.trim() ? "pointer" : "not-allowed",
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
-              }}>Try</button>
-          </div>
-          <button
-            onClick={() => setAiHint(true)}
-            style={{
-              padding: "6px 10px",
-              background: "transparent",
-              color: C.gold, border: `1px dashed ${C.gold}55`,
-              borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
-              fontSize: 10.5, letterSpacing: "0.1em", fontWeight: 600,
-              opacity: 0.85,
-            }}>✦ Use AI to adjust</button>
-          {aiHint && (
-            <div style={{
-              marginTop: 6,
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 11.5, color: C.muted,
-              lineHeight: 1.4,
-            }}>
-              AI free-text editing is coming once the API hookup ships. For now the parser handles simple patterns — see the placeholder.
-            </div>
-          )}
-          {hint && (
-            <div style={{
-              marginTop: 8,
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 12, lineHeight: 1.4,
-              color: hint.ok ? "#5A7A4E" : C.accent,
-            }}>
-              {hint.ok ? "✓ " : "✗ "}{hint.message}
-            </div>
-          )}
-        </div>
+        {/* v05.05bt350 — Per chat: 'under proposed schedule - lets
+            remove the tell me how to fix it option...doesnt work.'
+            The text-command parser + AI stub removed. Inline
+            controls on each row (drag, edit) are the path forward. */}
 
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -28568,22 +28521,38 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, (() => { const d = new Date(now); d.setHours(0,0,0,0); return d; })());
 
               // who-has phrasing
+              // v05.05bt350 — Per chat: 'now slider is showing at
+              // grandparents when there is no caregiver tag. and lets
+              // put caregiver or something more discreet to show when
+              // i am at work and in my boss lady role and someone
+              // accidentally sees my app on my screen.' In Cadence
+              // mode, the phrasing is genericized so a colleague
+              // glancing at the screen sees neutral labels. Onsite
+              // phrasing also tightened to require explicit caregiver
+              // tag — onsite alone (no active caregiver window) no
+              // longer claims grandparents.
+              const isCadence = productMode === "solo" && (cadenceScope === "all" || true);
+              const activeCaregiverWin = getActiveOrUpcomingCaregiverWindow(events, now);
+              const caregiverActive = activeCaregiverWin && activeCaregiverWin.state === "active";
               let whoHasPhrase = null;
               let whoColor = C.muted;
               if (isTomorrow) {
-                whoHasPhrase = `tomorrow's plan`;
+                whoHasPhrase = isCadence ? "tomorrow" : `tomorrow's plan`;
                 whoColor = C.mommy;
               } else if (currentOwner === "Mommy") {
-                whoHasPhrase = "you have Solène";
+                whoHasPhrase = isCadence ? "self" : "you have Solène";
                 whoColor = C.mommy;
               } else if (currentOwner === "Daddy") {
-                whoHasPhrase = "Daddy has Solène — your time";
+                whoHasPhrase = isCadence ? "covered" : "Daddy has Solène — your time";
                 whoColor = C.daddy;
               } else if (currentOwner === "joint") {
-                whoHasPhrase = "together with Solène";
+                whoHasPhrase = isCadence ? "joint" : "together with Solène";
                 whoColor = C.gold;
-              } else if (onsite) {
-                whoHasPhrase = "Solène with grandparents";
+              } else if (caregiverActive) {
+                whoHasPhrase = isCadence ? "covered" : "Solène with caregiver";
+                whoColor = C.gold;
+              } else if (onsite && !isCadence) {
+                whoHasPhrase = "Solène with caregiver";
                 whoColor = C.gold;
               }
 
@@ -28595,7 +28564,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       <h1 style={{
                         fontFamily: "'Cormorant Garamond', serif",
                         fontStyle: "italic", fontWeight: 500,
-                        fontSize: 24, color: C.ink,
+                        fontSize: 30, color: C.ink,
                         margin: 0, lineHeight: 1.05,
                         letterSpacing: "-0.015em",
                       }}>{
@@ -28868,13 +28837,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </button>
               );
             })()}
-            {/* v05.05bt316 — Per chat: 'Need some way to intuitively add
-                task. I know clicking on one bloc allows you to do this
-                but may it be intuitive. User may think it's to only
-                add to that specific block.' Top-of-timeline pill that
-                opens the NL input — no slot context, just "add a task
-                somewhere today." */}
-            {currentUser === "Mommy" && !isTomorrow && (
+            {/* v05.05bt316/350 — Top-of-timeline pill that opens the
+                NL input. Per chat (bt350): 'the add task for today
+                long button can disappear now because we have the log
+                button able to do that now.' Hidden in Cadence (boss
+                mode) — central log button's Plan tab is the primary
+                entry. Family mode keeps the button since the log
+                button still shows the legacy baby-only picker. */}
+            {currentUser === "Mommy" && !isTomorrow && !(productMode === "solo") && (
               <button
                 onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
                 style={{
@@ -30091,8 +30061,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           };
                         }
                         return {
-                          boxShadow: `0 0 0 1.5px ${ownerColor}, 0 0 28px -2px ${ownerColor}88, 0 0 56px -8px ${C.accent}55, inset 0 0 24px -6px ${ownerColor}40`,
-                          background: `${ownerColor}14`,
+                          // v05.05bt350 — Per chat: 'i like the glow
+                          // on the card thing but i think we can dial
+                          // it back a little bit.' Bloom radius 28→18,
+                          // bloom opacity 88→55, accent halo 55→2a,
+                          // inset glow 40→1f. Owner ring stays solid
+                          // (the locating cue); the candlelight just
+                          // gets quieter.
+                          boxShadow: `0 0 0 1.5px ${ownerColor}, 0 0 18px -4px ${ownerColor}55, 0 0 40px -12px ${C.accent}2a, inset 0 0 16px -6px ${ownerColor}1f`,
+                          background: `${ownerColor}0e`,
                         };
                       })() : {}),
                       alignItems: "center",
@@ -31332,6 +31309,48 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             const isPeak = blockFocus === "deep";
                             const label = isPeak ? "TRADE WINDOW" : "OPEN";
                             const tone = isPeak ? C.mommy : C.muted;
+                            // v05.05bt350 — Per chat: 'clicking on
+                            // trade window does nothing but pulls up
+                            // the add task dialog so either remove
+                            // or its a request to daddy dialog.'
+                            // Made TRADE WINDOW peak chip a real
+                            // button → opens the SendTradeRequest
+                            // modal. OPEN (non-peak) chip stays
+                            // informational (the row itself opens NL
+                            // input).
+                            if (isPeak && typeof openSendTrade === "function") {
+                              const durMs = slot.end.getTime() - slot.start.getTime();
+                              const fmt = (d) => {
+                                const h = d.getHours(), m = d.getMinutes();
+                                const h12 = ((h + 11) % 12) + 1;
+                                return `${h12}${m ? `:${String(m).padStart(2,"0")}` : ""}${h < 12 ? "a" : "p"}`;
+                              };
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openSendTrade({
+                                      start: slot.start.getHours() * 60 + slot.start.getMinutes(),
+                                      end: slot.end.getHours() * 60 + slot.end.getMinutes(),
+                                      deepMin: Math.round(durMs / 60000),
+                                      label: `${fmt(slot.start)}-${fmt(slot.end)}`,
+                                    });
+                                  }}
+                                  title="Ask Daddy to cover this window"
+                                  style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 8.5, letterSpacing: "0.14em",
+                                    fontWeight: 800, textTransform: "uppercase",
+                                    color: C.bg, background: tone,
+                                    padding: "2px 5px",
+                                    border: `1px solid ${tone}`,
+                                    borderRadius: 2,
+                                    marginRight: 4,
+                                    whiteSpace: "nowrap",
+                                    cursor: "pointer",
+                                  }}>{label} ↗</button>
+                              );
+                            }
                             return (
                               <span style={{
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -31536,8 +31555,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   return true;
                 })
                 .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
+              // v05.05bt350 — Per chat: 'when i check mark something
+              // in the task pile, it used to be that we just cross it
+              // off and not make it disappear. i want to just see the
+              // crossed off items with the option of deleting it.'
+              // Completed-today items now remain visible in their
+              // original column (struck through). 24h grace so today's
+              // checked-off work doesn't vanish at midnight.
+              const isCompletedToday = (t) => {
+                if (!t.completedAt) return false;
+                const c = new Date(t.completedAt);
+                const yesterday = new Date(now);
+                yesterday.setHours(yesterday.getHours() - 24);
+                return c > yesterday;
+              };
               const unscheduledBase = todayTasks
-                .filter(t => !t.completedAt && !t.scheduledTime);
+                .filter(t => !t.scheduledTime && (!t.completedAt || isCompletedToday(t)));
               const rollovers = pastLightsOut
                 ? todayTasks.filter(t => !t.completedAt && t.scheduledTime)
                 : [];
@@ -37611,7 +37644,11 @@ function ModalShell({ C, onClose, title, children, placement }) {
           display: "flex", justifyContent: "space-between", alignItems: "center",
           marginBottom: 18, flexShrink: 0,
         }}>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500, margin: 0, fontStyle: "italic" }}>
+          <h2 style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 26, fontWeight: 500, margin: 0, fontStyle: "italic",
+            color: C.ink, // v05.05bt350 — adapt to palette (was inheriting black in Cadence)
+          }}>
             {title}
           </h2>
           <button onClick={onClose} style={{
@@ -37858,7 +37895,7 @@ function HandoffPromptModal({ C, fromParent, toParent, existingText, onClose, on
       <Field C={C} label={`Note for ${toParent}`}>
         <textarea
           value={text} onChange={e => setText(e.target.value)} rows={4} autoFocus
-          placeholder="e.g. She was super fussy until I found the white-noise playlist on the speaker. Pump bottle in the fridge labeled 6oz. Next bath is full tonight."
+          placeholder="Mood, last feed, what's coming up, things that worked…"
           style={{
             width: "100%", background: `${C.line}08`, border: `1px solid ${C.line}22`,
             borderRadius: 10, padding: "12px 14px", fontSize: 14, color: C.ink, fontFamily: "inherit",
@@ -37899,7 +37936,7 @@ function HandoffNoteEditor({ C, fromParent, toParent, existingText, onClose, onS
       <Field C={C} label={`Note text`}>
         <textarea
           value={text} onChange={e => setText(e.target.value)} rows={4} autoFocus
-          placeholder="e.g. She refused the 5oz bottle but took 3oz; might want food earlier than usual"
+          placeholder="What should they know?"
           style={{
             width: "100%", background: `${C.line}08`, border: `1px solid ${C.line}22`,
             borderRadius: 10, padding: "12px 14px", fontSize: 14, color: C.ink, fontFamily: "inherit",
