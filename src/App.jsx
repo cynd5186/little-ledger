@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt357";
+const APP_VERSION = "2026.05.05bt359";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -31972,37 +31972,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           const focusLbl = FOCUS_LABEL[fl] || "Light";
                           const focusColor = FOCUS_COLOR[fl] || FOCUS_COLOR.shallow;
                           return (
-                            <div style={{ marginTop: 2 }}>
+                            <div style={{ marginTop: 3 }}>
                               <div style={{
                                 fontFamily: "'Cormorant Garamond', serif",
-                                fontSize: 11.5, lineHeight: 1.35,
+                                fontSize: 13, lineHeight: 1.35,
                                 color: C.ink,
                               }}>
                                 <span style={{
                                   color: focusColor, fontWeight: 700,
                                   letterSpacing: "0.04em",
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   textTransform: "uppercase",
                                 }}>{focusLbl.toLowerCase()}</span>
                                 {profile.careLabel && (
                                   <span style={{ color: C.muted, fontStyle: "italic" }}> · {profile.careLabel}</span>
                                 )}
                               </div>
-                              {Array.isArray(profile.reasons) && profile.reasons.length > 0 && (
-                                <div style={{
-                                  fontFamily: "'Cormorant Garamond', serif",
-                                  fontSize: 11.5, lineHeight: 1.45,
-                                  color: C.ink,
-                                  marginTop: 4, paddingLeft: 2,
-                                }}>
-                                  {profile.reasons.filter(Boolean).map((r, idx) => (
-                                    <div key={idx} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 1 }}>
-                                      <span style={{ color: focusColor, opacity: 0.85, flexShrink: 0, fontWeight: 700 }}>•</span>
-                                      <span>{r}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              {/* v05.05bt358 — Per chat: 'in the open
+                                  blocks the verbiage also is a lot...
+                                  see if anyway to consolidate and
+                                  also better readability since it is
+                                  so tiny.' Bullet reasons removed
+                                  from default view — they're now
+                                  shown via the "why" expander on
+                                  scheduled task rows only. Free
+                                  blocks just show focus + careLabel
+                                  in a larger, more readable line. */}
                               {/* v05.05bt192 — 'What fits here?' suggestion.
                                   Heuristic-based: filter my-unscheduled
                                   tasks that fit the block duration, prefer
@@ -32124,11 +32119,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       display: "flex", alignItems: "center", justifyContent: "space-between",
                                       marginBottom: 6,
                                     }}>
+                                      {/* v05.05bt358 — Header simplified.
+                                          Per chat: 'redundant new task
+                                          title under the FITS picker.'
+                                          Was "✦ PICK ONE TO SLOT" + "↳
+                                          Or pick from unscheduled" —
+                                          two near-identical headers.
+                                          Reduced to ✦ FITS + slot time. */}
                                       <span style={{
                                         fontFamily: "'JetBrains Mono', monospace",
                                         fontSize: 9, color: C.gold, fontWeight: 800,
                                         letterSpacing: "0.14em",
-                                      }}>✦ PICK ONE TO SLOT</span>
+                                      }}>✦ Fits {(() => {
+                                        const [h, mm] = slotTime.split(":").map(Number);
+                                        const ap = h >= 12 ? "p" : "a";
+                                        const h12 = ((h + 11) % 12) + 1;
+                                        return mm === 0 ? `${h12}${ap}` : `${h12}:${String(mm).padStart(2,"0")}${ap}`;
+                                      })()}</span>
                                       <button onClick={(e) => { e.stopPropagation(); setFitsPickerSlotKey(null); }} style={{
                                         background: "transparent", border: "none", padding: 0,
                                         color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
@@ -32253,7 +32260,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                             setFitsPickerSlotKey(null);
                                           }
                                         }}
-                                        placeholder="+ new task for this slot..."
+                                        placeholder="+ new task..."
                                         style={{
                                           flex: 1, padding: "6px 8px",
                                           fontSize: 13,
@@ -32302,14 +32309,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         (candidates) — was already in
                                         this position; just renamed
                                         the header to clarify. */}
-                                    {candidates.length > 0 && (
-                                      <div style={{
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: 8.5, color: C.muted, fontWeight: 700,
-                                        letterSpacing: "0.10em", textTransform: "uppercase",
-                                        marginBottom: 4, marginTop: 2,
-                                      }}>↳ Or pick from unscheduled · {candidates.length}</div>
-                                    )}
+                                    {/* v05.05bt358 — Eyebrow "↳ Or
+                                        pick from unscheduled · N"
+                                        removed. The chip row's count
+                                        already conveys the same info,
+                                        and the input field above is
+                                        self-evidently "new task." */}
                                     {/* v05.05bt354 — Section: Or add unscheduled
                                         (D hybrid). When filter === "all", group
                                         candidates by category with thin headers
@@ -32965,33 +32970,38 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     width: "100%", padding: "5px 6px",
                     borderBottom: `1px solid ${C.line}15`,
                   }}>
-                    {/* v05.05bt352/355 — Inline checkbox. iOS Safari
-                        tap fix: explicit type="button" so it doesn't
-                        accidentally submit any ancestor form; bigger
-                        touch target (22px); touchAction: manipulation
-                        to disable double-tap-zoom delay. Native React
-                        onClick is enough — onPointerDown stopProp was
-                        actually breaking the click in some cases
-                        because click only fires after a full pointer
-                        sequence. */}
+                    {/* v05.05bt352/355/359 — Inline checkbox. iOS Safari
+                        PWA fix: added onTouchEnd alongside onClick
+                        because iOS sometimes skips the synthetic
+                        click when interactive elements are nested
+                        inside flex containers — onTouchEnd fires
+                        deterministically. preventDefault on touch
+                        also prevents the 300ms tap delay from
+                        firing the click again. */}
                     <button
                       type="button"
+                      onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        toggleComplete(t.id);
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         toggleComplete(t.id);
                       }}
                       style={{
-                        width: 24, height: 24, borderRadius: "50%",
-                        border: `1.5px solid ${done ? "#7B9B6E" : C.line + "88"}`,
+                        width: 28, height: 28, borderRadius: "50%",
+                        border: `1.5px solid ${done ? "#7B9B6E" : C.line + "aa"}`,
                         background: done ? "#7B9B6E" : "transparent",
                         cursor: "pointer", flexShrink: 0, padding: 0,
-                        marginTop: 1,
+                        marginTop: 0,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 14, lineHeight: 1,
+                        color: "#fff", fontSize: 15, lineHeight: 1,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
                         WebkitAppearance: "none",
+                        userSelect: "none",
                       }}
                       title={done ? "Done — tap to mark not done" : "Tap to mark done"}
                       aria-label={done ? "Mark not done" : "Mark done"}>
@@ -33068,9 +33078,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           WebkitTapHighlightColor: "transparent",
                         }}>R{t.regretScore == null ? 3 : t.regretScore}</span>
                     </div>
-                    {/* v05.05bt352/355 — Single-tap × delete. */}
+                    {/* v05.05bt352/355/359 — Single-tap × delete with
+                        onTouchEnd fallback for iOS Safari PWA. */}
                     <button
                       type="button"
+                      onTouchEnd={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setTasks(prev => prev.filter(x => x.id !== t.id));
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -33082,15 +33098,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         background: "transparent",
                         color: C.accent || "#B85040",
                         border: "none",
-                        padding: "4px 10px",
-                        fontSize: 20, fontWeight: 700, lineHeight: 1,
+                        padding: "4px 12px",
+                        fontSize: 22, fontWeight: 700, lineHeight: 1,
                         cursor: "pointer", fontFamily: "inherit",
                         flexShrink: 0,
-                        minWidth: 40, minHeight: 36,
-                        opacity: 0.7,
+                        minWidth: 44, minHeight: 40,
+                        opacity: 0.75,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
                         WebkitAppearance: "none",
+                        userSelect: "none",
                       }}>
                       ×
                     </button>
