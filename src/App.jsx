@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt373";
+const APP_VERSION = "2026.05.05bt375";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -5800,19 +5800,21 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           Daddy specifically since the muted slate-blue daddy color reads
           as less saturated than mommy's rose at the same opacity — to get
           equal perceptual punch, blue needs more alpha. */}
+      {/* v05.05bt375 — Per chat: 'the app on the phone still has that
+          outer whitish border that needs to be removed.' Disabled the
+          full-viewport user-tint washes (was creating a perceptible
+          edge halo on iOS where the dark content card didn't extend
+          fully to the safe-area edges). Wash divs left in place with
+          transparent fills so they're easy to re-enable later. */}
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        // Global wash: 12 alpha for Daddy (more present), 0C for Mommy
-        background: currentUser === "Daddy" ? `${userTint}14` : `${userTint}0C`,
+        background: "transparent",
         pointerEvents: "none", zIndex: 0,
         transition: "background 0.4s ease",
       }} />
       <div style={{
         position: "fixed", top: 0, left: 0, right: 0, height: "50vh",
-        // Top gradient: 40 → 14 → transparent for Daddy; 28 → 0C → transparent for Mommy
-        background: currentUser === "Daddy"
-          ? `linear-gradient(180deg, ${userTint}40 0%, ${userTint}14 50%, transparent 100%)`
-          : `linear-gradient(180deg, ${userTint}28 0%, ${userTint}0C 60%, transparent 100%)`,
+        background: "transparent",
         pointerEvents: "none", zIndex: 0,
         transition: "background 0.4s ease",
       }} />
@@ -10281,16 +10283,14 @@ function PaperGrain({ mode }) {
   const isDark = mode === "dusk" || mode === "night";
   return (
     <>
-      {/* Warm corner glow — large and very diffuse so it adds atmosphere
-          without creating a perceptible boundary line. */}
+      {/* v05.05bt375 — Corner glow disabled per chat. Was contributing
+          to the perceptible "outer border" effect on phone. */}
       <div style={{
         position: "fixed",
         top: -700, right: -700,
         width: 1400, height: 1400,
         borderRadius: "50%",
-        background: isDark
-          ? "radial-gradient(circle, rgba(232, 168, 124, 0.05), transparent 95%)"
-          : "radial-gradient(circle, rgba(184, 92, 46, 0.06), transparent 95%)",
+        background: "transparent",
         pointerEvents: "none", zIndex: 1,
       }} />
       {/* Paper grain — fixed overlay so it doesn't move on scroll, multiply
@@ -12397,6 +12397,157 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             </div>
           );
         };
+        // v05.05bt374 — Per chat: 'i dont like how you changed the
+        // inventory - i liked the side by side squares for RT and
+        // fridge with the freezer underneath and spanning that width.'
+        // Restored 2-up-1-down grid. RT + Fridge as side-by-side
+        // square-ish tiles on top; Freezer spans full width below.
+        // Keeping the emoji bottles + tap-to-expand pattern from
+        // bt361 since that's compact and readable.
+        const Tile = ({ zoneKey, label, glyph, oz, bottles, urgencyHint, urgent, span }) => {
+          const expanded = milkZoneExpanded === zoneKey;
+          const empty = bottles.length === 0;
+          return (
+            <button
+              type="button"
+              onClick={() => setMilkZoneExpanded(expanded ? null : zoneKey)}
+              style={{
+                gridColumn: span || "auto",
+                display: "flex", flexDirection: "column",
+                alignItems: "stretch", justifyContent: "space-between",
+                gap: 8,
+                padding: "10px 12px",
+                minHeight: span === "1 / -1" ? 72 : 96,
+                background: empty ? "transparent" : C.paper,
+                border: empty
+                  ? `1px dashed ${C.line}33`
+                  : `1px solid ${urgent ? C.accent + "55" : C.line + "22"}`,
+                borderRadius: 8,
+                cursor: "pointer", textAlign: "left",
+                fontFamily: "inherit",
+                opacity: empty ? 0.7 : 1,
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
+              }}>
+              {/* Top: label */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 6,
+              }}>
+                <span style={{
+                  fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase",
+                  color: C.muted, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>
+                  {glyph && <span style={{ marginRight: 4 }}>{glyph}</span>}{label}
+                </span>
+                {urgencyHint && (
+                  <span style={{
+                    fontSize: 9, letterSpacing: "0.06em",
+                    color: urgent ? C.accent : C.muted,
+                    fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                    {urgencyHint}
+                  </span>
+                )}
+              </div>
+              {/* Middle: emoji or empty hint */}
+              <div style={{
+                flex: 1, display: "flex",
+                alignItems: "center",
+              }}>
+                {empty
+                  ? <span style={{
+                      fontStyle: "italic", fontSize: 12, color: C.muted,
+                      fontFamily: "'Cormorant Garamond', serif",
+                    }}>empty · tap to add</span>
+                  : renderEmoji(bottles.length, urgent)}
+              </div>
+              {/* Bottom: oz number */}
+              {!empty && (
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 22, fontWeight: 500,
+                  color: urgent ? C.accent : C.ink,
+                  lineHeight: 1,
+                }}>
+                  {oz.toFixed(1)}<span style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginLeft: 3 }}>oz</span>
+                </div>
+              )}
+            </button>
+          );
+        };
+        // Expanded detail panel (shown below the grid when a tile is tapped).
+        const renderExpanded = () => {
+          if (!milkZoneExpanded) return null;
+          const zone = milkZoneExpanded;
+          const list = zone === "rt" ? sortedRT
+                     : zone === "fridge" ? (fridgeItems || [])
+                     : freezerBottles;
+          const label = zone === "rt" ? "Room temp"
+                      : zone === "fridge" ? "Fridge"
+                      : "Freezer";
+          return (
+            <div style={{
+              marginTop: 4, padding: "8px 12px",
+              background: `${C.line}08`,
+              border: `1px solid ${C.line}22`,
+              borderRadius: 6,
+            }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "center", marginBottom: 6,
+              }}>
+                <span style={{
+                  fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase",
+                  color: C.muted, fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>{label} · {list.length} bottle{list.length !== 1 ? "s" : ""}</span>
+                <button
+                  type="button"
+                  onClick={() => setMilkZoneExpanded(null)}
+                  style={{
+                    background: "transparent", border: "none",
+                    padding: "2px 6px", color: C.muted,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, cursor: "pointer",
+                  }}>close ×</button>
+              </div>
+              {list.map(b => (
+                <div key={b.id} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "5px 4px",
+                  borderBottom: `1px solid ${C.line}10`,
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 13, color: C.ink,
+                }}>
+                  <span style={{ fontSize: 13 }}>🍼</span>
+                  <span style={{ flex: 1 }}>{b.oz} oz</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: b.remaining < 2 ? C.accent : C.muted,
+                  }}>
+                    {fmtHours(b.remaining)}
+                  </span>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => onPickBottle && onPickBottle(zone)}
+                style={{
+                  marginTop: 6, padding: "4px 8px",
+                  background: "transparent",
+                  border: `1px dashed ${C.line}44`,
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 11.5,
+                  color: C.muted,
+                  width: "100%",
+                }}>+ add to {label.toLowerCase()}</button>
+            </div>
+          );
+        };
         const rtUrgencyHint = (() => {
           const urgent = sortedRT.find(b => b.remaining < 2);
           if (!urgent) return null;
@@ -12411,34 +12562,39 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         })();
         return (
           <div style={{ marginBottom: 10 }}>
-            <Row
-              zoneKey="rt"
-              label="Room temp"
-              oz={rtSafeOz}
-              bottles={sortedRT}
-              sortedBottles={sortedRT}
-              urgencyHint={rtUrgencyHint}
-              urgent={expiryUrgent || expiryRisky}
-            />
-            <Row
-              zoneKey="fridge"
-              label="Fridge"
-              oz={fridgeOz}
-              bottles={fridgeItems || []}
-              sortedBottles={[...(fridgeItems || [])].sort((a, b) => (a.remaining || 0) - (b.remaining || 0))}
-              urgencyHint={null}
-              urgent={false}
-            />
-            <Row
-              zoneKey="freezer"
-              label="Freezer"
-              glyph="🧊"
-              oz={freezerTotalOz}
-              bottles={freezerBottles}
-              sortedBottles={[...freezerBottles].sort((a, b) => (a.remaining || 0) - (b.remaining || 0))}
-              urgencyHint={freezerUrgencyHint}
-              urgent={false}
-            />
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+            }}>
+              <Tile
+                zoneKey="rt"
+                label="Room temp"
+                oz={rtSafeOz}
+                bottles={sortedRT}
+                urgencyHint={rtUrgencyHint}
+                urgent={expiryUrgent || expiryRisky}
+              />
+              <Tile
+                zoneKey="fridge"
+                label="Fridge"
+                oz={fridgeOz}
+                bottles={fridgeItems || []}
+                urgencyHint={null}
+                urgent={false}
+              />
+              <Tile
+                zoneKey="freezer"
+                label="Freezer"
+                glyph="🧊"
+                oz={freezerTotalOz}
+                bottles={freezerBottles}
+                urgencyHint={freezerUrgencyHint}
+                urgent={false}
+                span="1 / -1"
+              />
+            </div>
+            {renderExpanded()}
           </div>
         );
       })()}
@@ -33908,33 +34064,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           ));
                         })()}
                       </div>
-                    </div>
-                    </>
-                  )}
-                  {/* v05.05bt287 — Opens bottom-sheet modal instead of
-                      navigating to a different sub-tab. Per chat:
-                      'i dont like how the all tasks history goes into
-                      a whole different screen.' */}
-                  {taskPileExpanded && openAllTasksModal && (
-                    <button
-                      onClick={() => openAllTasksModal()}
-                      style={{
-                        width: "100%", padding: "8px 14px",
-                        background: "transparent",
-                        border: "none", borderTop: `1px solid ${C.line}22`,
-                        cursor: "pointer", textAlign: "center",
-                        fontFamily: "'Cormorant Garamond', serif",
-                        fontStyle: "italic", fontSize: 11.5,
-                        color: C.gold,
-                      }}>↗ All tasks across days · search · done history</button>
-                  )}
-                </div>
-              );
-            })()}
-                      {/* v05.05bt373 — BACKLOG section. Brain-dump
+                      {/* v05.05bt373/374 — BACKLOG section. Brain-dump
                           items (tasks with no scheduledDate). Collapsed
                           by default — can be long. Label keeps "brain
-                          dump" in parens since that's the input vocab. */}
+                          dump" in parens since that's the input vocab.
+                          Moved to live INSIDE the outer IIFE so backlog
+                          variable is in scope. */}
                       <div style={{
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
@@ -33992,7 +34127,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           )
                         )}
                       </div>
-          </div>
+                    </div>
+                    </>
+                  )}
+                  {/* v05.05bt287 — Opens bottom-sheet modal instead of
+                      navigating to a different sub-tab. Per chat:
+                      'i dont like how the all tasks history goes into
+                      a whole different screen.' */}
+                  {taskPileExpanded && openAllTasksModal && (
+                    <button
+                      onClick={() => openAllTasksModal()}
+                      style={{
+                        width: "100%", padding: "8px 14px",
+                        background: "transparent",
+                        border: "none", borderTop: `1px solid ${C.line}22`,
+                        cursor: "pointer", textAlign: "center",
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontSize: 11.5,
+                        color: C.gold,
+                      }}>↗ All tasks across days · search · done history</button>
+                  )}
+                </div>
+              );
+            })()}
+        </div>
         )}
 
         {/* v05.05bt132 — Brain Dump drawer. Quick-capture items live
