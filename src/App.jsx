@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt320";
+const APP_VERSION = "2026.05.05bt342";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -1850,6 +1850,36 @@ const PALETTES = {
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
   night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
+  // v05.05bt338/340 — Cadence palettes. Per chat (bt340): user picked
+  // mockup D · Champagne Blush — softer, more romantic, candlelit.
+  // Primary moves from #B7848C dusty rose → #D4A0A0 champagne blush.
+  // Rose-gold bridge becomes lighter blush #E6CFC7 for a more
+  // illuminated luxe feel. Daddy slate blue unchanged (she loved it).
+  //
+  // MOMMY VIEW (D — Champagne Blush):
+  //   bg #181318 warm plum-black
+  //   paper #211B21 warm card
+  //   mommy #D4A0A0 champagne blush PRIMARY
+  //   accent #B7848C dusty rose (urgent — darker rose contrasts blush)
+  //   gold #E6CFC7 blush-pink bridge
+  //   daddy #7B8FAB steel blue
+  //
+  // DADDY VIEW (unchanged — she loved the dark navy):
+  //   bg #0E121C midnight navy
+  //   mommy #A88299 muted dusty mauve
+  //   daddy #6E84A8 slate blue PRIMARY
+  // v05.05bt341/342 — Cadence palettes. Bt342: user screenshot
+  // showed muted text STILL too dim. Italic Cormorant at small sizes
+  // has thin letterforms — color brightness alone wasn't enough.
+  // Pushed muted close to ink: #ECD7CD → #F0E4D8 in Mommy palette
+  // and #B6BFCE → #D0D6E1 in Daddy. Combined with fontWeight bumps
+  // on the worst-offender italic captions (handled at render sites).
+  cadence:       { bg: "#181318", ink: "#F3EBDD", paper: "#211B21", panel: "#211B21", accent: "#B7848C", soft: "#2B232B", muted: "#F0E4D8", line: "#E6CFC7",
+                   mommy: "#D4A0A0", daddy: "#7B8FAB", gold: "#E6CFC7" },
+  cadenceDaddy:  { bg: "#0E121C", ink: "#E8E8E8", paper: "#161D29", panel: "#161D29", accent: "#8B7A5C", soft: "#1A2130", muted: "#D0D6E1", line: "#6E7C93",
+                   mommy: "#A88299", daddy: "#6E84A8", gold: "#8B7A5C" },
+  cadenceDusk:   { bg: "#0E090E", ink: "#F3EBDD", paper: "#17111A", panel: "#17111A", accent: "#B7848C", soft: "#211B21", muted: "#EBD5C9", line: "#E6CFC7",
+                   mommy: "#D4A0A0", daddy: "#7B8FAB", gold: "#E6CFC7" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -2408,6 +2438,29 @@ export default function SoleneHandoff() {
 function SoleneHandoffInner() {
   const [now, setNow] = useState(new Date());
   const [tab, setTab] = useState("now");
+  // v05.05bt323/329 — Per chat: 'Can cadence just be a mode? ... I
+  // can still be a mommy but want the cadence mode as a look for the
+  // app without hiding buttons. I may want everything cadence or just
+  // the schedule cadence.'
+  // productMode is now purely an aesthetic toggle: 'family' = default
+  // Little Ledger palette/feel, 'solo' = Cadence palette/feel.
+  // cadenceScope controls WHERE the Cadence palette is applied when
+  // productMode is solo: 'all' (whole app) or 'schedule' (just the
+  // Schedule tab, other tabs keep family palette). Cadence no longer
+  // hides any tabs, OnDutyCard, caregiver banner, bottle alerts, or
+  // changes the brand wordmark / sync badge / age.
+  const [productMode, setProductMode] = useState(() => {
+    try { return localStorage.getItem("ll:productMode") || "family"; } catch { return "family"; }
+  });
+  const [cadenceScope, setCadenceScope] = useState(() => {
+    try { return localStorage.getItem("ll:cadenceScope") || "all"; } catch { return "all"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:productMode", productMode); } catch {}
+  }, [productMode]);
+  useEffect(() => {
+    try { localStorage.setItem("ll:cadenceScope", cadenceScope); } catch {}
+  }, [cadenceScope]);
   const [events, setEvents] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -3478,8 +3531,31 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // Theme palette key. Derived from the user's chosen theme override
   // (day/dusk). Decoupled from `mode` so TimeOrb can still show sun/moon
   // based on real time of day, while the COLORS follow the user's pick.
+  // v05.05bt324 — Cadence productMode swaps the entire palette (indigo
+  // primary, amber secondary, gold bridge). Mirrors how dark mode works
+  // — pick a different key, the whole C object flows from there.
   const themeMode = themeOverride === "dusk" ? "dusk" : "day";
-  const C = PALETTES[themeMode];
+  // v05.05bt329 — Cadence palette applies when:
+  // (1) productMode === 'solo' AND
+  // (2) cadenceScope === 'all' (whole-app cadence) OR current tab is
+  //     the schedule tab (cadence-only-on-schedule).
+  // Otherwise → family palette. Tab transitions when scope is
+  // 'schedule' cause a clean crossfade as user moves between tabs.
+  // v05.05bt329/332 — Cadence palette applies when:
+  // (1) productMode === 'solo' AND
+  // (2) cadenceScope === 'all' (whole-app cadence) OR current tab is
+  //     the Schedule tab. Tab id is "shifts" (label is "Schedule");
+  //     bt329 incorrectly checked "schedule" so this branch never
+  //     fired. Fixed in bt332.
+  const isCadence = productMode === "solo" && (cadenceScope === "all" || tab === "shifts");
+  // v05.05bt334 — When the viewer is Daddy in Cadence, pick the
+  // antique-brass variant. Mommy gets champagne. Same dark bg, only
+  // accents shift — duty ownership is instantly readable from the
+  // accent family.
+  const cadenceKey = currentUser === "Daddy" ? "cadenceDaddy" : "cadence";
+  const C = isCadence
+    ? PALETTES[themeMode === "dusk" ? "cadenceDusk" : cadenceKey]
+    : PALETTES[themeMode];
 
   // Sync html + body backgrounds to the current theme. Without this, iOS
   // overscroll, the area under the safe-area inset, and any rendering gap
@@ -5643,7 +5719,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         <button onClick={() => setShowProfileSwitcher(true)} style={{
           width: "100%",
           background: "#7B9B6E",
-          color: "#FDFAF1",
+          color: C.bg,
           border: "none",
           padding: "8px 14px",
           fontFamily: "'JetBrains Mono', monospace",
@@ -5869,6 +5945,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                   across two lines (subtitle + brand mark). All inline:
                   serif italic for the wordmark, muted lowercase "for",
                   user-tinted "Solène", warm orange period. */}
+              {/* v05.05bt325/327/329 — Brand wordmark is now Little
+                  Ledger always. Per chat: 'I can still be a mommy
+                  but want the cadence mode as a look.' Identity
+                  unchanged; aesthetic (colors) auto-adapt to active
+                  palette via C.muted / userTint. */}
               <span style={{
                 fontFamily: "'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
@@ -5905,9 +5986,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 })()}
                 {(() => {
                   // v05.05bt140 — Tri-state sync badge.
-                  // GREEN LIVE  = cloudSyncAvailable && familyCode (synced cross-device)
-                  // YELLOW LOCAL = cloudSyncAvailable && !familyCode (online but solo)
-                  // RED OFFLINE  = !cloudSyncAvailable (no cloud)
                   const synced = cloudSyncAvailable && familyCode;
                   const local  = cloudSyncAvailable && !familyCode;
                   const color = synced ? "#7B9B6E" : local ? "#D4A24A" : "#B85040";
@@ -5970,43 +6048,83 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         {(() => {
           const pendingGifts = getPendingGifts(timeBank.transactions, currentUser);
           if (pendingGifts.length === 0) return null;
-          const totalMins = pendingGifts.reduce((sum, g) => sum + g.mins, 0);
-          // Tap behavior: open the most recent pending gift. The modal will
-          // close on submit; if more remain, the pip stays visible so the
-          // user can tap again.
-          const mostRecent = pendingGifts.slice().sort(
+          // v05.05bt341 — Per chat: 'should be able to snooze or address
+          // notifications like the gift from daddy.' Filter out gifts
+          // that have been snoozed (localStorage key per gift ts holds
+          // the ISO until-time). Snooze = 4 hours of quiet.
+          const visibleGifts = pendingGifts.filter(g => {
+            try {
+              const key = `ll:giftSnooze:${currentUser}:${g.ts}`;
+              const until = localStorage.getItem(key);
+              if (!until) return true;
+              return new Date(until).getTime() < now.getTime();
+            } catch { return true; }
+          });
+          if (visibleGifts.length === 0) return null;
+          const totalMins = visibleGifts.reduce((sum, g) => sum + g.mins, 0);
+          const mostRecent = visibleGifts.slice().sort(
             (a, b) => new Date(b.ts) - new Date(a.ts)
           )[0];
           const giverColor = mostRecent.from === "Mommy" ? C.mommy : C.daddy;
+          const snoozeGift = (e) => {
+            e.stopPropagation();
+            try {
+              const until = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+              const key = `ll:giftSnooze:${currentUser}:${mostRecent.ts}`;
+              localStorage.setItem(key, until.toISOString());
+            } catch {}
+            // Force a re-render via tick — Now state already updates per minute
+            // but we want immediate feedback. setEvents trick doesn't apply,
+            // so just rely on the next now tick (max 60s). Acceptable.
+            // Better: use a dedicated state, but that's overkill for snooze.
+            setTab(tab); // no-op state set to nudge a render
+          };
           return (
-            <button
-              onClick={() => setRedeemingGift(mostRecent)}
-              style={{
-                width: "100%",
-                background: `linear-gradient(135deg, ${giverColor}18 0%, ${C.gold}12 100%)`,
-                border: `1px solid ${giverColor}40`,
-                borderRadius: 12,
-                padding: "10px 14px",
-                marginBottom: 12,
-                marginTop: 8,
-                fontFamily: "inherit",
-                cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 10,
-                textAlign: "left",
-              }}>
-              <span style={{ fontSize: 18, flexShrink: 0 }}>🎁</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, lineHeight: 1.3 }}>
-                  {pendingGifts.length === 1
-                    ? <>You have a <strong>{fmtBalance(totalMins)}</strong> gift from <span style={{ color: giverColor }}>{mostRecent.from}</span></>
-                    : <><strong>{pendingGifts.length}</strong> gifts waiting · <strong>{fmtBalance(totalMins)}</strong> total</>}
+            <div style={{
+              width: "100%",
+              background: `linear-gradient(135deg, ${giverColor}18 0%, ${C.gold}12 100%)`,
+              border: `1px solid ${giverColor}40`,
+              borderRadius: 12,
+              padding: "10px 14px",
+              marginBottom: 12,
+              marginTop: 8,
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <button
+                onClick={() => setRedeemingGift(mostRecent)}
+                style={{
+                  background: "transparent", border: "none", padding: 0,
+                  flex: 1, minWidth: 0, fontFamily: "inherit",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+                  textAlign: "left",
+                }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>🎁</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: C.ink, fontWeight: 600, lineHeight: 1.3 }}>
+                    {visibleGifts.length === 1
+                      ? <>You have a <strong>{fmtBalance(totalMins)}</strong> gift from <span style={{ color: giverColor }}>{mostRecent.from}</span></>
+                      : <><strong>{visibleGifts.length}</strong> gifts waiting · <strong>{fmtBalance(totalMins)}</strong> total</>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    Tap to choose when to redeem
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                  Tap to choose when to redeem
-                </div>
-              </div>
-              <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
-            </button>
+                <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
+              </button>
+              <button
+                onClick={snoozeGift}
+                aria-label="Snooze for 4 hours"
+                title="Snooze for 4 hours"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.line}33`,
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  color: C.muted, cursor: "pointer",
+                  fontSize: 14, lineHeight: 1,
+                  flexShrink: 0,
+                }}>×</button>
+            </div>
           );
         })()}
 
@@ -6044,15 +6162,27 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           // Tier the visual urgency
           const tier = hour >= 20 ? "urgent" : hour >= 18 ? "elevated" : "subtle";
 
+          // v05.05bt341 — Per chat: 'for calendar can dismiss it if
+          // dont have any calendar.' Add × dismiss button on both
+          // urgent + elevated tiers. Reuses the existing
+          // tomorrowDismissed localStorage key (dismissedToday).
+          const dismissTomorrow = (e) => {
+            e.stopPropagation();
+            try {
+              const key = `ll:tomorrowDismissed:${currentUser}:${now.toDateString()}`;
+              localStorage.setItem(key, "1");
+            } catch {}
+            setTab(tab); // nudge re-render
+          };
+
           if (tier === "urgent") {
             return (
-              <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+              <div style={{
                 width: "100%", marginBottom: 12, marginTop: 8,
                 background: C.accent, color: "#fff",
                 border: `2px solid ${C.accent}`,
                 borderRadius: 14, padding: "14px 16px",
                 display: "flex", alignItems: "center", gap: 12,
-                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                 boxShadow: `0 4px 16px ${C.accent}55, 0 0 0 4px ${C.accent}22`,
                 animation: "pulse-glow 2.4s ease-in-out infinite",
               }}>
@@ -6060,65 +6190,124 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                   0%, 100% { box-shadow: 0 4px 16px ${C.accent}55, 0 0 0 4px ${C.accent}22; }
                   50%      { box-shadow: 0 6px 22px ${C.accent}88, 0 0 0 8px ${C.accent}33; }
                 }`}</style>
-                <AlarmClock size={22} style={{ flexShrink: 0 }} className="pulse-soft" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.95 }}>
-                    Before you wind down
+                <button
+                  onClick={() => { setLoggerType("commitment"); setShowLogger(true); }}
+                  style={{
+                    flex: 1, minWidth: 0,
+                    background: "transparent", border: "none", padding: 0,
+                    color: "#fff", cursor: "pointer", textAlign: "left",
+                    fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}>
+                  <AlarmClock size={22} style={{ flexShrink: 0 }} className="pulse-soft" />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.95 }}>
+                      Before you wind down
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, marginTop: 2 }}>
+                      Log tomorrow's commitments
+                    </div>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.25, marginTop: 2 }}>
-                    Log tomorrow's commitments
-                  </div>
-                </div>
-                <ChevronRight size={18} style={{ flexShrink: 0 }} />
-              </button>
+                  <ChevronRight size={18} style={{ flexShrink: 0 }} />
+                </button>
+                <button
+                  onClick={dismissTomorrow}
+                  aria-label="Nothing tomorrow — dismiss"
+                  title="Nothing tomorrow — dismiss"
+                  style={{
+                    background: "rgba(255,255,255,0.18)",
+                    border: "1px solid rgba(255,255,255,0.35)",
+                    borderRadius: 6, padding: "4px 9px",
+                    color: "#fff", cursor: "pointer", fontSize: 14, lineHeight: 1,
+                    flexShrink: 0, fontWeight: 700,
+                  }}>×</button>
+              </div>
             );
           }
 
           if (tier === "elevated") {
             return (
-              <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+              <div style={{
                 width: "100%", marginBottom: 12, marginTop: 8,
                 background: `${C.accent}15`,
                 border: `1.5px solid ${C.accent}80`,
                 borderRadius: 12, padding: "12px 14px",
                 display: "flex", alignItems: "center", gap: 10,
-                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
               }}>
-                <AlarmClock size={18} color={C.accent} style={{ flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>
-                    Tomorrow's calendar?
+                <button
+                  onClick={() => { setLoggerType("commitment"); setShowLogger(true); }}
+                  style={{
+                    flex: 1, minWidth: 0,
+                    background: "transparent", border: "none", padding: 0,
+                    cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 10,
+                  }}>
+                  <AlarmClock size={18} color={C.accent} style={{ flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>
+                      Tomorrow's calendar?
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                      Log meetings or commitments so coverage balances before morning
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                    Log meetings or commitments so coverage balances before morning
-                  </div>
-                </div>
-                <ChevronRight size={14} color={C.accent} style={{ flexShrink: 0 }} />
-              </button>
+                  <ChevronRight size={14} color={C.accent} style={{ flexShrink: 0 }} />
+                </button>
+                <button
+                  onClick={dismissTomorrow}
+                  aria-label="Nothing tomorrow — dismiss"
+                  title="Nothing tomorrow — dismiss"
+                  style={{
+                    background: "transparent",
+                    border: `1px solid ${C.accent}55`,
+                    borderRadius: 6, padding: "4px 8px",
+                    color: C.accent, cursor: "pointer", fontSize: 14, lineHeight: 1,
+                    flexShrink: 0, fontWeight: 700,
+                  }}>×</button>
+              </div>
             );
           }
 
           // subtle tier (4-6pm)
           return (
-            <button onClick={() => { setLoggerType("commitment"); setShowLogger(true); }} style={{
+            <div style={{
               width: "100%", marginBottom: 12, marginTop: 8,
               background: `${C.accent}10`,
               border: `1px solid ${C.accent}40`,
               borderRadius: 10, padding: "10px 14px",
               display: "flex", alignItems: "center", gap: 10,
-              cursor: "pointer", textAlign: "left", fontFamily: "inherit",
             }}>
-              <AlarmClock size={14} color={C.accent} style={{ flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>
-                  Anything on your calendar tomorrow?
+              <button
+                onClick={() => { setLoggerType("commitment"); setShowLogger(true); }}
+                style={{
+                  flex: 1, minWidth: 0,
+                  background: "transparent", border: "none", padding: 0,
+                  cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", gap: 10,
+                }}>
+                <AlarmClock size={14} color={C.accent} style={{ flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>
+                    Anything on your calendar tomorrow?
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                    Tap to log — or this nudge gets bigger as the night goes on
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-                  Tap to log — or this nudge gets bigger as the night goes on
-                </div>
-              </div>
-              <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
-            </button>
+                <ChevronRight size={14} color={C.muted} style={{ flexShrink: 0 }} />
+              </button>
+              <button
+                onClick={dismissTomorrow}
+                aria-label="Nothing tomorrow — dismiss"
+                title="Nothing tomorrow — dismiss"
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${C.line}33`,
+                  borderRadius: 6, padding: "4px 8px",
+                  color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
+                  flexShrink: 0,
+                }}>×</button>
+            </div>
           );
         })()}
         {/* v05.05bt307 — Caregiver window banner. Per chat: 'caregiver
@@ -6455,6 +6644,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             appointments={appointments}
             schedulerDarkMode={schedulerDarkMode} setSchedulerDarkMode={setSchedulerDarkMode}
             setTab={setTab}
+            productMode={productMode} setProductMode={setProductMode}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope}
           />
         )}
         {tab === "bank" && (
@@ -6505,11 +6696,11 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
 
       {/* Central LOG button — hidden in caregiver mode (they use the in-card buttons) */}
       {currentUser !== "Caregiver" && (
-        <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} currentUser={currentUser} />
+        <CentralLogButton C={C} mode={mode} onClick={() => setShowLogger(true)} currentUser={currentUser} isCadence={isCadence} />
       )}
 
       {currentUser !== "Caregiver" && (
-        <TabBar C={C} tab={tab} setTab={setTab} currentUser={currentUser} />
+        <TabBar C={C} tab={tab} setTab={setTab} currentUser={currentUser} isCadence={isCadence} />
       )}
 
       {showLogger && (
@@ -6952,6 +7143,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           cloudSyncAvailable={cloudSyncAvailable}
           themeOverride={themeOverride}
           setThemeOverride={setThemeOverride}
+          productMode={productMode}
+          setProductMode={setProductMode}
+          cadenceScope={cadenceScope}
+          setCadenceScope={setCadenceScope}
           timeTravelOffset={timeTravelOffset}
           setTimeTravelOffset={setTimeTravelOffset}
           onResetBedtimeCheck={() => {
@@ -8834,7 +9029,7 @@ function SoundToggleButton({ C }) {
   );
 }
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // v05.05bt86 — gate destructive/dev controls behind explicit reveal
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -8899,6 +9094,66 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           warm-cream day mode and the dusk option was unused. State plumbing
           (themeOverride, setThemeOverride) is still in App in case we want
           to surface a different appearance toggle later. */}
+
+      {/* v05.05bt340 — Cadence mode toggle. Per chat: 'since daddy
+          can have a Cadence view, then shouldnt the cadence mode vs.
+          normal mode be toggable in spite of who is viewing?' Moved
+          from the scheduler ≡ menu (which Daddy can't reach) to here,
+          since both Mommy + Daddy open this modal. */}
+      {setProductMode && (
+        <div style={{
+          marginTop: 16, marginBottom: 8,
+          padding: 12,
+          background: C.paper,
+          border: `1px solid ${C.line}33`,
+          borderRadius: 10,
+        }}>
+          <div style={{
+            fontSize: 9.5, letterSpacing: "0.20em", textTransform: "uppercase",
+            fontWeight: 700, color: C.muted, marginBottom: 8,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            Cadence mode · luxury work-focus aesthetic
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {[
+              { v: "off", scope: null, label: "Off · default Little Ledger" },
+              { v: "schedule", scope: "schedule", label: "On · Schedule tab only" },
+              { v: "all", scope: "all", label: "On · whole app" },
+            ].map(opt => {
+              const active = opt.v === "off"
+                ? productMode === "family"
+                : productMode === "solo" && cadenceScope === opt.scope;
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => {
+                    if (opt.v === "off") {
+                      setProductMode("family");
+                    } else {
+                      setProductMode("solo");
+                      if (setCadenceScope) setCadenceScope(opt.scope);
+                    }
+                  }}
+                  style={{
+                    width: "100%", textAlign: "left",
+                    padding: "8px 10px",
+                    background: active ? `${C.mommy}1a` : "transparent",
+                    border: `1px solid ${active ? C.mommy : C.line + "33"}`,
+                    borderRadius: 6, cursor: "pointer",
+                    color: C.ink, fontFamily: "inherit", fontSize: 12.5,
+                    display: "flex", alignItems: "center", gap: 8,
+                  }}>
+                  <span style={{ color: active ? C.mommy : C.muted, fontWeight: 700 }}>
+                    {active ? "●" : "○"}
+                  </span>
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Clear stuck takeover — only when one is active */}
       {takeover && (
@@ -9575,7 +9830,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
 function FontImports() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
       * { box-sizing: border-box; }
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
@@ -10743,7 +10998,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                   }}
                   style={{
                     flex: 2, padding: "8px",
-                    background: promptColor, color: "#FDFAF1",
+                    background: promptColor, color: C.bg,
                     border: "none", borderRadius: 6,
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 10, letterSpacing: "0.12em", fontWeight: 700,
@@ -12517,7 +12772,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
     <div style={{ padding: "14px 14px 100px", maxWidth: 640, margin: "0 auto" }}>
       {/* ── Tiny status line ──────────────────────────────────────── */}
       <div style={{
-        background: "#FBF5E9",
+        background: C.paper,
         border: `1.5px solid ${sage}55`,
         borderLeft: `5px solid ${sage}`,
         borderRadius: 14,
@@ -16268,7 +16523,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         placeholder="Search…"
         style={{
           width: "100%",
-          background: "#FDFAF1",
+          background: C.paper,
           border: `1px solid ${C.line}55`,
           borderRadius: 10, padding: "9px 14px",
           fontSize: 13, color: C.ink, marginBottom: 10,
@@ -16444,7 +16699,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -16473,6 +16728,11 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
   // 'schedule' = base shift schedule + day plan + meetings,
   // 'caregiver' = day-in-life of Solène from her actual data.
   const [scheduleSubTab, setScheduleSubTab] = useState("today");
+  // v05.05bt323 — Caregiver sub-tab removed (per chat). If a user has
+  // it persisted from before, redirect them back to "today" on mount.
+  useEffect(() => {
+    if (scheduleSubTab === "caregiver") setScheduleSubTab("today");
+  }, [scheduleSubTab]);
   // v05.05bt287 — All Tasks as bottom-sheet modal instead of full-screen
   // sub-tab. Per chat: 'i dont like how the all tasks history goes into
   // a whole different screen.' Modal preserves scheduler context behind
@@ -16564,21 +16824,31 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
           {[
             { key: "schedule",  label: "Shifts" },
             { key: "today",     label: "Mommy's Day" },
-            { key: "caregiver", label: "Solène's Day" },
+            // v05.05bt323 — Per chat: 'i dont think i need a Solene day
+            // in little ledger scheduler tab because that info should
+            // be captured in caregiver.' The caregiver-window banner +
+            // the OnDutyCard caregiver-mode (bt310) already surface
+            // Solène's context at the top of the Now tab; no need to
+            // duplicate as a separate scheduler sub-tab.
           ].map(t => (
             <button
               key={t.key}
               onClick={() => setScheduleSubTab(t.key)}
               style={{
                 flex: 1,
-                background: scheduleSubTab === t.key ? "#FDFAF1" : "transparent",
-                color: scheduleSubTab === t.key ? C.ink : "#7C6B5A",
+                // v05.05bt333 — Active state was hardcoded #FDFAF1 cream
+                // bg + #7C6B5A brown inactive text — both invisible on
+                // Cadence dark. Swap to palette colors so the active
+                // pill always reads as a lifted surface and inactive
+                // text is muted-but-legible in both modes.
+                background: scheduleSubTab === t.key ? C.paper : "transparent",
+                color: scheduleSubTab === t.key ? C.ink : C.muted,
                 border: scheduleSubTab === t.key ? `1px solid ${C.mommy}38` : "1px solid transparent",
                 borderRadius: 9, padding: "8px 4px",
                 fontSize: 10, fontWeight: scheduleSubTab === t.key ? 700 : 500,
                 cursor: "pointer", fontFamily: "inherit",
                 letterSpacing: "0.01em",
-                boxShadow: scheduleSubTab === t.key ? "0 1px 2px rgba(166,139,160,0.08)" : "none",
+                boxShadow: scheduleSubTab === t.key ? `0 1px 2px ${C.mommy}22` : "none",
               }}>
               {t.label}
             </button>
@@ -16611,6 +16881,8 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             setScheduleSubTab={setScheduleSubTab}
             openAllTasksModal={() => setAllTasksModalOpen(true)}
             setTab={setTab}
+            productMode={productMode} setProductMode={setProductMode}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope}
         />
       )}
 
@@ -16644,7 +16916,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
               marginTop: 4,
               fontFamily: "'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 13,
-              color: "#7C6B5A", lineHeight: 1.4,
+              color: C.muted, lineHeight: 1.4,
             }}>
               Share with whoever's watching Solène. Times pulled from her actual rhythm.
             </div>
@@ -20477,7 +20749,13 @@ function CaregiverWindowBanner({ C, events, addEvent, now, currentUser }) {
   };
   // v05.05bt310 — Active state is now rendered INSIDE OnDutyCard.
   // This banner is for upcoming + inactive only.
+  // v05.05bt342 — Per chat: 'place the handoff to caregiver near
+  // where the handoff information is.' The "Plan caregiver" inactive
+  // banner is hidden from the top — it'll be embedded into
+  // OnDutyCard's handoff line in a follow-up build. The upcoming
+  // window banner still shows since it's a real status alert.
   if (win && win.state === "active") return null;
+  if (!win || win.state === "inactive") return null;
   // Upcoming state
   if (win && win.state === "upcoming") {
     return (
@@ -22315,7 +22593,14 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
               <div key={t.id} style={{
                 padding: "10px 12px",
                 marginBottom: 6,
-                background: "#FDFAF1",
+                // v05.05bt331 — Was hardcoded #FDFAF1 cream. In Cadence
+                // mode, the surrounding page is dark slate but these
+                // cards stayed cream — and the text inside (C.ink)
+                // was bright cream too, making the card text invisible
+                // (cream-on-cream). Swap to C.paper so the card surface
+                // tracks the palette: cream in family, dark slate in
+                // Cadence. C.ink text then contrasts properly in both.
+                background: C.paper,
                 border: `1px solid ${C.line}22`,
                 borderRadius: 6,
                 borderLeft: `4px solid ${C.mommy}`,
@@ -22411,7 +22696,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                 fontFamily: "inherit", fontSize: 13, color: C.ink,
                 border: `1.5px solid ${C.line}33`,
                 borderRadius: 6, padding: "8px 10px",
-                background: "#FBF5E9",
+                background: C.paper,
               }}
             />
             <button
@@ -22420,7 +22705,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
               style={{
                 padding: "8px 12px",
                 background: cmd.trim() ? C.mommy : C.line,
-                color: "#FDFAF1", border: "none", borderRadius: 6,
+                color: C.bg, border: "none", borderRadius: 6,
                 cursor: cmd.trim() ? "pointer" : "not-allowed",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
@@ -22473,7 +22758,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
             onClick={onLockIn}
             style={{
               flex: 2, padding: "11px 16px",
-              background: C.mommy, color: "#FDFAF1",
+              background: C.mommy, color: C.bg,
               border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
               fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
               textTransform: "uppercase",
@@ -22531,7 +22816,7 @@ function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
             fontSize: 13, color: C.ink, fontWeight: 600,
             border: `1.5px solid ${C.line}33`,
             borderRadius: 5, padding: "5px 8px",
-            background: "#FBF5E9", width: 100,
+            background: C.paper, width: 100,
           }}
         />
         <span style={{
@@ -22601,7 +22886,7 @@ function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
             onClick={() => onSave({ scheduledTime: start, effortMin: Number(duration) || 30 })}
             style={{
               padding: "5px 12px",
-              background: C.mommy, color: "#FDFAF1",
+              background: C.mommy, color: C.bg,
               border: "none", borderRadius: 5, cursor: "pointer",
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 11, letterSpacing: "0.1em", fontWeight: 700,
@@ -22684,7 +22969,7 @@ function TimeEditPopover({ C, task, onClose, onSave }) {
               fontSize: 16, color: C.ink, fontWeight: 600,
               border: `1.5px solid ${C.line}33`,
               borderRadius: 8, padding: "10px 12px",
-              background: "#FBF5E9", width: "100%",
+              background: C.paper, width: "100%",
             }}
           />
         </div>
@@ -22753,7 +23038,7 @@ function TimeEditPopover({ C, task, onClose, onSave }) {
             style={{
               flex: 2, padding: "11px 16px",
               background: start ? C.mommy : C.line,
-              color: "#FDFAF1", border: "none", borderRadius: 10,
+              color: C.bg, border: "none", borderRadius: 10,
               cursor: start ? "pointer" : "not-allowed", fontFamily: "inherit",
               fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
               textTransform: "uppercase",
@@ -23257,7 +23542,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
             style={{
               flex: 2, padding: "11px 16px",
               background: (quickMode ? quickRating > 0 : (answeredCount > 0 || behavioralRating)) ? C.mommy : C.line,
-              color: "#FDFAF1", border: "none", borderRadius: 10,
+              color: C.bg, border: "none", borderRadius: 10,
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
               textTransform: "uppercase",
@@ -23525,7 +23810,7 @@ function FocusQuizModal({ C, focusProfile, onClose, onSave, onClear }) {
             style={{
               flex: 2, padding: "11px 16px",
               background: current.canAdvance ? C.mommy : C.line,
-              color: "#FDFAF1", border: "none", borderRadius: 10,
+              color: C.bg, border: "none", borderRadius: 10,
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
               textTransform: "uppercase",
@@ -23701,7 +23986,7 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
               marginTop: 4,
               fontFamily: "'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
-              color: "#7C6B5A",
+              color: C.muted,
             }}>
               Default: {baseStart} · {baseDur}m. Tomorrow snaps back.
             </div>
@@ -23709,7 +23994,7 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
           <button onClick={onClose}
             style={{
               background: "transparent", border: "none",
-              fontSize: 22, color: "#7C6B5A", cursor: "pointer",
+              fontSize: 22, color: C.muted, cursor: "pointer",
               padding: 0, lineHeight: 1, fontFamily: "inherit",
             }}>×</button>
         </div>
@@ -23729,7 +24014,7 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
             style={{
               width: "100%", padding: "12px 14px",
               border: `1px solid ${C.mommy}38`, borderRadius: 10,
-              background: "#FDFAF1", color: C.ink,
+              background: C.paper, color: C.ink,
               fontSize: 16, fontFamily: "inherit",
             }}
           />
@@ -23749,8 +24034,13 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
                 key={d}
                 onClick={() => setDur(d)}
                 style={{
-                  background: dur === d ? C.mommy : "#FDFAF1",
-                  color: dur === d ? "#fff" : C.ink,
+                  // v05.05bt333 — Was hardcoded cream bg + white text
+                  // on mauve. In Cadence, cream stood out on dark bg
+                  // and white-on-amber was low contrast. Now palette-
+                  // adaptive: inactive uses C.paper (cream/dark surface),
+                  // active text uses C.bg for high contrast on accent.
+                  background: dur === d ? C.mommy : C.paper,
+                  color: dur === d ? C.bg : C.ink,
                   border: `1px solid ${dur === d ? C.mommy : C.mommy + "38"}`,
                   borderRadius: 8, padding: "9px 4px",
                   fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -23783,7 +24073,7 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
             style={{
               width: "100%",
               background: "transparent",
-              color: "#7C6B5A",
+              color: C.muted,
               border: `1px solid ${C.line}55`,
               borderRadius: 10, padding: "10px",
               fontSize: 12, fontWeight: 500,
@@ -23924,7 +24214,7 @@ function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
           }}>Cancel</button>
           <button onClick={save} style={{
             flex: 2, padding: "11px 16px",
-            background: C.daddy, color: "#FDFAF1",
+            background: C.daddy, color: C.bg,
             border: "none", borderRadius: 10,
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 12, letterSpacing: "0.14em", fontWeight: 700,
@@ -24516,7 +24806,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -25155,6 +25445,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // is currently showing the picker (slot key = start ms). Tap "fits"
   // expands the candidate list; tap a specific candidate to slot it.
   const [fitsPickerSlotKey, setFitsPickerSlotKey] = useState(null);
+  // v05.05bt321 — Per chat (screenshot): 'should be able to cancel out
+  // of open tap fill if doesnt make sense to be there.' Set of free
+  // block keys (epoch ms of start time) the user has dismissed for
+  // this session. Hides those rows from the timeline. Resets on date
+  // change since the keys are time-anchored.
+  const [dismissedFreeKeys, setDismissedFreeKeys] = useState(new Set());
   // v05.05bt313 — Per chat: 'Manual override of fits here suggestion.'
   // Toggle that flips the picker candidates from "tasks that fit by
   // duration" to "all unscheduled tasks" so the user can force-slot
@@ -25438,6 +25734,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const activeTasks = myTasks.filter(t => !t.completedAt && !t.drawer);
   const sortedActive = [...activeTasks].sort((a, b) => {
     if (b.regretScore !== a.regretScore) return b.regretScore - a.regretScore;
+    // v05.05bt339 — Per chat: 'order by regret score then on deep
+    // before shallow.' Tiebreak by focus level: deep > shallow > auto.
+    const fa = normalizeFocus(a.focusLevel);
+    const fb = normalizeFocus(b.focusLevel);
+    const focusRank = { deep: 0, shallow: 1, auto: 2 };
+    if (focusRank[fa] !== focusRank[fb]) return focusRank[fa] - focusRank[fb];
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
   // v05.05bt134 — completedToday is now ONLY for tasks completed without
@@ -25748,33 +26050,40 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       const out = [];
       let prevEnd = null;
       let prevTitle = null;
+      // v05.05bt321/324 — Per chat: 'splitting it into two continuous
+      // block and shifting everything below that down.' The current
+      // walk shifts an overlapping task forward to prevEnd; subsequent
+      // tasks ALSO shift naturally because prevEnd cascades. To make
+      // the cascade visible — so the user sees that the day stays
+      // continuous without gaps — mark every item that shifted by ANY
+      // amount (not just direct conflicts) with _shiftedByOverlap. The
+      // first task in a shift chain shows the conflict reason; later
+      // cascaded tasks show the upstream cause (push-from earlier).
+      const shiftIntervals = [];
       for (const item of sorted) {
         if (!item.start || !item.end) { out.push(item); continue; }
-        // Free blocks and pumps (soft) don't enforce overlap shifts
         if (item.kind === "free" || item.kind === "pump_reminder") {
           out.push(item);
           continue;
         }
         if (prevEnd && item.start < prevEnd) {
-          // Overlap. If item is a task, shift it forward to prevEnd.
           if (item.kind === "task") {
             const dur = item.end.getTime() - item.start.getTime();
             const shiftMs = prevEnd.getTime() - item.start.getTime();
             const newStart = new Date(prevEnd);
             const newEnd = new Date(newStart.getTime() + dur);
+            shiftIntervals.push([newStart.getTime(), newEnd.getTime()]);
             out.push({
               ...item,
               start: newStart, end: newEnd,
               _shiftedByOverlap: Math.round(shiftMs / 60000),
               _shiftedAfter: prevTitle,
+              _originalStart: item.start, // for undo
             });
             if (newEnd > prevEnd) prevEnd = newEnd;
             prevTitle = item.title;
             continue;
           }
-          // Immovable-vs-immovable overlap: leave both as-is so the
-          // user can see the collision. resolveRoutineOverlaps already
-          // handles routine-vs-routine.
         }
         out.push(item);
         if (item.end > (prevEnd || new Date(0))) {
@@ -25782,7 +26091,33 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           prevTitle = item.title;
         }
       }
-      return out;
+      // Post-pass: drop or trim free blocks covered by shifted tasks
+      // so the day stays visually continuous (no phantom open slots
+      // behind the new task positions).
+      if (shiftIntervals.length === 0) return out;
+      return out.flatMap(item => {
+        if (item.kind !== "free" || !item.start || !item.end) return [item];
+        const fStart = item.start.getTime();
+        const fEnd = item.end.getTime();
+        if (shiftIntervals.some(([s, e]) => s <= fStart && e >= fEnd)) return [];
+        let pieces = [{ start: fStart, end: fEnd }];
+        for (const [s, e] of shiftIntervals) {
+          pieces = pieces.flatMap(p => {
+            if (e <= p.start || s >= p.end) return [p];
+            const before = s > p.start ? { start: p.start, end: Math.min(p.end, s) } : null;
+            const after = e < p.end ? { start: Math.max(p.start, e), end: p.end } : null;
+            return [before, after].filter(Boolean);
+          });
+        }
+        return pieces
+          .filter(p => (p.end - p.start) >= 15 * 60000)
+          .map(p => ({
+            ...item,
+            start: new Date(p.start),
+            end: new Date(p.end),
+            durationMin: (p.end - p.start) / 60000,
+          }));
+      });
     };
     return autoResolveOverlaps(splitFreeAtBoundaries(rawTimeline));
   }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan, appointments]);
@@ -26561,7 +26896,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
     setNlText("");
     setNlPending(null);
+    // v05.05bt337 — Per chat: 'when adding task then after added dont
+    // scroll up.' Capture scroll position before the NL panel
+    // collapses (showNlInput false reflows the DOM tree below the
+    // timeline). Restore the previous scrollY in the next frame so
+    // the user stays anchored to whatever slot they were looking at.
+    const scrollY = (typeof window !== "undefined") ? window.scrollY : 0;
     setShowNlInput(false);
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: "instant" });
+        });
+      });
+    }
 
     // Banner reports only on the NEW additions (what just got committed).
     const slotted = updatedNew.filter(t => t.scheduledTime).length;
@@ -27053,7 +27401,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             }}>
               <div style={{
                 fontSize: 9, letterSpacing: "0.26em", textTransform: "uppercase",
-                color: "#7C6B5A", fontWeight: 700,
+                color: C.muted, fontWeight: 700,
                 fontFamily: "'JetBrains Mono', monospace",
               }}>
                 Type your day, free-form
@@ -27078,7 +27426,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               rows={3}
               style={{
                 width: "100%", padding: "12px 14px", border: `1px solid ${C.line}33`,
-                borderRadius: 10, fontSize: 14, background: "#FBF5E9", color: C.ink,
+                borderRadius: 10, fontSize: 14, background: C.paper, color: C.ink,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 marginBottom: 10, resize: "vertical", lineHeight: 1.5,
@@ -27172,7 +27520,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             </div>
             <div style={{
               fontFamily: "'Cormorant Garamond', serif",
-              fontSize: 12, color: "#7C6B5A", fontStyle: "italic",
+              fontSize: 12, color: C.muted, fontStyle: "italic",
               marginBottom: 12, lineHeight: 1.5,
             }}>
               Separate tasks with commas, periods, or "and". Recognizes "30 min", "an hour", "half hour", and times like "at 11am" or "2:30pm".
@@ -27183,7 +27531,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <div style={{ marginBottom: 12 }}>
                   <div style={{
                     fontSize: 9, letterSpacing: "0.26em", textTransform: "uppercase",
-                    color: "#7C6B5A", fontWeight: 700, marginBottom: 6,
+                    color: C.muted, fontWeight: 700, marginBottom: 6,
                     fontFamily: "'JetBrains Mono', monospace",
                   }}>
                     Preview · {preview.length} task{preview.length !== 1 ? "s" : ""}
@@ -27197,7 +27545,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                       {p.scheduledTime && <span style={{ color: C.gold, fontWeight: 700, marginRight: 6 }}>{p.scheduledTime}</span>}
                       {p.title}
-                      <span style={{ color: "#7C6B5A", marginLeft: 6 }}>· {fmtDurationHM(p.effortMin)}</span>
+                      <span style={{ color: C.muted, marginLeft: 6 }}>· {fmtDurationHM(p.effortMin)}</span>
                       {p.recurringRule && (
                         <span style={{
                           marginLeft: 6,
@@ -27217,24 +27565,65 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               ) : (
                 <div style={{
                   fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 13, color: "#7C6B5A", fontStyle: "italic", marginBottom: 12,
+                  fontSize: 13, color: C.muted, fontStyle: "italic", marginBottom: 12,
                 }}>
                   Nothing parsed yet — try adding duration or task title.
                 </div>
               );
             })()}
+            {/* v05.05bt339 — Per chat: 'set priority and focus before
+                adding should be ABOVE the add and slot tasks and
+                should be more apparent. same thing with detailed
+                entry instead (maybe it should be on the same line as
+                set priority).' Bolder mono caps, side-by-side, gold
+                accent, ABOVE the primary action button. */}
+            {nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 && (
+              <div style={{
+                display: "flex", gap: 10,
+                marginBottom: 10,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <button
+                  onClick={reviewBeforeAdding}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${C.gold}88`,
+                    borderRadius: 6, padding: "9px 8px",
+                    color: C.gold, cursor: "pointer",
+                    fontSize: 9.5, fontWeight: 700,
+                    letterSpacing: "0.14em", textTransform: "uppercase",
+                  }}>
+                  ✦ Set priority + focus
+                </button>
+                <button
+                  onClick={() => { setShowAddForm(true); setShowNlInput(false); }}
+                  style={{
+                    flex: 1,
+                    background: "transparent",
+                    border: `1px solid ${C.gold}88`,
+                    borderRadius: 6, padding: "9px 8px",
+                    color: C.gold, cursor: "pointer",
+                    fontSize: 9.5, fontWeight: 700,
+                    letterSpacing: "0.14em", textTransform: "uppercase",
+                  }}>
+                  ✎ Detailed entry
+                </button>
+              </div>
+            )}
             <button
               onClick={addFromNl}
               disabled={!nlText.trim() || parseNaturalLanguageTasks(nlText).length === 0}
               style={{
                 width: "100%",
                 background: nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 ? C.mommy : C.line,
-                color: "#fff", border: "none",
-                borderRadius: 10, padding: "12px",
-                fontSize: 13, fontWeight: 600,
+                color: nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 ? C.bg : C.muted,
+                border: "none",
+                borderRadius: 10, padding: "13px",
+                fontSize: 14, fontWeight: 700,
                 cursor: nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 ? "pointer" : "not-allowed",
                 fontFamily: "inherit",
-                letterSpacing: "0.04em",
+                letterSpacing: "0.05em",
               }}>
               {(() => {
                 const n = parseNaturalLanguageTasks(nlText).length;
@@ -27242,26 +27631,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 return `Add + slot ${n} task${n === 1 ? "" : "s"}`;
               })()}
             </button>
-            {/* v05.05bt161 — opt-in "review first" link. Most cases
-                don't need the review step — defaults (regret 3 + auto
-                focus inference) work fine and per-task tweaks can
-                happen on the timeline after. The link is for power
-                users who want to set priority/focus before scheduling. */}
-            {nlText.trim() && parseNaturalLanguageTasks(nlText).length > 0 && (
-              <div style={{ textAlign: "center", marginTop: 8 }}>
-                <button
-                  onClick={reviewBeforeAdding}
-                  style={{
-                    background: "transparent", border: "none", padding: 0,
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 11.5,
-                    color: "#7C6B5A", cursor: "pointer",
-                    borderBottom: `1px dotted ${C.line}66`,
-                  }}>
-                  set priority + focus before adding
-                </button>
-              </div>
-            )}
             {/* v05.05bt276 — Resume saved draft. If user has a pending
                 draft (from a previous session/accidental close) and isn't
                 currently typing new NL, surface a "resume" link. */}
@@ -27302,26 +27671,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               </div>
             )}
             <div style={{
-              display: "flex", justifyContent: "space-between",
+              display: "flex", justifyContent: "flex-end",
               alignItems: "center", marginTop: 10,
             }}>
-              <button
-                onClick={() => { setShowAddForm(true); setShowNlInput(false); }}
-                style={{
-                  background: "transparent", border: "none", padding: 0,
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 12,
-                  color: C.mommy, cursor: "pointer",
-                  borderBottom: `1px dotted ${C.mommy}`,
-                }}>
-                detailed entry instead
-              </button>
               <button
                 onClick={() => { setShowNlInput(false); setNlText(""); }}
                 style={{
                   background: "transparent", border: "none", padding: 0,
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 11, color: "#7C6B5A", cursor: "pointer",
+                  fontSize: 11, color: C.muted, cursor: "pointer",
                   letterSpacing: "0.06em",
                 }}>
                 Cancel
@@ -27346,7 +27704,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               autoFocus
               style={{
                 width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
-                borderRadius: 8, fontSize: 14, background: "#FBF5E9", color: C.ink,
+                borderRadius: 8, fontSize: 14, background: C.paper, color: C.ink,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 marginBottom: 10,
@@ -27357,7 +27715,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <div style={{ flex: 1 }}>
                 <div style={{
                   fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase",
-                  color: "#7C6B5A", fontWeight: 700, marginBottom: 4,
+                  color: C.muted, fontWeight: 700, marginBottom: 4,
                   fontFamily: "'JetBrains Mono', monospace",
                 }}>How long</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
@@ -27382,7 +27740,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             <div style={{ marginBottom: 10 }}>
               <div style={{
                 fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase",
-                color: "#7C6B5A", fontWeight: 700, marginBottom: 4,
+                color: C.muted, fontWeight: 700, marginBottom: 4,
                 fontFamily: "'JetBrains Mono', monospace",
               }}>Priority · {regretLabels[draftRegret]}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
@@ -27409,7 +27767,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 borderTop: `1px dashed ${C.line}44`,
                 paddingTop: 10, marginBottom: 10,
               }}>
-                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: "#7C6B5A", fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
                   Custom duration
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -27426,7 +27784,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   />
                   <span style={{ fontSize: 10, color: C.muted }}>min</span>
                 </div>
-                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: "#7C6B5A", fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
                   Focus
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4, marginBottom: 10 }}>
@@ -27449,7 +27807,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </button>
                   ))}
                 </div>
-                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: "#7C6B5A", fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ fontSize: 8.5, letterSpacing: "0.22em", textTransform: "uppercase", color: C.muted, fontWeight: 700, marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>
                   Lock to specific time
                 </div>
                 <input
@@ -27520,7 +27878,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 style={{
                   background: "transparent", border: "none", padding: 0,
                   fontFamily: "'Inter', sans-serif",
-                  fontSize: 11, color: "#7C6B5A", cursor: "pointer",
+                  fontSize: 11, color: C.muted, cursor: "pointer",
                   letterSpacing: "0.06em",
                 }}>
                 Cancel
@@ -27667,7 +28025,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <div style={{
                 marginTop: 6,
                 fontSize: 11.5, fontStyle: "italic",
-                color: "#7C6B5A", lineHeight: 1.5,
+                color: C.muted, lineHeight: 1.5,
               }}>
                 <span style={{
                   fontFamily: "'JetBrains Mono', monospace",
@@ -27684,7 +28042,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <div style={{
                 marginTop: 6,
                 fontSize: 11.5, fontStyle: "italic",
-                color: "#7C6B5A", lineHeight: 1.5,
+                color: C.muted, lineHeight: 1.5,
               }}>
                 <span style={{
                   fontFamily: "'JetBrains Mono', monospace",
@@ -27719,7 +28077,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
                 <div style={{
                   fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 11.5, color: "#7C6B5A",
+                  fontStyle: "italic", fontSize: 11.5, color: C.muted,
                   marginBottom: 10, lineHeight: 1.5,
                 }}>
                   Highest-regret task first. If two tasks have the same regret, the higher-focus one goes first. Each task claims the earliest free block big enough to hold it. Block focus level is informational, not a filter — partner-on-duty time is treated as your focus opportunity regardless of clock.
@@ -27749,7 +28107,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           <span style={{
                             display: "block",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10, color: "#7C6B5A",
+                            fontSize: 10, color: C.muted,
                             lineHeight: 1.45, marginTop: 2,
                           }}>{item.reason}</span>
                         )}
@@ -27854,7 +28212,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             onClick={() => setDayView(opt.v)}
                             style={{
                               background: dayView === opt.v ? C.mommy : "transparent",
-                              color: dayView === opt.v ? "#fff" : C.muted,
+                              // v05.05bt333 — Active text was hardcoded
+                              // white; on Cadence amber (C.mommy) that
+                              // reads as low-contrast pale-on-pale. Use
+                              // C.bg (page background) as the active
+                              // text color — in family it's cream on
+                              // mauve (readable), in Cadence it's deep
+                              // navy on amber (high contrast).
+                              color: dayView === opt.v ? C.bg : C.muted,
                               border: "none",
                               borderRadius: 999,
                               padding: "5px 10px",
@@ -27884,7 +28249,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       {showActionsMenu && (
                         <div style={{
                           position: "absolute", top: "calc(100% + 4px)", right: 0,
-                          background: "#FBF5E9",
+                          background: C.paper,
                           border: `1px solid ${C.line}55`,
                           borderRadius: 10, padding: 4, minWidth: 240,
                           boxShadow: "0 8px 24px -8px rgba(61, 49, 40, 0.18)",
@@ -27912,6 +28277,36 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             { section: "Display & export" },
                             { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                             { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
+                            { section: "Cadence mode" },
+                            // v05.05bt323/329 — Cadence is purely an
+                            // aesthetic mode (no feature hiding). User
+                            // picks scope: Off / Just this tab /
+                            // Whole app. Three radio-like items.
+                            { icon: productMode === "family" ? "●" : "○",
+                              label: "Off · default Little Ledger",
+                              onClick: () => {
+                                if (setProductMode) setProductMode("family");
+                                setShowActionsMenu(false);
+                              },
+                            },
+                            { icon: productMode === "solo" && (cadenceScope === "schedule" || !cadenceScope) ? "●" : "○",
+                              label: "On · Schedule tab only",
+                              onClick: () => {
+                                if (setProductMode) setProductMode("solo");
+                                if (setCadenceScope) setCadenceScope("schedule");
+                                setShowActionsMenu(false);
+                              },
+                              hint: "Cadence palette inside Schedule; rest of app stays Little Ledger",
+                            },
+                            { icon: productMode === "solo" && cadenceScope === "all" ? "●" : "○",
+                              label: "On · whole app",
+                              onClick: () => {
+                                if (setProductMode) setProductMode("solo");
+                                if (setCadenceScope) setCadenceScope("all");
+                                setShowActionsMenu(false);
+                              },
+                              hint: "Cadence palette everywhere — Now, Journal, Wellness, Milk too",
+                            },
                           ].map((item, idx) => {
                             if (item.section) {
                               return (
@@ -27996,6 +28391,63 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 pick-existing and add-new (inline input in the fits
                 picker). Brain Dump in ⋯ menu remains for the no-time
                 quick-capture case. */}
+            {/* v05.05bt324 — Per chat: 'the overlap fix shouldnt be
+                shifting or moving things ... should also be an undo
+                button if user doesnt like what app did.' Global undo
+                pill appears when ANY task was auto-shifted by the
+                overlap resolver. One tap restores all shifted tasks
+                to their original times (and pins them so the shift
+                can't re-apply). Each task already has its own per-row
+                undo via the badge — this is the bulk-undo. */}
+            {(() => {
+              const shifted = dayTimeline.filter(s => s.kind === "task" && s._shiftedByOverlap > 0 && s._originalStart);
+              if (shifted.length === 0) return null;
+              const totalShift = shifted.reduce((sum, s) => sum + (s._shiftedByOverlap || 0), 0);
+              return (
+                <button
+                  onClick={() => {
+                    setTasks(prev => prev.map(t => {
+                      const m = shifted.find(s => s.id === t.id);
+                      if (!m || !m._originalStart) return t;
+                      const orig = m._originalStart;
+                      const hh = String(orig.getHours()).padStart(2, "0");
+                      const mm = String(orig.getMinutes()).padStart(2, "0");
+                      return { ...t, scheduledTime: `${hh}:${mm}`, pinned: true };
+                    }));
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    background: `${C.accent}1c`,
+                    border: `1.5px solid ${C.accent}`,
+                    borderRadius: 10, marginBottom: 12,
+                    cursor: "pointer", textAlign: "left",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 8,
+                  }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, letterSpacing: "0.14em",
+                      textTransform: "uppercase", fontWeight: 800,
+                      color: C.accent,
+                    }}>↻ {shifted.length} task{shifted.length === 1 ? "" : "s"} auto-shifted</div>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontSize: 13,
+                      color: C.ink, marginTop: 2, lineHeight: 1.3,
+                    }}>
+                      Pushed forward {totalShift}m total to clear overlaps. Tap to undo all + pin originals.
+                    </div>
+                  </div>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, letterSpacing: "0.12em",
+                    fontWeight: 800, color: C.accent,
+                  }}>UNDO ALL</span>
+                </button>
+              );
+            })()}
             {/* v05.05bt316 — Per chat: 'Need some way to intuitively add
                 task. I know clicking on one bloc allows you to do this
                 but may it be intuitive. User may think it's to only
@@ -28454,7 +28906,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   title="Unpin lower-priority tasks + re-analyze to make room"
                   style={{
                     padding: "6px 11px",
-                    background: C.accent, color: "#FDFAF1",
+                    background: C.accent, color: C.bg,
                     border: "none", borderRadius: 6,
                     cursor: "pointer",
                     fontFamily: "'JetBrains Mono', monospace",
@@ -28509,7 +28961,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     title="Release pins on overlapping tasks + re-analyze to redistribute"
                     style={{
                       padding: "5px 9px",
-                      background: C.accent, color: "#FDFAF1",
+                      background: C.accent, color: C.bg,
                       border: `1px solid ${C.accent}`, borderRadius: 6,
                       cursor: "pointer",
                       fontFamily: "'JetBrains Mono', monospace",
@@ -28584,7 +29036,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <button
                   onClick={() => { reanalyze(); }}
                   style={{
-                    background: C.accent, color: "#FDFAF1",
+                    background: C.accent, color: C.bg,
                     border: "none", borderRadius: 6,
                     padding: "6px 10px",
                     fontFamily: "'JetBrains Mono', monospace",
@@ -28712,7 +29164,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           position: "absolute", top: -10, left: 0,
                           background: _color, padding: "3px 9px",
                           font: "800 8.5px/1 'JetBrains Mono', monospace",
-                          letterSpacing: "0.18em", color: "#FDFAF1",
+                          letterSpacing: "0.18em", color: C.bg,
                           borderRadius: 4,
                         }}>{_label}</span>
                       <span className="nl-now-pill-pulse"
@@ -28721,12 +29173,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           position: "absolute", top: -9, right: 0,
                           background: _color, padding: "3px 7px",
                           font: "700 9px/1 'JetBrains Mono', monospace",
-                          color: "#FDFAF1", borderRadius: 4,
+                          color: C.bg, borderRadius: 4,
                         }}>{nowFmt}</span>
                     </div>
                   );
                 };
                 dayTimeline.forEach((slot, i) => {
+                  // v05.05bt321 — Skip user-dismissed free blocks.
+                  // Per chat: 'should be able to cancel out of open
+                  // tap fill if doesnt make sense to be there.'
+                  if (slot.kind === "free" && dismissedFreeKeys.has(slot.start.getTime())) {
+                    return;
+                  }
                   // v05.05bt207 — NOW line anchor FIRST, before any early
                   // returns. Fires for whichever slot contains now OR is
                   // the first one at-or-after now.
@@ -28787,16 +29245,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   }
                   const section = getDaySection(slot.start.getHours());
                   if (section.label !== lastSection) {
+                    const isSolo = productMode === "solo";
                     rows.push(
                       <div key={`section-${i}`} style={{
-                        padding: "16px 4px 6px",
+                        // v05.05bt328 — Cadence section dividers:
+                        // bolder caps, wider tracking, gold color
+                        // forced (vs section.color which has morning
+                        // orange/midday teal etc — too tonally varied
+                        // for the editorial-luxury feel). Refined,
+                        // restrained, cinematic.
+                        padding: isSolo ? "20px 4px 8px" : "16px 4px 6px",
                         fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, letterSpacing: "0.30em",
-                        textTransform: "lowercase",
-                        color: section.color, fontWeight: 600,
+                        fontSize: isSolo ? 10 : 9,
+                        letterSpacing: isSolo ? "0.36em" : "0.30em",
+                        textTransform: "uppercase",
+                        color: isSolo ? C.gold : section.color,
+                        fontWeight: isSolo ? 700 : 600,
+                        textAlign: isSolo ? "center" : "left",
                         position: "relative", zIndex: 1,
                       }}>
-                        — {section.label.toLowerCase()} —
+                        — {isSolo ? section.label.toUpperCase() : section.label.toLowerCase()} —
                       </div>
                     );
                     lastSection = section.label;
@@ -29079,7 +29547,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       style={{
                       display: "grid",
                       gridTemplateColumns: "54px 1fr auto",
-                      gap: 10, padding: "9px 8px 9px 12px",
+                      gap: productMode === "solo" ? 8 : 10,
+                      padding: productMode === "solo" ? "7px 8px 7px 12px" : "9px 8px 9px 12px",
                       // v05.05bt301/315 — Per chat (bt315): 'can the
                       // routine blocks be colored a different color —
                       // i dont like the color it is currently...maybe
@@ -29128,16 +29597,53 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         : owner === "joint" ? C.gold + "33"
                         : C.line + "1a"
                       }`,
-                      borderBottom: `1px ${isFree ? "dashed" : "solid"} ${
-                        isDropTarget ? C.mommy + "50"
-                        : owner === "Mommy" ? C.mommy + "33"
-                        : owner === "Daddy" ? C.daddy + "33"
-                        : owner === "joint" ? C.gold + "33"
-                        : isFree ? C.gold + "22"
-                        : C.line + "22"
+                      borderBottom: `1px ${isFree ? (productMode === "solo" ? "solid" : "dashed") : "solid"} ${
+                        productMode === "solo"
+                          // v05.05bt328/335 — Mommy: soft champagne
+                          // hairline (subtle, blends into bloom).
+                          // Daddy: sharper olive-bronze at higher
+                          // alpha (architectural delineation).
+                          ? (currentUser === "Daddy" ? `${C.gold}55` : `${C.gold}25`)
+                          : (isDropTarget ? C.mommy + "50"
+                            : owner === "Mommy" ? C.mommy + "33"
+                            : owner === "Daddy" ? C.daddy + "33"
+                            : owner === "joint" ? C.gold + "33"
+                            : isFree ? C.gold + "22"
+                            : C.line + "22")
                       }`,
-                      marginBottom: 3,
-                      borderRadius: "0 4px 4px 0",
+                      marginBottom: productMode === "solo" ? 0 : 3,
+                      // v05.05bt328 — Cadence flat cards: borderRadius
+                      // 4→2 + tighter spacing. Architectural, not soft.
+                      // v05.05bt328/335 — Cadence card edge treatment
+                      // differs by Mommy vs Daddy mode:
+                      //   Mommy: 2px softer rounded right edges
+                      //   Daddy: 0px square — architectural / tactical
+                      borderRadius: productMode === "solo"
+                        ? (currentUser === "Daddy" ? "0 0 0 0" : "0 2px 2px 0")
+                        : "0 4px 4px 0",
+                      // v05.05bt334/335/336 — ACTIVE NOW treatment.
+                      // Glow color tracks the OWNER of the current
+                      // slot — Mommy-owned uses C.mommy (rose in both
+                      // palettes), Daddy-owned uses C.daddy (brass in
+                      // Mommy view, slate in Daddy view), so the
+                      // duty owner is unmistakable. Bloom intensity
+                      // tracks VIEWER: Mommy mode = candlelit bloom,
+                      // Daddy mode = tactical lock (no bloom).
+                      ...(productMode === "solo" && !isPast && slot.start <= now && now < slot.end ? (() => {
+                        const ownerColor = owner === "Daddy" ? C.daddy
+                          : owner === "joint" ? C.gold
+                          : C.mommy;
+                        if (currentUser === "Daddy") {
+                          return {
+                            boxShadow: `inset 0 0 0 2px ${ownerColor}, 0 0 0 1px ${ownerColor}88`,
+                            background: "transparent",
+                          };
+                        }
+                        return {
+                          boxShadow: `0 0 0 1.5px ${ownerColor}, 0 0 28px -2px ${ownerColor}88, 0 0 56px -8px ${C.accent}55, inset 0 0 24px -6px ${ownerColor}40`,
+                          background: `${ownerColor}14`,
+                        };
+                      })() : {}),
                       alignItems: "center",
                       cursor: isBeingDragged ? "grabbing" : (isFree && !isPast ? "pointer" : (isTask && !slot.completedAt ? "grab" : "default")),
                       opacity: isBeingDragged ? 0.92 : (isTask && slot.completedAt ? 0.55 : (isPastFree ? 0.55 : 1)),
@@ -29335,15 +29841,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleComplete(slot.id); }}
                               style={{
-                                width: 14, height: 14, borderRadius: "50%",
-                                border: `1.5px solid ${slot.completedAt ? "#7B9B6E" : C.line + "66"}`,
-                                background: slot.completedAt ? "#7B9B6E" : "transparent",
-                                cursor: "pointer", flexShrink: 0, padding: 0,
+                                // v05.05bt330 — Per chat: 'checking
+                                // that a task is complete is hard on
+                                // the phone.' Was 14×14 (impossible
+                                // tap target on mobile). Now 24×24
+                                // visible circle inside a 32×32 tap
+                                // area via padding. 2px border so the
+                                // ring reads clearly even in dark mode.
+                                width: 32, height: 32,
+                                padding: 4, // 32 - (24/2 + 24/2) = 8, split = 4 each side
+                                background: "transparent",
+                                border: "none",
+                                cursor: "pointer", flexShrink: 0,
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                color: "#fff", fontSize: 9, lineHeight: 1,
+                                marginLeft: -4, // pull back into title gap so layout doesn't shift
                               }}
                               aria-label="Mark done">
-                              {slot.completedAt ? "✓" : ""}
+                              <span style={{
+                                width: 24, height: 24, borderRadius: "50%",
+                                border: `2px solid ${slot.completedAt ? "#7B9B6E" : C.line + "66"}`,
+                                background: slot.completedAt ? "#7B9B6E" : "transparent",
+                                color: "#fff", fontSize: 14, lineHeight: 1, fontWeight: 700,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}>
+                                {slot.completedAt ? "✓" : ""}
+                              </span>
                             </button>
                           )}
                           {/* v05.05bt222 — Focus dot removed from left side
@@ -29369,7 +29891,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   color: C.ink,
                                   border: `1.5px solid ${C.mommy}`,
                                   borderRadius: 6, padding: "3px 8px",
-                                  background: "#FBF5E9",
+                                  background: C.paper,
                                   letterSpacing: "-0.005em",
                                 }}
                               />
@@ -29447,19 +29969,33 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               : isRoutine ? 500
                               : 600,
                             color: (slot.id === "bedtime") ? C.mommy
-                              : isFree ? "#5C4D3A"
-                              : isRoutine ? "#4A4034"
-                              : C.ink,
-                            lineHeight: 1.2, flex: 1, minWidth: 0,
+                              // v05.05bt326 — Cadence mode: hardcoded
+                              // warm-brown for free + routine text
+                              // disappears on the dark slate bg.
+                              // Switch to amber (free) + light parchment
+                              // (routine) so titles read cleanly.
+                              : productMode === "solo"
+                                ? (isFree ? C.gold : isRoutine ? C.ink : C.ink)
+                                : (isFree ? "#5C4D3A" : isRoutine ? "#4A4034" : C.ink),
+                            lineHeight: 1.25, flex: 1, minWidth: 0,
                             letterSpacing: (slot.id === "bedtime") ? "0.01em" : "-0.005em",
                             textDecoration: isTask && slot.completedAt ? "line-through" : "none",
                             cursor: ((isTask && !slot.completedAt) || isRoutine) ? "pointer" : "default",
-                            textAlign: "left", display: "block",
-                            whiteSpace: "nowrap",
+                            textAlign: "left",
+                            // v05.05bt322 — Per chat (screenshot): 'You
+                            // should probably either wrap text so I
+                            // can see the whole task title or limit
+                            // task title so it can fit.' Allow titles
+                            // to wrap up to 2 lines then ellipsis on
+                            // anything longer. Routine + bedtime stay
+                            // single-line (they're always short).
+                            display: "-webkit-box",
+                            WebkitBoxOrient: "vertical",
+                            WebkitLineClamp: (isRoutine || slot.id === "bedtime") ? 1 : 2,
                             overflow: "hidden",
-                            textOverflow: "ellipsis",
+                            wordBreak: "break-word",
                           }}
-                          title={(isTask && !slot.completedAt) ? "Tap to edit name" : isRoutine ? "Tap to adjust today" : null}>
+                          title={(isTask && !slot.completedAt) ? slot.title || "Tap to edit name" : isRoutine ? "Tap to adjust today" : null}>
                             {isFree ? (
                               isPast ? (
                                 <span style={{ color: C.muted, fontWeight: 500, fontStyle: "italic" }}>
@@ -29470,6 +30006,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   <span style={{ color: C.gold, fontWeight: 500 }}>
                                     + Open · tap to fill
                                   </span>
+                                  {/* v05.05bt321 — Per chat: 'should
+                                      be able to cancel out of open
+                                      tap fill if doesnt make sense to
+                                      be there.' Small × dismisses
+                                      this free row for the session. */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const k = slot.start.getTime();
+                                      setDismissedFreeKeys(prev => {
+                                        const n = new Set(prev);
+                                        n.add(k);
+                                        return n;
+                                      });
+                                    }}
+                                    title="Hide this open slot"
+                                    style={{
+                                      marginLeft: 10,
+                                      width: 22, height: 22,
+                                      padding: 0,
+                                      background: "transparent",
+                                      border: `1px solid ${C.line}55`,
+                                      borderRadius: 4,
+                                      color: C.muted, cursor: "pointer",
+                                      fontSize: 13, lineHeight: 1, fontWeight: 600,
+                                      display: "inline-flex",
+                                      alignItems: "center", justifyContent: "center",
+                                      verticalAlign: "middle",
+                                    }}>×</button>
                                   {(() => {
                                     const napOverlap = (predictedNaps || []).reduce((best, nap) => {
                                       if (nap.sampleSize < 4) return best;
@@ -29538,13 +30103,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 letterSpacing: "0.08em",
                               }}>· moved</span>
                             )}
-                            {/* v05.05bt317 — Per chat: auto-resolved
-                                overlap badge. Shows when the scheduler
-                                shifted this task forward because it
-                                overlapped an earlier item. */}
+                            {/* v05.05bt317/321 — Per chat: auto-resolved
+                                overlap badge. Tap to undo: restores
+                                the task's scheduledTime to the
+                                original (pre-shift) value and pins it
+                                so the shift doesn't re-apply. */}
                             {isTask && slot._shiftedByOverlap > 0 && (
-                              <span
-                                title={`Auto-shifted +${slot._shiftedByOverlap}m to clear overlap${slot._shiftedAfter ? ` with "${slot._shiftedAfter}"` : ""}`}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const orig = slot._originalStart;
+                                  if (!orig) return;
+                                  const hh = String(orig.getHours()).padStart(2, "0");
+                                  const mm = String(orig.getMinutes()).padStart(2, "0");
+                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, scheduledTime: `${hh}:${mm}`, pinned: true } : t));
+                                }}
+                                title={`Auto-shifted +${slot._shiftedByOverlap}m to clear overlap${slot._shiftedAfter ? ` with "${slot._shiftedAfter}"` : ""} · tap to undo + pin to original time`}
                                 style={{
                                   fontFamily: "'JetBrains Mono', monospace",
                                   fontSize: 9, color: C.accent,
@@ -29552,7 +30126,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   letterSpacing: "0.08em",
                                   background: `${C.accent}14`,
                                   padding: "1px 5px", borderRadius: 3,
-                                }}>↻ +{slot._shiftedByOverlap}m</span>
+                                  border: "none", cursor: "pointer",
+                                }}>↻ +{slot._shiftedByOverlap}m</button>
                             )}
                             {/* v05.05bt277 — Coverage badge: this slice is
                                 a coverage adjustment (e.g. Mommy covering
@@ -30273,16 +30848,75 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         display: "flex", alignItems: "center", gap: 4,
                         flexShrink: 0,
                       }}>
-                        {/* v05.05bt278 — Chip border dropped per chat ('makes
-                            it look clunky'). Back to two floating buttons
-                            — same as before bt276. */}
+                        {/* v05.05bt334 — Duty-state pill (Cadence only).
+                            Per reference image: INTERRUPTIBLE / DEEP
+                            FOCUS / LIGHT FOCUS / TRADE WINDOW chips on
+                            each row. Small caps mono, palette-aware. */}
+                        {productMode === "solo" && (() => {
+                          if (isTask && !slot.completedAt) {
+                            // v05.05bt339 — Per chat: 'isnt the deep
+                            // focus word tag redundant if the brain
+                            // icon is already there?' Drop the
+                            // DEEP/LIGHT chips — keep INTERRUPTIBLE
+                            // (no icon for that yet) and TRADE WINDOW
+                            // (informational gem).
+                            const fl = normalizeFocus(slot.focusLevel);
+                            if (fl === "deep" || fl === "shallow") return null;
+                            return (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 8.5, letterSpacing: "0.14em",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                color: C.muted,
+                                padding: "2px 5px",
+                                border: `1px solid ${C.muted}55`,
+                                borderRadius: 2,
+                                marginRight: 4,
+                                whiteSpace: "nowrap",
+                              }}>INTERRUPTIBLE</span>
+                            );
+                          }
+                          if (isFree && !isPast) {
+                            const isPeak = blockFocus === "deep";
+                            const label = isPeak ? "TRADE WINDOW" : "OPEN";
+                            const tone = isPeak ? C.mommy : C.muted;
+                            return (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 8.5, letterSpacing: "0.14em",
+                                fontWeight: 800, textTransform: "uppercase",
+                                color: isPeak ? C.bg : tone,
+                                background: isPeak ? tone : "transparent",
+                                padding: "2px 5px",
+                                border: `1px solid ${tone}`,
+                                borderRadius: 2,
+                                marginRight: 4,
+                                whiteSpace: "nowrap",
+                              }}>{label}</span>
+                            );
+                          }
+                          return null;
+                        })()}
                         {isTask && !slot.completedAt && (() => {
                           const fl = normalizeFocus(slot.focusLevel);
-                          const glyph = fl === "deep" ? "🧠" : "🍃";
+                          // v05.05bt321 — Per chat (screenshot): 'if I
+                          // put nap then I see a bottle emoji - i am
+                          // trying to schedule MY nap.' For tasks that
+                          // are rest/nap/break in nature, show 💤
+                          // instead of the focus glyph so the user
+                          // immediately reads it as their downtime.
+                          // The pump cadence may still show a 🍼 row
+                          // adjacent to it (different slot), but at
+                          // least the task itself is unambiguously a
+                          // nap.
+                          const titleLower = (slot.title || "").toLowerCase();
+                          const isRestTask = /\b(nap|rest|break|recharge|lie down|lay down|power nap|siesta)\b/.test(titleLower);
+                          const glyph = isRestTask ? "💤" : (fl === "deep" ? "🧠" : "🍃");
                           return (
                             <button
                               onClick={(e) => { e.stopPropagation(); cycleFocusLevel(slot.id); }}
-                              title={`${FOCUS_LABEL[fl]} focus · tap to toggle`}
+                              title={isRestTask ? "Rest task · tap to toggle focus level" : `${FOCUS_LABEL[fl]} focus · tap to toggle`}
                               style={{
                                 background: "transparent", border: "none",
                                 padding: "2px 2px", cursor: "pointer",
@@ -30718,7 +31352,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   Brain Dump
                 </span>
                 <span style={{
-                  fontSize: 9, color: "#7C6B5A", letterSpacing: "0.26em",
+                  fontSize: 9, color: C.muted, letterSpacing: "0.26em",
                   textTransform: "uppercase", fontWeight: 700,
                   fontFamily: "'JetBrains Mono', monospace",
                 }}>
@@ -30747,7 +31381,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <div key={t.id} style={{
                     display: "flex", alignItems: "center", gap: 10,
                     padding: "12px 14px",
-                    background: "#FDFAF1",
+                    background: C.paper,
                     border: `1px solid ${isStale ? "#C18D7A40" : C.mommy + "38"}`,
                     borderRadius: 12,
                     boxShadow: "0 1px 2px rgba(166, 139, 160, 0.05)",
@@ -30767,7 +31401,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         letterSpacing: "-0.005em",
                       }}>{t.title}</div>
                       <div style={{
-                        fontSize: 10, color: "#7C6B5A",
+                        fontSize: 10, color: C.muted,
                         fontFamily: "'JetBrains Mono', monospace",
                         letterSpacing: "0.04em", marginTop: 2,
                       }}>
@@ -30810,7 +31444,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         onClick={() => deleteTask(t.id)}
                         style={{
                           background: "transparent",
-                          color: "#7C6B5A",
+                          color: C.muted,
                           border: `1px solid ${C.line}55`,
                           borderRadius: 6, padding: "4px 9px",
                           fontSize: 10, fontWeight: 600,
@@ -30837,8 +31471,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             style={{
               background: "transparent", border: "none", padding: "8px 0",
               fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 12,
-              color: "#7C6B5A", cursor: "pointer",
+              // v05.05bt342 — Was C.muted italic 400 — visually thin on
+              // dark plum. C.ink + weight 500 reads cleanly.
+              fontStyle: "italic", fontSize: 12.5, fontWeight: 500,
+              color: C.ink, opacity: 0.92, cursor: "pointer",
               borderBottom: `1px dotted ${C.line}99`,
               marginTop: 4, marginBottom: 4,
             }}>
@@ -30863,7 +31499,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 Unscheduled
               </span>
               <span style={{
-                fontSize: 9, color: "#7C6B5A", letterSpacing: "0.26em",
+                fontSize: 9, color: C.muted, letterSpacing: "0.26em",
                 textTransform: "uppercase", fontWeight: 700,
                 fontFamily: "'JetBrains Mono', monospace",
               }}>
@@ -30875,7 +31511,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   background: "transparent", border: "none", padding: 0,
                   fontFamily: "'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11,
-                  color: "#7C6B5A", cursor: "pointer",
+                  color: C.muted, cursor: "pointer",
                   borderBottom: `1px dotted ${C.line}88`,
                   marginLeft: "auto",
                 }}>
@@ -30889,7 +31525,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <div key={t.id} style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "12px 14px",
-                  background: "#FDFAF1",
+                  background: C.paper,
                   border: `1px solid ${C.mommy}38`,
                   borderRadius: 12,
                   boxShadow: "0 1px 2px rgba(166, 139, 160, 0.05)",
@@ -30904,18 +31540,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}
                     aria-label="Mark done"
                   />
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    color: regretColors[t.regretScore],
-                    fontFamily: "'JetBrains Mono', monospace",
-                    width: 16, textAlign: "center", flexShrink: 0,
-                  }}>{t.regretScore}</span>
-                  {/* v05.05bt222 — Focus emoji glyph (🧠 deep / 🍃 light) replacing the colored dot. */}
+                  {/* v05.05bt339 — Per chat: 'shallow vs deep icon
+                      should be placed right before the regret score
+                      and on both scheduled and unscheduled.' Focus
+                      glyph now precedes the R-score. */}
                   <span style={{
                     fontSize: 14, flexShrink: 0, lineHeight: 1,
                   }} title={`${FOCUS_LABEL[normalizeFocus(t.focusLevel)]} focus`}>
                     {normalizeFocus(t.focusLevel) === "deep" ? "🧠" : "🍃"}
                   </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: regretColors[t.regretScore],
+                    fontFamily: "'JetBrains Mono', monospace",
+                    width: 24, textAlign: "center", flexShrink: 0,
+                    letterSpacing: "0.04em",
+                  }}>R{t.regretScore}</span>
                   {/* Tap on body to edit */}
                   <button
                     onClick={() => setEditingTask(t)}
@@ -30931,7 +31571,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       letterSpacing: "-0.005em",
                     }}>{t.title}</div>
                     <div style={{
-                      fontSize: 10, color: "#7C6B5A",
+                      fontSize: 10, color: C.muted,
                       fontFamily: "'JetBrains Mono', monospace",
                       letterSpacing: "0.04em", marginTop: 2,
                     }}>
@@ -30944,7 +31584,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       onClick={() => setSplittingTask(t)}
                       style={{
                         background: "transparent", border: `1px solid ${C.line}33`,
-                        borderRadius: 8, padding: "4px 10px", color: "#7C6B5A",
+                        borderRadius: 8, padding: "4px 10px", color: C.muted,
                         fontSize: 10, cursor: "pointer", fontFamily: "inherit",
                         flexShrink: 0, letterSpacing: "0.06em",
                       }}
@@ -30956,7 +31596,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     onClick={() => deleteTask(t.id)}
                     style={{
                       background: "transparent", border: "none", padding: 4,
-                      color: "#7C6B5A", cursor: "pointer", flexShrink: 0,
+                      color: C.muted, cursor: "pointer", flexShrink: 0,
                     }}
                     aria-label="Delete">
                     <Trash2 size={14} />
@@ -30967,7 +31607,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             {completedToday.length > 0 && (
               <div style={{ marginTop: 18, paddingTop: 12, borderTop: `1px dashed ${C.line}33` }}>
                 <div style={{
-                  fontSize: 9, color: "#7C6B5A",
+                  fontSize: 9, color: C.muted,
                   letterSpacing: "0.26em", textTransform: "uppercase", fontWeight: 700,
                   fontFamily: "'JetBrains Mono', monospace",
                   marginBottom: 8,
@@ -30990,7 +31630,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       onClick={() => toggleComplete(t.id)}
                       style={{
                         background: "transparent", border: "none", padding: 2,
-                        color: "#7C6B5A", cursor: "pointer", fontSize: 10,
+                        color: C.muted, cursor: "pointer", fontSize: 10,
                         letterSpacing: "0.08em",
                       }}>
                       undo
@@ -31004,9 +31644,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
         <div style={{
           fontFamily: "'Cormorant Garamond', serif",
-          fontSize: 12, color: "#7C6B5A",
-          fontStyle: "italic", marginTop: 18,
-          lineHeight: 1.5, padding: "0 4px",
+          // v05.05bt342 — Per chat: 'the font at the botom of the
+          // landing page is STILL LOW contrast.' Italic Cormorant at
+          // weight 400 (default) on dark plum reads as thin/dim even
+          // when the color is bright. Combo fix: use C.ink (cream) +
+          // explicit weight 500 (Cormorant 500 italic is medium-bold,
+          // visually heavier and crisper).
+          fontSize: 12.5, color: C.ink, opacity: 0.92,
+          fontStyle: "italic", fontWeight: 500, marginTop: 18,
+          lineHeight: 1.55, padding: "0 4px",
         }}>
           {currentUser !== "Mommy"
             ? "Currently shows Mommy's view of blocks. Switch profile to plan from her perspective."
@@ -31061,7 +31707,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 }}>×</button>
             </div>
             <div style={{
-              fontSize: 12, color: "#7C6B5A", marginBottom: 10,
+              fontSize: 12, color: C.muted, marginBottom: 10,
               lineHeight: 1.5,
               fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
             }}>
@@ -31078,7 +31724,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 padding: "10px 12px",
                 border: `1px solid ${C.line}55`,
                 borderRadius: 8,
-                background: "#FBF5E9",
+                background: C.paper,
                 color: C.ink,
                 resize: "vertical",
               }}
@@ -31113,7 +31759,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   borderRadius: 8, padding: "10px 14px",
                   fontFamily: "'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 13,
-                  color: "#7C6B5A", cursor: "pointer",
+                  color: C.muted, cursor: "pointer",
                 }}>Close</button>
             </div>
           </div>
@@ -31152,7 +31798,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <div style={{
                   fontFamily: "'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 14,
-                  color: "#7C6B5A", lineHeight: 1.4,
+                  color: C.muted, lineHeight: 1.4,
                 }}>
                   Jot it now. Decide later.
                 </div>
@@ -31160,7 +31806,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <button onClick={() => { setShowBrainDump(false); setBrainDumpText(""); }}
                 style={{
                   background: "transparent", border: "none",
-                  fontSize: 22, color: "#7C6B5A", cursor: "pointer",
+                  fontSize: 22, color: C.muted, cursor: "pointer",
                   padding: 0, lineHeight: 1, fontFamily: "inherit",
                 }}>×</button>
             </div>
@@ -31180,7 +31826,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 width: "100%", padding: "14px 16px",
                 border: `1px solid ${C.mommy}38`,
                 borderRadius: 12,
-                fontSize: 15, background: "#FDFAF1", color: C.ink,
+                fontSize: 15, background: C.paper, color: C.ink,
                 fontFamily: "'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 resize: "vertical", lineHeight: 1.5,
@@ -31401,14 +32047,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <button onClick={() => setMovePickerForTask(null)}
                   style={{
                     background: "transparent", border: "none",
-                    fontSize: 22, color: "#7C6B5A", cursor: "pointer",
+                    fontSize: 22, color: C.muted, cursor: "pointer",
                     padding: 0, lineHeight: 1, fontFamily: "inherit",
                   }}>×</button>
               </div>
               {destinations.length === 0 ? (
                 <div style={{
                   fontFamily: "'Cormorant Garamond', serif",
-                  fontStyle: "italic", color: "#7C6B5A",
+                  fontStyle: "italic", color: C.muted,
                   fontSize: 14, padding: "16px 0", textAlign: "center",
                 }}>
                   No other slots available today.
@@ -31443,7 +32089,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       }}
                       style={{
                         width: "100%", textAlign: "left",
-                        background: "#FDFAF1",
+                        background: C.paper,
                         border: `1px solid ${C.mommy}38`,
                         borderRadius: 10,
                         padding: "12px 14px",
@@ -31458,7 +32104,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         width: 60, flexShrink: 0, lineHeight: 1.3,
                       }}>
                         {fmtT(dest.start)}<br/>
-                        <span style={{ color: "#7C6B5A", fontSize: 9, fontWeight: 400 }}>
+                        <span style={{ color: C.muted, fontSize: 9, fontWeight: 400 }}>
                           {fmtT(dest.end)}
                         </span>
                       </div>
@@ -31471,7 +32117,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           {dest.kind === "free" ? "Open block" : dest.title}
                         </div>
                         <div style={{
-                          fontSize: 10, color: "#7C6B5A",
+                          fontSize: 10, color: C.muted,
                           fontFamily: "'JetBrains Mono', monospace",
                           marginTop: 2, letterSpacing: "0.04em",
                         }}>
@@ -31696,7 +32342,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
       {/* v05.05bt163 — Custom minute input. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{
-          fontSize: 10, color: "#7C6B5A",
+          fontSize: 10, color: C.muted,
           fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
         }}>or custom:</span>
         <input
@@ -31973,7 +32619,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
               background: "transparent", border: "none", padding: 0,
               fontFamily: "'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
-              color: "#7C6B5A", cursor: "pointer",
+              color: C.muted, cursor: "pointer",
               borderBottom: `1px dotted ${C.line}66`,
             }}>
             remove from today (keep in task list)
@@ -32236,7 +32882,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
         background: `${C.line}10`,
         border: `1px solid ${C.line}30`,
         borderRadius: 8, padding: "6px 10px",
-        fontSize: 10, color: "#7C6B5A", lineHeight: 1.4,
+        fontSize: 10, color: C.muted, lineHeight: 1.4,
         marginBottom: 8,
         fontFamily: "'Cormorant Garamond', serif",
         fontStyle: "italic",
@@ -32302,7 +32948,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
             }} title="Deselect all — keep tasks intact">○ Clear ({selected.size})</button>
             <button onClick={removeSelected} style={{
               padding: "4px 8px",
-              background: C.accent, color: "#FDFAF1",
+              background: C.accent, color: C.bg,
               border: "none", borderRadius: 5,
               fontFamily: "'JetBrains Mono', monospace",
               fontSize: 9.5, letterSpacing: "0.1em", fontWeight: 700,
@@ -32455,7 +33101,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
                 padding: "5px 0",
                 border: `1px solid ${C.line}55`, borderRadius: 4,
                 borderLeft: `3px solid ${regretMeta[p.regretScore].color}`,
-                fontSize: 10.5, background: "#FBF5E9",
+                fontSize: 10.5, background: C.paper,
                 color: regretMeta[p.regretScore].color,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontWeight: 700, textAlign: "center",
@@ -32746,7 +33392,7 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
           const bedStr = bedMin === 0 ? `${h12}${ap}` : `${h12}:${String(bedMin).padStart(2,"0")}${ap}`;
           return (
             <div style={{
-              fontSize: 11, color: "#7C6B5A",
+              fontSize: 11, color: C.muted,
               marginTop: 8, fontStyle: "italic",
               fontFamily: "'Cormorant Garamond', serif",
               lineHeight: 1.4,
@@ -35234,22 +35880,20 @@ function DiaperBagSection({ C, diaperBag, setDiaperBag }) {
 }
 
 // ---- Central LOG button (impossible to miss) --------------------------
-function CentralLogButton({ C, mode, onClick, currentUser }) {
-  // v05.05bt186 — Auto-hide while any modal is open so bottom-sheet
-  // save buttons aren't blocked. Per chat ('log button gets in the
-  // way ... applies across the entire app').
+function CentralLogButton({ C, mode, onClick, currentUser, isCadence }) {
   const anyModalOpen = useModalOpen();
   if (anyModalOpen) return null;
-  // Bottom UI zone (LOG button + tab bar) is owned by the viewer, in contrast
-  // to page-level primary-action coral used elsewhere (Generate code, Use
-  // code, etc). This is the strongest cross-room signal in the app — at a
-  // glance the floating button color tells you whose view this is.
+  // v05.05bt329 — Cadence aesthetic gates use isCadence (current
+  // effective palette) instead of productMode, since productMode
+  // can be 'solo' but scope='schedule' may leave Now tab in family
+  // palette. isCadence is true ONLY when the current palette IS the
+  // cadence palette.
+  const isSolo = isCadence;
+  // v05.05bt337 — viewerColor uses currentUser in both family + cadence.
   const viewerColor = currentUser === "Daddy" ? C.daddy : C.mommy;
-  // Darker tone for the gradient end stop. Slightly hand-tuned per color
-  // so the button reads as having depth rather than flat fill.
-  const viewerDarker = currentUser === "Daddy" ? "#4F6E96" : "#7B6177";
+  const viewerDarker = isSolo ? "#9A7B4E" : (currentUser === "Daddy" ? "#4F6E96" : "#7B6177");
   return (
-    <button onClick={onClick} className="log-glow" style={{
+    <button onClick={onClick} className={isSolo ? "" : "log-glow"} style={{
       position: "fixed",
       bottom: 38, left: "50%", transform: "translate(-50%, 0) translateZ(0)",
       // v05.05bt37: translateZ(0) + willChange force iOS Safari to promote
@@ -35296,16 +35940,19 @@ function CentralLogButton({ C, mode, onClick, currentUser }) {
   );
 }
 
-function TabBar({ C, tab, setTab, currentUser }) {
-  // Bottom-nav zone uses viewer color for active state (label + indicator
-  // bar) instead of the page-level coral accent. This makes the tab bar
-  // unmistakably "yours" at a glance — paired with the viewer-color LOG
-  // button it forms a coherent docked panel claimed by the viewer.
-  // v05.05bt214 — Caregiver persona uses sage green. Caregiver mode
-  // also strips parent-focused tabs (Schedule, Bank, Wellness) — the
-  // caregiver only needs Now (current state + bottles available),
-  // Journal (to log events), and Milk (bottles + use-by times).
+function TabBar({ C, tab, setTab, currentUser, isCadence }) {
+  // Bottom-nav active color = viewer color. In Cadence palette, C.mommy
+  // is amber (the brand gold) so this auto-adapts; no hardcode needed.
+  // v05.05bt214 — Caregiver persona uses sage green.
+  // v05.05bt329 — Cadence is purely a palette mode. Tabs are NEVER
+  // hidden by Cadence — user explicitly asked: 'cadence mode as a
+  // look ... without hiding buttons.'
   const isCaregiver = currentUser === "Caregiver";
+  const isSolo = isCadence;
+  // v05.05bt337 — In Cadence, viewerColor follows currentUser like
+  // family mode. Before bt337 it was hardcoded to C.mommy when solo,
+  // which meant Daddy viewing in Cadence still saw rose accents on
+  // his LOG button + tabs (wrong — should be slate-blue, his color).
   const viewerColor = isCaregiver ? "#7B9B6E" : (currentUser === "Daddy" ? C.daddy : C.mommy);
   const allTabs = [
     { id: "now",       label: "Now",      icon: Home },
@@ -35346,11 +35993,19 @@ function TabBar({ C, tab, setTab, currentUser }) {
       // so the top edge reads as a deliberate boundary, not an artifact
       // of the elevation shadow.
       background: C.panel,
-      borderTop: `1px solid ${C.line}30`,
-      // Soft elevation shadow above the panel — slightly stronger than
-      // bt43's value (0.08 vs 0.06) so the panel feels "set down on" the
-      // page rather than floating against it.
-      boxShadow: `0 -10px 28px rgba(31, 27, 22, 0.08)`,
+      // v05.05bt328/335 — Mommy: gold-tinted hairline + heavy bloom
+      // shadow (ambient warmth). Daddy: full-strength olive line +
+      // tighter shadow (architectural delineation, no bloom).
+      borderTop: isCadence
+        ? (currentUser === "Daddy"
+            ? `1px solid ${C.daddy}`
+            : `1px solid ${C.gold}40`)
+        : `1px solid ${C.line}30`,
+      boxShadow: isCadence
+        ? (currentUser === "Daddy"
+            ? `0 -4px 12px rgba(0, 0, 0, 0.55)`
+            : `0 -16px 40px rgba(0, 0, 0, 0.45), 0 -32px 64px ${C.gold}10`)
+        : `0 -10px 28px rgba(31, 27, 22, 0.08)`,
       zIndex: 6,
       // Extend background into the iOS home-indicator safe area so the
       // strip below the tab bar isn't bare white. The buttons stay above
