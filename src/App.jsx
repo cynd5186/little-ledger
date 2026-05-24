@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt382";
+const APP_VERSION = "2026.05.05bt383";
 const APP_BUILD_NOTES = [
-  "MILK TILE → MODAL + SOFTER GLOW. Per chat: 'lets go with softer glow ... when you tap on the inventory tiles, it is hard to see what shows up — is it better as a popup modal?' Yes. (1) MILK TILE → MODAL. Reverted bt378's inline-expand behavior. Tile onClick now calls onPickBottle(zoneKey), which opens UseBottleModal for that zone — the pre-bt378 flow. UseBottleModal already has all the use / edit / discard / move / log-anyway / bulk-manage affordances with proper room to breathe. The inline expand panel (renderExpanded + the slim Row component) is left in the file as dormant code so we can flip back if the modal-and-context tradeoff isn't worth it; nothing currently sets milkZoneExpanded so renderExpanded short-circuits to null. UseBottleModal's bt380 initialBottleId pre-select still works for any caller that wants to seed a specific bottle (the inline tile click doesn't, but other call sites might in the future). (2) NOW-LINE GLOW SOFTENED. The @keyframes nl-now-pill-pulse and nl-now-line-pulse keyframes dropped their outer 22px-44px halo layers and halved the remaining alphas (0.4-0.7 → 0.22-0.35). Pulse still breathes 2.4s ease-in-out so the live cursor stays identifiable, but no longer reads as a marquee. Matches mockup option B sent in chat.",
+  "SCROLLBAR FIX FOR 'WHITE BORDER ON THE RIGHT'. Per chat (with macOS Chrome screenshot): the 'white border' is the macOS Chrome default scrollbar — light-gray track on the right edge reads as a vertical white strip against the Cadence dark bg. Added webkit-scrollbar styling (8px width, 28% taupe thumb, transparent track) + firefox scrollbar-width: thin + scrollbar-color so the scrollbar blends with the dark bg. Page now paints continuously to the viewport edge.\n\nMILK TILE CLICK BUG IS NOT REPRODUCIBLE FROM CODE ALONE. The Tile is a <button> with onClick={() => onPickBottle && onPickBottle(zoneKey)}, no event blockers, no children with their own handlers. onPickBottle is correctly threaded App → OnDutyCard → MilkPanel → Tile via closure. Single click should fire onClick. The user reports it doesn't, but double-clicking on the bottle emoji does. This behavior is consistent with either (a) a JS error breaking the page mid-render so React's event handlers aren't attached to the button, or (b) a Chrome-on-Mac-specific quirk I can't see from the code. Needs the user to open Chrome DevTools console while clicking to surface what's happening. Not patched in this build pending diagnostic info.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt383", summary: "Scrollbar styling. Added ::-webkit-scrollbar rules (8px wide, transparent track, semi-transparent taupe thumb) + Firefox scrollbar-width/scrollbar-color equivalents. Eliminates the macOS Chrome default light-gray scrollbar track that was reading as a thin white border on the right edge of the dark Cadence palette. Page bg now paints continuously to the viewport edge. Build verified clean via esbuild. Milk tile single-click bug deferred — code chain is intact (Tile button has onClick={() => onPickBottle && onPickBottle(zoneKey)} with onPickBottle threaded through closures from App down) so the bug is either a JS error breaking the page mid-render or a Chrome-on-Mac quirk that needs DevTools console output to diagnose." },
   { version: "2026.05.05bt382", summary: "Milk tile reverted to opening UseBottleModal + softer NOW-line glow. (1) Tile onClick rewired from setMilkZoneExpanded(zoneKey) back to onPickBottle(zoneKey) — restores the pre-bt378 modal flow where use/edit/discard/move/log-anyway/bulk-manage have full room. Inline renderExpanded + Row component left as dormant code (no caller sets milkZoneExpanded). UseBottleModal initialBottleId pre-select (bt380) preserved for future callers. (2) @keyframes nl-now-pill-pulse and nl-now-line-pulse rewritten per mockup option B: dropped outer halo layers (was 3 stacked shadows including 0 0 22-44px outermost), halved alpha (0.4-0.7 → 0.22-0.35), kept inset highlight on pill and 2.4s pulse rate. Build verified clean via esbuild." },
   { version: "2026.05.05bt381", summary: "Brain Dump modal bottom cutoff. The hand-rolled bottom-sheet (showBrainDump) was missing env(safe-area-inset-bottom) padding so the submit button slid under the iOS home indicator. Added paddingBottom: calc(24px + env(safe-area-inset-bottom, 0px)) plus maxHeight: calc(100dvh - 60px) + overflowY: auto so keyboard-induced viewport shrink doesn't push the sheet off-screen. Build verified clean via esbuild." },
   { version: "2026.05.05bt228", summary: "Visual split of free rows at shift boundaries. (1) Inside the dayTimeline useMemo, captured buildDayTimeline output as rawTimeline. (2) New post-processing helper splitFreeAtBoundaries(items) walks the timeline: for each item where kind !== 'free' OR start/end missing, passes through unchanged. For each free item, collects shift-boundary timestamps from activeShifts.Mommy + activeShifts.Daddy that fall strictly within [item.start, item.end]. If no internal cuts, passes through unchanged. Otherwise generates one sub-item per [cut[i], cut[i+1]] range. Sub-items with durationMin < 5 are dropped (slivers). (3) useMemo returns splitFreeAtBoundaries(rawTimeline). SCOPING: 1 helper + 1 final return wrap inside the existing dayTimeline useMemo. Zero changes to buildDayTimeline, scheduler, schema, palette, modals. Build verified clean via esbuild." },
@@ -10197,6 +10198,35 @@ function FontImports() {
       button { font-family: inherit; }
       button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
       input { font-family: inherit; }
+      /* v05.05bt383 — Per chat (with screenshot): 'still have the white
+         border at the edges'. Diagnosed: it's the macOS Chrome default
+         scrollbar — light-gray track on the right edge reads as a thin
+         white vertical strip against the Cadence dark bg. Styled to be
+         dark and unobtrusive so the page bg paints continuously to the
+         viewport edge. Webkit-prefixed (Chrome/Safari/Edge); Firefox uses
+         the existing scrollbarWidth: thin where applied locally. */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+        background: transparent;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(155, 143, 127, 0.28);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(155, 143, 127, 0.50);
+      }
+      ::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+      html {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(155, 143, 127, 0.28) transparent;
+      }
       /* v05.05bt56 — iOS Safari zoom-on-focus fix. iOS auto-zooms when a
          focused input has computed font-size < 16px. Forcing 16px on all
          form controls suppresses the zoom while preserving small visual
