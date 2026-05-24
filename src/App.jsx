@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt353";
+const APP_VERSION = "2026.05.05bt355";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -12186,12 +12186,166 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         );
       })()}
 
-      {/* RT and Fridge side by side — tap to use a bottle (when bottles
-          exist) or add one (when empty). Empty tiles are NOT disabled in
-          v05.05bb; tapping an empty tile opens the bottle picker which
-          surfaces an Add-bottle affordance.
-          Each tile shows: oz total, then a row of bottle emojis (one per bottle, up to 3,
-          then "+N" overflow), with each bottle's individual expiry time underneath. */}
+      {/* v05.05bt353 — Per chat: 'lets reorganize the milk tab - it
+          has gotten out of control...freezer timer should be in days
+          or weeks not hours. And i wanted it to be one single panel
+          split in left middle and right to avoid taking more
+          vertical space.' Restructured RT + Fridge + Freezer into a
+          single 3-column row. Compact tiles drop bottle-emoji
+          preview rows (tap to open the picker for full detail) so
+          each tile fits in 1/3 width on a phone. Days/weeks math is
+          already handled by fmtSmartDuration for freezer items. */}
+      {(() => {
+        const freezerBottles = freezerItems || [];
+        const freezerTotalOz = freezerBottles.reduce((s, b) => s + b.oz, 0);
+        const hasFreezer = freezerBottles.length > 0;
+        const tileBase = {
+          background: C.paper, borderRadius: 8,
+          padding: "10px 8px",
+          cursor: "pointer",
+          textAlign: "left", fontFamily: "inherit",
+          minHeight: 88,
+          display: "flex", flexDirection: "column",
+          justifyContent: "space-between",
+        };
+        return (
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 8, marginBottom: 10,
+          }}>
+            {/* RT */}
+            <button
+              onClick={() => onPickBottle && onPickBottle("rt")}
+              style={{
+                ...tileBase,
+                border: `1px solid ${expiryUrgent || expiryRisky ? C.accent : expiryWarn ? C.gold : C.line + "22"}`,
+                opacity: rtSafeOz > 0 ? 1 : 0.7,
+              }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase",
+                color: C.muted, fontWeight: 700,
+              }}>
+                Room temp
+              </div>
+              <div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                  color: expiryUrgent || expiryRisky ? C.accent : C.ink, lineHeight: 1.05,
+                }}>
+                  {rtSafeOz.toFixed(1)} <span style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>oz</span>
+                </div>
+                <div style={{
+                  fontSize: 9, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+                  marginTop: 2,
+                }}>
+                  {sortedRT.length === 0 ? "tap to add" : `${sortedRT.length} bottle${sortedRT.length === 1 ? "" : "s"}`}
+                </div>
+                {(() => {
+                  // Show the most-urgent bottle's expiry time inline
+                  const urgent = sortedRT.find(b => b.remaining < 2);
+                  if (!urgent) return null;
+                  return (
+                    <div style={{
+                      fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+                      color: urgent.remaining < 1 ? C.accent : C.gold,
+                      fontWeight: 700, marginTop: 2,
+                    }}>
+                      ⚠ {fmtHours(urgent.remaining)} oldest
+                    </div>
+                  );
+                })()}
+              </div>
+            </button>
+
+            {/* FRIDGE */}
+            <button
+              onClick={() => onPickBottle && onPickBottle("fridge")}
+              style={{
+                ...tileBase,
+                border: `1px solid ${C.line}22`,
+                opacity: fridgeOz > 0 ? 1 : 0.7,
+              }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase",
+                color: C.muted, fontWeight: 700,
+              }}>
+                Fridge
+              </div>
+              <div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                  color: C.ink, lineHeight: 1.05,
+                }}>
+                  {fridgeOz.toFixed(1)} <span style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>oz</span>
+                </div>
+                <div style={{
+                  fontSize: 9, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+                  marginTop: 2,
+                }}>
+                  {(fridgeItems || []).length === 0
+                    ? "tap to add"
+                    : `${(fridgeItems || []).length} bottle${(fridgeItems || []).length === 1 ? "" : "s"}`}
+                </div>
+              </div>
+            </button>
+
+            {/* FREEZER */}
+            <button
+              onClick={() => onPickBottle && onPickBottle("freezer")}
+              style={{
+                ...tileBase,
+                background: hasFreezer ? C.paper : "transparent",
+                border: hasFreezer ? `1px solid ${C.line}22` : `1px dashed ${C.line}33`,
+              }}>
+              <div style={{
+                fontSize: 9, letterSpacing: "0.16em", textTransform: "uppercase",
+                color: C.muted, fontWeight: 700,
+              }}>
+                <span style={{ marginRight: 3 }}>🧊</span>Freezer
+              </div>
+              <div>
+                {hasFreezer ? (
+                  <>
+                    <div style={{
+                      fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                      color: C.ink, lineHeight: 1.05,
+                    }}>
+                      {freezerTotalOz.toFixed(1)} <span style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>oz</span>
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+                      marginTop: 2,
+                    }}>
+                      {freezerBottles.length} bag{freezerBottles.length === 1 ? "" : "s"}
+                    </div>
+                    {(() => {
+                      // Oldest bag — days/weeks/months remaining via fmtSmartDuration
+                      const sorted = [...freezerBottles].sort((a, b) => (a.remaining || 0) - (b.remaining || 0));
+                      const oldest = sorted[0];
+                      if (!oldest) return null;
+                      return (
+                        <div style={{
+                          fontSize: 9, color: C.muted, fontFamily: "'JetBrains Mono', monospace",
+                          marginTop: 2, fontWeight: 600,
+                        }}>
+                          {fmtSmartDuration(oldest.remaining)} oldest
+                        </div>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
+                    empty · tap to add
+                  </div>
+                )}
+              </div>
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Old 2-col + freezer strip removed in bt353; see 3-column above */}
+      {false && (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
         <button
           onClick={() => onPickBottle && onPickBottle("rt")}
@@ -12368,62 +12522,10 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
           )}
         </button>
       </div>
+      )}
 
-      {/* Freezer strip — appears below the RT/Fridge tiles. Slim full-width
-          strip showing freezer total + bottle count. Tap to open picker
-          filtered to freezer. Always rendered (even when empty) so users
-          remember they can pick frozen milk OR add a frozen bottle
-          retroactively. v05.05bt21. */}
-      {(() => {
-        const freezerBottles = freezerItems || [];
-        const freezerOz = freezerBottles.reduce((s, b) => s + b.oz, 0);
-        const hasFreezer = freezerBottles.length > 0;
-        return (
-          <button
-            onClick={() => onPickBottle && onPickBottle("freezer")}
-            style={{
-              width: "100%",
-              background: hasFreezer ? C.paper : "transparent",
-              borderRadius: 8, padding: "8px 12px",
-              border: hasFreezer
-                ? `1px solid ${C.line}22`
-                : `1px dashed ${C.line}33`,
-              cursor: "pointer",
-              textAlign: "left", fontFamily: "inherit",
-              marginBottom: 10,
-              display: "flex", alignItems: "center", gap: 12,
-            }}>
-            <span style={{ fontSize: 16 }}>🧊</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase",
-                color: C.muted, fontWeight: 600,
-              }}>
-                Freezer
-                <span style={{ opacity: 0.6 }}>
-                  {hasFreezer ? " · tap to use or add" : " · tap to add a frozen bottle"}
-                </span>
-              </div>
-              {hasFreezer ? (
-                <div style={{
-                  fontFamily: "'Cormorant Garamond', serif", fontSize: 16,
-                  fontWeight: 500, color: C.ink, marginTop: 1, lineHeight: 1.2,
-                }}>
-                  {freezerOz.toFixed(1)} oz
-                  <span style={{ color: C.muted, fontSize: 11, fontStyle: "italic", marginLeft: 6 }}>
-                    · {freezerBottles.length} bottle{freezerBottles.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-              ) : (
-                <div style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 2, fontStyle: "italic" }}>
-                  empty
-                </div>
-              )}
-            </div>
-            <ChevronRight size={14} color={C.muted} />
-          </button>
-        );
-      })()}
+      {/* v05.05bt353 — Old standalone freezer strip removed; freezer
+          is now part of the 3-column row above. */}
 
       {/* Last bottle pumped — info display, more readable */}
       {lastPumpedItem && (
@@ -16770,6 +16872,42 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
     setTasks(prev => prev.filter(t => !bulkSelected.has(t.id)));
     setBulkSelected(new Set());
   };
+
+  // v05.05bt353 — Per chat: 'sometimes there are duplicates so need
+  // to check for that and remove them.' Detect tasks with identical
+  // titles (case-insensitive, trimmed, completedAt-blind so an
+  // open + done copy count as dupes). Keeps newest, offers to
+  // remove the rest.
+  const duplicateGroups = useMemo(() => {
+    const buckets = new Map();
+    for (const t of tasks) {
+      if (t.completedAt) continue; // ignore done items in dedupe
+      const key = (t.title || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(t);
+    }
+    return Array.from(buckets.entries())
+      .filter(([_, items]) => items.length >= 2)
+      .map(([key, items]) => ({
+        key, title: items[0].title,
+        items: items.slice().sort((a, b) =>
+          new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+        ),
+      }));
+  }, [tasks]);
+  const removeDuplicates = () => {
+    if (duplicateGroups.length === 0) return;
+    if (typeof window !== "undefined" && !window.confirm(
+      `Found ${duplicateGroups.reduce((s, g) => s + g.items.length - 1, 0)} duplicate task${duplicateGroups.reduce((s, g) => s + g.items.length - 1, 0) === 1 ? "" : "s"}. Keep newest of each and remove the rest?`
+    )) return;
+    const toRemove = new Set();
+    for (const g of duplicateGroups) {
+      // Keep first (newest); remove rest.
+      for (let i = 1; i < g.items.length; i++) toRemove.add(g.items[i].id);
+    }
+    setTasks(prev => prev.filter(t => !toRemove.has(t.id)));
+  };
   // v05.05bt349/350 — Per chat: 'Collapse categories by default.'
   // Switched from collapsedGroups (start expanded) to expandedGroups
   // (start collapsed). Counts are visible in headers so user can scan
@@ -16783,6 +16921,64 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
     });
   };
   const isGroupOpen = (key) => expandedGroups.has(key);
+  // v05.05bt353 — Per chat: 'under the all tasks, let me drag to
+  // reorder categories or let me choose how the categories are
+  // ordered.' Custom sort order persisted to localStorage. Default
+  // sort (count desc / UNCATEGORIZED last) used for any group not in
+  // the saved order; groups in saved order come first in saved
+  // position. Reorder via ↑↓ arrows on each group header (drag is
+  // unreliable on touch screens, so explicit buttons instead).
+  const [taskGroupOrder, setTaskGroupOrderState] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ll:taskGroupOrder");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
+  const setTaskGroupOrder = (next) => {
+    setTaskGroupOrderState(next);
+    try { localStorage.setItem("ll:taskGroupOrder", JSON.stringify(next)); } catch {}
+  };
+  const moveGroup = (key, delta) => {
+    // Build current effective order (saved + any new groups appended)
+    setTaskGroupOrder((() => {
+      const cur = taskGroupOrder.slice();
+      const idx = cur.indexOf(key);
+      if (idx < 0) {
+        // Not yet in order — add at end, then try moving from there
+        cur.push(key);
+      }
+      const newIdx = cur.indexOf(key) + delta;
+      if (newIdx < 0 || newIdx >= cur.length) return cur;
+      const tgt = cur[newIdx];
+      cur[newIdx] = key;
+      cur[cur.indexOf(key)] = tgt;
+      return cur;
+    })());
+  };
+  // v05.05bt353 — Rename group. Per chat: 'Rename a group — currently
+  // you can override individual tasks, but if you rename LIMS →
+  // LIMSv2, child tasks don't bulk-rename.' Pencil icon opens a small
+  // prompt; bulk-updates every task's taskGroup field from old to new.
+  const renameGroup = (oldKey) => {
+    if (typeof window === "undefined") return;
+    const nextRaw = window.prompt(
+      `Rename "${oldKey}" — enter the new name. All tasks in this group will be retagged.`,
+      oldKey
+    );
+    if (!nextRaw) return;
+    const next = nextRaw.trim().toUpperCase();
+    if (!next || next === oldKey) return;
+    setTasks(prev => prev.map(t => {
+      const key = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
+      if (key !== oldKey) return t;
+      return { ...t, taskGroup: next };
+    }));
+    // Update the saved order array too so the rename sticks.
+    if (taskGroupOrder.includes(oldKey)) {
+      setTaskGroupOrder(taskGroupOrder.map(k => k === oldKey ? next : k));
+    }
+  };
   // v05.05bt152 — Two-tap delete state, scoped to this view only.
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const pendingDeleteTimerRef = useRef(null);
@@ -16877,8 +17073,19 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         items,
         isUncat: key === "UNCATEGORIZED",
       }));
+    // v05.05bt353 — Apply custom order (from up/down arrow reorder)
+    // before count-desc fallback. Saved keys come first in saved
+    // position; new groups (not yet reordered) fall back to count
+    // desc / alphabetical. UNCATEGORIZED always last.
     entries.sort((a, b) => {
       if (a.isUncat !== b.isUncat) return a.isUncat ? 1 : -1;
+      const ai = taskGroupOrder.indexOf(a.key);
+      const bi = taskGroupOrder.indexOf(b.key);
+      if (ai !== -1 || bi !== -1) {
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      }
       if (b.items.length !== a.items.length) return b.items.length - a.items.length;
       return a.label.localeCompare(b.label);
     });
@@ -17021,10 +17228,43 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         ))}
       </div>
 
-      {/* v05.05bt351 — Quick filter chips. Regret ≥4 and deep-only.
-          Per chat: 'now instead of a long list we have categories
-          and can filter by regret score and deep work.' Always
-          visible; chips toggle the filter on/off. */}
+      {/* v05.05bt353 — Duplicate-detection banner. Shows when 1+
+          duplicate groups are detected; tap removes the older copies. */}
+      {duplicateGroups.length > 0 && (
+        <button
+          onClick={removeDuplicates}
+          style={{
+            width: "100%",
+            background: `${C.gold}1a`,
+            border: `1px solid ${C.gold}55`,
+            borderRadius: 8,
+            padding: "8px 12px",
+            marginBottom: 10,
+            cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8,
+            fontFamily: "inherit",
+          }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9.5, letterSpacing: "0.16em",
+            fontWeight: 700, color: C.gold, textTransform: "uppercase",
+          }}>↳ duplicates</span>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontStyle: "italic", fontSize: 13,
+            color: C.ink, flex: 1,
+          }}>
+            {duplicateGroups.length} title{duplicateGroups.length === 1 ? "" : "s"} appear{duplicateGroups.length === 1 ? "s" : ""} more than once
+          </span>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, letterSpacing: "0.08em",
+            fontWeight: 800, color: C.gold,
+          }}>MERGE ↗</span>
+        </button>
+      )}
+
+      {/* v05.05bt351 — Quick filter chips. */}
       <div style={{
         display: "flex", gap: 6, marginBottom: 10, alignItems: "center",
         flexWrap: "wrap",
@@ -17147,7 +17387,81 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       {/* Groups */}
       {groups.map(g => (
         <div key={g.key} style={{ marginBottom: 18 }}>
-          {filter === "all" && (
+          {useCategoryGroups && !g.isDone && (
+            <div style={{
+              width: "100%",
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "10px 4px 8px", marginBottom: 4,
+            }}>
+              <button
+                onClick={() => toggleGroup(g.key)}
+                style={{
+                  flex: 1,
+                  background: "transparent", border: "none",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, letterSpacing: "0.20em", textTransform: "uppercase",
+                  fontWeight: 700, color: g.color,
+                  padding: 0,
+                  display: "flex", alignItems: "center", gap: 10,
+                  cursor: "pointer", textAlign: "left",
+                }}>
+                <span style={{
+                  display: "inline-block",
+                  width: 12, fontSize: 12, opacity: 0.7,
+                  transform: !isGroupOpen(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
+                  transition: "transform 0.15s",
+                }}>▾</span>
+                <span>{g.label}</span>
+                <span style={{
+                  opacity: 0.95,
+                  background: `${g.color}1f`,
+                  color: g.color,
+                  borderRadius: 5,
+                  padding: "2px 8px",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.02em",
+                }}>{g.items.length}</span>
+              </button>
+              {/* v05.05bt353 — Per chat: 'continue with drag to
+                  reorder.' Up/down arrows + rename pencil per
+                  group header. Drag was unreliable on touch; explicit
+                  buttons keep it deterministic. */}
+              {!g.isUncat && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveGroup(g.key, -1); }}
+                    title="Move group up"
+                    style={{
+                      background: "transparent", border: `1px solid ${C.line}33`,
+                      borderRadius: 4, padding: "2px 6px",
+                      fontSize: 11, color: C.muted, cursor: "pointer",
+                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                    }}>↑</button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveGroup(g.key, 1); }}
+                    title="Move group down"
+                    style={{
+                      background: "transparent", border: `1px solid ${C.line}33`,
+                      borderRadius: 4, padding: "2px 6px",
+                      fontSize: 11, color: C.muted, cursor: "pointer",
+                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                    }}>↓</button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); renameGroup(g.key); }}
+                    title="Rename group"
+                    style={{
+                      background: "transparent", border: `1px solid ${C.line}33`,
+                      borderRadius: 4, padding: "2px 6px",
+                      fontSize: 11, color: C.muted, cursor: "pointer",
+                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                    }}>✎</button>
+                </>
+              )}
+              <span style={{ flex: 0, height: 1, background: `${g.color}33` }} />
+            </div>
+          )}
+          {filter === "all" && (g.isDone || (!useCategoryGroups)) && (
             <button
               onClick={() => toggleGroup(g.key)}
               style={{
@@ -17177,11 +17491,6 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               }}>{g.items.length}</span>
-              {/* v05.05bt351/352 — Per chat (bt352): 'i dont like the
-                  select all.' Group-level bulk-select chip removed.
-                  Individual row taps still open EditTaskModal as
-                  before; deletion goes through EditTaskModal's
-                  delete button. */}
               <span style={{ flex: 1, height: 1, background: `${g.color}33` }} />
             </button>
           )}
@@ -17238,17 +17547,41 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   }} />
                   {t.title}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {t.regretScore && t._status !== "done" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {t.regretScore != null && t._status !== "done" && (
                     <span style={{
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 10, fontWeight: 700,
                       color: fmtRegretColor(t.regretScore),
                     }}>R{t.regretScore}</span>
                   )}
-                  {/* v05.05bt152 — Delete button lives ONLY here, in the
-                      All Tasks view. Two-tap confirm (first turns red,
-                      second deletes). Wider hit target than the timeline. */}
+                  {/* v05.05bt353 — Per chat: 'on the all tasks, i see
+                      where i can click on delete but i think it would
+                      be good to click on done so maybe a little check
+                      mark as well.' Toggles completedAt directly. */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const nowIso = new Date().toISOString();
+                      setTasks(prev => prev.map(x =>
+                        x.id === t.id
+                          ? { ...x, completedAt: x.completedAt ? null : nowIso }
+                          : x
+                      ));
+                    }}
+                    title={t._status === "done" ? "Mark not done" : "Mark done"}
+                    style={{
+                      width: 24, height: 24, borderRadius: "50%",
+                      background: t._status === "done" ? "#7B9B6E" : "transparent",
+                      color: "#fff", fontSize: 12, fontWeight: 700,
+                      border: t._status === "done" ? "none" : `1.5px solid #7B9B6E66`,
+                      cursor: "pointer", padding: 0, lineHeight: 1,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0,
+                    }}>
+                    {t._status === "done" ? "✓" : ""}
+                  </button>
+                  {/* Delete (× → confirm) */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -23215,7 +23548,7 @@ function parsePreviewCommand(text, previewTasks) {
   };
 }
 
-function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApply }) {
+function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApply, onPreviewMutate }) {
   // v05.05bt189 — Per chat: 'should have the app go through the
   // algorithm and show a preview of what the proposed schedule is and
   // another option with clear explanation as to why and have free text
@@ -23244,6 +23577,42 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
     } else {
       setHint({ ok: false, message: result.message });
     }
+  };
+
+  // v05.05bt354 — Reorder + schedule/unschedule helpers. Operate on
+  // the preview.tasks array via onPreviewMutate so the change is
+  // reflected before lock-in.
+  const swapScheduled = (i, j) => {
+    if (!onPreviewMutate) return;
+    const allScheduled = preview.tasks
+      .filter(t => t.scheduledTime)
+      .sort((a, b) => {
+        const [ah, am] = a.scheduledTime.split(":").map(Number);
+        const [bh, bm] = b.scheduledTime.split(":").map(Number);
+        return (ah * 60 + (am || 0)) - (bh * 60 + (bm || 0));
+      });
+    if (i < 0 || j < 0 || i >= allScheduled.length || j >= allScheduled.length) return;
+    const ta = allScheduled[i], tb = allScheduled[j];
+    // Swap scheduledTime so the time slots stay anchored but the
+    // task assignments flip.
+    const next = preview.tasks.map(t => {
+      if (t.id === ta.id) return { ...t, scheduledTime: tb.scheduledTime };
+      if (t.id === tb.id) return { ...t, scheduledTime: ta.scheduledTime };
+      return t;
+    });
+    onPreviewMutate(next);
+  };
+  const unscheduleTask = (id) => {
+    if (!onPreviewMutate) return;
+    onPreviewMutate(preview.tasks.map(t =>
+      t.id === id ? { ...t, scheduledTime: null } : t
+    ));
+  };
+  const scheduleTaskAt = (id, time) => {
+    if (!onPreviewMutate) return;
+    onPreviewMutate(preview.tasks.map(t =>
+      t.id === id ? { ...t, scheduledTime: time } : t
+    ));
   };
 
   const scheduled = preview.tasks.filter(t => t.scheduledTime);
@@ -23298,23 +23667,16 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
         {/* Scheduled tasks */}
         {scheduledSorted.length > 0 && (
           <div style={{ marginBottom: unscheduled.length > 0 ? 14 : 18 }}>
-            {scheduledSorted.map(t => (
+            {scheduledSorted.map((t, i) => (
               <div key={t.id} style={{
                 padding: "10px 12px",
                 marginBottom: 6,
-                // v05.05bt331 — Was hardcoded #FDFAF1 cream. In Cadence
-                // mode, the surrounding page is dark slate but these
-                // cards stayed cream — and the text inside (C.ink)
-                // was bright cream too, making the card text invisible
-                // (cream-on-cream). Swap to C.paper so the card surface
-                // tracks the palette: cream in family, dark slate in
-                // Cadence. C.ink text then contrasts properly in both.
                 background: C.paper,
                 border: `1px solid ${C.line}22`,
                 borderRadius: 6,
                 borderLeft: `4px solid ${C.mommy}`,
               }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 11, color: C.ink, fontWeight: 700,
@@ -23326,8 +23688,52 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                   }}>{t.title}</span>
                   <span style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, color: C.muted,
+                    fontSize: 10, color: C.muted, flexShrink: 0,
                   }}>{t.effortMin}m</span>
+                  {/* v05.05bt354 — Reorder + unschedule controls. */}
+                  {onPreviewMutate && (
+                    <div style={{ display: "flex", gap: 3, marginLeft: 4 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); swapScheduled(i, i - 1); }}
+                        disabled={i === 0}
+                        title="Swap with task above"
+                        style={{
+                          background: "transparent",
+                          border: `1px solid ${C.line}33`,
+                          borderRadius: 4, padding: "2px 6px",
+                          fontSize: 11, color: i === 0 ? C.muted + "55" : C.muted,
+                          cursor: i === 0 ? "default" : "pointer",
+                          fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                          opacity: i === 0 ? 0.4 : 1,
+                        }}>↑</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); swapScheduled(i, i + 1); }}
+                        disabled={i === scheduledSorted.length - 1}
+                        title="Swap with task below"
+                        style={{
+                          background: "transparent",
+                          border: `1px solid ${C.line}33`,
+                          borderRadius: 4, padding: "2px 6px",
+                          fontSize: 11, color: i === scheduledSorted.length - 1 ? C.muted + "55" : C.muted,
+                          cursor: i === scheduledSorted.length - 1 ? "default" : "pointer",
+                          fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                          opacity: i === scheduledSorted.length - 1 ? 0.4 : 1,
+                        }}>↓</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); unscheduleTask(t.id); }}
+                        title="Move to Couldn't fit"
+                        style={{
+                          background: "transparent",
+                          border: `1px solid ${C.accent}44`,
+                          borderRadius: 4, padding: "2px 6px",
+                          fontSize: 10, color: C.accent, fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          letterSpacing: "0.06em",
+                          minHeight: 24,
+                        }}>↓UN</button>
+                    </div>
+                  )}
                 </div>
                 {preview.reasons && preview.reasons[t.id] && (
                   <div style={{
@@ -23359,15 +23765,36 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                 border: `1px dashed ${C.accent}44`,
                 borderRadius: 6,
               }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{
                     fontFamily: "'Cormorant Garamond', serif",
                     fontSize: 14, color: C.ink, fontWeight: 500, flex: 1,
                   }}>{t.title}</span>
                   <span style={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, color: C.muted,
+                    fontSize: 10, color: C.muted, flexShrink: 0,
                   }}>{t.effortMin}m</span>
+                  {/* v05.05bt354 — Schedule-at affordance. Native time
+                      input on tap (mobile-friendly), no new modal. */}
+                  {onPreviewMutate && (
+                    <input
+                      type="time"
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (e.target.value) scheduleTaskAt(t.id, e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        background: C.paper,
+                        border: `1px solid ${C.mommy}66`,
+                        borderRadius: 4, padding: "3px 6px",
+                        fontSize: 11, color: C.ink,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        cursor: "pointer",
+                      }}
+                      title="Pick a time to schedule"
+                    />
+                  )}
                 </div>
                 {preview.reasons && preview.reasons[t.id] && (
                   <div style={{
@@ -26095,6 +26522,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // is currently showing the picker (slot key = start ms). Tap "fits"
   // expands the candidate list; tap a specific candidate to slot it.
   const [fitsPickerSlotKey, setFitsPickerSlotKey] = useState(null);
+  // v05.05bt354 — Per chat: 'lets do D hybrid for adding a task to a
+  // block.' Active category in the fits picker. "all" = show every
+  // category with section headers between clusters. Specific key =
+  // filter to that category only. Resets on picker close.
+  const [fitsCategoryFilter, setFitsCategoryFilter] = useState("all");
+  useEffect(() => {
+    if (fitsPickerSlotKey === null) setFitsCategoryFilter("all");
+  }, [fitsPickerSlotKey]);
   // v05.05bt321 — Per chat (screenshot): 'should be able to cancel out
   // of open tap fill if doesnt make sense to be there.' Set of free
   // block keys (epoch ms of start time) the user has dismissed for
@@ -28032,6 +28467,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   };
 
   const regretLabels = {
+    0: "Someday · no rush",
     1: "Tomorrow's fine",
     2: "Prefer today",
     3: "Slightly behind if not",
@@ -28039,6 +28475,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     5: "Cannot push to tomorrow",
   };
   const regretColors = {
+    // v05.05bt353 — Per chat: 'should there be a R0 score - or
+    // basically something where i am putting it down on my to do
+    // because i eventually need to do it but not anytime soon-ish.'
+    // R0 = someday/whenever bucket. Muted opacity so it visually
+    // recedes vs R1-5 (which are still "today-ish" priorities).
+    0: `${C.muted}aa`,
     1: C.muted,
     2: C.muted,
     3: C.gold,
@@ -28427,8 +28869,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 color: C.muted, fontWeight: 700, marginBottom: 4,
                 fontFamily: "'JetBrains Mono', monospace",
               }}>Priority · {regretLabels[draftRegret]}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
-                {[1, 2, 3, 4, 5].map(n => (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 3 }}>
+                {[0, 1, 2, 3, 4, 5].map(n => (
                   <button
                     key={n}
                     onClick={() => setDraftRegret(n)}
@@ -28439,6 +28881,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       borderRadius: 6, padding: "6px 0",
                       fontSize: 12, fontWeight: 600, cursor: "pointer",
                       fontFamily: "'JetBrains Mono', monospace",
+                      opacity: n === 0 ? 0.7 : 1,
                     }}>
                     {n}
                   </button>
@@ -31367,6 +31810,59 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
                                       }}>×</button>
                                     </div>
+                                    {/* v05.05bt354 — D hybrid: category
+                                        chips at top. Compute breakdown
+                                        from candidates only (not movable
+                                        — those are already-scheduled). */}
+                                    {(() => {
+                                      const breakdown = new Map();
+                                      for (const c of candidates) {
+                                        const key = String(c.taskGroup || inferTaskGroup(c.title) || "UNCATEGORIZED").toUpperCase();
+                                        breakdown.set(key, (breakdown.get(key) || 0) + 1);
+                                      }
+                                      const cats = Array.from(breakdown.entries())
+                                        .sort((a, b) => b[1] - a[1]);
+                                      if (cats.length < 2) return null;
+                                      return (
+                                        <div style={{
+                                          display: "flex", gap: 4, flexWrap: "wrap",
+                                          marginBottom: 8, paddingBottom: 8,
+                                          borderBottom: `1px dashed ${C.line}33`,
+                                        }}>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); setFitsCategoryFilter("all"); }}
+                                            style={{
+                                              fontFamily: "'JetBrains Mono', monospace",
+                                              fontSize: 8.5, letterSpacing: "0.10em",
+                                              fontWeight: 700, textTransform: "uppercase",
+                                              padding: "2px 7px", borderRadius: 4,
+                                              background: fitsCategoryFilter === "all" ? `${C.mommy}22` : "transparent",
+                                              color: fitsCategoryFilter === "all" ? C.mommy : C.muted,
+                                              border: `1px solid ${fitsCategoryFilter === "all" ? C.mommy + "55" : C.line + "33"}`,
+                                              cursor: "pointer",
+                                            }}>
+                                            All <span style={{ opacity: 0.6 }}>{candidates.length}</span>
+                                          </button>
+                                          {cats.map(([key, n]) => (
+                                            <button
+                                              key={key}
+                                              onClick={(e) => { e.stopPropagation(); setFitsCategoryFilter(key); }}
+                                              style={{
+                                                fontFamily: "'JetBrains Mono', monospace",
+                                                fontSize: 8.5, letterSpacing: "0.10em",
+                                                fontWeight: 700, textTransform: "uppercase",
+                                                padding: "2px 7px", borderRadius: 4,
+                                                background: fitsCategoryFilter === key ? `${C.mommy}22` : "transparent",
+                                                color: fitsCategoryFilter === key ? C.mommy : C.muted,
+                                                border: `1px solid ${fitsCategoryFilter === key ? C.mommy + "55" : C.line + "33"}`,
+                                                cursor: "pointer",
+                                              }}>
+                                              {key} <span style={{ opacity: 0.6 }}>{n}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()}
                                     {/* Section: Move from elsewhere */}
                                     {movable.length > 0 && (
                                       <>
@@ -31427,7 +31923,91 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         }}>↳ Or add unscheduled · {candidates.length}</div>
                                       </>
                                     )}
-                                    {candidates.slice(0, topCount).map((c, idx) => {
+                                    {/* v05.05bt354 — Section: Or add unscheduled
+                                        (D hybrid). When filter === "all", group
+                                        candidates by category with thin headers
+                                        between clusters. When filter is a
+                                        specific key, render flat filtered list. */}
+                                    {(() => {
+                                      const taskCat = (c) => String(c.taskGroup || inferTaskGroup(c.title) || "UNCATEGORIZED").toUpperCase();
+                                      const filtered = fitsCategoryFilter === "all"
+                                        ? candidates
+                                        : candidates.filter(c => taskCat(c) === fitsCategoryFilter);
+                                      const limited = filtered.slice(0, topCount);
+                                      const buckets = new Map();
+                                      for (const c of limited) {
+                                        const k = taskCat(c);
+                                        if (!buckets.has(k)) buckets.set(k, []);
+                                        buckets.get(k).push(c);
+                                      }
+                                      const ordered = Array.from(buckets.entries());
+                                      return ordered.map(([catKey, group], gi) => (
+                                        <React.Fragment key={catKey}>
+                                          {fitsCategoryFilter === "all" && (
+                                            <div style={{
+                                              fontFamily: "'JetBrains Mono', monospace",
+                                              fontSize: 8.5, color: C.muted, fontWeight: 700,
+                                              letterSpacing: "0.10em", textTransform: "uppercase",
+                                              padding: gi === 0 ? "2px 0 3px" : "8px 0 3px",
+                                              borderTop: gi === 0 ? "none" : `1px dashed ${C.line}22`,
+                                            }}>{catKey} · {group.length}</div>
+                                          )}
+                                          {group.map((c, idx) => {
+                                            const fl = normalizeFocus(c.focusLevel);
+                                            const flGlyph = fl === "deep" ? "🧠" : "🍃";
+                                            const isLeftover = c.scheduledDate && c.scheduledDate < todayISO;
+                                            return (
+                                              <button
+                                                key={c.id}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setTasks(prev => prev.map(t => t.id === c.id ? { ...t, scheduledTime: slotTime, scheduledDate: todayISO, _couldNotFit: false, pinned: true } : t));
+                                                  setFitsPickerSlotKey(null);
+                                                }}
+                                                style={{
+                                                  display: "flex", alignItems: "center", gap: 8,
+                                                  width: "100%", padding: "5px 6px",
+                                                  background: "transparent",
+                                                  border: "none", borderTop: idx === 0 ? "none" : `1px solid ${C.line}22`,
+                                                  cursor: "pointer", textAlign: "left",
+                                                  fontFamily: "inherit",
+                                                }}>
+                                                <span style={{ fontSize: 12 }}>{flGlyph}</span>
+                                                <span style={{
+                                                  fontFamily: "'JetBrains Mono', monospace",
+                                                  fontSize: 10, fontWeight: 700,
+                                                  color: regretColors[c.regretScore],
+                                                }}>R{c.regretScore}</span>
+                                                <span style={{
+                                                  flex: 1, color: C.ink,
+                                                  fontFamily: "'Cormorant Garamond', serif",
+                                                  fontSize: 13,
+                                                }}>
+                                                  {c.title}
+                                                  {isLeftover && (
+                                                    <span style={{
+                                                      marginLeft: 6,
+                                                      fontFamily: "'JetBrains Mono', monospace",
+                                                      fontSize: 8.5, color: C.gold, fontWeight: 700,
+                                                      letterSpacing: "0.1em",
+                                                    }}>↩ YESTERDAY</span>
+                                                  )}
+                                                </span>
+                                                <span style={{
+                                                  fontFamily: "'JetBrains Mono', monospace",
+                                                  fontSize: 10, color: C.muted, fontWeight: 600,
+                                                }}>{c.effortMin || 30}m</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </React.Fragment>
+                                      ));
+                                    })()}
+                                    {/* v05.05bt354 — Original flat candidates
+                                        list replaced by the category-grouped
+                                        renderer above. Leaving false-gated
+                                        block to preserve diff readability. */}
+                                    {false && candidates.slice(0, topCount).map((c, idx) => {
                                       const fl = normalizeFocus(c.focusLevel);
                                       const flGlyph = fl === "deep" ? "🧠" : "🍃";
                                       const isLeftover = c.scheduledDate && c.scheduledDate < todayISO;
@@ -31882,11 +32462,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 // per-task fields.
                 const cycleRegret = (e) => {
                   e.stopPropagation();
-                  setTasks(prev => prev.map(x =>
-                    x.id === t.id
-                      ? { ...x, regretScore: ((x.regretScore || 3) % 5) + 1 }
-                      : x
-                  ));
+                  setTasks(prev => prev.map(x => {
+                    if (x.id !== t.id) return x;
+                    // v05.05bt353 — Cycle 1→2→3→4→5→0→1. R0 means
+                    // "someday/no rush"; sits visually muted.
+                    const cur = x.regretScore == null ? 3 : x.regretScore;
+                    const next = (cur + 1) % 6;
+                    return { ...x, regretScore: next };
+                  }));
                 };
                 const cycleFocus = (e) => {
                   e.stopPropagation();
@@ -33149,6 +33732,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               setPreviewState({ ...previewState, tasks: result.newTasks });
             }
             return result;
+          }}
+          // v05.05bt354 — Per chat: 'continue with drag-reorder in
+          // PreviewBeforeCommitModal.' Lets the modal mutate the
+          // task list directly via ↑↓ buttons + schedule/unschedule
+          // toggles on each row.
+          onPreviewMutate={(newTasks) => {
+            setPreviewState({ ...previewState, tasks: newTasks });
           }}
         />
       )}
