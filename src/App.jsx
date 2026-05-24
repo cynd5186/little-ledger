@@ -15,7 +15,7 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt355";
+const APP_VERSION = "2026.05.05bt357";
 const APP_BUILD_NOTES = [
   "MIXED-BLOCK ROWS SPLIT VISUALLY. Per chat: 'Split mixed-block rows visually too — so the timeline shows two rows for the two halves.'\n\nBEFORE: a free block crossing a shift boundary (e.g. 8:26–9:26 spanning Daddy 6:30-8:30 → Mommy 8:30-10:30) rendered as ONE row in the visual timeline. The bt225 rail showed the proportional color split, and bt227 added a sub-line breakdown, but the row itself was one entry.\n\nNOW: that same span renders as TWO separate rows:\n  • 8:26–8:30 (4m) — Daddy-owned (would render but dropped as sliver <5min)\n  • 8:30–9:26 (56m) — Mommy-owned\n\nSlivers below 5 min are dropped from the visual (consistent with the bt224 scheduler), so a near-clean boundary doesn't produce a noise row.\n\nA more substantial split — e.g. 9:30–11:30 across Daddy → Mommy at 10:30 — becomes:\n  • 9:30–10:30 (60m) — Daddy on duty → '+ Open · tap to fill' in your uninterrupted half\n  • 10:30–11:30 (60m) — Mommy on duty → second '+ Open' row for your solo half\n\nEach row gets its own rail color (no more proportional split since each row is single-owner now), its own focus assessment, and its own tap-to-fill affordance. When you fill one, the other stays open until you fill it too.\n\nThe bt227 mixed-block sub-line code stays in place but won't trigger for visual rows anymore (each row is single-owner). It's a safety net if any edge case slips through.",
 ];
@@ -5759,14 +5759,19 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       transition: "background 1.5s ease, color 1.5s ease",
       paddingBottom: 130,
       position: "relative",
-      // v05.05bt351 — User-controlled zoom for accessibility.
+      // v05.05bt351/356 — User-controlled zoom for accessibility.
       // 1.0 default · 1.15 large · 1.30 extra-large. Multiplies with
       // existing desktop media-query zoom (so 1.30 on a 1100px+ laptop
       // is 1.30 * 1.35 = 1.755 effective). zoom is non-standard but
       // widely supported (Chrome, Safari, Edge); Firefox falls back
-      // to text-scale via CSS in print only — acceptable since the
-      // primary target is iOS Safari + desktop Safari/Chrome.
-      zoom: fontScale,
+      // to text-scale via CSS in print only.
+      // bt356 — Per chat: 'what happened to the top banner being
+      // frozen so that i can see it when i move the main page up
+      // and down.' Root cause: any `zoom` value (including 1.0)
+      // creates a stacking context that breaks `position: sticky`
+      // descendants in Safari/Chrome. Only apply zoom when actually
+      // scaling so the default-state banner stays sticky.
+      ...(fontScale !== 1 ? { zoom: fontScale } : {}),
       // v05.05bt43 — overflow:hidden REMOVED. It was causing fixed-position
       // children (TabBar, CentralLogButton) to scroll with content on iOS
       // Safari instead of pinning to the viewport. The fixed view-tint
@@ -16836,7 +16841,7 @@ function SundayRoutineCard({ C, events, now }) {
 // user, grouped by status (scheduled / unscheduled / draft / done).
 // Tap a row → opens the centered edit modal (handled by parent).
 // Filter chips at top narrow the list; search box narrows by title.
-function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack }) {
+function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack, hideHeader }) {
   const [filter, setFilter] = useState("all"); // all | scheduled | unscheduled | draft | done
   const [search, setSearch] = useState("");
   // v05.05bt349 — Per chat: 'have a high priority work item list
@@ -16898,9 +16903,15 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
   }, [tasks]);
   const removeDuplicates = () => {
     if (duplicateGroups.length === 0) return;
-    if (typeof window !== "undefined" && !window.confirm(
-      `Found ${duplicateGroups.reduce((s, g) => s + g.items.length - 1, 0)} duplicate task${duplicateGroups.reduce((s, g) => s + g.items.length - 1, 0) === 1 ? "" : "s"}. Keep newest of each and remove the rest?`
-    )) return;
+    // v05.05bt356 — Inline two-tap. First tap arms; second commits.
+    if (!mergeArmed) {
+      setMergeArmed(true);
+      if (mergeArmTimerRef.current) clearTimeout(mergeArmTimerRef.current);
+      mergeArmTimerRef.current = setTimeout(() => setMergeArmed(false), 4000);
+      return;
+    }
+    if (mergeArmTimerRef.current) clearTimeout(mergeArmTimerRef.current);
+    setMergeArmed(false);
     const toRemove = new Set();
     for (const g of duplicateGroups) {
       // Keep first (newest); remove rest.
@@ -16939,49 +16950,65 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
     setTaskGroupOrderState(next);
     try { localStorage.setItem("ll:taskGroupOrder", JSON.stringify(next)); } catch {}
   };
-  const moveGroup = (key, delta) => {
-    // Build current effective order (saved + any new groups appended)
-    setTaskGroupOrder((() => {
-      const cur = taskGroupOrder.slice();
-      const idx = cur.indexOf(key);
-      if (idx < 0) {
-        // Not yet in order — add at end, then try moving from there
-        cur.push(key);
-      }
-      const newIdx = cur.indexOf(key) + delta;
-      if (newIdx < 0 || newIdx >= cur.length) return cur;
-      const tgt = cur[newIdx];
-      cur[newIdx] = key;
-      cur[cur.indexOf(key)] = tgt;
-      return cur;
-    })());
+  // v05.05bt357 — Per chat: 'the move up or down to move category
+  // and the edit buttons...also it doesn't do anything.' Rewrote
+  // moveGroup to operate on the currently-rendered order: if the
+  // saved order is partial, snapshot the visual order into the
+  // saved array first so subsequent swaps reflect what the user
+  // actually sees.
+  const moveGroup = (key, delta, visibleOrder) => {
+    // visibleOrder is the array of keys in current render order
+    // (excluding UNCATEGORIZED and _DONE). Use it as the canonical
+    // starting point so the user's tap moves things relative to
+    // what's on screen.
+    let cur = visibleOrder ? visibleOrder.slice() : taskGroupOrder.slice();
+    const idx = cur.indexOf(key);
+    if (idx < 0) return;
+    const newIdx = idx + delta;
+    if (newIdx < 0 || newIdx >= cur.length) return;
+    const tgt = cur[newIdx];
+    cur[newIdx] = key;
+    cur[idx] = tgt;
+    setTaskGroupOrder(cur);
   };
-  // v05.05bt353 — Rename group. Per chat: 'Rename a group — currently
-  // you can override individual tasks, but if you rename LIMS →
-  // LIMSv2, child tasks don't bulk-rename.' Pencil icon opens a small
-  // prompt; bulk-updates every task's taskGroup field from old to new.
-  const renameGroup = (oldKey) => {
-    if (typeof window === "undefined") return;
-    const nextRaw = window.prompt(
-      `Rename "${oldKey}" — enter the new name. All tasks in this group will be retagged.`,
-      oldKey
-    );
-    if (!nextRaw) return;
-    const next = nextRaw.trim().toUpperCase();
-    if (!next || next === oldKey) return;
+  // v05.05bt357 — Inline rename state. window.prompt is unreliable
+  // in iOS PWAs (same reason MERGE button needed reworking).
+  const [renamingGroupKey, setRenamingGroupKey] = useState(null);
+  const [renamingGroupValue, setRenamingGroupValue] = useState("");
+  const startRename = (oldKey) => {
+    setRenamingGroupKey(oldKey);
+    setRenamingGroupValue(oldKey);
+  };
+  const commitRename = () => {
+    const oldKey = renamingGroupKey;
+    const next = (renamingGroupValue || "").trim().toUpperCase();
+    setRenamingGroupKey(null);
+    setRenamingGroupValue("");
+    if (!oldKey || !next || next === oldKey) return;
     setTasks(prev => prev.map(t => {
       const key = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
       if (key !== oldKey) return t;
       return { ...t, taskGroup: next };
     }));
-    // Update the saved order array too so the rename sticks.
     if (taskGroupOrder.includes(oldKey)) {
       setTaskGroupOrder(taskGroupOrder.map(k => k === oldKey ? next : k));
     }
   };
+  const cancelRename = () => {
+    setRenamingGroupKey(null);
+    setRenamingGroupValue("");
+  };
+  // v05.05bt353 — DEPRECATED renameGroup helper kept as a no-op
+  // wrapper so any stray callers do not crash.
+  const renameGroup = startRename;
   // v05.05bt152 — Two-tap delete state, scoped to this view only.
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
   const pendingDeleteTimerRef = useRef(null);
+  // v05.05bt356 — Per chat: 'in the all tasks, when i click to merge
+  // duplicates then nothing happens.' window.confirm is unreliable in
+  // iOS Safari PWAs. Inline two-tap: first tap arms, second commits.
+  const [mergeArmed, setMergeArmed] = useState(false);
+  const mergeArmTimerRef = useRef(null);
   const userTint = currentUser === "Mommy" ? C.mommy : C.daddy;
 
   const today = new Date(now); today.setHours(0,0,0,0);
@@ -17164,7 +17191,11 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
             fontStyle: "italic", fontSize: 12.5,
           }}>← Back to Mommy's Day</button>
       )}
-      {/* Header */}
+      {/* v05.05bt357 — Per chat: 'still the redundant titles at the
+          top of the card with all tasks across days appearing
+          twice.' Drop the internal h1 when this view is rendered
+          inside a ModalShell that already shows the title. */}
+      {!hideHeader && (
       <div style={{ marginBottom: 14, padding: "0 4px" }}>
         <h1 style={{
           fontFamily: "'Cormorant Garamond', serif",
@@ -17180,6 +17211,17 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
           {totalCount} total · search · filter · done history
         </div>
       </div>
+      )}
+      {hideHeader && (
+        <div style={{
+          marginTop: 0, marginBottom: 10, padding: "0 4px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 11, color: C.muted,
+          letterSpacing: "0.08em",
+        }}>
+          {totalCount} total · search · filter · done history
+        </div>
+      )}
 
       {/* v05.05bt351/352 — Bulk action bar removed alongside the
           select-all chip per bt352 chat. Single-row delete is via
@@ -17228,41 +17270,53 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         ))}
       </div>
 
-      {/* v05.05bt353 — Duplicate-detection banner. Shows when 1+
-          duplicate groups are detected; tap removes the older copies. */}
-      {duplicateGroups.length > 0 && (
-        <button
-          onClick={removeDuplicates}
-          style={{
-            width: "100%",
-            background: `${C.gold}1a`,
-            border: `1px solid ${C.gold}55`,
-            borderRadius: 8,
-            padding: "8px 12px",
-            marginBottom: 10,
-            cursor: "pointer", textAlign: "left",
-            display: "flex", alignItems: "center", gap: 8,
-            fontFamily: "inherit",
-          }}>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 9.5, letterSpacing: "0.16em",
-            fontWeight: 700, color: C.gold, textTransform: "uppercase",
-          }}>↳ duplicates</span>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontStyle: "italic", fontSize: 13,
-            color: C.ink, flex: 1,
-          }}>
-            {duplicateGroups.length} title{duplicateGroups.length === 1 ? "" : "s"} appear{duplicateGroups.length === 1 ? "s" : ""} more than once
-          </span>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10, letterSpacing: "0.08em",
-            fontWeight: 800, color: C.gold,
-          }}>MERGE ↗</span>
-        </button>
-      )}
+      {/* v05.05bt353/356 — Duplicate-detection banner. First tap
+          arms (label flips to "TAP TO CONFIRM"); second tap commits. */}
+      {duplicateGroups.length > 0 && (() => {
+        const dupCount = duplicateGroups.reduce((s, g) => s + g.items.length - 1, 0);
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); removeDuplicates(); }}
+            style={{
+              width: "100%",
+              background: mergeArmed ? `${C.gold}33` : `${C.gold}1a`,
+              border: `1.5px solid ${mergeArmed ? C.gold : C.gold + "55"}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+              marginBottom: 10,
+              cursor: "pointer", textAlign: "left",
+              display: "flex", alignItems: "center", gap: 8,
+              fontFamily: "inherit",
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
+              WebkitAppearance: "none",
+            }}>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9.5, letterSpacing: "0.16em",
+              fontWeight: 700, color: C.gold, textTransform: "uppercase",
+            }}>↳ duplicates</span>
+            <span style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 13,
+              color: C.ink, flex: 1,
+            }}>
+              {mergeArmed
+                ? `Remove ${dupCount} older cop${dupCount === 1 ? "y" : "ies"}? Tap again to confirm.`
+                : `${duplicateGroups.length} title${duplicateGroups.length === 1 ? "" : "s"} appear${duplicateGroups.length === 1 ? "s" : ""} more than once`}
+            </span>
+            <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.08em",
+              fontWeight: 800, color: mergeArmed ? "#fff" : C.gold,
+              background: mergeArmed ? C.gold : "transparent",
+              padding: mergeArmed ? "3px 8px" : 0,
+              borderRadius: 4,
+            }}>{mergeArmed ? "CONFIRM" : "MERGE ↗"}</span>
+          </button>
+        );
+      })()}
 
       {/* v05.05bt351 — Quick filter chips. */}
       <div style={{
@@ -17385,7 +17439,14 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       )}
 
       {/* Groups */}
-      {groups.map(g => (
+      {(() => {
+        // v05.05bt357 — Compute canonical visible-order array for
+        // moveGroup so swaps reflect what the user sees, regardless
+        // of which entries are in the saved order vs not.
+        const visibleGroupOrder = groups
+          .filter(g => !g.isDone && !g.isUncat)
+          .map(g => g.key);
+        return groups.map(g => (
         <div key={g.key} style={{ marginBottom: 18 }}>
           {useCategoryGroups && !g.isDone && (
             <div style={{
@@ -17404,6 +17465,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   padding: 0,
                   display: "flex", alignItems: "center", gap: 10,
                   cursor: "pointer", textAlign: "left",
+                  minWidth: 0,
                 }}>
                 <span style={{
                   display: "inline-block",
@@ -17411,7 +17473,37 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   transform: !isGroupOpen(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
                   transition: "transform 0.15s",
                 }}>▾</span>
-                <span>{g.label}</span>
+                {/* v05.05bt357 — Inline rename via tap on label.
+                    When this group is in renaming state, swap to
+                    text input. Enter or blur commits; Esc cancels. */}
+                {renamingGroupKey === g.key ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renamingGroupValue}
+                    onChange={(e) => setRenamingGroupValue(e.target.value)}
+                    onBlur={commitRename}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                      else if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+                    }}
+                    style={{
+                      flex: 1, minWidth: 80,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11, fontWeight: 700,
+                      letterSpacing: "0.20em", textTransform: "uppercase",
+                      color: g.color,
+                      background: `${g.color}10`,
+                      border: `1px solid ${g.color}55`,
+                      borderRadius: 4, padding: "2px 6px",
+                      outline: "none",
+                    }}
+                  />
+                ) : (
+                  <span>{g.label}</span>
+                )}
                 <span style={{
                   opacity: 0.95,
                   background: `${g.color}1f`,
@@ -17423,40 +17515,65 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   letterSpacing: "0.02em",
                 }}>{g.items.length}</span>
               </button>
-              {/* v05.05bt353 — Per chat: 'continue with drag to
-                  reorder.' Up/down arrows + rename pencil per
-                  group header. Drag was unreliable on touch; explicit
-                  buttons keep it deterministic. */}
-              {!g.isUncat && (
-                <>
+              {/* v05.05bt353/357 — Subtle reorder + rename affordances.
+                  Per chat (bt357): 'the move up or down to move
+                  category and the edit buttons i feel like should be
+                  more subtle.' Borderless minimal icons, muted
+                  color, only visible on the header. */}
+              {!g.isUncat && renamingGroupKey !== g.key && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 1,
+                  opacity: 0.55,
+                }}>
                   <button
-                    onClick={(e) => { e.stopPropagation(); moveGroup(g.key, -1); }}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveGroup(g.key, -1, visibleGroupOrder);
+                    }}
                     title="Move group up"
+                    aria-label="Move group up"
                     style={{
-                      background: "transparent", border: `1px solid ${C.line}33`,
-                      borderRadius: 4, padding: "2px 6px",
+                      background: "transparent", border: "none",
+                      padding: "4px 5px", lineHeight: 1,
                       fontSize: 11, color: C.muted, cursor: "pointer",
-                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minWidth: 22, minHeight: 22,
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                     }}>↑</button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); moveGroup(g.key, 1); }}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      moveGroup(g.key, 1, visibleGroupOrder);
+                    }}
                     title="Move group down"
+                    aria-label="Move group down"
                     style={{
-                      background: "transparent", border: `1px solid ${C.line}33`,
-                      borderRadius: 4, padding: "2px 6px",
+                      background: "transparent", border: "none",
+                      padding: "4px 5px", lineHeight: 1,
                       fontSize: 11, color: C.muted, cursor: "pointer",
-                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minWidth: 22, minHeight: 22,
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                     }}>↓</button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); renameGroup(g.key); }}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); startRename(g.key); }}
                     title="Rename group"
+                    aria-label="Rename group"
                     style={{
-                      background: "transparent", border: `1px solid ${C.line}33`,
-                      borderRadius: 4, padding: "2px 6px",
-                      fontSize: 11, color: C.muted, cursor: "pointer",
-                      fontFamily: "inherit", minWidth: 24, minHeight: 24,
+                      background: "transparent", border: "none",
+                      padding: "4px 5px", lineHeight: 1,
+                      fontSize: 10.5, color: C.muted, cursor: "pointer",
+                      fontFamily: "inherit",
+                      minWidth: 22, minHeight: 22,
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                     }}>✎</button>
-                </>
+                </div>
               )}
               <span style={{ flex: 0, height: 1, background: `${g.color}33` }} />
             </div>
@@ -17614,7 +17731,8 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
             );
           })}
         </div>
-      ))}
+        ));
+      })()}
 
       {/* Footer note */}
       <div style={{
@@ -18223,6 +18341,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
           <AllTasksView
             C={C} tasks={tasks} setTasks={setTasks}
             currentUser={currentUser} now={now}
+            hideHeader={true}
             onEditTask={(t) => { setAllTasksModalOpen(false); setEditingTaskFromAll(t); }}
           />
         </ModalShell>
@@ -26527,8 +26646,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // category with section headers between clusters. Specific key =
   // filter to that category only. Resets on picker close.
   const [fitsCategoryFilter, setFitsCategoryFilter] = useState("all");
+  // v05.05bt356 — Per chat: 'when picking things to slot it should
+  // first be new task title option, then the or add unscheduled,
+  // then move from elsewhere and that should be collapsed unless
+  // the user expands it.' Inline new-task input + collapsible move
+  // section state. Both reset on picker close.
+  const [pickerNewTitle, setPickerNewTitle] = useState("");
+  const [pickerShowMove, setPickerShowMove] = useState(false);
   useEffect(() => {
-    if (fitsPickerSlotKey === null) setFitsCategoryFilter("all");
+    if (fitsPickerSlotKey === null) {
+      setFitsCategoryFilter("all");
+      setPickerNewTitle("");
+      setPickerShowMove(false);
+    }
   }, [fitsPickerSlotKey]);
   // v05.05bt321 — Per chat (screenshot): 'should be able to cancel out
   // of open tap fill if doesnt make sense to be there.' Set of free
@@ -26616,6 +26746,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // (was collapsed, user reported 'we lost the table'). Tap header to
   // collapse.
   const [taskPileExpanded, setTaskPileExpanded] = useState(true);
+  // v05.05bt356 — Per chat: 'in the task pile, the list can get
+  // kinda long so have the ability to filter as well by the
+  // different categories.' Same chip pattern as fits picker.
+  const [pileCategoryFilter, setPileCategoryFilter] = useState("all");
   // v05.05bt348 — Per chat: 'let me select multiple tasks to delete
   // together instead of just one at a time.' Multi-select set for the
   // task pile. Tapping × on a row toggles membership; a bulk action
@@ -29326,7 +29460,190 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
               return (
                 <div style={{ padding: "0 4px" }}>
-                  {/* Heading row: h1 + toggle pill + ⋯ menu */}
+                  {/* v05.05bt356 — Heading restructured: h1 + date
+                      sub-line on the left, Today/Tomorrow pill + ⋯
+                      menu on the right. Per chat: 'the today should
+                      have the date no? and the today vs. tomorrow
+                      pill maybe move to the right side of the
+                      panel?' */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 10 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h1 style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontWeight: 500,
+                        fontSize: 30, color: C.ink,
+                        margin: 0, lineHeight: 1.05,
+                        letterSpacing: "-0.015em",
+                      }}>{
+                        isTomorrow ? "Tomorrow"
+                        : productMode === "solo" ? "Today"
+                        : "Mommy's Day"
+                      }</h1>
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 10, letterSpacing: "0.14em",
+                        fontWeight: 600, color: C.muted,
+                        textTransform: "uppercase", marginTop: 3,
+                      }}>
+                        {referenceDate.toLocaleDateString(undefined, {
+                          weekday: "short", month: "short", day: "numeric",
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <div style={{
+                        display: "inline-flex", alignItems: "stretch",
+                        background: `${C.line}15`,
+                        border: `1px solid ${C.line}33`,
+                        borderRadius: 999, padding: 2,
+                        fontFamily: "'Inter', sans-serif",
+                        fontSize: 9.5, fontWeight: 700,
+                        letterSpacing: "0.18em",
+                      }}>
+                        {[
+                          { v: "today", l: "TODAY" },
+                          { v: "tomorrow", l: "TOMORROW" },
+                        ].map(opt => (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            onClick={() => setDayView(opt.v)}
+                            style={{
+                              background: dayView === opt.v ? C.mommy : "transparent",
+                              color: dayView === opt.v ? C.bg : C.muted,
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "5px 10px",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              fontWeight: "inherit",
+                              letterSpacing: "inherit",
+                              fontSize: "inherit",
+                              touchAction: "manipulation",
+                            }}>
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                      {/* v05.05bt356 — ⋯ menu inside new right column */}
+                      <div style={{ position: "relative" }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowActionsMenu(s => !s)}
+                          style={{
+                            background: "transparent",
+                            color: C.muted,
+                            border: `1px solid ${C.line}33`,
+                            borderRadius: 8, padding: "5px 10px",
+                            fontSize: 14, fontWeight: 600, cursor: "pointer",
+                            fontFamily: "inherit", lineHeight: 1,
+                            touchAction: "manipulation",
+                          }}
+                          title="Settings · menu">≡</button>
+                        {showActionsMenu && (
+                          <div style={{
+                            position: "absolute", top: "calc(100% + 4px)", right: 0,
+                            background: C.paper,
+                            border: `1px solid ${C.line}55`,
+                            borderRadius: 10, padding: 4, minWidth: 240,
+                            boxShadow: "0 8px 24px -8px rgba(61, 49, 40, 0.18)",
+                            zIndex: 10,
+                            maxHeight: "70vh", overflowY: "auto",
+                          }}>
+                            {[
+                              { section: "Today's plan" },
+                              { icon: "⚙", label: "Today's setup · wake / sleep / mode", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
+                              { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
+                              { icon: "✦", label: "Optimize today's shape", onClick: () => { setShowOptimizer(true); setShowActionsMenu(false); } },
+                              { section: "You" },
+                              { icon: "◆", label: focusProfile ? "Focus profile · retake quiz" : "Focus profile · take quiz", onClick: () => { setShowFocusQuiz(true); setShowActionsMenu(false); } },
+                              { section: "Routines & tasks" },
+                              { icon: "↻", label: "Routines · edit defaults", onClick: () => { setShowRoutineEditor(true); setShowActionsMenu(false); } },
+                              { icon: "✎", label: "Brain dump · quick capture", onClick: () => { setShowBrainDump(true); setShowActionsMenu(false); } },
+                              { section: "Pump & milk" },
+                              { icon: "🍼", label: "Pump settings → Milk tab", onClick: () => { if (setTab) setTab("inventory"); setShowActionsMenu(false); }, hint: "Cadence, anchor, target oz, freezer buffer" },
+                              { section: "Display & export" },
+                              { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
+                              { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
+                              { section: "Cadence mode" },
+                              { icon: productMode === "family" ? "●" : "○",
+                                label: "Off · default Little Ledger",
+                                onClick: () => {
+                                  if (setProductMode) setProductMode("family");
+                                  setShowActionsMenu(false);
+                                },
+                              },
+                              { icon: productMode === "solo" && (cadenceScope === "schedule" || !cadenceScope) ? "●" : "○",
+                                label: "On · Schedule tab only",
+                                onClick: () => {
+                                  if (setProductMode) setProductMode("solo");
+                                  if (setCadenceScope) setCadenceScope("schedule");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Cadence palette inside Schedule; rest of app stays Little Ledger",
+                              },
+                              { icon: productMode === "solo" && cadenceScope === "all" ? "●" : "○",
+                                label: "On · whole app",
+                                onClick: () => {
+                                  if (setProductMode) setProductMode("solo");
+                                  if (setCadenceScope) setCadenceScope("all");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Cadence palette everywhere — Now, Journal, Wellness, Milk too",
+                              },
+                            ].map((item, idx) => {
+                              if (item.section) {
+                                return (
+                                  <div key={`section-${idx}`} style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 9.5, letterSpacing: "0.14em",
+                                    textTransform: "uppercase",
+                                    color: C.gold, fontWeight: 700,
+                                    padding: idx === 0 ? "6px 12px 4px" : "10px 12px 4px",
+                                    borderTop: idx === 0 ? "none" : `1px solid ${C.line}22`,
+                                    marginTop: idx === 0 ? 0 : 4,
+                                  }}>{item.section}</div>
+                                );
+                              }
+                              return (
+                                <button key={item.label}
+                                  type="button"
+                                  onClick={item.onClick}
+                                  disabled={item.disabled}
+                                  style={{
+                                    width: "100%",
+                                    display: "flex", gap: 10,
+                                    padding: item.hint ? "8px 12px 10px" : "10px 12px",
+                                    background: "transparent",
+                                    border: "none", borderRadius: 6,
+                                    cursor: item.disabled ? "not-allowed" : "pointer",
+                                    opacity: item.disabled ? 0.4 : 1,
+                                    fontFamily: "inherit", fontSize: 13,
+                                    color: C.ink, textAlign: "left",
+                                    flexDirection: item.hint ? "column" : "row",
+                                    alignItems: item.hint ? "flex-start" : "center",
+                                  }}>
+                                  <span style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+                                    <span style={{ color: C.gold, width: 16, textAlign: "center" }}>{item.icon}</span>
+                                    {item.label}
+                                  </span>
+                                  {item.hint && (
+                                    <span style={{
+                                      fontSize: 10.5, color: C.muted,
+                                      fontStyle: "italic",
+                                      marginLeft: 26, marginTop: 1,
+                                      fontFamily: "'Cormorant Garamond', serif",
+                                    }}>{item.hint}</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {false && (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
                       <h1 style={{
@@ -29514,14 +29831,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       )}
                     </div>
                   </div>
+                  )}
 
-                  {/* v05.05bt194 — Date sub-line dropped for TODAY per
-                      chat ('Is there some redundancy in having the
-                      time and date hence it is also on the banners').
-                      The top banner already shows 'Sat, May 16 · 12:41p'.
-                      For TOMORROW, keep it — the top banner is anchored
-                      to today's date so we need to show tomorrow's. */}
-                  {isTomorrow && (
+                  {/* v05.05bt356 — Old date sub-line below is redundant
+                      now that the date sits next to h1. Disabled. */}
+                  {false && isTomorrow && (
                     <div style={{
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 10, color: C.muted,
@@ -30053,18 +30367,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 10.5, letterSpacing: "0.10em",
                   color: C.accent, fontWeight: 800,
-                }}>↳ R5 WAITING</div>
+                }}>↳ STUCK</div>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{highPriorityUnscheduled.length}</span>{" "}
-                  high-priority task{highPriorityUnscheduled.length === 1 ? "" : "s"} unscheduled.{" "}
+                  urgent task{highPriorityUnscheduled.length === 1 ? "" : "s"} can't fit because{" "}
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{lowerPriorityPinned.length}</span>{" "}
+                  lower-R task{lowerPriorityPinned.length === 1 ? "" : "s"} {lowerPriorityPinned.length === 1 ? "is" : "are"} pinned.{" "}
                   <span style={{ color: C.muted, fontStyle: "italic" }}>
-                    {lowerPriorityPinned.length} pinned lower-R task{lowerPriorityPinned.length === 1 ? "" : "s"} taking space.
+                    Unpin {lowerPriorityPinned.length === 1 ? "it" : "them"} and re-fit?
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={releaseLowerPinsAndReanalyze}
-                  title="Unpin lower-priority tasks + re-analyze to make room"
+                  title="Unpin lower-priority tasks and re-analyze to fit the urgent ones"
                   style={{
                     padding: "6px 11px",
                     background: C.accent, color: C.bg,
@@ -30073,7 +30389,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
                     textTransform: "uppercase",
-                  }}>Free up space</button>
+                    touchAction: "manipulation",
+                  }}>UNPIN · RE-FIT</button>
               </div>
             )}
 
@@ -30764,6 +31081,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         if (isPumpReminder) return ownerTint;
                         if (slot.kind === "appointment") return `#A04F4F2E`;
                         if (isRoutine) return ownerTint;
+                        // v05.05bt357 — Per chat: 'the immovable tasks
+                        // that entire block card should be colored,
+                        // recall? and the color you fill in should be
+                        // of the same family as the rail.' Pinned
+                        // tasks get the owner tint too so they read
+                        // as fixed/anchored, matching the rail color.
+                        if (isTask && slot.pinned) return ownerTint;
                         return "transparent";
                       })(),
                       // v05.05bt280 — Bedtime: thick double-border above as HARD STOP marker
@@ -31198,12 +31522,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             {isFree ? (
                               isPast ? (
                                 <span style={{ color: C.muted, fontWeight: 500, fontStyle: "italic" }}>
-                                  ✕ Closed · time has passed
+                                  ✕ Closed · passed
                                 </span>
                               ) : (
                                 <>
                                   <span style={{ color: C.gold, fontWeight: 500 }}>
-                                    + Open · tap to fill
+                                    + Open
                                   </span>
                                   {/* v05.05bt321 — Per chat: 'should
                                       be able to cancel out of open
@@ -31810,11 +32134,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
                                       }}>×</button>
                                     </div>
-                                    {/* v05.05bt354 — D hybrid: category
-                                        chips at top. Compute breakdown
-                                        from candidates only (not movable
-                                        — those are already-scheduled). */}
-                                    {(() => {
+                                    {/* v05.05bt354/357 — D hybrid:
+                                        ✦ BEST chip + category chips.
+                                        BEST shows algorithm's top
+                                        picks regardless of category.
+                                        Per chat (bt357): 'for fits,
+                                        should be a category of what
+                                        the algorithm suggests are
+                                        viable candidates.' */}
+                                    {candidates.length > 0 && (() => {
                                       const breakdown = new Map();
                                       for (const c of candidates) {
                                         const key = String(c.taskGroup || inferTaskGroup(c.title) || "UNCATEGORIZED").toUpperCase();
@@ -31822,14 +32150,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       }
                                       const cats = Array.from(breakdown.entries())
                                         .sort((a, b) => b[1] - a[1]);
-                                      if (cats.length < 2) return null;
+                                      const showCats = cats.length >= 2;
+                                      const bestCount = Math.min(candidates.length, 3);
                                       return (
                                         <div style={{
                                           display: "flex", gap: 4, flexWrap: "wrap",
                                           marginBottom: 8, paddingBottom: 8,
                                           borderBottom: `1px dashed ${C.line}33`,
                                         }}>
+                                          {/* ✦ BEST — algorithm's top picks */}
                                           <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setFitsCategoryFilter("__best__"); }}
+                                            title="Algorithm's top picks for this slot"
+                                            style={{
+                                              fontFamily: "'JetBrains Mono', monospace",
+                                              fontSize: 8.5, letterSpacing: "0.10em",
+                                              fontWeight: 800, textTransform: "uppercase",
+                                              padding: "2px 7px", borderRadius: 4,
+                                              background: fitsCategoryFilter === "__best__" ? C.gold : `${C.gold}1a`,
+                                              color: fitsCategoryFilter === "__best__" ? "#fff" : C.gold,
+                                              border: `1px solid ${C.gold}66`,
+                                              cursor: "pointer",
+                                              touchAction: "manipulation",
+                                              WebkitTapHighlightColor: "transparent",
+                                            }}>
+                                            ✦ Best <span style={{ opacity: 0.7 }}>{bestCount}</span>
+                                          </button>
+                                          <button
+                                            type="button"
                                             onClick={(e) => { e.stopPropagation(); setFitsCategoryFilter("all"); }}
                                             style={{
                                               fontFamily: "'JetBrains Mono', monospace",
@@ -31840,12 +32189,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                               color: fitsCategoryFilter === "all" ? C.mommy : C.muted,
                                               border: `1px solid ${fitsCategoryFilter === "all" ? C.mommy + "55" : C.line + "33"}`,
                                               cursor: "pointer",
+                                              touchAction: "manipulation",
+                                              WebkitTapHighlightColor: "transparent",
                                             }}>
                                             All <span style={{ opacity: 0.6 }}>{candidates.length}</span>
                                           </button>
-                                          {cats.map(([key, n]) => (
+                                          {showCats && cats.map(([key, n]) => (
                                             <button
                                               key={key}
+                                              type="button"
                                               onClick={(e) => { e.stopPropagation(); setFitsCategoryFilter(key); }}
                                               style={{
                                                 fontFamily: "'JetBrains Mono', monospace",
@@ -31856,6 +32208,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                                 color: fitsCategoryFilter === key ? C.mommy : C.muted,
                                                 border: `1px solid ${fitsCategoryFilter === key ? C.mommy + "55" : C.line + "33"}`,
                                                 cursor: "pointer",
+                                                touchAction: "manipulation",
+                                                WebkitTapHighlightColor: "transparent",
                                               }}>
                                               {key} <span style={{ opacity: 0.6 }}>{n}</span>
                                             </button>
@@ -31863,65 +32217,98 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         </div>
                                       );
                                     })()}
-                                    {/* Section: Move from elsewhere */}
-                                    {movable.length > 0 && (
-                                      <>
-                                        <div style={{
-                                          fontFamily: "'JetBrains Mono', monospace",
-                                          fontSize: 8.5, color: C.muted, fontWeight: 700,
-                                          letterSpacing: "0.10em", textTransform: "uppercase",
-                                          marginBottom: 4, marginTop: 2,
-                                        }}>↳ Move from elsewhere · {movable.length}</div>
-                                        {movable.slice(0, 3).map(m => {
-                                          const fl = normalizeFocus(m.focusLevel);
-                                          const flGlyph = fl === "deep" ? "🧠" : "🍃";
-                                          const fromTime = (() => {
-                                            const [h, mm] = (m.scheduledTime || "").split(":").map(Number);
-                                            const ap = h >= 12 ? "p" : "a";
-                                            const h12 = ((h + 11) % 12) + 1;
-                                            return mm === 0 ? `${h12}${ap}` : `${h12}:${String(mm).padStart(2,"0")}${ap}`;
-                                          })();
-                                          return (
-                                            <button
-                                              key={m.id}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setTasks(prev => prev.map(t => t.id === m.id
-                                                  ? { ...t, scheduledTime: slotTime, pinned: true }
-                                                  : t));
-                                                setFitsPickerSlotKey(null);
-                                              }}
-                                              style={{
-                                                display: "flex", alignItems: "center", gap: 8,
-                                                width: "100%", padding: "6px 8px",
-                                                background: `${C.daddy}0a`,
-                                                border: `1px solid ${C.daddy}33`,
-                                                borderRadius: 4, marginBottom: 3,
-                                                cursor: "pointer", textAlign: "left",
-                                                fontFamily: "inherit",
-                                              }}>
-                                              <span style={{
-                                                fontFamily: "'JetBrains Mono', monospace",
-                                                fontSize: 9, color: C.daddy, fontWeight: 700,
-                                                letterSpacing: "0.08em", flexShrink: 0,
-                                              }}>{fromTime}→{slotTime.slice(0,5).replace(":","")}</span>
-                                              <span style={{ fontSize: 11, flexShrink: 0 }}>{flGlyph}</span>
-                                              <span style={{
-                                                flex: 1, color: C.ink,
-                                                fontFamily: "'Cormorant Garamond', serif",
-                                                fontSize: 13, fontStyle: "italic",
-                                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                              }}>{m.title}</span>
-                                            </button>
-                                          );
-                                        })}
-                                        <div style={{
-                                          fontFamily: "'JetBrains Mono', monospace",
-                                          fontSize: 8.5, color: C.muted, fontWeight: 700,
-                                          letterSpacing: "0.10em", textTransform: "uppercase",
-                                          marginBottom: 4, marginTop: 8,
-                                        }}>↳ Or add unscheduled · {candidates.length}</div>
-                                      </>
+                                    {/* v05.05bt356 — Section 1: New
+                                        task title input. Per chat:
+                                        'first be new task title
+                                        option.' Inline input + Add
+                                        button creates a pinned task
+                                        at this slot's time. */}
+                                    <div style={{
+                                      display: "flex", gap: 6, alignItems: "center",
+                                      marginBottom: 8,
+                                    }}>
+                                      <input
+                                        type="text"
+                                        value={pickerNewTitle}
+                                        onChange={(e) => setPickerNewTitle(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" && pickerNewTitle.trim()) {
+                                            e.preventDefault();
+                                            const title = pickerNewTitle.trim();
+                                            const newTask = {
+                                              id: crypto.randomUUID(),
+                                              title,
+                                              effortMin: Math.min(slot.durationMin, 30),
+                                              regretScore: 3,
+                                              focusLevel: profile.focusLevel === "deep" ? "deep" : "shallow",
+                                              ownerName: currentUser,
+                                              createdAt: new Date().toISOString(),
+                                              scheduledTime: slotTime,
+                                              scheduledDate: todayISO,
+                                              taskGroup: inferTaskGroup(title),
+                                              pinned: true,
+                                            };
+                                            setTasks(prev => [...prev, newTask]);
+                                            setFitsPickerSlotKey(null);
+                                          }
+                                        }}
+                                        placeholder="+ new task for this slot..."
+                                        style={{
+                                          flex: 1, padding: "6px 8px",
+                                          fontSize: 13,
+                                          fontFamily: "'Cormorant Garamond', serif",
+                                          background: C.paper,
+                                          border: `1px solid ${C.mommy}55`,
+                                          borderRadius: 5, color: C.ink,
+                                          minWidth: 0,
+                                        }}
+                                      />
+                                      {pickerNewTitle.trim().length > 0 && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const title = pickerNewTitle.trim();
+                                            const newTask = {
+                                              id: crypto.randomUUID(),
+                                              title,
+                                              effortMin: Math.min(slot.durationMin, 30),
+                                              regretScore: 3,
+                                              focusLevel: profile.focusLevel === "deep" ? "deep" : "shallow",
+                                              ownerName: currentUser,
+                                              createdAt: new Date().toISOString(),
+                                              scheduledTime: slotTime,
+                                              scheduledDate: todayISO,
+                                              taskGroup: inferTaskGroup(title),
+                                              pinned: true,
+                                            };
+                                            setTasks(prev => [...prev, newTask]);
+                                            setFitsPickerSlotKey(null);
+                                          }}
+                                          style={{
+                                            background: C.mommy, color: "#fff",
+                                            border: "none", borderRadius: 5,
+                                            padding: "6px 12px",
+                                            fontSize: 11, fontWeight: 700,
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            letterSpacing: "0.10em",
+                                            cursor: "pointer",
+                                            touchAction: "manipulation",
+                                          }}>ADD</button>
+                                      )}
+                                    </div>
+                                    {/* Section 2: Or add unscheduled
+                                        (candidates) — was already in
+                                        this position; just renamed
+                                        the header to clarify. */}
+                                    {candidates.length > 0 && (
+                                      <div style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 8.5, color: C.muted, fontWeight: 700,
+                                        letterSpacing: "0.10em", textTransform: "uppercase",
+                                        marginBottom: 4, marginTop: 2,
+                                      }}>↳ Or pick from unscheduled · {candidates.length}</div>
                                     )}
                                     {/* v05.05bt354 — Section: Or add unscheduled
                                         (D hybrid). When filter === "all", group
@@ -31930,10 +32317,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         specific key, render flat filtered list. */}
                                     {(() => {
                                       const taskCat = (c) => String(c.taskGroup || inferTaskGroup(c.title) || "UNCATEGORIZED").toUpperCase();
-                                      const filtered = fitsCategoryFilter === "all"
+                                      // v05.05bt357 — '__best__' = top-3 from algorithm sort
+                                      const filtered = fitsCategoryFilter === "__best__"
+                                        ? candidates.slice(0, 3)
+                                        : fitsCategoryFilter === "all"
                                         ? candidates
                                         : candidates.filter(c => taskCat(c) === fitsCategoryFilter);
-                                      const limited = filtered.slice(0, topCount);
+                                      const limited = fitsCategoryFilter === "__best__"
+                                        ? filtered
+                                        : filtered.slice(0, topCount);
                                       const buckets = new Map();
                                       for (const c of limited) {
                                         const k = taskCat(c);
@@ -32003,6 +32395,93 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         </React.Fragment>
                                       ));
                                     })()}
+                                    {/* v05.05bt356 — Section 3:
+                                        Move-from-elsewhere, collapsed
+                                        by default. Per chat: 'move
+                                        from elsewhere and that should
+                                        be collapsed unless the user
+                                        expands it.' */}
+                                    {movable.length > 0 && (
+                                      <div style={{
+                                        marginTop: 10,
+                                        paddingTop: 8,
+                                        borderTop: `1px dashed ${C.line}33`,
+                                      }}>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPickerShowMove(v => !v);
+                                          }}
+                                          style={{
+                                            background: "transparent",
+                                            border: "none", padding: "2px 0",
+                                            cursor: "pointer",
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: 8.5, color: C.muted,
+                                            fontWeight: 700, letterSpacing: "0.10em",
+                                            textTransform: "uppercase",
+                                            display: "flex", alignItems: "center", gap: 5,
+                                            touchAction: "manipulation",
+                                          }}>
+                                          <span style={{
+                                            transform: pickerShowMove ? "rotate(90deg)" : "rotate(0deg)",
+                                            transition: "transform 0.15s",
+                                            display: "inline-block",
+                                          }}>▸</span>
+                                          Move from elsewhere · {movable.length}
+                                        </button>
+                                        {pickerShowMove && (
+                                          <div style={{ marginTop: 6 }}>
+                                            {movable.slice(0, 5).map(m => {
+                                              const fl = normalizeFocus(m.focusLevel);
+                                              const flGlyph = fl === "deep" ? "🧠" : "🍃";
+                                              const fromTime = (() => {
+                                                const [h, mm] = (m.scheduledTime || "").split(":").map(Number);
+                                                const ap = h >= 12 ? "p" : "a";
+                                                const h12 = ((h + 11) % 12) + 1;
+                                                return mm === 0 ? `${h12}${ap}` : `${h12}:${String(mm).padStart(2,"0")}${ap}`;
+                                              })();
+                                              return (
+                                                <button
+                                                  key={m.id}
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setTasks(prev => prev.map(t => t.id === m.id
+                                                      ? { ...t, scheduledTime: slotTime, pinned: true }
+                                                      : t));
+                                                    setFitsPickerSlotKey(null);
+                                                  }}
+                                                  style={{
+                                                    display: "flex", alignItems: "center", gap: 8,
+                                                    width: "100%", padding: "6px 8px",
+                                                    background: `${C.daddy}0a`,
+                                                    border: `1px solid ${C.daddy}33`,
+                                                    borderRadius: 4, marginBottom: 3,
+                                                    cursor: "pointer", textAlign: "left",
+                                                    fontFamily: "inherit",
+                                                    touchAction: "manipulation",
+                                                  }}>
+                                                  <span style={{
+                                                    fontFamily: "'JetBrains Mono', monospace",
+                                                    fontSize: 9, color: C.daddy, fontWeight: 700,
+                                                    letterSpacing: "0.08em", flexShrink: 0,
+                                                  }}>{fromTime}→{slotTime.slice(0,5).replace(":","")}</span>
+                                                  <span style={{ fontSize: 11, flexShrink: 0 }}>{flGlyph}</span>
+                                                  <span style={{
+                                                    flex: 1, color: C.ink,
+                                                    fontFamily: "'Cormorant Garamond', serif",
+                                                    fontSize: 13, fontStyle: "italic",
+                                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                                  }}>{m.title}</span>
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     {/* v05.05bt354 — Original flat candidates
                                         list replaced by the category-grouped
                                         renderer above. Leaving false-gated
@@ -32486,53 +32965,61 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     width: "100%", padding: "5px 6px",
                     borderBottom: `1px solid ${C.line}15`,
                   }}>
-                    {/* v05.05bt285/352 — Inline checkbox. Bigger touch
-                        target (was 14px → 22px), explicit preventDefault
-                        + stopPropagation to dodge mobile-tap race. */}
+                    {/* v05.05bt352/355 — Inline checkbox. iOS Safari
+                        tap fix: explicit type="button" so it doesn't
+                        accidentally submit any ancestor form; bigger
+                        touch target (22px); touchAction: manipulation
+                        to disable double-tap-zoom delay. Native React
+                        onClick is enough — onPointerDown stopProp was
+                        actually breaking the click in some cases
+                        because click only fires after a full pointer
+                        sequence. */}
                     <button
-                      onPointerDown={(e) => { e.stopPropagation(); }}
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
                         toggleComplete(t.id);
                       }}
                       style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        border: `1.5px solid ${done ? "#7B9B6E" : C.line + "66"}`,
+                        width: 24, height: 24, borderRadius: "50%",
+                        border: `1.5px solid ${done ? "#7B9B6E" : C.line + "88"}`,
                         background: done ? "#7B9B6E" : "transparent",
                         cursor: "pointer", flexShrink: 0, padding: 0,
                         marginTop: 1,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 13, lineHeight: 1,
+                        color: "#fff", fontSize: 14, lineHeight: 1,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
+                        WebkitAppearance: "none",
                       }}
                       title={done ? "Done — tap to mark not done" : "Tap to mark done"}
                       aria-label={done ? "Mark not done" : "Mark done"}>
                       {done ? "✓" : ""}
                     </button>
-                    <button
+                    {/* v05.05bt355 — Title wrap was <button> wrapping
+                        spans with onClick (nested clickables = invalid
+                        HTML, breaks tap on iOS Safari). Switched to
+                        <div> with role+onClick; inner spans now
+                        cleanly receive their own onClicks. */}
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setEditingTask(t)}
                       style={{
                         flex: 1,
                         display: "flex", alignItems: "flex-start", gap: 5,
-                        background: "transparent", border: "none",
-                        cursor: "pointer", textAlign: "left",
-                        fontFamily: "inherit", padding: 0,
+                        cursor: "pointer",
                         minWidth: 0,
                       }}>
-                      {/* v05.05bt352 — Per chat: 'lets stay consistent
-                          with the icons for deep vs. shallow work and
-                          always put the icon in front of the regret
-                          score.' Focus glyph now lives ahead of the
-                          title as before — but inline-tappable to
-                          cycle deep↔shallow without opening edit. */}
                       <span
                         onClick={cycleFocus}
                         title={`${fl === "deep" ? "Deep" : "Shallow"} focus · tap to flip`}
                         style={{
                           fontSize: 13, flexShrink: 0, marginTop: 0,
                           cursor: "pointer", padding: "0 2px",
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
                         }}>{flGlyph}</span>
                       <span style={{
                         flex: 1, color: C.ink,
@@ -32565,31 +33052,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }} title={t._couldNotFitReason || "no block fit during reanalyze"}>✗ WON'T FIT</span>
                         )}
                       </span>
-                      {/* v05.05bt352 — Regret score tappable to cycle.
-                          Per chat: 'i should be able to change the
-                          regret score by clicking on it.' Always
-                          rendered after the focus glyph + title to
-                          keep the visual cadence consistent. */}
                       <span
                         onClick={cycleRegret}
-                        title={`Regret ${t.regretScore || 3}/5 · tap to cycle`}
+                        title={`Regret ${t.regretScore == null ? 3 : t.regretScore}/5 · tap to cycle`}
                         style={{
                           fontFamily: "'JetBrains Mono', monospace",
                           fontSize: 11, fontWeight: 700, flexShrink: 0,
                           marginTop: 1, padding: "1px 6px",
-                          color: regretColors[t.regretScore || 3],
+                          color: regretColors[t.regretScore == null ? 3 : t.regretScore],
                           opacity: done ? 0.5 : 1,
-                          background: `${regretColors[t.regretScore || 3]}14`,
+                          background: `${regretColors[t.regretScore == null ? 3 : t.regretScore]}14`,
                           borderRadius: 4,
                           cursor: "pointer",
-                        }}>R{t.regretScore || 3}</span>
-                    </button>
-                    {/* v05.05bt352 — Single-tap delete. Per chat:
-                        'i should be able to click on the X under the
-                        task pile.' Restored direct delete behaviour;
-                        the multi-select pattern was confusing. */}
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                        }}>R{t.regretScore == null ? 3 : t.regretScore}</span>
+                    </div>
+                    {/* v05.05bt352/355 — Single-tap × delete. */}
                     <button
-                      onPointerDown={(e) => { e.stopPropagation(); }}
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
@@ -32599,15 +33080,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       aria-label="Delete task"
                       style={{
                         background: "transparent",
-                        color: C.muted, border: "none",
-                        padding: "4px 8px",
-                        fontSize: 18, fontWeight: 700, lineHeight: 1,
+                        color: C.accent || "#B85040",
+                        border: "none",
+                        padding: "4px 10px",
+                        fontSize: 20, fontWeight: 700, lineHeight: 1,
                         cursor: "pointer", fontFamily: "inherit",
                         flexShrink: 0,
-                        minWidth: 36, minHeight: 36,
-                        opacity: 0.6,
+                        minWidth: 40, minHeight: 36,
+                        opacity: 0.7,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
+                        WebkitAppearance: "none",
                       }}>
                       ×
                     </button>
@@ -32716,6 +33199,62 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           color: C.gold, textTransform: "uppercase",
                           padding: "3px 5px 5px",
                         }}>Unscheduled · {unscheduled.length}</div>
+                        {/* v05.05bt356 — Category filter chips. Hidden
+                            when only 1 category or pile is empty. */}
+                        {unscheduled.length > 1 && (() => {
+                          const counts = new Map();
+                          for (const t of unscheduled) {
+                            const k = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
+                            counts.set(k, (counts.get(k) || 0) + 1);
+                          }
+                          if (counts.size < 2) return null;
+                          const cats = Array.from(counts.entries())
+                            .sort((a, b) => b[1] - a[1]);
+                          return (
+                            <div style={{
+                              display: "flex", gap: 4, flexWrap: "wrap",
+                              padding: "0 5px 8px",
+                            }}>
+                              <button
+                                type="button"
+                                onClick={() => setPileCategoryFilter("all")}
+                                style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 8.5, letterSpacing: "0.10em",
+                                  fontWeight: 700, textTransform: "uppercase",
+                                  padding: "2px 7px", borderRadius: 4,
+                                  background: pileCategoryFilter === "all" ? `${C.mommy}22` : "transparent",
+                                  color: pileCategoryFilter === "all" ? C.mommy : C.muted,
+                                  border: `1px solid ${pileCategoryFilter === "all" ? C.mommy + "55" : C.line + "33"}`,
+                                  cursor: "pointer",
+                                  touchAction: "manipulation",
+                                  WebkitTapHighlightColor: "transparent",
+                                }}>
+                                All <span style={{ opacity: 0.6 }}>{unscheduled.length}</span>
+                              </button>
+                              {cats.map(([key, n]) => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => setPileCategoryFilter(key)}
+                                  style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 8.5, letterSpacing: "0.10em",
+                                    fontWeight: 700, textTransform: "uppercase",
+                                    padding: "2px 7px", borderRadius: 4,
+                                    background: pileCategoryFilter === key ? `${C.mommy}22` : "transparent",
+                                    color: pileCategoryFilter === key ? C.mommy : C.muted,
+                                    border: `1px solid ${pileCategoryFilter === key ? C.mommy + "55" : C.line + "33"}`,
+                                    cursor: "pointer",
+                                    touchAction: "manipulation",
+                                    WebkitTapHighlightColor: "transparent",
+                                  }}>
+                                  {key} <span style={{ opacity: 0.6 }}>{n}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         {unscheduled.length === 0 ? (
                           <div style={{
                             padding: "8px 5px",
@@ -32724,18 +33263,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             color: C.muted,
                           }}>backlog clear ✓</div>
                         ) : (() => {
-                          // v05.05bt352 — Per chat: 'in my task pile
-                          // unscheduled, i would still like it to be
-                          // divided by categories so maybe draw a
-                          // line between each different category so
-                          // i can see it visually.' Group by
-                          // taskGroup, render a thin category header
-                          // before each cluster. Sort matches existing
-                          // unscheduled sort (won't-fit first, regret
-                          // desc) WITHIN each category. Categories
-                          // ordered by count desc; UNCATEGORIZED last.
+                          // v05.05bt352/356 — Group + filter by category.
+                          // Filter applied first; category dividers stay
+                          // within the filtered subset.
+                          const visible = pileCategoryFilter === "all"
+                            ? unscheduled
+                            : unscheduled.filter(t =>
+                                String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase() === pileCategoryFilter
+                              );
+                          if (visible.length === 0) {
+                            return (
+                              <div style={{
+                                padding: "8px 5px",
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontStyle: "italic", fontSize: 11.5,
+                                color: C.muted,
+                              }}>no tasks in {pileCategoryFilter.toLowerCase()}</div>
+                            );
+                          }
                           const buckets = new Map();
-                          for (const t of unscheduled) {
+                          for (const t of visible) {
                             const key = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
                             if (!buckets.has(key)) buckets.set(key, []);
                             buckets.get(key).push(t);
@@ -34721,16 +35268,17 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
 // Meetings render in the timeline as MEETING blocks and block time
 // from auto-scheduling. Persisted per-date so each new day starts fresh.
 function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetup, setTodaySetup, onsite, setOnsite, meetings, currentUser }) {
-  // v05.05bt344 — Per chat: 'todays setup dialog, you can only apply
-  // it to today and not tomorrow.' Use referenceDate (today or
-  // tomorrow based on dayView) as the setup key — when user is in
-  // tomorrow view + opens setup, edits write tomorrow's date key.
-  // When tomorrow rolls over, todaySetup.date === todayKey and the
-  // setup applies automatically.
-  const refDate = referenceDate || (() => { const d = new Date(now); d.setHours(0,0,0,0); return d; })();
-  const refKey = refDate.toISOString().slice(0, 10);
+  // v05.05bt344/357 — Per chat: 'todays setup does not allow you to
+  // pick tomorrow date to have it to apply it to tomorrow.' Internal
+  // day toggle lets the user switch between today and tomorrow
+  // without having to close the sheet, swap dayView, and reopen.
+  // Starts at whatever the parent dayView says.
+  const [setupForTomorrow, setSetupForTomorrow] = useState(!!isTomorrow);
   const today = new Date(now); today.setHours(0, 0, 0, 0);
   const todayKey = today.toISOString().slice(0, 10);
+  const tomorrowDate = (() => { const d = new Date(today); d.setDate(d.getDate() + 1); return d; })();
+  const refDate = setupForTomorrow ? tomorrowDate : today;
+  const refKey = refDate.toISOString().slice(0, 10);
 
   const isForRef = todaySetup?.date === refKey;
   const cookingToday  = isForRef ? (todaySetup.cookingToday  ?? true) : true;
@@ -34773,7 +35321,62 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
   };
 
   return (
-    <ModalShell C={C} onClose={onClose} title={isTomorrow ? "Tomorrow's Setup" : "Today's Setup"}>
+    <ModalShell C={C} onClose={onClose} title="Day setup">
+      {/* v05.05bt357 — Per chat: 'todays setup does not allow you to
+          pick tomorrow date.' Day toggle pill at top. */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        marginBottom: 14,
+      }}>
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10, letterSpacing: "0.12em",
+          textTransform: "uppercase", fontWeight: 700,
+          color: C.muted,
+        }}>Apply to</span>
+        <div style={{
+          display: "inline-flex", alignItems: "stretch",
+          background: `${C.line}15`,
+          border: `1px solid ${C.line}33`,
+          borderRadius: 999, padding: 2,
+          fontFamily: "'Inter', sans-serif",
+          fontSize: 10, fontWeight: 700,
+          letterSpacing: "0.16em",
+        }}>
+          {[
+            { v: false, l: "TODAY" },
+            { v: true, l: "TOMORROW" },
+          ].map(opt => (
+            <button
+              key={String(opt.v)}
+              type="button"
+              onClick={() => setSetupForTomorrow(opt.v)}
+              style={{
+                background: setupForTomorrow === opt.v ? C.mommy : "transparent",
+                color: setupForTomorrow === opt.v ? C.bg : C.muted,
+                border: "none", borderRadius: 999,
+                padding: "5px 12px",
+                cursor: "pointer",
+                fontFamily: "inherit", fontWeight: "inherit",
+                letterSpacing: "inherit", fontSize: "inherit",
+                touchAction: "manipulation",
+              }}>
+              {opt.l}
+            </button>
+          ))}
+        </div>
+        <span style={{
+          flex: 1, textAlign: "right",
+          fontFamily: "'Cormorant Garamond', serif",
+          fontStyle: "italic", fontSize: 12.5,
+          color: C.ink,
+        }}>
+          {refDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: 1.5, fontStyle: "italic" }}>
+        Set what applies to {setupForTomorrow ? "tomorrow" : "today"} — the scheduler uses this to pick the right blocks.
+      </div>
       {/* v05.05bt317 — Per chat: 'When planning tomorrow - the mode wfh
           or onsite and when to wake up and such should apply to
           tomorrow if in the tomorrow tab or today if in the today tab
@@ -34784,31 +35387,8 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
           tomorrow's setup is a follow-up build (needs a separate
           tomorrowSetup state); for now we make the day scope visible
           so the user isn't surprised. */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "8px 12px", marginBottom: 12,
-        background: `${isTomorrow ? C.daddy : C.mommy}1a`,
-        border: `1px solid ${isTomorrow ? C.daddy : C.mommy}55`,
-        borderRadius: 8,
-      }}>
-        <span style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: 10, letterSpacing: "0.12em",
-          textTransform: "uppercase", fontWeight: 700,
-          color: isTomorrow ? C.daddy : C.mommy,
-        }}>Applies to</span>
-        <span style={{
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: 15, fontStyle: "italic",
-          color: C.ink,
-        }}>
-          {isTomorrow ? "Tomorrow" : "Today"}
-          {referenceDate && ` · ${new Date(referenceDate).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
-        </span>
-      </div>
-      <div style={{ fontSize: 11, color: C.muted, marginBottom: 14, lineHeight: 1.5, fontStyle: "italic" }}>
-        Set what applies to {isTomorrow ? "tomorrow" : "today"} — the scheduler uses this to pick the right blocks.
-      </div>
+      {/* v05.05bt357 — Old "Applies to" banner removed; the day
+          toggle pill above already shows the date. */}
 
       {/* Mode */}
       <div style={{ marginBottom: 16 }}>
@@ -34817,6 +35397,7 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
         </div>
         <div style={{ display: "flex", gap: 6 }}>
           <button
+            type="button"
             onClick={() => onsite && setOnsite(null)}
             style={{
               flex: 1,
@@ -34826,25 +35407,32 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
               borderRadius: 8, padding: "10px",
               fontSize: 13, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
+              touchAction: "manipulation",
             }}>
             🏠 WFH
           </button>
+          {/* v05.05bt357 — Per chat: 'when switch to onsite, it
+              should not be a daddy color which is blue.' Onsite is a
+              neutral state (covered/away), not a parent role —
+              switch to gold so it doesn't visually claim "Daddy". */}
           <button
+            type="button"
             onClick={() => !onsite && setOnsite({ parent: "Mommy", startedAt: new Date().toISOString(), simple: true })}
             style={{
               flex: 1,
-              background: onsite ? C.daddy : "transparent",
+              background: onsite ? C.gold : "transparent",
               color: onsite ? "#fff" : C.muted,
-              border: `1px solid ${onsite ? C.daddy : C.line + "33"}`,
+              border: `1px solid ${onsite ? C.gold : C.line + "33"}`,
               borderRadius: 8, padding: "10px",
               fontSize: 13, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
+              touchAction: "manipulation",
             }}>
             🏢 Onsite
           </button>
         </div>
         <div style={{ fontSize: 10, color: C.muted, marginTop: 4, fontStyle: "italic" }}>
-          {onsite ? "Grandparents / daycare has baby during work hours · shifts resume after" : "Baby duty applies during your shifts"}
+          {onsite ? "Solène with caregiver during work hours · shifts resume after" : "Baby duty applies during your shifts"}
         </div>
         {/* v05.05bt297 — Per chat: 'Onsite days 8-5 should be work
             task so no rail colors. Then back to regular shifts
