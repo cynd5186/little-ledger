@@ -15,13 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt381";
+const APP_VERSION = "2026.05.05bt382";
 const APP_BUILD_NOTES = [
-  "BRAIN DUMP MODAL CUTOFF + ACKNOWLEDGED REGRESSIONS. This is a small build because the user asked me to talk first about the bigger items. (1) Brain dump bottom-sheet was hand-rolled (not via ModalShell) and missing env(safe-area-inset-bottom) padding, so on iPhones the 'Drop into the drawer' button slid under the home indicator. Added safe-area-inset-bottom to paddingBottom, plus maxHeight + overflow-y auto so a tall keyboard doesn't shove the sheet out of view. The other items in chat (white border, header sticky regression, glow tuning, inline title/time edit being 'gone', tile tap not working) are addressed in the response — most are either already wired in bt380 (the user needs to deploy that build to see them) or need mockups/screenshots before I touch code.",
-  "BOTTLE PRE-SELECT + TASK PILE UX BATCH 1. Per chat (massive 18-item dump): focusing this build on the highest-impact fixes that don't need investigation. (1) BOTTLE PICKER PRE-SELECT. The inline tile panel's per-bottle buttons were calling onPickBottle(zone, bottleId) but the App handler ignored the bottleId, so the picker always opened with the oldest bottle pre-selected. New App-level bottlePickerInitialId state + threaded through to UseBottleModal via initialBottleId prop. Modal seeds selectedId and oz from the matching bottle when provided, falls back to oldest-first otherwise. Cleared on close alongside loc. (2) TAP-OUTSIDE DISMISS FOR PILE × PROMPT. Per chat: 'how about if i accidentally hit it and i dont want to delete then i should be able to click anywhere else on the screen and that delete prompt disappears.' useEffect on pilePendingActionId attaches a document-level pointerdown listener (50ms after arming, so the same tap that armed doesn't immediately clear). Listener checks closest('[data-pile-delete-btn]') and only clears when the tap is NOT on the × button itself — so the second tap can still commit. The × button got the data attribute. (3) INLINE EDIT TASK NAME. Per chat: 'i should also be able to edit task name right there and then on the task pile.' Reused the existing inlineTitleEdit / commitInlineTitle helpers (already wired into the scheduled-timeline render). Added a small ✎ button next to the title in the pile TaskRow that sets inlineTitleEdit = t.id and closes the quick-action panel. When edit mode is active, the title span renders as an autofocused <input> that commits on blur / Enter and cancels on Escape. (4) REGRET SORT DEBOUNCE. Per chat: 'when i am changing regret scores maybe give it some time before it gets resorted because if i am going from a 1 to a 5 then it moves suddenly on me and i end up changing another task instead by accident.' New regretSortFrozen state + armRegretFreeze helper. cycleRegret() sets it true + 2s timeout to clear. backlog sort and unscheduledTodayBucket sort both gated: comparator returns 0 while frozen, preserving input-array order. Badge value updates immediately so the user sees progress; positions hold until the user stops tapping. (5) PLAN FROM QUEUE PROMINENCE. Per chat: 'the plan for queue also needs to be more prominent because i didnt realize it was there.' Was a 12.5px italic gold link buried under the sections. Now a 11px bold uppercase mono CTA with mauve-tinted bg, ☑ glyph, and an italic 'pick from all unscheduled →' hint on the right. Reads as a primary affordance.\n\nDISCOVERED ALREADY IN PLACE: bottle inline use/edit/discard infrastructure (armBottleDiscard, onQuickUseBottle/onEditBottle/onDiscardBottle plumbing through OnDutyCard → MilkPanel, full inline action buttons in renderExpanded), tappable empty pile sections (all three sections already render dashed buttons that open the NL input).\n\nDEFERRED (not yet investigated): pump timer wrongly turning green when overdue (need to inspect cadence math); top panel sticky/frozen (need to find which header); notifications dismissible (find each toast); routine/predicted task visual differentiation (bigger system change); white outer border and residual glow in schedule (need to inspect); clock icon on 'use this bottle next' panel restyling; 'pinned' rename + arrow +Xm explanation (unclear what specific glyph user is referring to); PWA shortcut icon update (text instructions in chat response, not code). \"Today\" header was checked — already left-aligned in current code; user may be referring to a different element.\n\nSCOPING: 1 new App-level state (bottlePickerInitialId) + matching threading through 1 modal prop, 1 useState init refactor in UseBottleModal, 1 useEffect for tap-outside dismiss + 1 data attribute on the × button, ~40-line input/button JSX addition to TaskRow for rename, 1 new state pair + 1 helper for regret freeze + 2 sort comparator gates, 1 button restyle. Build verified clean via esbuild.",
+  "MILK TILE → MODAL + SOFTER GLOW. Per chat: 'lets go with softer glow ... when you tap on the inventory tiles, it is hard to see what shows up — is it better as a popup modal?' Yes. (1) MILK TILE → MODAL. Reverted bt378's inline-expand behavior. Tile onClick now calls onPickBottle(zoneKey), which opens UseBottleModal for that zone — the pre-bt378 flow. UseBottleModal already has all the use / edit / discard / move / log-anyway / bulk-manage affordances with proper room to breathe. The inline expand panel (renderExpanded + the slim Row component) is left in the file as dormant code so we can flip back if the modal-and-context tradeoff isn't worth it; nothing currently sets milkZoneExpanded so renderExpanded short-circuits to null. UseBottleModal's bt380 initialBottleId pre-select still works for any caller that wants to seed a specific bottle (the inline tile click doesn't, but other call sites might in the future). (2) NOW-LINE GLOW SOFTENED. The @keyframes nl-now-pill-pulse and nl-now-line-pulse keyframes dropped their outer 22px-44px halo layers and halved the remaining alphas (0.4-0.7 → 0.22-0.35). Pulse still breathes 2.4s ease-in-out so the live cursor stays identifiable, but no longer reads as a marquee. Matches mockup option B sent in chat.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt381", summary: "Brain Dump modal bottom cutoff. The hand-rolled bottom-sheet (showBrainDump) was missing env(safe-area-inset-bottom) padding so the submit button slid under the iOS home indicator. Added paddingBottom: calc(24px + env(safe-area-inset-bottom, 0px)) plus maxHeight: calc(100dvh - 60px) + overflowY: auto so keyboard-induced viewport shrink doesn't push the sheet off-screen. Build verified clean via esbuild. Most other items in chat were either (a) already wired in bt380 awaiting deploy (inline title/time edit on timeline tasks; the tile click expand panel with use/edit/discard), or (b) deferred pending mockup feedback (glow level — about to send 3-option HTML), screenshot (white border location, 'Today' centering — code looks left-aligned), or behavioral repro (header not sticky — code is sticky, may need iOS-specific debug)." },
+  { version: "2026.05.05bt382", summary: "Milk tile reverted to opening UseBottleModal + softer NOW-line glow. (1) Tile onClick rewired from setMilkZoneExpanded(zoneKey) back to onPickBottle(zoneKey) — restores the pre-bt378 modal flow where use/edit/discard/move/log-anyway/bulk-manage have full room. Inline renderExpanded + Row component left as dormant code (no caller sets milkZoneExpanded). UseBottleModal initialBottleId pre-select (bt380) preserved for future callers. (2) @keyframes nl-now-pill-pulse and nl-now-line-pulse rewritten per mockup option B: dropped outer halo layers (was 3 stacked shadows including 0 0 22-44px outermost), halved alpha (0.4-0.7 → 0.22-0.35), kept inset highlight on pill and 2.4s pulse rate. Build verified clean via esbuild." },
+  { version: "2026.05.05bt381", summary: "Brain Dump modal bottom cutoff. The hand-rolled bottom-sheet (showBrainDump) was missing env(safe-area-inset-bottom) padding so the submit button slid under the iOS home indicator. Added paddingBottom: calc(24px + env(safe-area-inset-bottom, 0px)) plus maxHeight: calc(100dvh - 60px) + overflowY: auto so keyboard-induced viewport shrink doesn't push the sheet off-screen. Build verified clean via esbuild." },
   { version: "2026.05.05bt228", summary: "Visual split of free rows at shift boundaries. (1) Inside the dayTimeline useMemo, captured buildDayTimeline output as rawTimeline. (2) New post-processing helper splitFreeAtBoundaries(items) walks the timeline: for each item where kind !== 'free' OR start/end missing, passes through unchanged. For each free item, collects shift-boundary timestamps from activeShifts.Mommy + activeShifts.Daddy that fall strictly within [item.start, item.end]. If no internal cuts, passes through unchanged. Otherwise generates one sub-item per [cut[i], cut[i+1]] range. Sub-items with durationMin < 5 are dropped (slivers). (3) useMemo returns splitFreeAtBoundaries(rawTimeline). SCOPING: 1 helper + 1 final return wrap inside the existing dayTimeline useMemo. Zero changes to buildDayTimeline, scheduler, schema, palette, modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt227", summary: "Mixed-duty block sub-line breakdown (dormant after bt228 since each visual row is single-owner now, but kept for edge cases). railSegments refactored to include startMs/endMs. isMixedOwner = railSegments.length > 1. Open-block sub-line IIFE branches on isMixedOwner: when true, computes per-segment effectiveBlockProfile, surfaces breakdown bullets with owner-colored time ranges. Build verified clean via esbuild." },
   { version: "2026.05.05bt226", summary: "Past-free-block render as closed. (1) Added isPast + isPastFree derivation in row scope: isPast = !isTomorrow && slot.end <= now. isPastFree = isFree && isPast. (2) Free-block onClick handler gated on !isPast. (3) Title block rewrite inside the isFree ternary: past → muted-italic '✕ Closed · time has passed'; not-past → original gold open-label span + nap-badge IIFE. (4) Row cursor + opacity updated for past free rows (0.55 fade)." },
@@ -10264,42 +10264,35 @@ function FontImports() {
           transform: translate(-50%, 0) translateZ(0) scale(1.05);
         }
       }
-      /* v05.05bt198 — NOW-line breathing pulse. Per chat ('might be
-         TOO glowy and need pulsing/breathing'). Two keyframes:
-         pill-pulse for the label+time pills, line-pulse for the
-         horizontal 1.5px line glow. Both consume --nl-color set
-         inline so the keyframe adapts to current on-duty owner
-         color (mauve/slate/gold). 2.4s ease-in-out infinite. */
+      /* v05.05bt198 → bt382 — NOW-line pulse softened. Per chat: 'lets
+         go with softer glow' (option B from the mockup). Dropped the
+         outermost halo layers and roughly halved alphas. Still pulses
+         so the live cursor is identifiable, but doesn't read as Vegas
+         marquee against the dark Cadence background. */
       @keyframes nl-now-pill-pulse {
         0%, 100% {
           box-shadow:
-            0 2px 6px -2px var(--nl-color, rgba(0,0,0,0.4)),
-            0 0 12px -2px var(--nl-color, rgba(0,0,0,0.5)),
-            0 0 22px -8px var(--nl-color, rgba(0,0,0,0.35)),
-            inset 0 1px 0 rgba(255,255,255,0.28),
-            inset 0 -1px 0 rgba(0,0,0,0.10);
+            0 1px 4px -2px var(--nl-color, rgba(0,0,0,0.30)),
+            0 0 8px -3px var(--nl-color, rgba(0,0,0,0.22)),
+            inset 0 1px 0 rgba(255,255,255,0.16),
+            inset 0 -1px 0 rgba(0,0,0,0.08);
         }
         50% {
           box-shadow:
-            0 2px 12px -2px var(--nl-color, rgba(0,0,0,0.55)),
-            0 0 26px -2px var(--nl-color, rgba(0,0,0,0.7)),
-            0 0 46px -6px var(--nl-color, rgba(0,0,0,0.45)),
-            inset 0 1px 0 rgba(255,255,255,0.28),
-            inset 0 -1px 0 rgba(0,0,0,0.10);
+            0 1px 6px -2px var(--nl-color, rgba(0,0,0,0.35)),
+            0 0 12px -3px var(--nl-color, rgba(0,0,0,0.30)),
+            inset 0 1px 0 rgba(255,255,255,0.16),
+            inset 0 -1px 0 rgba(0,0,0,0.08);
         }
       }
       @keyframes nl-now-line-pulse {
         0%, 100% {
           box-shadow:
-            0 0 12px -2px var(--nl-color, rgba(0,0,0,0.5)),
-            0 0 24px -8px var(--nl-color, rgba(0,0,0,0.35)),
-            0 0 44px -18px var(--nl-color, rgba(0,0,0,0.2));
+            0 0 8px -3px var(--nl-color, rgba(0,0,0,0.22));
         }
         50% {
           box-shadow:
-            0 0 20px -2px var(--nl-color, rgba(0,0,0,0.7)),
-            0 0 44px -8px var(--nl-color, rgba(0,0,0,0.55)),
-            0 0 84px -16px var(--nl-color, rgba(0,0,0,0.35));
+            0 0 14px -3px var(--nl-color, rgba(0,0,0,0.32));
         }
       }
       .fade-up { animation: fadeUp 0.5s ease-out both; }
@@ -12468,18 +12461,22 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
         // bt361 since that's compact and readable.
         const Tile = ({ zoneKey, label, glyph, oz, bottles, urgencyHint, urgent, span }) => {
           const empty = bottles.length === 0;
-          const isExpanded = milkZoneExpanded === zoneKey;
-          // v05.05bt378 — Per chat: 'clicking on the inventory tiles is
-          // either laggy for RT or does nothing as in the fridge.' Root
-          // cause: tile click was wired to onPickBottle (opens
-          // UseBottleModal) instead of toggling milkZoneExpanded (inline
-          // detail panel via renderExpanded). The handoff intent was
-          // tap-to-expand. Empty tiles also toggle expansion so the
-          // expanded panel can host the '+ add' button consistently.
+          // v05.05bt378 → bt382: bt378 changed this tile to expand an
+          // inline panel below. Per chat (bt382): 'when you tap on
+          // the inventory tiles, it is hard to see what shows up …
+          // is it better as a popup modal?' Yes — the inline panel
+          // was competing with tile chrome for visibility and the
+          // freezer list got cramped. Tile click now opens
+          // UseBottleModal again (the pre-bt378 behavior), which has
+          // room for the use / edit / discard / move actions and
+          // pre-selects via initialBottleId when applicable. The
+          // inline panel code (renderExpanded, Row component) is
+          // left in place but no longer invoked, so we can flip
+          // back if needed.
           return (
             <button
               type="button"
-              onClick={() => setMilkZoneExpanded(isExpanded ? null : zoneKey)}
+              onClick={() => onPickBottle && onPickBottle(zoneKey)}
               style={{
                 gridColumn: span || "auto",
                 display: "flex", flexDirection: "column",
@@ -12487,19 +12484,16 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 gap: 8,
                 padding: "10px 12px",
                 minHeight: span === "1 / -1" ? 72 : 96,
-                background: empty
-                  ? (isExpanded ? `${C.line}10` : "transparent")
-                  : (isExpanded ? `${C.gold}10` : C.paper),
+                background: empty ? "transparent" : C.paper,
                 border: empty
-                  ? `1px dashed ${isExpanded ? C.gold + "66" : C.line + "33"}`
-                  : `1px solid ${isExpanded ? C.gold + "88" : (urgent ? C.accent + "55" : C.line + "22")}`,
+                  ? `1px dashed ${C.line}33`
+                  : `1px solid ${urgent ? C.accent + "55" : C.line + "22"}`,
                 borderRadius: 8,
                 cursor: "pointer", textAlign: "left",
                 fontFamily: "inherit",
                 opacity: empty ? 0.7 : 1,
                 touchAction: "manipulation",
                 WebkitTapHighlightColor: "transparent",
-                transition: "background 0.15s, border-color 0.15s",
               }}>
               {/* Top: label */}
               <div style={{
