@@ -15,12 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt385";
+const APP_VERSION = "2026.05.05bt386";
 const APP_BUILD_NOTES = [
-  "STICKY HEADER FIX. Per chat (after bt384 deployed and milk tile clicks started working): 'header scrolls away so stickiness did not work'. Root cause: the global CSS had `overflow-x: hidden` on the html element (in the `html, body, #root` rule). Setting any overflow value on html promotes it to a scroll container, which moves the scrolling ancestor for position:sticky descendants away from the viewport. The bt356 zoom fix (don't apply zoom: 1.0 since zoom creates a stacking context) was correct but only addressed half the problem; html.overflow-x was the other half. Split the rule: html, body, #root get margin:0 + padding:0 + bg:inherit. body, #root get overflow-x:hidden separately. html now stays as the default viewport scroller and sticky elements latch to its top edge as designed. Horizontal escapes are still clipped at body + #root level. Build verified clean via esbuild.",
+  "STICKY HEADER FIX, ROUND 2 — the actual fix. Per chat (after bt385): 'still header doesnt stick'. Found the real culprit: four @media queries in the global CSS apply `body { zoom: 1.20|1.35|1.45|1.55 }` at min-width 760/1100/1500/1900px on hover-capable + fine-pointer devices. The user is on Chrome on a Mac with a window >= 760px wide, so body was getting zoom: 1.20 — and ANY zoom value on body creates a stacking context that breaks position: sticky for every descendant. The bt356 conditional zoom fix only addressed the inline App-root zoom; these CSS media-query body zooms have been silently breaking sticky on desktop the whole time. (bt385's html.overflow-x split was still a legitimate improvement, just not enough.) Commented out all four media-query zoom rules. Trade-off: the app no longer auto-scales bigger on laptop screens — it stays at phone-style scale regardless of window width. User can use browser zoom (Cmd+=) if they want bigger text. Sticky now latches as designed. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt385", summary: "Sticky header fix. Split the `html, body, #root { overflow-x: hidden }` rule: overflow-x is now applied only to body + #root, not html. Setting overflow on the html element was promoting it to a scroll container and moving the scrolling ancestor for position:sticky descendants off the viewport, so the top banner wasn't latching. With html restored as the default scroller, the banner sticks to the top as intended. Horizontal-escape clipping preserved at body + #root level. Build verified clean via esbuild." },
+  { version: "2026.05.05bt386", summary: "Sticky header fix, round 2 (the real fix). Commented out the @media body { zoom: 1.20 - 1.55 } rules at min-width 760/1100/1500/1900px. The bt356 conditional zoom fix covered the inline App-root zoom but these CSS media-query body zooms were still firing on any laptop window >= 760px, creating a stacking context that broke position: sticky for every descendant. App no longer auto-scales bigger on laptop screens — stays at phone-style scale. Sticky banner now latches to viewport top as designed. Build verified clean via esbuild." },
+  { version: "2026.05.05bt385", summary: "Sticky header fix attempt 1 (partial). Split the `html, body, #root { overflow-x: hidden }` rule: overflow-x is now applied only to body + #root, not html. Legitimate improvement but @media body zooms (fixed in bt386) were the dominant cause on desktop. Build verified clean via esbuild." },
   { version: "2026.05.05bt384", summary: "Daily-content fetch retry loop fixed (root cause of multiple UI bugs). The useEffect at App scope was fetching from api.anthropic.com directly, getting blocked by CORS, and looping forever because the catch block didn't update dailyContent — so the dep-driven effect kept re-firing. On failure we now write a {failed:true, attemptedAt} sentinel into dailyContent[todayKey] which the existing early-exit check catches. Loop stops after one failed attempt per day. The Anthropic API call itself is not fixed — it can't be from a browser without a server proxy with the API key — but the page is no longer thrashing. This was almost certainly the root cause of the milk tile single-click feeling dead (event handlers starved by the loop), sticky header not latching (constant re-renders disrupting layout), and general lag in the screenshot session. Build verified clean via esbuild." },
   { version: "2026.05.05bt383", summary: "Scrollbar styling. Added ::-webkit-scrollbar rules (8px wide, transparent track, semi-transparent taupe thumb) + Firefox scrollbar-width/scrollbar-color equivalents. Eliminates the macOS Chrome default light-gray scrollbar track that was reading as a thin white border on the right edge of the dark Cadence palette. Page bg now paints continuously to the viewport edge. Build verified clean via esbuild." },
   { version: "2026.05.05bt382", summary: "Milk tile reverted to opening UseBottleModal + softer NOW-line glow. (1) Tile onClick rewired from setMilkZoneExpanded(zoneKey) back to onPickBottle(zoneKey) — restores the pre-bt378 modal flow where use/edit/discard/move/log-anyway/bulk-manage have full room. Inline renderExpanded + Row component left as dormant code (no caller sets milkZoneExpanded). UseBottleModal initialBottleId pre-select (bt380) preserved for future callers. (2) @keyframes nl-now-pill-pulse and nl-now-line-pulse rewritten per mockup option B: dropped outer halo layers (was 3 stacked shadows including 0 0 22-44px outermost), halved alpha (0.4-0.7 → 0.22-0.35), kept inset highlight on pill and 2.4s pulse rate. Build verified clean via esbuild." },
@@ -10279,6 +10280,17 @@ function FontImports() {
          which would have hit the old 900px breakpoint and shrunk
          everything on the phone). Tiers cover the realistic
          browser-window widths on each Mac at default scaling. */
+      /* v05.05bt386 — DISABLED. Per chat (sticky still didn't work
+         after bt385's html.overflow-x fix): even with that, the body
+         zoom rules below were still creating a stacking context that
+         broke position: sticky for every descendant on any laptop
+         window >= 760px. The bt356 conditional zoom fix only covered
+         the inline App-root zoom; these media-query body zooms have
+         been silently breaking sticky on desktop the whole time.
+         Removed by gating the @media query body to a no-op. Trade-off:
+         the app no longer auto-scales bigger on laptop screens. User
+         can use browser zoom (Cmd+=) if they want bigger text. */
+      /*
       @media (hover: hover) and (pointer: fine) and (min-width: 760px) {
         body { zoom: 1.20; }
       }
@@ -10291,6 +10303,7 @@ function FontImports() {
       @media (hover: hover) and (pointer: fine) and (min-width: 1900px) {
         body { zoom: 1.55; }
       }
+      */
       @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes pulse-soft { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
