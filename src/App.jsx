@@ -6,7 +6,7 @@ import {
   Play, Pause, RotateCcw, Flame, Package, Coffee, Timer, MapPin,
   BookOpen, Stethoscope, FileText, Copy, Printer, MessageSquare, Star,
   ArrowRightLeft, Gift, Volume2, AlarmClock, Search,
-  Home, PiggyBank,
+  Home, PiggyBank, Pin,
 } from "lucide-react";
 
 // ---- App identity ------------------------------------------------------
@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt400";
+const APP_VERSION = "2026.05.05bt402";
 const APP_BUILD_NOTES = [
-  "THREE SMALL UI CHANGES per chat answers. Held the larger items (routine NL detection, swipe quick-select, time-credit action, end-of-day export, pump mitigation banner) for separate focused builds to keep risk surface small after the bt398 → bt399 regression.\\n\\n(1) LAST PUMP TIME IN PUMP TILE. Per chat: 'maybe it would also help if we put a last pump time as well'. Added a second sub-line below the target/was line on the pump button. Format: 'last 8:44a · 40m' (end time + duration). Renders only when there IS a last pump and we're NOT currently pumping (the active state already shows 'started H:MM'). Smaller font (10px vs the 11px target line) and lower opacity (0.65 vs 0.85) so it reads as secondary context. Required threading `lastPump` as a new prop on MilkPanel.\\n\\n(2) PAST SLOTS FULL DIM TREATMENT. Per chat: 'past slots full dim treatment - i like your suggestion'. Extended the row opacity logic so past TASK rows now dim to 0.55 (was: only completed tasks + past free blocks dimmed). Past incomplete tasks (drift) are surfaced via the drift banner up top; the dimmed row says 'this is on your record' rather than 'act on me now'. Also hid the focus glyph (🧠/🍃) and R-chip on past task rows — they're decision-support affordances that don't apply to receipts.\\n\\n(3) ROUTINE / PREDICTED VISUAL DIFFERENTIATION. Per chat: 'i am ok with your proposal for routine/predicted task visual differentiation and also i want you to add that it is a predicted task if that is the case.' Library-sourced routine slots and feed-predicted slots now render at opacity 0.72 so they read as ambient context for the day rather than primary tasks. Italic titles were already in place from bt146. The PREDICTED tag pill (from bt181, via getBlockTag) was already on feed-predicted slots — that covers the 'add that it is a predicted task' ask. NOTE: USER-TYPED tasks with routine-y names (like 'AM routine' as a task title) don't yet get this treatment — they're still kind='task'. The smart NL detection that auto-marks those as kind='routine' is bt401's job, and once it ships, those tasks will inherit this treatment automatically (no further visual work needed).",
+  "HOTFIX + DISMISS-ABILITY FOR BANNERS. Per chat: 'lastPump is not defined' crash + 'still an issue with some of the notifications not being able to be ignored or dismissed.'\\n\\n(1) HOTFIX: lastPump SCOPE. bt400 added `lastPump={lastPump}` to the MilkPanel mount, but MilkPanel is mounted inside OnDutyCard — which doesn't have lastPump in scope. Same pattern as the bt399 hydrated crash. Threaded lastPump through: NowView mount now passes lastPump={lastPump} to OnDutyCard, and OnDutyCard's signature accepts it as a prop and forwards to MilkPanel. Self-inflicted, same prop-scope lesson as before; will audit any new prop additions more carefully going forward.\\n\\n(2) AUTO-SHIFTED BANNER × DISMISS. The 'N TASKS AUTO-SHIFTED' banner only had UNDO ALL as an action — no way to ignore. Restructured: the banner is now a flex container (was a single big button), with the main info+undo as the left content (still tap-to-undo) and a new × button on the right. State: autoShiftDismissedCount stores the count at dismiss time. Banner only renders when shifted.length > autoShiftDismissedCount, so if new shifts pile up beyond what was dismissed, the banner re-surfaces for the new count.\\n\\n(3) OVERLAP BANNER × DISMISS. Same pattern. 'OVERLAP · N pairs' banner had Auto-fix + Show buttons but no dismiss. Added × button on the right side. State: overlapDismissedCount mirrors the auto-shift logic — banner re-appears if overlap count exceeds what was dismissed. This protects against the 'I clicked ignore once and now I never see overlaps' failure mode.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt402", summary: "Hotfix + dismiss-ability. (1) Hotfix bt400 lastPump crash: lastPump is App-level state; bt400 added the prop directly on MilkPanel but MilkPanel is mounted inside OnDutyCard which didn't have lastPump. Threaded through NowView → OnDutyCard → MilkPanel. Same lesson as bt399 hydrated crash. (2) Auto-shifted banner gains × dismiss with count-based gating: dismissedCount stored, banner re-appears if count grows beyond dismissed. Banner restructured from a single big button to flex layout (content + UNDO ALL + ×). (3) Overlap banner gains × dismiss with same count-based gating, sits next to existing Auto-fix + Show buttons. Build verified clean via esbuild." },
+  { version: "2026.05.05bt401", summary: "Three row-level UI cleanups per chat screenshots. (1) ⋮⋮ move button: removed mauve border + bg tint, now a bare glyph at 32×32 tap target. (2) Pin: removed inline '◆ PIN' next to title; added Lucide Pin icon on right side (between R-chip and ⋮⋮) — always visible on incomplete tasks, gold-filled when pinned, muted-outline at 0.45 opacity when not. Tap toggles. (3) Auto-shift tag: '↻ +60m' renamed to 'AUTO-SHIFT +60m' uppercase mono so the verb is clear. Deeper overlap-compress algorithm queued for later. Build verified clean via esbuild." },
   { version: "2026.05.05bt400", summary: "Three small UI changes per chat answers. (1) Last pump time displayed in pump tile as a secondary sub-line under target/was, 'last H:MM · Xm' format, renders only when not actively pumping. lastPump threaded as a new MilkPanel prop. (2) Past task rows now dim to 0.55 same as completed tasks + past free blocks; focus glyph + R-chip also hidden on past task rows (receipts shouldn't show decision-support affordances). (3) Library routines + feed-predicted slots now render at opacity 0.72 for ambient-context look; italic titles already present from bt146, PREDICTED tag already on feed-predicted slots from bt181. User-typed routine tasks don't get this treatment until bt401's NL detection lands. Build verified clean via esbuild." },
   { version: "2026.05.05bt399", summary: "Hotfix for bt398 runtime crash. The time-credit useEffect referenced `hydrated`, which is App-level state and was never passed to TodayTaskPlanCard — caused 'hydrated is not defined' on first render. Replaced the gate with a tasks.length > 0 check on the seed-on-first-run guard, which serves the same purpose (don't seed an empty array, don't fire banners for already-completed tasks on app reload). Build verified clean via esbuild." },
   { version: "2026.05.05bt398", summary: "Two features per chat. (1) Fits picker search: free-text filter input shows above the category chips when 3+ candidates exist; case-insensitive substring match on title; clears on picker close. (2) Time-credit banner: TodayTaskPlanCard useEffect watches tasks for early completions (completedAt before scheduledEnd by >=5 min on a today-scheduled task) and surfaces a gold ✨ FREED banner with the freed minutes + which task. Info-only MVP — no re-slot affordance yet. Mount-seeding marks currently-completed tasks as already-processed so reload doesn't re-fire stale banners. Parser unchanged (bt397 work verified solid via test suite). Build verified clean via esbuild." },
@@ -6627,6 +6629,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           fridgeItems={liveInventory.filter(i => !i.expired && i.location === "fridge")}
           freezerItems={liveInventory.filter(i => !i.expired && i.location === "freezer")}
           nextPumpAt={nextPumpAt}
+          lastPump={lastPump}
           lastPumpedItem={(() => {
             const valid = liveInventory.filter(i => !i.expired);
             if (valid.length === 0) return null;
@@ -10745,7 +10748,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPump, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -27736,6 +27739,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return overlaps;
   }, [tasks, currentUser, now, todayISO]);
   const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
+  // v05.05bt402 — Per chat: 'still an issue with some of the
+  // notifications not being able to be ignored or dismissed.' Both
+  // the AUTO-SHIFTED banner and the OVERLAP banner only had action
+  // buttons (Undo all / Auto-fix / Show); no way to just ignore.
+  // Count-based dismiss: store the count at dismiss time, then only
+  // show the banner when the current count EXCEEDS the dismissed
+  // count. That way, if more shifts/overlaps happen later (user adds
+  // a new task that conflicts), the banner re-appears for the new
+  // count; if some resolve naturally, banner stays hidden.
+  const [autoShiftDismissedCount, setAutoShiftDismissedCount] = useState(null);
+  const [overlapDismissedCount, setOverlapDismissedCount] = useState(null);
   // v05.05bt280 — Per chat: 'when i hit on "fits..." the app still accepts
   // the suggestion rather than giving me options.' Track which open slot
   // is currently showing the picker (slot key = start ms). Tap "fits"
@@ -31342,35 +31356,40 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               );
             })()}
-            {/* v05.05bt324/351 — Auto-shift undo banner moved here
-                (below runway, above add-task pill). */}
+            {/* v05.05bt324/351 → bt402 — Auto-shift undo banner moved
+                here (below runway, above add-task pill). bt402 adds
+                count-based dismiss + × button. */}
             {(() => {
               const shifted = dayTimeline.filter(s => s.kind === "task" && s._shiftedByOverlap > 0 && s._originalStart);
               if (shifted.length === 0) return null;
+              if (autoShiftDismissedCount !== null && shifted.length <= autoShiftDismissedCount) return null;
               const totalShift = shifted.reduce((sum, s) => sum + (s._shiftedByOverlap || 0), 0);
               return (
-                <button
-                  onClick={() => {
-                    setTasks(prev => prev.map(t => {
-                      const m = shifted.find(s => s.id === t.id);
-                      if (!m || !m._originalStart) return t;
-                      const orig = m._originalStart;
-                      const hh = String(orig.getHours()).padStart(2, "0");
-                      const mm = String(orig.getMinutes()).padStart(2, "0");
-                      return { ...t, scheduledTime: `${hh}:${mm}`, pinned: true };
-                    }));
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 14px",
-                    background: `${C.accent}1c`,
-                    border: `1.5px solid ${C.accent}`,
-                    borderRadius: 10, marginBottom: 12,
-                    cursor: "pointer", textAlign: "left",
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 8,
-                  }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  background: `${C.accent}1c`,
+                  border: `1.5px solid ${C.accent}`,
+                  borderRadius: 10, marginBottom: 12,
+                  display: "flex", alignItems: "center",
+                  gap: 8,
+                }}>
+                  <button
+                    onClick={() => {
+                      setTasks(prev => prev.map(t => {
+                        const m = shifted.find(s => s.id === t.id);
+                        if (!m || !m._originalStart) return t;
+                        const orig = m._originalStart;
+                        const hh = String(orig.getHours()).padStart(2, "0");
+                        const mm = String(orig.getMinutes()).padStart(2, "0");
+                        return { ...t, scheduledTime: `${hh}:${mm}`, pinned: true };
+                      }));
+                    }}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      background: "transparent", border: "none", padding: 0,
+                      cursor: "pointer", textAlign: "left",
+                    }}>
                     <div style={{
                       fontFamily: "'JetBrains Mono', monospace",
                       fontSize: 10, letterSpacing: "0.14em",
@@ -31384,13 +31403,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                       Pushed forward {totalShift}m total to clear overlaps. Tap to undo all + pin originals.
                     </div>
-                  </div>
+                  </button>
                   <span style={{
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 9.5, letterSpacing: "0.12em",
                     fontWeight: 800, color: C.accent,
+                    alignSelf: "center",
                   }}>UNDO ALL</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setAutoShiftDismissedCount(shifted.length); }}
+                    title="Dismiss this notification"
+                    style={{
+                      background: "transparent", border: "none",
+                      fontSize: 18, color: C.muted, cursor: "pointer",
+                      padding: "0 4px", lineHeight: 1,
+                      alignSelf: "center",
+                    }}>×</button>
+                </div>
               );
             })()}
             {/* v05.05bt316/350/351 — Add-task pill, now BELOW runway. */}
@@ -31661,7 +31691,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
             {/* v05.05bt273 — Overlap warning. Tasks scheduled to
                 overlap each other = real correctness problem. */}
-            {!isTomorrow && overlapWarnings.length > 0 && (
+            {!isTomorrow && overlapWarnings.length > 0 && (overlapDismissedCount === null || overlapWarnings.length > overlapDismissedCount) && (
               <div style={{
                 background: `${C.accent}14`,
                 border: `1.5px solid ${C.accent}55`,
@@ -31704,6 +31734,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       fontSize: 11, letterSpacing: "0.08em", fontWeight: 700,
                       textTransform: "uppercase",
                     }}>{overlapBannerExpanded ? "Hide" : "Show"}</button>
+                  {/* v05.05bt402 — × dismiss. Banner re-appears if the
+                      overlap count grows beyond what was dismissed. */}
+                  <button
+                    type="button"
+                    onClick={() => setOverlapDismissedCount(overlapWarnings.length)}
+                    title="Dismiss this notification"
+                    style={{
+                      background: "transparent", border: "none",
+                      fontSize: 18, color: C.muted, cursor: "pointer",
+                      padding: "0 4px", lineHeight: 1,
+                    }}>×</button>
                 </div>
                 {overlapBannerExpanded && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.accent}33` }}>
@@ -33087,7 +33128,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   background: `${C.accent}14`,
                                   padding: "1px 5px", borderRadius: 3,
                                   border: "none", cursor: "pointer",
-                                }}>↻ +{slot._shiftedByOverlap}m</button>
+                                  textTransform: "uppercase",
+                                }}>{/* v05.05bt401 — Per chat (2nd screenshot):
+                                    'i have NO idea what the tag means
+                                    with the arrow and the +60m.' Was
+                                    "↻ +60m" — too cryptic to read out
+                                    of context. Now reads as "AUTO-SHIFT
+                                    +60m" so the verb is clear; the
+                                    tooltip still explains undo. The
+                                    deeper "compress duration instead
+                                    of displacing" overlap algorithm
+                                    is queued for a later build. */}
+                                  AUTO-SHIFT +{slot._shiftedByOverlap}m</button>
                             )}
                             {/* v05.05bt277 — Coverage badge: this slice is
                                 a coverage adjustment (e.g. Mommy covering
@@ -33124,30 +33176,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 for this common toggle. Tasks WITHOUT
                                 a pin can be pinned by tapping the
                                 hollow ○ that appears on hover/touch. */}
-                            {isTask && slot.pinned && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, pinned: false } : t));
-                                }}
-                                title="Tap to unpin (Reanalyze can move it)"
-                                style={{
-                                  background: "transparent", border: "none",
-                                  padding: "2px 4px", marginLeft: 4,
-                                  cursor: "pointer",
-                                  fontSize: 11, color: C.gold,
-                                  verticalAlign: "middle", lineHeight: 1,
-                                  fontWeight: 700,
-                                  letterSpacing: "0.05em",
-                                }}>{/* v05.05bt365 — was 📌 emoji
-                                   (rendered fixed red on iOS, out of
-                                   palette per chat: 'I don't like the
-                                   pin icon. It is so red and seems
-                                   out of place with my aesthetic.').
-                                   Replaced with a styleable text
-                                   glyph that takes C.gold cleanly. */}
-                                  ◆ PIN</button>
-                            )}
+                            {/* v05.05bt401 — Inline ◆ PIN badge removed.
+                                Per chat: 'for the pin - can we just have
+                                a clear pin icon on the right side of
+                                the task card that i can either click
+                                or not click. i am not a fan of the way
+                                the pin is made.' New always-visible
+                                pin toggle now lives on the right side
+                                between R3 and the ⋮⋮ grip — see
+                                further down in this render. */}
                             {/* v05.05bt196 — Recurring badge. Daily/weekly
                                 tasks show a small ↻ in mauve next to title. */}
                             {isTask && slot.recurringRule && (
@@ -34249,6 +34286,44 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             R{slot.regretScore}
                           </button>
                         )}
+                        {/* v05.05bt401 — Pin toggle on the right side
+                            of the task row. Per chat: 'for the pin -
+                            can we just have a clear pin icon on the
+                            right side of the task card that i can
+                            either click or not click.' Always visible
+                            on incomplete tasks (so you can pin OR
+                            unpin without a hover state). Gold + solid
+                            when pinned (Lucide Pin's default fill);
+                            muted + lower opacity when unpinned so
+                            it reads as a quiet affordance not a
+                            badge. Tap toggles. Past + completed task
+                            rows hide it (those are receipts). */}
+                        {isTask && !slot.completedAt && !isPast && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, pinned: !t.pinned } : t));
+                            }}
+                            title={slot.pinned ? "Pinned — tap to unpin (Reanalyze can move it)" : "Tap to pin to this time"}
+                            style={{
+                              background: "transparent", border: "none",
+                              padding: "4px 4px", cursor: "pointer",
+                              display: "inline-flex", alignItems: "center",
+                              lineHeight: 1,
+                              color: slot.pinned ? C.gold : C.muted,
+                              opacity: slot.pinned ? 1 : 0.45,
+                            }}>
+                            <Pin
+                              size={13}
+                              strokeWidth={slot.pinned ? 2.5 : 1.75}
+                              fill={slot.pinned ? C.gold : "none"}
+                              style={{
+                                transform: slot.pinned ? "rotate(-30deg)" : "rotate(0deg)",
+                                transition: "transform 0.15s",
+                              }}
+                            />
+                          </button>
+                        )}
                         {/* v05.05bt279 — Timer moved inline into the time
                             column (status-aware visibility). Right column
                             no longer carries it — reduces clutter, lets
@@ -34266,13 +34341,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             title="Hold and drag to move"
                             aria-label="Drag to move task"
                             style={{
-                              // v05.05bt318 — Per chat: 'It may just be
-                              // easier to have that little symbol on the
-                              // side right to allow user to click and
-                              // drag and move to where they want it.'
-                              // Bigger, more visible grip — bordered
-                              // box so it reads as 'grab me' not as
-                              // decoration. Larger tap target (32x32).
+                              // v05.05bt318 → bt401 — Per chat: 'the move
+                              // button on the far right - is there any
+                              // way we can remove the border to make it
+                              // less cluttered?' Stripped the bordered
+                              // box (1px mauve outline + 10% bg tint)
+                              // back to a bare glyph; tap target stays
+                              // 32×32 so it remains comfortable on
+                              // mobile, just visually quieter.
                               width: 32, height: 32,
                               display: "inline-flex",
                               alignItems: "center", justifyContent: "center",
@@ -34284,9 +34360,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               touchAction: "none",
                               userSelect: "none",
                               fontWeight: 700,
-                              background: `${C.mommy}10`,
-                              border: `1px solid ${C.mommy}55`,
-                              borderRadius: 6,
+                              background: "transparent",
+                              border: "none",
                               flexShrink: 0,
                             }}>
                             ⋮⋮
