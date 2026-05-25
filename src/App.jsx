@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt399";
+const APP_VERSION = "2026.05.05bt400";
 const APP_BUILD_NOTES = [
-  "HOTFIX bt398 RUNTIME CRASH. Per chat error report: 'hydrated is not defined / ReferenceError'. The bt398 time-credit useEffect referenced `hydrated` as a gate, but `hydrated` is App-level state and the useEffect lives inside TodayTaskPlanCard (a separate component) — `hydrated` was never threaded as a prop. Component crashed on first render.\\n\\nFIX: removed the `hydrated` reference entirely. Replaced with a tasks.length > 0 gate for the seed-on-first-run guard. The App-level state hydrates async, so if tasks is briefly empty on first render we skip seeding (rather than seeding an empty array, flipping the seed-done flag, and then firing banners for all completions once tasks finally populate). Once tasks > 0, seed runs, sets the flag, returns. On the NEXT effect run with new completions, the banner fires as designed.\\n\\nNo behavior change vs the bt398 design intent. Just the missing scope wiring.",
+  "THREE SMALL UI CHANGES per chat answers. Held the larger items (routine NL detection, swipe quick-select, time-credit action, end-of-day export, pump mitigation banner) for separate focused builds to keep risk surface small after the bt398 → bt399 regression.\\n\\n(1) LAST PUMP TIME IN PUMP TILE. Per chat: 'maybe it would also help if we put a last pump time as well'. Added a second sub-line below the target/was line on the pump button. Format: 'last 8:44a · 40m' (end time + duration). Renders only when there IS a last pump and we're NOT currently pumping (the active state already shows 'started H:MM'). Smaller font (10px vs the 11px target line) and lower opacity (0.65 vs 0.85) so it reads as secondary context. Required threading `lastPump` as a new prop on MilkPanel.\\n\\n(2) PAST SLOTS FULL DIM TREATMENT. Per chat: 'past slots full dim treatment - i like your suggestion'. Extended the row opacity logic so past TASK rows now dim to 0.55 (was: only completed tasks + past free blocks dimmed). Past incomplete tasks (drift) are surfaced via the drift banner up top; the dimmed row says 'this is on your record' rather than 'act on me now'. Also hid the focus glyph (🧠/🍃) and R-chip on past task rows — they're decision-support affordances that don't apply to receipts.\\n\\n(3) ROUTINE / PREDICTED VISUAL DIFFERENTIATION. Per chat: 'i am ok with your proposal for routine/predicted task visual differentiation and also i want you to add that it is a predicted task if that is the case.' Library-sourced routine slots and feed-predicted slots now render at opacity 0.72 so they read as ambient context for the day rather than primary tasks. Italic titles were already in place from bt146. The PREDICTED tag pill (from bt181, via getBlockTag) was already on feed-predicted slots — that covers the 'add that it is a predicted task' ask. NOTE: USER-TYPED tasks with routine-y names (like 'AM routine' as a task title) don't yet get this treatment — they're still kind='task'. The smart NL detection that auto-marks those as kind='routine' is bt401's job, and once it ships, those tasks will inherit this treatment automatically (no further visual work needed).",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt400", summary: "Three small UI changes per chat answers. (1) Last pump time displayed in pump tile as a secondary sub-line under target/was, 'last H:MM · Xm' format, renders only when not actively pumping. lastPump threaded as a new MilkPanel prop. (2) Past task rows now dim to 0.55 same as completed tasks + past free blocks; focus glyph + R-chip also hidden on past task rows (receipts shouldn't show decision-support affordances). (3) Library routines + feed-predicted slots now render at opacity 0.72 for ambient-context look; italic titles already present from bt146, PREDICTED tag already on feed-predicted slots from bt181. User-typed routine tasks don't get this treatment until bt401's NL detection lands. Build verified clean via esbuild." },
   { version: "2026.05.05bt399", summary: "Hotfix for bt398 runtime crash. The time-credit useEffect referenced `hydrated`, which is App-level state and was never passed to TodayTaskPlanCard — caused 'hydrated is not defined' on first render. Replaced the gate with a tasks.length > 0 check on the seed-on-first-run guard, which serves the same purpose (don't seed an empty array, don't fire banners for already-completed tasks on app reload). Build verified clean via esbuild." },
   { version: "2026.05.05bt398", summary: "Two features per chat. (1) Fits picker search: free-text filter input shows above the category chips when 3+ candidates exist; case-insensitive substring match on title; clears on picker close. (2) Time-credit banner: TodayTaskPlanCard useEffect watches tasks for early completions (completedAt before scheduledEnd by >=5 min on a today-scheduled task) and surfaces a gold ✨ FREED banner with the freed minutes + which task. Info-only MVP — no re-slot affordance yet. Mount-seeding marks currently-completed tasks as already-processed so reload doesn't re-fire stale banners. Parser unchanged (bt397 work verified solid via test suite). Build verified clean via esbuild." },
   { version: "2026.05.05bt397", summary: "Three fixes per chat (rest deferred with questions). (1) Parser comma-merge: 'task, shallow, R5' style inputs no longer split into separate tasks. Added a pre-split merge pass that absorbs marker-only comma segments (time tags, focus tags, regret/priority tags, recurring tags) into the preceding segment. Bare-'shallow' fallback added (end-of-title only, after regret extraction) so 'buy shallow dishes' stays untouched but 'respond to emails shallow' picks up focus. Verified 7/7 cases. (2) Section header 'For today · N' → 'Unscheduled for today · N' per chat. (3) Fits-here picker scoped to today's pile only — no more yesterday's leftovers cluttering the suggestions. Build verified clean via esbuild." },
@@ -11922,6 +11923,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         freezerItems={freezerItems}
         nextPumpAt={nextPumpAt}
         lastPumpedItem={lastPumpedItem}
+        lastPump={lastPump}
         todayCalories={todayCalories}
         activePump={activePump}
         onStartPump={onStartPump}
@@ -11951,7 +11953,7 @@ function fmtPredictedNextFeed(lastFeed, now) {
 }
 
 // Milk panel: shown on both parents' on-duty card
-function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, onJustLogPump }) {
+function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafeOz, feedsRunway, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPump, now, todayCalories, lastPumpedItem, activePump, onStartPump, onEndActivePump, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, onJustLogPump }) {
   const isMom = currentUser === "Mommy";
   // Chrome that's not specifically about Mommy (lactation) but still inside
   // MilkPanel — bottle markers, "last bottle" tile, etc. — should follow
@@ -12446,6 +12448,24 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 ? `was ${fmtTimeShort(nextPumpAt)}`
                 : `target ${fmtTimeShort(nextPumpAt)}`}
             </div>
+            {/* v05.05bt400 — Per chat: 'maybe it would also help if we
+                put a last pump time as well'. Renders only when there
+                IS a last pump and we're not currently pumping (active
+                state already shows "started H:MM"). Uses end-time
+                (start + durationMin) since that's what feels like
+                "when I finished" to the user. Smaller + lower opacity
+                so it doesn't compete with the target line. */}
+            {!activePump && lastPump && (() => {
+              const start = new Date(lastPump.ts);
+              if (isNaN(start.getTime())) return null;
+              const dur = Number(lastPump.durationMin) || 0;
+              const end = dur > 0 ? new Date(start.getTime() + dur * 60000) : start;
+              return (
+                <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", opacity: 0.65, marginTop: 1 }}>
+                  last {fmtTimeShort(end)}{dur > 0 ? ` · ${dur}m` : ""}
+                </div>
+              );
+            })()}
           </div>
         </button>
         );
@@ -32555,7 +32575,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       })() : {}),
                       alignItems: "center",
                       cursor: isBeingDragged ? "grabbing" : (isFree && !isPast ? "pointer" : (isTask && !slot.completedAt ? "grab" : "default")),
-                      opacity: isBeingDragged ? 0.92 : (isTask && slot.completedAt ? 0.55 : (isPastFree ? 0.55 : 1)),
+                      // v05.05bt400 — Past task rows now dim same as
+                      // completed-task receipts and past free blocks.
+                      // Per chat: 'past slots full dim treatment - i
+                      // like your suggestion.' Past incomplete tasks
+                      // (drift) get surfaced via the drift banner; the
+                      // dimmed row indicates "this is on your record"
+                      // rather than "act on me now". Routine/predicted
+                      // slots get a softer dim (0.72) so they read as
+                      // ambient context for the day rather than
+                      // primary action items, per the user-approved
+                      // proposal ('opacity 0.72 + italic title + small
+                      // mauve predicted tag').
+                      opacity: isBeingDragged ? 0.92
+                        : ((isTask && (slot.completedAt || isPast)) || isPastFree) ? 0.55
+                        : (isRoutine || isFeedPred) ? 0.72
+                        : 1,
                       transition: isBeingDragged
                         ? "none"
                         : (swipedTaskId === slot.id && swipeOffset !== 0)
@@ -34166,7 +34201,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }
                           return null;
                         })()}
-                        {isTask && !slot.completedAt && (() => {
+                        {/* v05.05bt400 — Hide focus glyph + R-chip on
+                            past task rows (receipts don't need the
+                            decide-affordance). Was already hidden on
+                            completed tasks; extending to past tasks
+                            so the row reads cleanly as a record. */}
+                        {isTask && !slot.completedAt && !isPast && (() => {
                           const fl = normalizeFocus(slot.focusLevel);
                           // v05.05bt321 — Per chat (screenshot): 'if I
                           // put nap then I see a bottle emoji - i am
@@ -34194,7 +34234,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             </button>
                           );
                         })()}
-                        {isTask && !slot.completedAt && (
+                        {isTask && !slot.completedAt && !isPast && (
                           <button
                             onClick={(e) => { e.stopPropagation(); cycleRegret(slot.id); }}
                             style={{
