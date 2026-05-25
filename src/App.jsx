@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt395";
+const APP_VERSION = "2026.05.05bt398";
 const APP_BUILD_NOTES = [
-  "NL PARSER NOW EXTRACTS FOCUS + REGRET. Per chat: 'when free writing my day, brain dump or describing my day, parse out focus mode and regrets because i could always free write that in.' User picked 'lean for cleanliness' — the matched phrases are stripped from the title so the saved task reads clean.\\n\\nFOUR CHANGES:\\n\\n(1) parseOneNlTask EXTENSION. Added focus + regret detection between recurring-rule detection and time parsing (so the new strips don't pollute later matchers). Two-phase approach: (a) walk all bracketed content `(...)` or `[...]` and pull focus/regret from inside — empty brackets are dropped, brackets with leftover content stay so meaning isn't lost; (b) then run outside-brackets matchers for shapes like 'write paper deep work' (two-word phrase required) or 'finish report R3' (compact form).\\n\\n(2) RECOGNIZED FOCUS SHAPES. Two-word phrases anywhere: 'deep work' / 'deep focus' / 'shallow work' / 'light work' / 'low focus'. Bare words INSIDE brackets only: '(deep)' / '[shallow]' / '(light)' / '(low)'. Deliberately NOT matched: bare 'deep' / 'shallow' alone (no brackets, no work/focus suffix) — too ambiguous with 'deep clean', 'deep dive', etc. Verified with a 19-case test: 'deep clean the kitchen' stays untouched, 'write paper deep work' becomes title='write paper' + focus=deep.\\n\\n(3) RECOGNIZED REGRET SHAPES. 'R5' / 'R 4' (compact); 'regret 5' / 'regret: 4' / 'priority 3' / 'pri 5' (explicit phrase); any of the above inside brackets. Number must be 1-5. Composite tags work: '(deep R5)' parses to both focus=deep + regret=5 and yields a clean title.\\n\\n(4) DEFAULTS LOGIC AT EVERY CONSUMER. addBrainDump, fast-path NL commit, and reviewBeforeAdding all updated to use parser-detected focusLevel/regretScore when present, falling back to nlDefaultFocus/nlDefaultRegret only when parser didn't see anything. Before this build, the consumers were unconditionally overwriting the parser's values with the defaults — which would've made parser-detection silently no-op even if it had run.\\n\\nReturn shape of parseOneNlTask now extends with `focusLevel` (string|null) and `regretScore` (number|null). The 19-case regression suite confirms zero false positives on common 'deep verb' patterns.",
+  "FITS PICKER SEARCH + TIME-CREDIT BANNER. Per chat: 'go with your suggestios...start with the search in fits picker, the time credit, and also the parser.' Parser is already solid from bt397 (7/7 test cases pass including the user's exact comma example), so this build covers items #7 and #8 from the deferred list.\\n\\n(1) FITS PICKER SEARCH. New free-text filter inside the expanded fits picker. Renders above the category chips whenever there are 3+ candidates (below that the chips + scroll are enough). Filters by title via case-insensitive substring match. Empty input shows everything. × button clears. Search state lives in TodayTaskPlanCard (fitsPickerSearch) and resets every time the picker closes so each new tap starts fresh. Implementation note: searchActive only applies when the picker is EXPANDED — the collapsed-view top-candidate hint ignores it so the preview line stays useful.\\n\\n(2) TIME-CREDIT BANNER. Per chat: 'if things are done ahead of time, should we have some reanalysis or you bought back x amount of time or apply it to unfinished previous tasks.' MVP info-only banner that surfaces freed minutes when a scheduled task is checked off before its scheduled end. Detection lives in TodayTaskPlanCard: a useEffect watches the tasks array and, for each task owned by the current user with completedAt + scheduledTime + scheduledDate matching today, computes scheduledEnd (= scheduledStart + effortMin) and compares to completedAt. If freedMin >= 5, banner appears with the freed minutes + the title of the task that finished early. Mount-seeding: on first hydration the effect marks all currently-completed tasks as already-processed so a reload doesn't re-fire stale banners; only completions made DURING this session trigger the surface. Banner renders just above the drift banner — gold-tinted (positive signal) vs the coral drift (negative), with ✨ FREED eyebrow + ×-dismiss. No re-slot action this build; that's the obvious next iteration.\\n\\n(3) PARSER — NO CHANGE. The bt397 work covered the user's exact comma-marker input ('respond to emails, at 3pm, shallow, regret 5' parses as one task with all four fields extracted) plus 6 other regression cases. No further parser tweaks this build.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt398", summary: "Two features per chat. (1) Fits picker search: free-text filter input shows above the category chips when 3+ candidates exist; case-insensitive substring match on title; clears on picker close. (2) Time-credit banner: TodayTaskPlanCard useEffect watches tasks for early completions (completedAt before scheduledEnd by >=5 min on a today-scheduled task) and surfaces a gold ✨ FREED banner with the freed minutes + which task. Info-only MVP — no re-slot affordance yet. Mount-seeding marks currently-completed tasks as already-processed so reload doesn't re-fire stale banners. Parser unchanged (bt397 work verified solid via test suite). Build verified clean via esbuild." },
+  { version: "2026.05.05bt397", summary: "Three fixes per chat (rest deferred with questions). (1) Parser comma-merge: 'task, shallow, R5' style inputs no longer split into separate tasks. Added a pre-split merge pass that absorbs marker-only comma segments (time tags, focus tags, regret/priority tags, recurring tags) into the preceding segment. Bare-'shallow' fallback added (end-of-title only, after regret extraction) so 'buy shallow dishes' stays untouched but 'respond to emails shallow' picks up focus. Verified 7/7 cases. (2) Section header 'For today · N' → 'Unscheduled for today · N' per chat. (3) Fits-here picker scoped to today's pile only — no more yesterday's leftovers cluttering the suggestions. Build verified clean via esbuild." },
+  { version: "2026.05.05bt396", summary: "Pump timer math fix. Two interacting bugs found. (1) FinishPumpModal saves pump events with ts: start, but bt380 lastStart calc + journal display were both assuming ts: end when mode='end' (matching seed data, not real data). Computed lastStart 30-60min before actual start — overdue check fired late or never, journal showed wrong session range. Both fixed to use ts directly. (2) Stale manualSessions from yesterday persisted on Now tab (the staleness-reset useEffect lives in TodaysPumpPlanCard, which the user may never open). Cascading bt86/bt87 shifts left yesterday's plan with only late-evening entries, which at 8am today read as ~11h to next pump. App-level nextPumpAt now ignores manualSessions when manualSessionsDate doesn't match today; falls to lastStart+3hr fallback, which produces the correct ~3h target. Build verified clean via esbuild." },
   { version: "2026.05.05bt395", summary: "NL parser extracts focus + regret from free-write text and strips matched phrases from title (option a, lean for cleanliness). (1) parseOneNlTask gains a two-phase tag detector — bracket-content walker first (handles composite '(deep R5)' / '(low focus)' parens), then outside-brackets matchers for 'deep work' / 'R3' style. Bare 'deep'/'shallow' without brackets-or-suffix intentionally not matched so 'deep clean the kitchen' stays untouched. (2) addBrainDump, fast-path NL commit, and reviewBeforeAdding all updated to honor parser-detected values; defaults only apply when parser saw nothing. Previously the consumers were unconditionally overwriting parser values. Verified with a 19-case offline test suite covering composite parens, mixed order, and negative cases. Build verified clean via esbuild." },
   { version: "2026.05.05bt394", summary: "Three UX tightenings per chat. (1) Plan from queue removed (button + state + modal) — inline edit and per-row quick actions cover the same flow. (2) Timeline checkbox shrunk from 24×24 visual (in 32×32 tap area) to 18×18 visual (in 28×28 tap area). Inner ✓ scaled to match. Still comfortable mobile tap target. (3) Past free-block reasoning suppressed: the bt226 'Closed · time has passed' title treatment extended by gating the sub-line IIFE (focus eyebrow + careLabel + 'what fits here' + WHY THIS SLOT panel) on !isPast. Past free rows now render as a single quiet line. Past task rows unchanged. Parser change (extract focus mode + regret from brain dump) deferred to its own focused build. Build verified clean via esbuild." },
   { version: "2026.05.05bt393", summary: "↺ now keeps tasks in today's pile (was sending to Backlog in bt391/392). Per chat: user wants manually-unscheduled tasks visible in today's For Today section with a tag so they can be re-slotted mid-day. (1) Bucket derivation reverted to date-based (forToday = scheduledDate=today + no scheduledTime). (2) Section header reverted from 'Couldn't fit' to 'For today' — bucket now covers both engine failures AND user choices, so the original name is more honest. (3) ↺ semantics: clears scheduledTime + pinned, KEEPS scheduledDate, sets _unscheduledByUser=true, clears _couldNotFit. (4) New '↺ MOVED OFF' tag in row render (gold) sits alongside existing '✗ WON'T FIT' (coral) — differentiates user choice from engine failure. Tag auto-hides when task gets scheduledTime again. Build verified clean via esbuild." },
@@ -3735,7 +3738,23 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     //     auto-shift effect handles the late-pump rebalance once logged.
     //   • Fall back to lastPump.start + PUMP_INTERVAL_HRS when no plan
     //     exists (initial state, fresh app, plan cleared).
-    if (Array.isArray(pumpPlan?.manualSessions) && pumpPlan.manualSessions.length > 0) {
+    // v05.05bt396 — Per chat (possible cause of '11 hours' next-pump
+    // reading): only honor pumpPlan.manualSessions when the recorded
+    // manualSessionsDate matches today. The TodaysPumpPlanCard clears
+    // stale entries when the user visits that tab, but if the user
+    // stays on the Now tab across midnight (likely for a 4-month-old
+    // baby keeping mom up overnight), yesterday's accumulated bt86 +
+    // bt87 shifts persist and the nextPumpAt iteration walks an old
+    // list of fractional hours. With yesterday's plan having drifted
+    // late through cascading missed-pump shifts, the only remaining
+    // future entry can be ~7-8pm, producing the bogus 11-hour wait.
+    const todayKey = (() => {
+      const d = new Date(now); d.setHours(0, 0, 0, 0);
+      return d.toISOString().slice(0, 10);
+    })();
+    const planIsFresh = !pumpPlan?.manualSessionsDate
+      || pumpPlan.manualSessionsDate === todayKey;
+    if (planIsFresh && Array.isArray(pumpPlan?.manualSessions) && pumpPlan.manualSessions.length > 0) {
       // v05.05bt267 — Pick the NEXT-DUE session, not the earliest. Per
       // chat: 'check pump due time on mommy profile. Seems to be wrong.'
       // Previously took sorted[0] which is always the first session of
@@ -3767,9 +3786,20 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       // lastPump at all (first pump of the day) we let the plan
       // drive the first session.
       if (lastPump) {
-        const lastStart = lastPump.mode === "start"
-          ? new Date(lastPump.ts)
-          : new Date(new Date(lastPump.ts).getTime() - (lastPump.durationMin || 30) * 60000);
+        // v05.05bt396 — Per chat: 'still an issue with the pump timer
+        // - i just logged a pump at 844a for ending a power pump
+        // session and my timer now says i am on track with the next
+        // pump in 11 hours. that does not make sense.' Root cause: the
+        // bt380 calc assumed mode='end' meant ts=end (seed-data
+        // convention), and subtracted durationMin to derive start.
+        // But FinishPumpModal saves ts: start regardless of mode (see
+        // line 7929 and the explicit comment in the doneSessions
+        // derivation at line ~37800: "ts IS the start time"). So for
+        // every real-logged pump, lastStart was being computed
+        // durationMin BEFORE the actual start — making hoursSinceLast
+        // appear shorter than reality and the overdue check fire late
+        // or not at all. Treat ts as start always; mode is metadata.
+        const lastStart = new Date(lastPump.ts);
         const hoursSinceLast = (now.getTime() - lastStart.getTime()) / 3600000;
         if (hoursSinceLast >= PUMP_INTERVAL_HRS) {
           // Overdue — show lastPump + interval (in the past) so the
@@ -3787,9 +3817,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     }
     // Fallback: fixed-interval estimate from last pump
     if (!lastPump) return null;
-    const startTime = lastPump.mode === "start"
-      ? new Date(lastPump.ts)
-      : new Date(new Date(lastPump.ts).getTime() - (lastPump.durationMin || 30) * 60000);
+    // v05.05bt396 — Same ts-is-start fix as above. Previously treated
+    // ts as end when mode='end' and subtracted duration, which yielded
+    // a startTime before the actual start.
+    const startTime = new Date(lastPump.ts);
     return new Date(startTime.getTime() + PUMP_INTERVAL_HRS * 3600000);
   }, [lastPump, pumpPlan, now]);
 
@@ -15395,15 +15426,17 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                         const prefix = isPower ? "⚡ Power pump" : "Pump";
                         const labelStr = e.bottleLabel ? ` · Bottle ${e.bottleLabel}` : "";
                         const base = `${prefix}${e.oz ? ` · ${e.oz}oz` : ""}${e.durationMin ? ` · ${e.durationMin}m` : ""}${labelStr}`;
-                        // Append start–end range if we have duration. mode
-                        // tells us whether ts is the start or end of the
-                        // session; we compute the missing edge from durationMin.
+                        // v05.05bt396 — Same ts-is-start fix as the
+                        // pump-timer nextPumpAt calc. ts is always the
+                        // session START per FinishPumpModal; mode is
+                        // metadata. Old code assumed mode='end' meant
+                        // ts=end and subtracted duration, which gave
+                        // a start time 30-60 min BEFORE reality.
                         if (!e.durationMin) return base;
                         const ts = new Date(e.ts);
                         if (isNaN(ts.getTime())) return base;
-                        const isEnd = e.mode === "end";
-                        const start = isEnd ? new Date(ts.getTime() - e.durationMin * 60000) : ts;
-                        const end = isEnd ? ts : new Date(ts.getTime() + e.durationMin * 60000);
+                        const start = ts;
+                        const end = new Date(ts.getTime() + e.durationMin * 60000);
                         return `${base} (${fmtTimeShort(start)}–${fmtTimeShort(end)})`;
                       })()}
                       {e.type === "diaper" && `Diaper · ${diaperLabel(e.notes)}${e.pooSize === "lots" ? " 💩💩💩" : e.pooSize === "tiny" ? " · tiny" : ""}`}
@@ -23689,6 +23722,26 @@ function parseNaturalLanguageTasks(text) {
     .map(s => s.replace(/\u0002/g, "."))  // restore decimals
     .map(s => s.trim())
     .filter(Boolean);
+  // v05.05bt397 — Per chat: user wrote "respond to emails, at 3pm,
+  // shallow, regret 5" and got 4 separate tasks because commas split
+  // metadata off from the task title. Pre-pass: detect short
+  // "marker-only" segments (time tags, focus tags, regret/priority
+  // tags, recurring tags) and absorb them back into the preceding
+  // segment so they parse as task metadata, not separate tasks.
+  // Conservative: only matches when the WHOLE segment is the marker —
+  // avoids accidentally swallowing "buy shallow dish" or similar.
+  const MARKER_ONLY_RE = /^\s*(?:(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)|(?:deep(?:\s+(?:work|focus))?|shallow(?:\s+work)?|light(?:\s+work)?|low(?:\s+focus)?)|(?:R\s*[1-5]|regret\s*[:\s]?\s*[1-5]|priority\s*[:\s]?\s*[1-5]|pri\s*[:\s]?\s*[1-5])|daily|weekly|every\s+\w+|each\s+\w+)\s*$/i;
+  if (segments.length > 1) {
+    const merged = [];
+    for (const seg of segments) {
+      if (MARKER_ONLY_RE.test(seg) && merged.length > 0) {
+        merged[merged.length - 1] = `${merged[merged.length - 1]} ${seg}`;
+      } else {
+        merged.push(seg);
+      }
+    }
+    segments = merged;
+  }
   if (segments.length === 1 && segments[0].length > 25) {
     const verbSplit = aggressiveVerbSplit(segments[0]);
     if (verbSplit.length >= 2) segments = verbSplit;
@@ -23812,6 +23865,23 @@ function parseOneNlTask(text) {
     const m = title.match(regretPhraseRe) || title.match(regretCompactRe);
     if (m) {
       regretScore = parseInt(m[1], 10);
+      title = title.replace(m[0], " ").trim();
+    }
+  }
+  // v05.05bt397 — Bare-word fallback for less-ambiguous focus markers
+  // ONLY, restricted to the END of the title and run AFTER regret
+  // extraction so a trailing "shallow regret 5" sequence becomes just
+  // "shallow" at the end after the regret strip. After the comma-merge
+  // pre-pass, metadata tags get appended as the last words, so matching
+  // only at end avoids false positives like "buy shallow dishes" while
+  // still catching "respond to emails shallow" (post-merge). "deep" is
+  // intentionally NOT matched here ("deep clean" / "deep dive" are
+  // common verb phrases). "light" / "low" also skipped — too overloaded
+  // ("light dinner" / "low priority").
+  if (!focusLevel) {
+    const m = title.match(/\bshallow\s*$/i);
+    if (m) {
+      focusLevel = "shallow";
       title = title.replace(m[0], " ").trim();
     }
   }
@@ -27554,6 +27624,65 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return { count, earliest };
   }, [tasks, currentUser, now, todayISO]);
   const [driftDismissed, setDriftDismissed] = useState(false);
+
+  // v05.05bt398 — Time-credit detection. Per chat: 'if things are done
+  // ahead of time, should we have some reanalysis or you bought back x
+  // amount of time or apply it to unfinished previous tasks.' MVP:
+  // detect when a scheduled task is completed before its scheduled
+  // end and surface the freed minutes as a banner. Action affordance
+  // (apply to pile, slide upcoming tasks earlier, etc.) deferred —
+  // info first, do-something next iteration.
+  //
+  // Detection: for each task this user owns that is (a) completed,
+  // (b) has scheduledTime, (c) is for today, the difference between
+  // scheduledEnd (= scheduledStart + effortMin) and completedAt gives
+  // freedMin. We require freedMin >= 5 to avoid noise from "right on
+  // time" finishes. processedCreditIdsRef tracks which task IDs we've
+  // already surfaced a banner for, so re-renders don't re-fire and a
+  // dismissed banner stays dismissed for that task.
+  const [timeCreditBanner, setTimeCreditBanner] = useState(null);
+  const processedCreditIdsRef = useRef(new Set());
+  const creditSeededRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated) return;
+    // v05.05bt398 — On first run after hydration, seed the processed
+    // set with every currently-completed task so the banner only
+    // fires for completions made DURING this session. Without this,
+    // reloading the app after an early finish earlier in the day
+    // would re-surface the banner — confusing because the freed time
+    // has already been used.
+    if (!creditSeededRef.current) {
+      for (const t of (tasks || [])) {
+        if (t.completedAt) processedCreditIdsRef.current.add(t.id);
+      }
+      creditSeededRef.current = true;
+      return;
+    }
+    for (const t of (tasks || [])) {
+      if (t.ownerName !== currentUser) continue;
+      if (!t.completedAt) continue;
+      if (!t.scheduledTime) continue;
+      if (t.scheduledDate && t.scheduledDate !== referenceISO) continue;
+      if (processedCreditIdsRef.current.has(t.id)) continue;
+      const [h, m] = t.scheduledTime.split(":").map(Number);
+      if (!Number.isFinite(h)) continue;
+      const scheduledStart = new Date(now);
+      scheduledStart.setHours(h, m || 0, 0, 0);
+      const scheduledEnd = new Date(scheduledStart.getTime() + (t.effortMin || 30) * 60000);
+      const completedAt = new Date(t.completedAt);
+      if (isNaN(completedAt.getTime())) continue;
+      const freedMin = Math.floor((scheduledEnd.getTime() - completedAt.getTime()) / 60000);
+      processedCreditIdsRef.current.add(t.id);
+      if (freedMin >= 5) {
+        setTimeCreditBanner({
+          freedMin,
+          fromTaskId: t.id,
+          fromTitle: t.title,
+          freedAt: completedAt.toISOString(),
+        });
+      }
+    }
+  }, [tasks, hydrated, currentUser, referenceISO, now]);
   // v05.05bt273 — Overlap detection. Per chat: 'there should be an alert
   // or something with overlapping times. For example I have one task
   // ending at 9:15 and another starting at 9p. That's an issue.'
@@ -27601,11 +27730,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // section state. Both reset on picker close.
   const [pickerNewTitle, setPickerNewTitle] = useState("");
   const [pickerShowMove, setPickerShowMove] = useState(false);
+  // v05.05bt398 — Per chat: 'should be a search under the fits for
+  // faster picking.' Free-text filter for the expanded fits picker
+  // candidate list. Resets on picker close so each new open starts
+  // empty.
+  const [fitsPickerSearch, setFitsPickerSearch] = useState("");
   useEffect(() => {
     if (fitsPickerSlotKey === null) {
       setFitsCategoryFilter("all");
       setPickerNewTitle("");
       setPickerShowMove(false);
+      setFitsPickerSearch("");
     }
   }, [fitsPickerSlotKey]);
   // v05.05bt321 — Per chat (screenshot): 'should be able to cancel out
@@ -31577,6 +31712,43 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               </div>
             )}
 
+            {/* v05.05bt398 — Time-credit banner. Renders when the
+                user completes a scheduled task before its scheduled
+                end (freedMin >= 5). Gold-tinted to read as a positive
+                signal (vs the coral drift banner). Info-only for MVP
+                — × dismisses. Apply-to-something affordance comes
+                next iteration. */}
+            {!isTomorrow && timeCreditBanner && (
+              <div style={{
+                background: `${C.gold}14`,
+                border: `1.5px solid ${C.gold}55`,
+                borderRadius: 10,
+                padding: "10px 14px",
+                marginBottom: 12,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10.5, letterSpacing: "0.10em",
+                  color: C.gold, fontWeight: 800,
+                }}>✨ FREED</div>
+                <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{timeCreditBanner.freedMin}</span>{" "}
+                  min back from{" "}
+                  <span style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+                    {timeCreditBanner.fromTitle}
+                  </span>
+                  <span style={{ color: C.muted, fontStyle: "italic" }}> — finished early.</span>
+                </div>
+                <button
+                  onClick={() => setTimeCreditBanner(null)}
+                  style={{
+                    background: "transparent", border: "none",
+                    fontSize: 16, color: C.muted, cursor: "pointer",
+                    padding: 0, lineHeight: 1,
+                  }}>×</button>
+              </div>
+            )}
             {/* v05.05bt181 — Drift banner. Shows when tasks have
                 blown past their planned end time. Tap re-slot to push
                 them into remaining free time (respects pinned). */}
@@ -33255,18 +33427,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   Tap to slot the suggestion into this
                                   block. AI stub button alongside. */}
                               {(() => {
-                                // v05.05bt281 — Candidates now include
-                                // leftover-from-yesterday (tasks with
-                                // scheduledDate < todayISO that didn't
-                                // complete). Per chat: 'tap-open-block
-                                // shows me options ... leftover from
-                                // the previous day (or at least it
-                                // should).'
+                                // v05.05bt281 → bt397 → bt398 — Candidates
+                                // pull from the CURRENT day's pile only:
+                                // backlog (no scheduledDate) + today
+                                // (scheduledDate matches referenceISO).
+                                // bt398 adds the free-text search filter
+                                // from chat ('should be a search under the
+                                // fits for faster picking'). Search only
+                                // applies when picker is expanded — the
+                                // collapsed preview ignores it so the
+                                // top-candidate hint stays useful.
+                                const slotKey = `${slot.start.getTime()}`;
+                                const isExpanded = fitsPickerSlotKey === slotKey;
+                                const searchActive = isExpanded && fitsPickerSearch.trim().length > 0;
+                                const searchLower = fitsPickerSearch.trim().toLowerCase();
                                 const candidates = (tasks || [])
                                   .filter(t => t.ownerName === currentUser
                                             && !t.completedAt
                                             && !t.scheduledTime
-                                            && (showAllInFitsPicker || (t.effortMin || 30) <= slot.durationMin))
+                                            && (!t.scheduledDate || t.scheduledDate === referenceISO)
+                                            && (showAllInFitsPicker || (t.effortMin || 30) <= slot.durationMin)
+                                            && (!searchActive || (t.title || "").toLowerCase().includes(searchLower)))
                                   .sort((a, b) => {
                                     // v05.05bt313 — In show-all mode,
                                     // fitting tasks still surface first.
@@ -33279,9 +33460,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     if ((b.regretScore || 0) !== (a.regretScore || 0)) return (b.regretScore || 0) - (a.regretScore || 0);
                                     return (a.effortMin || 30) - (b.effortMin || 30);
                                   });
-                                const slotKey = `${slot.start.getTime()}`;
                                 const slotTime = `${String(slot.start.getHours()).padStart(2, "0")}:${String(slot.start.getMinutes()).padStart(2, "0")}`;
-                                const isExpanded = fitsPickerSlotKey === slotKey;
                                 const topCount = Math.min(candidates.length, 5);
                                 const top = candidates[0];
                                 // Collapsed: show preview + tap to expand
@@ -33391,6 +33570,61 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1,
                                       }}>×</button>
                                     </div>
+                                    {/* v05.05bt398 — Search input above
+                                        the category chips. Filters
+                                        candidates by title (case-insensitive
+                                        substring match). When the list
+                                        has >=3 candidates the search is
+                                        worth showing; below that the
+                                        category chips + scroll are
+                                        enough. Empty search shows
+                                        everything. */}
+                                    {(() => {
+                                      // Show search when there are
+                                      // enough candidates to scroll OR
+                                      // when search is already active
+                                      // (so user can clear it).
+                                      const showSearch = candidates.length >= 3 || searchActive;
+                                      if (!showSearch) return null;
+                                      return (
+                                        <div style={{
+                                          display: "flex", alignItems: "center", gap: 6,
+                                          marginBottom: 8,
+                                        }}>
+                                          <span style={{
+                                            fontFamily: "'JetBrains Mono', monospace",
+                                            fontSize: 10, color: C.muted, opacity: 0.7,
+                                          }}>🔍</span>
+                                          <input
+                                            type="text"
+                                            value={fitsPickerSearch}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => setFitsPickerSearch(e.target.value)}
+                                            placeholder="search tasks..."
+                                            style={{
+                                              flex: 1, minWidth: 0,
+                                              fontFamily: "'Cormorant Garamond', serif",
+                                              fontSize: 13, fontStyle: "italic",
+                                              padding: "4px 8px",
+                                              background: C.bg, color: C.ink,
+                                              border: `1px solid ${C.line}44`,
+                                              borderRadius: 4,
+                                              outline: "none",
+                                            }}
+                                          />
+                                          {fitsPickerSearch && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); setFitsPickerSearch(""); }}
+                                              style={{
+                                                background: "transparent", border: "none",
+                                                color: C.muted, cursor: "pointer",
+                                                fontSize: 13, padding: "0 4px", lineHeight: 1,
+                                              }}>×</button>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                     {/* v05.05bt354/357 — D hybrid:
                                         ✦ BEST chip + category chips.
                                         BEST shows algorithm's top
@@ -34966,7 +35200,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
                             color: C.gold, textTransform: "uppercase",
-                          }}>For today · {forToday.length}</span>
+                          }}>Unscheduled for today · {forToday.length}</span>
                           <span style={{
                             marginLeft: "auto",
                             fontSize: 11, color: C.gold, opacity: 0.5,
