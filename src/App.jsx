@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt393";
+const APP_VERSION = "2026.05.05bt395";
 const APP_BUILD_NOTES = [
-  "↺ KEEPS TASK IN TODAY + 'MOVED OFF' TAG. Per chat: 'I think tapping ↺ on a scheduled task SHOULD revert it back to today in case one were to decide midday that they want to switch it back in. It could just be tagged so user knows it was one that was unscheduled manually.' User pushed back on bt391/bt392's 'send to Backlog' semantics — they want manually-unscheduled tasks to stay in today's pile with a visible tag, so they're easy to re-slot mid-day instead of getting buried in Backlog.\n\nFOUR CHANGES THAT REVERT/UPDATE bt391:\n\n(1) BUCKET DERIVATION reverted to date-based. forToday = scheduledDate === referenceISO && !scheduledTime. Same as the pre-bt391 logic. Tasks land here whether the engine couldn't fit them OR the user manually unscheduled them.\n\n(2) SECTION HEADER reverted from 'Couldn't fit' (bt391) back to 'For today'. The bucket name needs to cover both engine failures AND user choices, so 'For today' is more honest than either '✗ Couldn't fit' or '↺ Moved off' alone.\n\n(3) ↺ SEMANTICS UPDATED. Both timeline ↺ and pile ↺ now clear scheduledTime + pinned, KEEP scheduledDate, set _unscheduledByUser=true, and clear _couldNotFit + _couldNotFitReason (since this isn't an engine failure). The task stays visible in today's For Today section with a tag.\n\n(4) NEW '↺ MOVED OFF' TAG added next to the existing '✗ WON'T FIT' tag in the row render. Differentiates user-choice unschedules from engine failures so the user knows which is which. Coral→gold color shift signals 'user did this' (not a problem). Tag auto-hides when the task gets a scheduledTime again (whether via drag, edit modal, or reanalyze) so no manual flag management needed.\n\nRationale captured from user: 'if it was originally scheduled for today then likely the user wanted to do it today but had to compromise and unscheduled it for whatever reason and no sense re-hunting it down in backlog.' True. Backlog is for tasks with no day commitment; today's pile is for tasks that wanted today, regardless of why they don't currently have a slot.",
+  "NL PARSER NOW EXTRACTS FOCUS + REGRET. Per chat: 'when free writing my day, brain dump or describing my day, parse out focus mode and regrets because i could always free write that in.' User picked 'lean for cleanliness' — the matched phrases are stripped from the title so the saved task reads clean.\\n\\nFOUR CHANGES:\\n\\n(1) parseOneNlTask EXTENSION. Added focus + regret detection between recurring-rule detection and time parsing (so the new strips don't pollute later matchers). Two-phase approach: (a) walk all bracketed content `(...)` or `[...]` and pull focus/regret from inside — empty brackets are dropped, brackets with leftover content stay so meaning isn't lost; (b) then run outside-brackets matchers for shapes like 'write paper deep work' (two-word phrase required) or 'finish report R3' (compact form).\\n\\n(2) RECOGNIZED FOCUS SHAPES. Two-word phrases anywhere: 'deep work' / 'deep focus' / 'shallow work' / 'light work' / 'low focus'. Bare words INSIDE brackets only: '(deep)' / '[shallow]' / '(light)' / '(low)'. Deliberately NOT matched: bare 'deep' / 'shallow' alone (no brackets, no work/focus suffix) — too ambiguous with 'deep clean', 'deep dive', etc. Verified with a 19-case test: 'deep clean the kitchen' stays untouched, 'write paper deep work' becomes title='write paper' + focus=deep.\\n\\n(3) RECOGNIZED REGRET SHAPES. 'R5' / 'R 4' (compact); 'regret 5' / 'regret: 4' / 'priority 3' / 'pri 5' (explicit phrase); any of the above inside brackets. Number must be 1-5. Composite tags work: '(deep R5)' parses to both focus=deep + regret=5 and yields a clean title.\\n\\n(4) DEFAULTS LOGIC AT EVERY CONSUMER. addBrainDump, fast-path NL commit, and reviewBeforeAdding all updated to use parser-detected focusLevel/regretScore when present, falling back to nlDefaultFocus/nlDefaultRegret only when parser didn't see anything. Before this build, the consumers were unconditionally overwriting the parser's values with the defaults — which would've made parser-detection silently no-op even if it had run.\\n\\nReturn shape of parseOneNlTask now extends with `focusLevel` (string|null) and `regretScore` (number|null). The 19-case regression suite confirms zero false positives on common 'deep verb' patterns.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt395", summary: "NL parser extracts focus + regret from free-write text and strips matched phrases from title (option a, lean for cleanliness). (1) parseOneNlTask gains a two-phase tag detector — bracket-content walker first (handles composite '(deep R5)' / '(low focus)' parens), then outside-brackets matchers for 'deep work' / 'R3' style. Bare 'deep'/'shallow' without brackets-or-suffix intentionally not matched so 'deep clean the kitchen' stays untouched. (2) addBrainDump, fast-path NL commit, and reviewBeforeAdding all updated to honor parser-detected values; defaults only apply when parser saw nothing. Previously the consumers were unconditionally overwriting parser values. Verified with a 19-case offline test suite covering composite parens, mixed order, and negative cases. Build verified clean via esbuild." },
+  { version: "2026.05.05bt394", summary: "Three UX tightenings per chat. (1) Plan from queue removed (button + state + modal) — inline edit and per-row quick actions cover the same flow. (2) Timeline checkbox shrunk from 24×24 visual (in 32×32 tap area) to 18×18 visual (in 28×28 tap area). Inner ✓ scaled to match. Still comfortable mobile tap target. (3) Past free-block reasoning suppressed: the bt226 'Closed · time has passed' title treatment extended by gating the sub-line IIFE (focus eyebrow + careLabel + 'what fits here' + WHY THIS SLOT panel) on !isPast. Past free rows now render as a single quiet line. Past task rows unchanged. Parser change (extract focus mode + regret from brain dump) deferred to its own focused build. Build verified clean via esbuild." },
   { version: "2026.05.05bt393", summary: "↺ now keeps tasks in today's pile (was sending to Backlog in bt391/392). Per chat: user wants manually-unscheduled tasks visible in today's For Today section with a tag so they can be re-slotted mid-day. (1) Bucket derivation reverted to date-based (forToday = scheduledDate=today + no scheduledTime). (2) Section header reverted from 'Couldn't fit' to 'For today' — bucket now covers both engine failures AND user choices, so the original name is more honest. (3) ↺ semantics: clears scheduledTime + pinned, KEEPS scheduledDate, sets _unscheduledByUser=true, clears _couldNotFit. (4) New '↺ MOVED OFF' tag in row render (gold) sits alongside existing '✗ WON'T FIT' (coral) — differentiates user choice from engine failure. Tag auto-hides when task gets scheduledTime again. Build verified clean via esbuild." },
   { version: "2026.05.05bt392", summary: "Rolled back bt391's auto-trigger useEffect (caused Schedule-tab error). Kept the 3-state pile and ↺-to-Backlog semantics — though both partially undone in bt393." },
   { version: "2026.05.05bt391", summary: "3-state pile model attempt — significantly reworked in bt393 after user feedback. Bucket derivation and ↺ semantics partially reverted; section header reverted to 'For today'." },
@@ -23749,6 +23751,74 @@ function parseOneNlTask(text) {
     title = title.replace(/\bevery\s+week\b|\bweekly\b|\beach\s+week\b/gi, "").trim();
   }
 
+  // v05.05bt395 — Focus + regret detection. Per chat: 'when free writing
+  // my day, brain dump or describing my day, parse out focus mode and
+  // regrets because i could always free write that in.' User picked
+  // 'lean for cleanliness' — phrases are stripped from the title after
+  // detection so the saved task reads clean.
+  //
+  // Strategy: process bracketed content first (so composite tags like
+  // "(deep work R5)" or "(low focus)" can yield both fields and the
+  // empty bracket gets cleaned up). Then run outside-the-brackets
+  // matchers for shapes like "write paper deep work" or "respond R3".
+  //
+  // Focus phrases are deliberately explicit ("deep work" / "deep focus"
+  // / "shallow work" / "light work" / "low focus", or bare "deep" /
+  // "shallow" / "light" / "low" INSIDE brackets) so common verbs like
+  // "deep clean the kitchen" don't get hijacked into focusLevel: deep.
+  let focusLevel = null;
+  let regretScore = null;
+
+  // Regexes used in both bracket and bare passes:
+  const focusInsideRe = /\b(deep(?:\s+(?:work|focus))?|shallow(?:\s+work)?|light(?:\s+work)?|low(?:\s+focus)?)\b/i;
+  const focusPhraseOnlyRe = /\b(deep\s+work|deep\s+focus|shallow\s+work|light\s+work|low\s+focus)\b/i;
+  const regretInsideRe = /\b(?:R|regret|priority|pri)[:\s]*([1-5])\b/i;
+  const regretPhraseRe = /\b(?:regret|priority|pri)[:\s]+([1-5])\b/i;
+  const regretCompactRe = /\bR\s*([1-5])\b/;
+
+  // Pass 1: process bracketed content. Anything `(...)` or `[...]` —
+  // try to extract focus + regret from inside. Drop the brackets if
+  // they're empty afterward; keep them with the residue otherwise.
+  title = title.replace(/([(\[])([^)\]]+)([)\]])/g, (match, openB, inner, closeB) => {
+    let stripped = inner;
+    if (!focusLevel) {
+      const m = stripped.match(focusInsideRe);
+      if (m) {
+        focusLevel = /^deep/i.test(m[1]) ? "deep" : "shallow";
+        stripped = stripped.replace(m[0], " ").replace(/\s+/g, " ").trim();
+      }
+    }
+    if (regretScore === null) {
+      const m = stripped.match(regretInsideRe);
+      if (m) {
+        regretScore = parseInt(m[1], 10);
+        stripped = stripped.replace(m[0], " ").replace(/\s+/g, " ").trim();
+      }
+    }
+    return stripped ? `${openB}${stripped}${closeB}` : "";
+  });
+
+  // Pass 2: outside-brackets detection. Focus must be a two-word phrase
+  // here (bare "deep" without context is too ambiguous). Regret can be
+  // "regret 5" / "priority 3" / "R5".
+  if (!focusLevel) {
+    const m = title.match(focusPhraseOnlyRe);
+    if (m) {
+      focusLevel = /^deep/i.test(m[1]) ? "deep" : "shallow";
+      title = title.replace(m[0], " ").trim();
+    }
+  }
+  if (regretScore === null) {
+    const m = title.match(regretPhraseRe) || title.match(regretCompactRe);
+    if (m) {
+      regretScore = parseInt(m[1], 10);
+      title = title.replace(m[0], " ").trim();
+    }
+  }
+
+  // Collapse any double spaces left behind.
+  title = title.replace(/\s+/g, " ").trim();
+
   // Time: "at 11am", "at 2:30pm", "11am", "2:30pm", "11:00am", "noon", "midnight"
   if (/\bnoon\b/i.test(title)) {
     scheduledTime = "12:00";
@@ -23816,7 +23886,7 @@ function parseOneNlTask(text) {
   if (effortMin >= 30 && /\bemail|\bemails|\binbox\b/i.test(title)) {
     cadence = 15;
   }
-  return { title, effortMin, scheduledTime, recurringRule, cadence };
+  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -27737,8 +27807,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // queue. Opens a modal listing all unscheduled tasks for currentUser
   // with checkboxes. "Schedule N" sets scheduledDate=today on selected
   // IDs, calls reanalyze() so the engine slots them, closes modal.
-  const [planPickerOpen, setPlanPickerOpen] = useState(false);
-  const [planPickerSelected, setPlanPickerSelected] = useState(() => new Set());
+  // v05.05bt394 — Per chat: 'why is plan from que still around?'
+  // planPickerOpen + planPickerSelected state removed alongside the
+  // button + modal. Inline edit + quick-action menus cover the
+  // same scheduling flow per-task.
   // v05.05bt348 — Per chat: 'let me select multiple tasks to delete
   // together instead of just one at a time.' Multi-select set for the
   // task pile. Tapping × on a row toggles membership; a bulk action
@@ -27851,8 +27923,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       title: p.title,
       effortMin: p.effortMin || 30,
-      regretScore: 3,
-      focusLevel: inferFocusLevel(p.title),
+      // v05.05bt395 — Honor parser-detected regret + focus from
+      // free-write text ("respond to emails (R2)" or "write paper
+      // deep work" etc). Falls back to legacy defaults if the parser
+      // didn't pick anything up.
+      regretScore: typeof p.regretScore === "number" ? p.regretScore : 3,
+      focusLevel: p.focusLevel || inferFocusLevel(p.title),
       category: inferCategory(p.title),
       taskGroup: inferTaskGroup(p.title), // v05.05bt349
       createdAt: new Date().toISOString(),
@@ -28533,8 +28609,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     if (parsed.length === 0) return;
     const pending = parsed.map(p => ({
       ...p,
-      regretScore: nlDefaultRegret,
-      focusLevel: nlDefaultFocus,
+      // v05.05bt395 — Parser may have detected explicit regret/focus
+      // from free-write text ("R5", "deep work", etc). Only fall back
+      // to the per-task default when the parser didn't see anything.
+      regretScore: typeof p.regretScore === "number" ? p.regretScore : nlDefaultRegret,
+      focusLevel: p.focusLevel || nlDefaultFocus,
     }));
     commitNlPending(pending);
   };
@@ -28551,8 +28630,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }
     setNlPending(parsed.map(p => ({
       ...p,
-      regretScore: nlDefaultRegret,
-      focusLevel: nlDefaultFocus,
+      // v05.05bt395 — Same defaults logic as fast-path: parser wins if
+      // it detected an explicit value.
+      regretScore: typeof p.regretScore === "number" ? p.regretScore : nlDefaultRegret,
+      focusLevel: p.focusLevel || nlDefaultFocus,
     })));
     setNlReviewOpen(true);
   };
@@ -32494,15 +32575,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleComplete(slot.id); }}
                               style={{
-                                // v05.05bt330 — Per chat: 'checking
-                                // that a task is complete is hard on
-                                // the phone.' Was 14×14 (impossible
-                                // tap target on mobile). Now 24×24
-                                // visible circle inside a 32×32 tap
-                                // area via padding. 2px border so the
-                                // ring reads clearly even in dark mode.
-                                width: 32, height: 32,
-                                padding: 4, // 32 - (24/2 + 24/2) = 8, split = 4 each side
+                                // v05.05bt330 → bt394 — Per chat: 'the
+                                // checkbox or checkcircle rather is
+                                // kinda large.' bt330 went 14×14 →
+                                // 24×24 (in 32×32 tap area) because
+                                // tapping a 14px circle on mobile was
+                                // impossible. bt394 splits the
+                                // difference: 18×18 visual in a 28×28
+                                // tap area — still a comfortable
+                                // mobile tap target, but reads less
+                                // dominant in the row.
+                                width: 28, height: 28,
+                                padding: 5, // (28 - 18) / 2 = 5
                                 background: "transparent",
                                 border: "none",
                                 cursor: "pointer", flexShrink: 0,
@@ -32511,10 +32595,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               }}
                               aria-label="Mark done">
                               <span style={{
-                                width: 24, height: 24, borderRadius: "50%",
+                                width: 18, height: 18, borderRadius: "50%",
                                 border: `2px solid ${slot.completedAt ? "#7B9B6E" : C.line + "66"}`,
                                 background: slot.completedAt ? "#7B9B6E" : "transparent",
-                                color: "#fff", fontSize: 14, lineHeight: 1, fontWeight: 700,
+                                color: "#fff", fontSize: 11, lineHeight: 1, fontWeight: 700,
                                 display: "flex", alignItems: "center", justifyContent: "center",
                               }}>
                                 {slot.completedAt ? "✓" : ""}
@@ -32992,7 +33076,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             "light · interruptible". Recall the
                             algorithm should consider what the baby is
                             doing, not just whose shift it is. */}
-                        {isFree && (() => {
+                        {/* v05.05bt394 — Per chat: 'i thought we were
+                            going to reduce words on slots that were
+                            closed - if we had something scheduled
+                            there that was crossed off that is fine
+                            but if it was an open slot, no need to
+                            have it would fit here...it is deep work
+                            etc right?' Gated the whole sub-line IIFE
+                            (focus eyebrow + careLabel + "what fits
+                            here" suggestions + WHY THIS SLOT panel)
+                            on !isPast. bt226 already mutes the title
+                            on past free blocks to "✕ Closed · time has
+                            passed"; this completes the treatment by
+                            also dropping the verbose reasoning that
+                            only makes sense for forward-looking slots. */}
+                        {isFree && !isPast && (() => {
                           // v05.05bt227 — Per chat: mixed-duty blocks
                           // should show "for how long daddy has her
                           // and then when I have her", and the focus
@@ -34770,50 +34868,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       }}>+</span>
                       Bulk add tasks · paste a list
                     </button>
-                    {/* v05.05bt361 — Per chat: 'when planning the day,
-                        we should be able to add something NEW or
-                        multi-select from the all tasks things that
-                        we want to schedule.' Multi-select picker
-                        from the task drawer. */}
-                    <button
-                      type="button"
-                      onClick={() => setPlanPickerOpen(true)}
-                      style={{
-                        /* v05.05bt380 — Per chat: 'the plan for queue
-                           also needs to be more prominent because i
-                           didnt realize it was there.' Was: transparent
-                           bg, italic small text, low-contrast. Now:
-                           solid mauve-tinted bg, bold mono uppercase
-                           label, bigger font + chevron so it reads as
-                           a primary action rather than a footnote. */
-                        width: "100%", padding: "12px 14px",
-                        background: `${C.mommy}15`,
-                        border: "none",
-                        borderTop: `1px solid ${C.mommy}33`,
-                        cursor: "pointer", textAlign: "left",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 11, fontWeight: 700,
-                        letterSpacing: "0.12em", textTransform: "uppercase",
-                        color: C.mommy,
-                        display: "flex", alignItems: "center", gap: 8,
-                        justifyContent: "space-between",
-                        touchAction: "manipulation",
-                        WebkitTapHighlightColor: "transparent",
-                      }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          fontFamily: "'Inter', sans-serif",
-                          fontSize: 15, fontWeight: 700,
-                        }}>☑</span>
-                        Plan from queue
-                      </span>
-                      <span style={{
-                        fontFamily: "'Cormorant Garamond', serif",
-                        fontStyle: "italic", fontSize: 12,
-                        textTransform: "none", letterSpacing: 0,
-                        opacity: 0.75, fontWeight: 400,
-                      }}>pick from all unscheduled →</span>
-                    </button>
+                    {/* v05.05bt394 — Per chat: 'why is plan from que
+                        still around?' Removed. Was a multi-select
+                        picker for sending pile tasks to today's
+                        timeline (bt361, made prominent in bt380), but
+                        the inline-edit + quick-action menu we shipped
+                        in bt380/bt390 lets the user do the same thing
+                        per-task by tapping the title and using ◐ Today
+                        or scheduling inline — the bulk picker became
+                        redundant. State + modal also removed (see
+                        bt394 deletions further down). */}
                     {/* v05.05bt363 — Per chat: 'In scheduled vs
                         unscheduled pile up need a better way to fix
                         this screenshot attached on the phone.' The
@@ -36074,150 +36138,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           }}
         />
       )}
-      {/* v05.05bt361/376 — Plan-from-queue picker. Moved here from
-          TodaysPumpPlanCard scope (was causing ReferenceError on
-          schedule tab tap). Lists all unscheduled tasks; tap to toggle;
-          "Schedule N" sets scheduledDate=today on selected IDs +
-          triggers reanalyze. */}
-      {planPickerOpen && (() => {
-        const candidates = (tasks || [])
-          .filter(t => t.ownerName === currentUser && !t.completedAt && !t.scheduledTime)
-          .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0));
-        const selectedCount = planPickerSelected.size;
-        return (
-          <ModalShell C={C} onClose={() => { setPlanPickerOpen(false); setPlanPickerSelected(new Set()); }} title="Plan from queue">
-            <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic", fontSize: 13,
-              color: C.muted, marginBottom: 12, lineHeight: 1.45,
-            }}>
-              Pick tasks to schedule for today. The engine will slot them into open blocks based on focus, regret, and effort.
-            </div>
-            {candidates.length === 0 ? (
-              <div style={{
-                padding: "24px 14px", textAlign: "center",
-                fontFamily: "'Cormorant Garamond', serif",
-                fontStyle: "italic", fontSize: 13, color: C.muted,
-              }}>No unscheduled tasks in your queue.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
-                {candidates.map(t => {
-                  const checked = planPickerSelected.has(t.id);
-                  const fl = normalizeFocus(t.focusLevel);
-                  const flGlyph = fl === "deep" ? "🧠" : "🍃";
-                  const cat = String(t.taskGroup || inferTaskGroup(t.title) || "UNCATEGORIZED").toUpperCase();
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setPlanPickerSelected(prev => {
-                          const next = new Set(prev);
-                          if (next.has(t.id)) next.delete(t.id);
-                          else next.add(t.id);
-                          return next;
-                        });
-                      }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        padding: "8px 10px", width: "100%",
-                        background: checked ? `${C.mommy}1a` : "transparent",
-                        border: `1px solid ${checked ? C.mommy + "66" : C.line + "22"}`,
-                        borderRadius: 6,
-                        cursor: "pointer", textAlign: "left",
-                        fontFamily: "inherit",
-                        touchAction: "manipulation",
-                        WebkitTapHighlightColor: "transparent",
-                      }}>
-                      <span style={{
-                        width: 22, height: 22, borderRadius: 4,
-                        border: `1.5px solid ${checked ? C.mommy : C.line + "88"}`,
-                        background: checked ? C.mommy : "transparent",
-                        color: "#fff", fontSize: 14, fontWeight: 700,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                      }}>{checked ? "✓" : ""}</span>
-                      <span style={{ fontSize: 13 }}>{flGlyph}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, fontWeight: 700,
-                        color: regretColors[t.regretScore || 3],
-                      }}>R{t.regretScore || 3}</span>
-                      <span style={{
-                        flex: 1, fontFamily: "'Cormorant Garamond', serif",
-                        fontSize: 13.5, color: C.ink, lineHeight: 1.3,
-                      }}>{t.title}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9, color: C.muted, fontWeight: 700,
-                        letterSpacing: "0.06em", textTransform: "uppercase",
-                      }}>{cat}</span>
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 10, color: C.muted, fontWeight: 600,
-                      }}>{t.effortMin || 30}m</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {candidates.length > 0 && (
-              <div style={{
-                position: "sticky", bottom: 0,
-                background: C.bg,
-                padding: "10px 0 4px",
-                borderTop: `1px solid ${C.line}33`,
-                display: "flex", gap: 8, alignItems: "center",
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setPlanPickerSelected(new Set(candidates.map(t => t.id)))}
-                  style={{
-                    background: "transparent", border: "none",
-                    color: C.muted, cursor: "pointer",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 12,
-                  }}>select all</button>
-                <button
-                  type="button"
-                  onClick={() => setPlanPickerSelected(new Set())}
-                  style={{
-                    background: "transparent", border: "none",
-                    color: C.muted, cursor: "pointer",
-                    fontFamily: "'Cormorant Garamond', serif",
-                    fontStyle: "italic", fontSize: 12,
-                  }}>clear</button>
-                <span style={{ flex: 1 }} />
-                <button
-                  type="button"
-                  disabled={selectedCount === 0}
-                  onClick={() => {
-                    const ids = new Set(planPickerSelected);
-                    setTasks(prev => prev.map(t => ids.has(t.id)
-                      ? { ...t, scheduledDate: todayISO, scheduledTime: null, pinned: false }
-                      : t));
-                    setPlanPickerOpen(false);
-                    setPlanPickerSelected(new Set());
-                    setTimeout(() => reanalyze(), 50);
-                  }}
-                  style={{
-                    background: selectedCount === 0 ? C.line + "33" : C.mommy,
-                    color: selectedCount === 0 ? C.muted : "#fff",
-                    border: "none", borderRadius: 6,
-                    padding: "8px 14px",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11, fontWeight: 800,
-                    letterSpacing: "0.10em", textTransform: "uppercase",
-                    cursor: selectedCount === 0 ? "not-allowed" : "pointer",
-                    touchAction: "manipulation",
-                  }}>
-                  Schedule {selectedCount > 0 ? selectedCount : ""}
-                </button>
-              </div>
-            )}
-          </ModalShell>
-        );
-      })()}
+      {/* v05.05bt394 — Plan-from-queue modal removed.
+          The button + state were also removed (see TodayTaskPlanCard
+          render and state declarations). Inline edit + per-row quick
+          actions cover the same flow now. */}
       {previewState && (
         <PreviewBeforeCommitModal
           C={C}
