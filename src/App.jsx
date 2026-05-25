@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt398";
+const APP_VERSION = "2026.05.05bt399";
 const APP_BUILD_NOTES = [
-  "FITS PICKER SEARCH + TIME-CREDIT BANNER. Per chat: 'go with your suggestios...start with the search in fits picker, the time credit, and also the parser.' Parser is already solid from bt397 (7/7 test cases pass including the user's exact comma example), so this build covers items #7 and #8 from the deferred list.\\n\\n(1) FITS PICKER SEARCH. New free-text filter inside the expanded fits picker. Renders above the category chips whenever there are 3+ candidates (below that the chips + scroll are enough). Filters by title via case-insensitive substring match. Empty input shows everything. × button clears. Search state lives in TodayTaskPlanCard (fitsPickerSearch) and resets every time the picker closes so each new tap starts fresh. Implementation note: searchActive only applies when the picker is EXPANDED — the collapsed-view top-candidate hint ignores it so the preview line stays useful.\\n\\n(2) TIME-CREDIT BANNER. Per chat: 'if things are done ahead of time, should we have some reanalysis or you bought back x amount of time or apply it to unfinished previous tasks.' MVP info-only banner that surfaces freed minutes when a scheduled task is checked off before its scheduled end. Detection lives in TodayTaskPlanCard: a useEffect watches the tasks array and, for each task owned by the current user with completedAt + scheduledTime + scheduledDate matching today, computes scheduledEnd (= scheduledStart + effortMin) and compares to completedAt. If freedMin >= 5, banner appears with the freed minutes + the title of the task that finished early. Mount-seeding: on first hydration the effect marks all currently-completed tasks as already-processed so a reload doesn't re-fire stale banners; only completions made DURING this session trigger the surface. Banner renders just above the drift banner — gold-tinted (positive signal) vs the coral drift (negative), with ✨ FREED eyebrow + ×-dismiss. No re-slot action this build; that's the obvious next iteration.\\n\\n(3) PARSER — NO CHANGE. The bt397 work covered the user's exact comma-marker input ('respond to emails, at 3pm, shallow, regret 5' parses as one task with all four fields extracted) plus 6 other regression cases. No further parser tweaks this build.",
+  "HOTFIX bt398 RUNTIME CRASH. Per chat error report: 'hydrated is not defined / ReferenceError'. The bt398 time-credit useEffect referenced `hydrated` as a gate, but `hydrated` is App-level state and the useEffect lives inside TodayTaskPlanCard (a separate component) — `hydrated` was never threaded as a prop. Component crashed on first render.\\n\\nFIX: removed the `hydrated` reference entirely. Replaced with a tasks.length > 0 gate for the seed-on-first-run guard. The App-level state hydrates async, so if tasks is briefly empty on first render we skip seeding (rather than seeding an empty array, flipping the seed-done flag, and then firing banners for all completions once tasks finally populate). Once tasks > 0, seed runs, sets the flag, returns. On the NEXT effect run with new completions, the banner fires as designed.\\n\\nNo behavior change vs the bt398 design intent. Just the missing scope wiring.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt399", summary: "Hotfix for bt398 runtime crash. The time-credit useEffect referenced `hydrated`, which is App-level state and was never passed to TodayTaskPlanCard — caused 'hydrated is not defined' on first render. Replaced the gate with a tasks.length > 0 check on the seed-on-first-run guard, which serves the same purpose (don't seed an empty array, don't fire banners for already-completed tasks on app reload). Build verified clean via esbuild." },
   { version: "2026.05.05bt398", summary: "Two features per chat. (1) Fits picker search: free-text filter input shows above the category chips when 3+ candidates exist; case-insensitive substring match on title; clears on picker close. (2) Time-credit banner: TodayTaskPlanCard useEffect watches tasks for early completions (completedAt before scheduledEnd by >=5 min on a today-scheduled task) and surfaces a gold ✨ FREED banner with the freed minutes + which task. Info-only MVP — no re-slot affordance yet. Mount-seeding marks currently-completed tasks as already-processed so reload doesn't re-fire stale banners. Parser unchanged (bt397 work verified solid via test suite). Build verified clean via esbuild." },
   { version: "2026.05.05bt397", summary: "Three fixes per chat (rest deferred with questions). (1) Parser comma-merge: 'task, shallow, R5' style inputs no longer split into separate tasks. Added a pre-split merge pass that absorbs marker-only comma segments (time tags, focus tags, regret/priority tags, recurring tags) into the preceding segment. Bare-'shallow' fallback added (end-of-title only, after regret extraction) so 'buy shallow dishes' stays untouched but 'respond to emails shallow' picks up focus. Verified 7/7 cases. (2) Section header 'For today · N' → 'Unscheduled for today · N' per chat. (3) Fits-here picker scoped to today's pile only — no more yesterday's leftovers cluttering the suggestions. Build verified clean via esbuild." },
   { version: "2026.05.05bt396", summary: "Pump timer math fix. Two interacting bugs found. (1) FinishPumpModal saves pump events with ts: start, but bt380 lastStart calc + journal display were both assuming ts: end when mode='end' (matching seed data, not real data). Computed lastStart 30-60min before actual start — overdue check fired late or never, journal showed wrong session range. Both fixed to use ts directly. (2) Stale manualSessions from yesterday persisted on Now tab (the staleness-reset useEffect lives in TodaysPumpPlanCard, which the user may never open). Cascading bt86/bt87 shifts left yesterday's plan with only late-evening entries, which at 8am today read as ~11h to next pump. App-level nextPumpAt now ignores manualSessions when manualSessionsDate doesn't match today; falls to lastStart+3hr fallback, which produces the correct ~3h target. Build verified clean via esbuild." },
@@ -27644,15 +27645,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const processedCreditIdsRef = useRef(new Set());
   const creditSeededRef = useRef(false);
   useEffect(() => {
-    if (!hydrated) return;
-    // v05.05bt398 — On first run after hydration, seed the processed
-    // set with every currently-completed task so the banner only
-    // fires for completions made DURING this session. Without this,
-    // reloading the app after an early finish earlier in the day
-    // would re-surface the banner — confusing because the freed time
-    // has already been used.
+    // v05.05bt398 — On first run after tasks are populated, seed the
+    // processed set with every currently-completed task so the banner
+    // only fires for completions made DURING this session. Without
+    // this, reloading the app after an early finish earlier in the
+    // day would re-surface the banner — confusing because the freed
+    // time has already been used. We gate seeding on tasks.length > 0
+    // because the App-level state hydrates async; if we seed an empty
+    // array, the seed-done flag flips and old completions later fire.
     if (!creditSeededRef.current) {
-      for (const t of (tasks || [])) {
+      if (!Array.isArray(tasks) || tasks.length === 0) return;
+      for (const t of tasks) {
         if (t.completedAt) processedCreditIdsRef.current.add(t.id);
       }
       creditSeededRef.current = true;
@@ -27682,7 +27685,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         });
       }
     }
-  }, [tasks, hydrated, currentUser, referenceISO, now]);
+  }, [tasks, currentUser, referenceISO, now]);
   // v05.05bt273 — Overlap detection. Per chat: 'there should be an alert
   // or something with overlapping times. For example I have one task
   // ending at 9:15 and another starting at 9p. That's an issue.'
