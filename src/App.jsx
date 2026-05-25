@@ -15,12 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt387";
+const APP_VERSION = "2026.05.05bt388";
 const APP_BUILD_NOTES = [
-  "STICKY HEADER FIX, ROUND 3 — the actual actual fix. Per chat (after bt386: 'still doesnt stick, im in default font size'). bt385 split overflow-x:hidden off html, bt386 commented out the @media body zoom rules. Sticky still didn't latch. Found the last culprit: the rule `body, #root { overflow-x: hidden }` was making #root itself a scroll container in CSS terms. That steals the scrolling-ancestor designation from the viewport, so position:sticky descendants of #root bind to #root (which doesn't scroll vertically) instead of the viewport. Result: sticky has nothing to attach its top:0 anchor to, so it just behaves like position:relative. Fixed by dropping #root from the overflow-x:hidden rule (now body-only). Body's overflow-x propagates to the viewport automatically via the CSS viewport-propagation rule (which kicks in because html has no overflow set after bt385), so horizontal escapes are still clipped — but now #root is a normal block container and sticky descendants attach to the viewport. Apologies for the three-build cycle on this one; should have checked the #root rule on the first pass. Build verified clean via esbuild.",
+  "THE ACTUAL FIX — STICKY HEADER + WHITE BORDER, BOTH FROM #ROOT. Per chat (user pasted Chrome DevTools computed-style dump of #root): a leftover Vite/React starter stylesheet (somewhere in the user's project — likely src/index.css or src/App.css) sets `#root { border-inline: 1px solid var(--border); display: flex; flex-direction: column; width: 1126px; max-width: 100%; min-height: 100svh; text-align: center; }`. (1) The border-inline rule was the visible 'white border' on both left and right edges that the user has been complaining about for 5+ builds. NOT the scrollbar (bt383's styling was a red herring). An actual 1px light-gray border on the #root element itself. (2) The display:flex on #root was a flex containment context that subtly interfered with position:sticky descendants in some Chrome configurations — the dominant cause of sticky not latching after bt356, bt385, bt386, bt387. Fixed by adding a high-specificity override block in FontImports CSS with !important on all the bad properties: border, border-inline, display, flex-direction, width, max-width, min-height, text-align, margin. This is the 'Path B' / nuke-from-App.jsx fix; the cleaner 'Path A' (find and delete the offending CSS file in the source dir) was offered in chat. Apologies for the 5-build cycle on this; should have asked for DOM inspection on turn 1.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt387", summary: "Sticky header fix round 3 (the actual fix). Dropped #root from the overflow-x:hidden CSS rule (now applies to body only). #root having overflow-x:hidden was making it a scroll container in CSS terms, which steals the scrolling-ancestor designation from the viewport for position:sticky descendants. Sticky was binding to #root (which doesn't scroll vertically) and so had no anchor. Body's overflow-x propagates to the viewport automatically via CSS viewport-propagation (active since bt385 removed html's overflow), so horizontal escapes are still clipped. Build verified clean via esbuild." },
+  { version: "2026.05.05bt388", summary: "The actual fix for sticky + white border. User's DevTools inspection revealed a leftover Vite/React starter stylesheet setting `#root { border-inline: 1px solid var(--border); display: flex; flex-direction: column; width: 1126px; max-width: 100%; min-height: 100svh; text-align: center }`. The border-inline was the visible white border (NOT the scrollbar — bt383 was a red herring). The display:flex was the dominant cause of sticky not latching after the bt356/bt385/bt386/bt387 cycle. Added a high-specificity override block in FontImports CSS with !important on all the bad properties. Build verified clean via esbuild." },
+  { version: "2026.05.05bt387", summary: "Sticky header fix round 3 (still partial — bt388 was the real fix). Dropped #root from the overflow-x:hidden CSS rule (now applies to body only). #root having overflow-x:hidden was making it a scroll container in CSS terms, which steals the scrolling-ancestor designation from the viewport for position:sticky descendants. Legitimate improvement on its own but not the dominant cause. Body's overflow-x propagates to the viewport automatically via CSS viewport-propagation (active since bt385 removed html's overflow), so horizontal escapes are still clipped. Build verified clean via esbuild." },
   { version: "2026.05.05bt386", summary: "Sticky header fix attempt 2 (partial). Commented out the @media body { zoom: 1.20 - 1.55 } rules at min-width 760/1100/1500/1900px. These would have been creating a stacking context on laptop windows >= 760px, but on the user's narrower window they weren't firing — bt387 (#root overflow drop) was the dominant cause. Trade-off: app no longer auto-scales bigger on laptop screens; user can use browser zoom (Cmd+=) instead. Build verified clean via esbuild." },
   { version: "2026.05.05bt385", summary: "Sticky header fix attempt 1 (partial). Split the `html, body, #root { overflow-x: hidden }` rule: overflow-x is now applied only to body + #root, not html. Legitimate improvement but #root overflow (fixed in bt387) was the dominant cause. Build verified clean via esbuild." },
   { version: "2026.05.05bt384", summary: "Daily-content fetch retry loop fixed (root cause of multiple UI bugs). The useEffect at App scope was fetching from api.anthropic.com directly, getting blocked by CORS, and looping forever because the catch block didn't update dailyContent — so the dep-driven effect kept re-firing. On failure we now write a {failed:true, attemptedAt} sentinel into dailyContent[todayKey] which the existing early-exit check catches. Loop stops after one failed attempt per day. The Anthropic API call itself is not fixed — it can't be from a browser without a server proxy with the API key — but the page is no longer thrashing. This was almost certainly the root cause of the milk tile single-click feeling dead (event handlers starved by the loop), sticky header not latching (constant re-renders disrupting layout), and general lag in the screenshot session. Build verified clean via esbuild." },
@@ -10221,6 +10222,30 @@ function FontImports() {
       }
       body {
         overflow-x: hidden;
+      }
+      /* v05.05bt388 — Per chat (DevTools DOM inspection): the user's
+         project has a leftover Vite/React starter stylesheet that sets
+         #root { border-inline: 1px solid var(--border); display: flex;
+         flex-direction: column; width: 1126px; max-width: 100%;
+         min-height: 100svh; text-align: center; }. The border-inline was
+         the "white border on the right" the user has been complaining
+         about for several builds (not the scrollbar, as we'd guessed —
+         an actual 1px border on the #root element). The display:flex was
+         also subtly interfering with position:sticky descendants by
+         making #root a flex container. Override with !important so we
+         don't have to chase down which CSS file has the leftover starter
+         styles. (Path A: user can find and delete the offending #root
+         block from their source. Path B (this): nuke from App.jsx.) */
+      #root {
+        border: 0 !important;
+        border-inline: 0 !important;
+        display: block !important;
+        flex-direction: initial !important;
+        width: auto !important;
+        max-width: none !important;
+        min-height: initial !important;
+        text-align: initial !important;
+        margin: 0 !important;
       }
       /* v05.05bt351 — Per chat: 'i love B, C and D' (mockup picks).
          Cadence gets the "rich-people paper" texture from Mode A but
