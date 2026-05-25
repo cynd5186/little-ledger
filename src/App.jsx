@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt402";
+const APP_VERSION = "2026.05.05bt403";
 const APP_BUILD_NOTES = [
-  "HOTFIX + DISMISS-ABILITY FOR BANNERS. Per chat: 'lastPump is not defined' crash + 'still an issue with some of the notifications not being able to be ignored or dismissed.'\\n\\n(1) HOTFIX: lastPump SCOPE. bt400 added `lastPump={lastPump}` to the MilkPanel mount, but MilkPanel is mounted inside OnDutyCard — which doesn't have lastPump in scope. Same pattern as the bt399 hydrated crash. Threaded lastPump through: NowView mount now passes lastPump={lastPump} to OnDutyCard, and OnDutyCard's signature accepts it as a prop and forwards to MilkPanel. Self-inflicted, same prop-scope lesson as before; will audit any new prop additions more carefully going forward.\\n\\n(2) AUTO-SHIFTED BANNER × DISMISS. The 'N TASKS AUTO-SHIFTED' banner only had UNDO ALL as an action — no way to ignore. Restructured: the banner is now a flex container (was a single big button), with the main info+undo as the left content (still tap-to-undo) and a new × button on the right. State: autoShiftDismissedCount stores the count at dismiss time. Banner only renders when shifted.length > autoShiftDismissedCount, so if new shifts pile up beyond what was dismissed, the banner re-surfaces for the new count.\\n\\n(3) OVERLAP BANNER × DISMISS. Same pattern. 'OVERLAP · N pairs' banner had Auto-fix + Show buttons but no dismiss. Added × button on the right side. State: overlapDismissedCount mirrors the auto-shift logic — banner re-appears if overlap count exceeds what was dismissed. This protects against the 'I clicked ignore once and now I never see overlaps' failure mode.",
+  "THREE FEATURES per chat. Stayed disciplined and split the user's 7-feature mega-request across three sequential builds (bt403/404/405) rather than one mega-build that crashes.\\n\\n(1) SUB-TASK / PREDICTED VISUAL TREATMENT (your stated priority — 'really waiting on that'). Per chat: 'feeding baby shows up as a new task but it is confusing because it should be a SUB TASK since it is a prediction that this may or may not happen here and the probability of it happening here is 70%.' Feed-predicted rows now get extra left padding (20px more than regular rows) so they visually nest under the slot above them as a sub-bullet rather than reading as a peer task. Combined with the bt400 opacity 0.72 + existing italic title + PREDICTED tag, the prediction now reads as ambient context, not actionable work. Added an explicit probability badge: 'N% likely' derived from sampleSize / 7 (the lookback window is 7 days), capped at 99%. Renders alongside the typical-oz hint, e.g., '· typical 4.2oz · 71% likely'.\\n\\n(2) DUPLICATE DETECTION ON ADD. Per chat: 'i added a wash hair to the schedule because i didnt see it on the list but then when i go to the task pile i noticed there was a wash hair routine.' New module-level helper findSimilarTitles(newTitle, existing) runs on every addTask + addBrainDump call. Algorithm: lowercase + strip punct + drop common filler words, then check substring either direction OR Jaccard token similarity >= 0.5. Empty / very short titles never match (prevents false positives on 'go'/'do'/etc). When matches found, the new DuplicatePromptModal renders with three options per chat: MERGE · keep existing (drops new draft, closes form), ADD ANYWAY (commits via opts.forceDuplicate=true bypass), CANCEL (keeps form open with draft intact so user can edit). Brain-dump batches detect across all parsed drafts and surface the first conflict + a count of others.\\n\\n(3) EXPORT FINISHED TASKS. Per chat: 'for end-of-day monday export - i had told you to just export the info like i had before but now only the finished task and i can copy or import into monday myself.' New exportFinishedTasks function next to the existing exportMondayCsv. Filters to completedAt + ownerName=currentUser + scheduledDate matching today, sorts by completedAt asc, formats as a markdown-friendly header + bullet list ('- 9:38a · wash hair (15m)'). Same clipboard-or-fallback path as the CSV export. New menu item '✓ Export finished tasks · for Monday' in the ⋯ overflow next to the existing CSV export, both call sites (Mommy and Daddy menus).",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt403", summary: "Three features per chat (split from 7-feature mega-ask into three sequential builds bt403/404/405). (1) Feed-predicted rows get +20px left indent to read as sub-bullets, plus '% likely' badge derived from sampleSize / 7 (capped at 99%). (2) Duplicate detection: new findSimilarTitles helper (substring + Jaccard token overlap >= 0.5) hooked into addTask + addBrainDump. New DuplicatePromptModal with Merge / Add anyway / Cancel options. (3) New exportFinishedTasks function + ⋯ menu item: copies today's completed tasks as a plain bullet list for paste into monday.com. Build verified clean via esbuild." },
   { version: "2026.05.05bt402", summary: "Hotfix + dismiss-ability. (1) Hotfix bt400 lastPump crash: lastPump is App-level state; bt400 added the prop directly on MilkPanel but MilkPanel is mounted inside OnDutyCard which didn't have lastPump. Threaded through NowView → OnDutyCard → MilkPanel. Same lesson as bt399 hydrated crash. (2) Auto-shifted banner gains × dismiss with count-based gating: dismissedCount stored, banner re-appears if count grows beyond dismissed. Banner restructured from a single big button to flex layout (content + UNDO ALL + ×). (3) Overlap banner gains × dismiss with same count-based gating, sits next to existing Auto-fix + Show buttons. Build verified clean via esbuild." },
   { version: "2026.05.05bt401", summary: "Three row-level UI cleanups per chat screenshots. (1) ⋮⋮ move button: removed mauve border + bg tint, now a bare glyph at 32×32 tap target. (2) Pin: removed inline '◆ PIN' next to title; added Lucide Pin icon on right side (between R-chip and ⋮⋮) — always visible on incomplete tasks, gold-filled when pinned, muted-outline at 0.45 opacity when not. Tap toggles. (3) Auto-shift tag: '↻ +60m' renamed to 'AUTO-SHIFT +60m' uppercase mono so the verb is clear. Deeper overlap-compress algorithm queued for later. Build verified clean via esbuild." },
   { version: "2026.05.05bt400", summary: "Three small UI changes per chat answers. (1) Last pump time displayed in pump tile as a secondary sub-line under target/was, 'last H:MM · Xm' format, renders only when not actively pumping. lastPump threaded as a new MilkPanel prop. (2) Past task rows now dim to 0.55 same as completed tasks + past free blocks; focus glyph + R-chip also hidden on past task rows (receipts shouldn't show decision-support affordances). (3) Library routines + feed-predicted slots now render at opacity 0.72 for ambient-context look; italic titles already present from bt146, PREDICTED tag already on feed-predicted slots from bt181. User-typed routine tasks don't get this treatment until bt401's NL detection lands. Build verified clean via esbuild." },
@@ -23730,6 +23731,51 @@ function computeTradeSuggestions({ activeShifts, focusProfile, now, currentUser,
   }));
 }
 
+// v05.05bt403 — Fuzzy duplicate detection for task add flows. Per
+// chat: 'i added a wash hair to the schedule because i didnt see it
+// on the list but then when i go to the task pile i noticed there
+// was a wash hair routine so need to resolve that.' Returns tasks
+// from `existing` that are likely duplicates of `newTitle`. Algorithm:
+// (1) normalize both (lowercase, strip punct, drop common filler
+// like "to"/"a"/"the"); (2) substring match either direction wins;
+// (3) Jaccard word-set similarity >= 0.5 wins. Empty / very short
+// titles never match (would false-positive on "go"/"do"/etc).
+function findSimilarTitles(newTitle, existing) {
+  const normalize = (s) => {
+    if (!s) return [];
+    return String(s)
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter(w => w && !["to", "a", "an", "the", "for", "and", "or", "of"].includes(w));
+  };
+  const newTokens = normalize(newTitle);
+  if (newTokens.length === 0) return [];
+  const newJoined = newTokens.join(" ");
+  if (newJoined.length < 4) return []; // too short to reliably match
+  const newSet = new Set(newTokens);
+  const matches = [];
+  for (const t of (existing || [])) {
+    if (!t || t.completedAt) continue;
+    const exTokens = normalize(t.title);
+    if (exTokens.length === 0) continue;
+    const exJoined = exTokens.join(" ");
+    // Substring either direction (common when one title has a
+    // suffix like "routine" added).
+    if (exJoined.includes(newJoined) || newJoined.includes(exJoined)) {
+      matches.push(t);
+      continue;
+    }
+    // Jaccard token overlap >= 0.5
+    const exSet = new Set(exTokens);
+    let intersect = 0;
+    for (const w of newSet) if (exSet.has(w)) intersect++;
+    const union = newSet.size + exSet.size - intersect;
+    if (union > 0 && intersect / union >= 0.5) matches.push(t);
+  }
+  return matches;
+}
+
 function parseNaturalLanguageTasks(text) {
   if (!text || !text.trim()) return [];
   // v05.05bt316 — Period as delimiter per chat ('Delimiter need to add
@@ -27750,6 +27796,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // count; if some resolve naturally, banner stays hidden.
   const [autoShiftDismissedCount, setAutoShiftDismissedCount] = useState(null);
   const [overlapDismissedCount, setOverlapDismissedCount] = useState(null);
+  // v05.05bt403 — Duplicate detection prompt state. When addTask /
+  // addBrainDump detect a fuzzy-match against an existing task in the
+  // pile, they stash the draft + matches here instead of committing,
+  // and the DuplicatePromptModal renders to ask: Merge / Add anyway /
+  // Cancel. Shape: { drafts: TaskDraft[], matches: TaskMatch[][] }
+  // — arrays so brain-dump batches (which can have many drafts) carry
+  // the same shape as single-add flow.
+  const [duplicatePrompt, setDuplicatePrompt] = useState(null);
   // v05.05bt280 — Per chat: 'when i hit on "fits..." the app still accepts
   // the suggestion rather than giving me options.' Track which open slot
   // is currently showing the picker (slot key = start ms). Tap "fits"
@@ -28081,7 +28135,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const [brainDumpText, setBrainDumpText] = useState("");
   // v05.05bt133 — drawerItems moved below myTasks declaration to
   // avoid temporal-dead-zone reference error.
-  const addBrainDump = () => {
+  const addBrainDump = (opts = {}) => {
     const text = brainDumpText.trim();
     if (!text) return;
     // v05.05bt318 — Per chat: 'Brain dump does not have a delimiter
@@ -28091,6 +28145,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // and the unscheduled pile.
     const parsed = parseNaturalLanguageTasks(text);
     const created = parsed.length > 0 ? parsed : [{ title: text }];
+    // v05.05bt403 — Duplicate detection across the whole batch. For
+    // each parsed item, find fuzzy matches in the current pile. If
+    // ANY have matches, prompt. opts.forceDuplicate bypasses (set by
+    // the "Add anyway" button).
+    if (!opts.forceDuplicate) {
+      const allMatches = created.flatMap(p => {
+        const m = findSimilarTitles(p.title, myTasks);
+        return m.length > 0 ? [{ draftTitle: p.title, matches: m }] : [];
+      });
+      if (allMatches.length > 0) {
+        setDuplicatePrompt({
+          source: "addBrainDump",
+          // Show first conflict; "Add anyway" commits ALL drafts including
+          // any others that didn't have matches.
+          draftTitle: allMatches[0].draftTitle,
+          matches: allMatches[0].matches,
+          extraConflicts: allMatches.length - 1,
+        });
+        return;
+      }
+    }
     const newItems = created.map(p => ({
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       title: p.title,
@@ -28696,8 +28771,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     });
   }, [dayTimeline, sortedActive]);
 
-  const addTask = () => {
+  const addTask = (opts = {}) => {
     if (!draftTitle.trim()) return;
+    // v05.05bt403 — Duplicate detection. Before committing, check if
+    // the draft title fuzzy-matches an existing pile task. If so,
+    // stash + prompt instead of committing. opts.forceDuplicate=true
+    // bypasses (set by the "Add anyway" button in the prompt modal).
+    if (!opts.forceDuplicate) {
+      const matches = findSimilarTitles(draftTitle.trim(), myTasks);
+      if (matches.length > 0) {
+        setDuplicatePrompt({
+          source: "addTask",
+          draftTitle: draftTitle.trim(),
+          matches,
+        });
+        return;
+      }
+    }
     const newTask = {
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       title: draftTitle.trim(),
@@ -29637,6 +29727,53 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // in the format `Task title [Scheduled Time]`. Mommy can paste the
   // whole block into Monday's first column and the time is right there
   // to copy-paste into the time column afterwards.
+  // v05.05bt403 — Per chat: 'for end-of-day monday export - i had
+  // told you to just export the info like i had before but now only
+  // the finished task and i can copy or import into monday myself.'
+  // Filters to completed-today tasks owned by the current user, sorts
+  // by completedAt ascending, formats as a simple bullet list with
+  // time + title + duration. Copies via clipboard with the same
+  // fallback path the CSV export uses (Monday CSV fallback modal).
+  const exportFinishedTasks = () => {
+    const fmt12hr = d => {
+      const h = d.getHours(), m = d.getMinutes();
+      const h12 = ((h + 11) % 12) + 1;
+      return `${h12}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`;
+    };
+    const fmtDur = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${Math.round(m % 60)}m` : ""}` : `${Math.round(m)}m`;
+    const today = new Date(now);
+    const todayStr = today.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+    const todayKey = isoDate(today);
+    const finished = (tasks || [])
+      .filter(t => t.ownerName === currentUser
+                && t.completedAt
+                && (!t.scheduledDate || t.scheduledDate === todayKey))
+      .sort((a, b) => new Date(a.completedAt) - new Date(b.completedAt));
+    if (finished.length === 0) {
+      setCopyStatus("Nothing finished today yet");
+      setTimeout(() => setCopyStatus(null), 2500);
+      return;
+    }
+    const lines = [`${todayStr} — Completed`, ""];
+    for (const t of finished) {
+      const doneAt = new Date(t.completedAt);
+      const timeStr = !isNaN(doneAt.getTime()) ? fmt12hr(doneAt) : (t.scheduledTime || "—");
+      const durStr = t.effortMin ? ` (${fmtDur(t.effortMin)})` : "";
+      lines.push(`- ${timeStr} · ${t.title}${durStr}`);
+    }
+    const text = lines.join("\n");
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopyStatus(`Copied ${finished.length} finished task${finished.length === 1 ? "" : "s"}`);
+        setTimeout(() => setCopyStatus(null), 2500);
+      }).catch(() => {
+        setMondayCsvFallback(text);
+      });
+    } else {
+      setMondayCsvFallback(text);
+    }
+  };
+
   const exportMondayCsv = () => {
     const fmt12hr = d => {
       const h = d.getHours(), m = d.getMinutes();
@@ -30811,6 +30948,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               { section: "Display & export" },
                               { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                               { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
+                              { icon: "✓", label: "Export finished tasks · for Monday", onClick: () => { exportFinishedTasks(); setShowActionsMenu(false); }, hint: "Today only, plain bullet list" },
                               { section: "Cadence mode" },
                               { icon: productMode === "family" ? "●" : "○",
                                 label: "Off · default Little Ledger",
@@ -30997,6 +31135,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             { section: "Display & export" },
                             { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                             { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
+                              { icon: "✓", label: "Export finished tasks · for Monday", onClick: () => { exportFinishedTasks(); setShowActionsMenu(false); }, hint: "Today only, plain bullet list" },
                             { section: "Cadence mode" },
                             // v05.05bt323/329 — Cadence is purely an
                             // aesthetic mode (no feature hiding). User
@@ -32500,7 +32639,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       display: "grid",
                       gridTemplateColumns: "54px 1fr auto",
                       gap: productMode === "solo" ? 8 : 10,
-                      padding: productMode === "solo" ? "7px 8px 7px 12px" : "9px 8px 9px 12px",
+                      // v05.05bt403 — Per chat: 'feeding baby shows up
+                      // as a new task but it is confusing because it
+                      // should be a SUB TASK since it is a prediction
+                      // that this may or may not happen here.' Feed-
+                      // predicted rows get extra left padding so they
+                      // visually nest under the slot above them — reads
+                      // as a sub-bullet rather than a peer row. Combined
+                      // with the bt400 opacity 0.72 + existing italic
+                      // title + PREDICTED tag, the prediction now
+                      // reads as ambient context, not actionable work.
+                      padding: isFeedPred
+                        ? (productMode === "solo" ? "7px 8px 7px 32px" : "9px 8px 9px 32px")
+                        : (productMode === "solo" ? "7px 8px 7px 12px" : "9px 8px 9px 12px"),
                       // v05.05bt301/315 — Per chat (bt315): 'can the
                       // routine blocks be colored a different color —
                       // i dont like the color it is currently...maybe
@@ -33206,10 +33357,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 verticalAlign: "middle",
                               }} title="Stretch goal — slots if room">✦ STRETCH</span>
                             )}
-                            {/* v05.05bt205 — Feed-predicted volume hint. Shows
-                                either "typical 4.2oz" (time-of-day pattern) or
-                                "after 5.0oz feed" (volume-anchored projection). */}
-                            {isFeedPred && (slot.typicalOz != null || slot.fromVolume) && (
+                            {/* v05.05bt205 / bt403 — Feed-predicted volume hint +
+                                probability. Shows either "typical 4.2oz" (time-of-
+                                day pattern) or "after 5.0oz feed" (volume-anchored).
+                                bt403 adds "· N% likely" derived from sampleSize / 7
+                                so user sees how confident the prediction is.
+                                Per chat: 'the probability of it happening here is
+                                70%' — needed an actual % readout. */}
+                            {isFeedPred && (slot.typicalOz != null || slot.fromVolume || slot.sampleSize) && (
                               <span style={{
                                 fontSize: 9, color: C.gold,
                                 marginLeft: 6,
@@ -33221,7 +33376,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               }} title={slot.context}>
                                 {slot.fromVolume
                                   ? `· after ${slot.typicalOz != null ? slot.typicalOz.toFixed(1) : "?"}oz`
-                                  : `· typical ${slot.typicalOz.toFixed(1)}oz`}
+                                  : slot.typicalOz != null
+                                    ? `· typical ${slot.typicalOz.toFixed(1)}oz`
+                                    : ""}
+                                {slot.sampleSize ? ` · ${Math.min(99, Math.round(slot.sampleSize / 7 * 100))}% likely` : ""}
                               </span>
                             )}
                             {isRoutine && slot.overridden && (
@@ -35996,6 +36154,130 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   fontStyle: "italic", fontSize: 13,
                   color: C.muted, cursor: "pointer",
                 }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* v05.05bt403 — Duplicate detection prompt. Per chat: 'i added
+          a wash hair to the schedule because i didnt see it on the
+          list but then when i go to the task pile i noticed there was
+          a wash hair routine so need to resolve that.' Three options:
+          MERGE (keeps existing, drops the new draft — most common
+          path when user genuinely double-added); ADD ANYWAY (commits
+          new + keeps existing); CANCEL (keeps the form open with the
+          draft intact so user can edit the title and try again). */}
+      {duplicatePrompt && (
+        <div
+          onClick={() => setDuplicatePrompt(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 105,
+            background: "rgba(61, 49, 40, 0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.paper,
+              borderRadius: 14,
+              maxWidth: 480, width: "100%",
+              padding: 24,
+              boxShadow: "0 10px 40px rgba(0,0,0,0.35)",
+              border: `1px solid ${C.line}55`,
+            }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.14em",
+              fontWeight: 800, color: C.gold,
+              textTransform: "uppercase", marginBottom: 8,
+            }}>⚠ Possible duplicate</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 17, color: C.ink, lineHeight: 1.4,
+              marginBottom: 14,
+            }}>
+              You're adding <span style={{ fontStyle: "italic", fontWeight: 600 }}>"{duplicatePrompt.draftTitle}"</span> — but your pile already has:
+            </div>
+            <div style={{
+              background: `${C.gold}10`,
+              border: `1px dashed ${C.gold}55`,
+              borderRadius: 8,
+              padding: "10px 14px",
+              marginBottom: 16,
+            }}>
+              {duplicatePrompt.matches.slice(0, 3).map((m, i) => (
+                <div key={m.id} style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 15,
+                  color: C.ink, lineHeight: 1.5,
+                  marginTop: i === 0 ? 0 : 4,
+                }}>
+                  • {m.title}
+                </div>
+              ))}
+              {duplicatePrompt.matches.length > 3 && (
+                <div style={{
+                  fontSize: 11, color: C.muted, marginTop: 6, fontStyle: "italic",
+                }}>
+                  + {duplicatePrompt.matches.length - 3} more
+                </div>
+              )}
+            </div>
+            {duplicatePrompt.extraConflicts > 0 && (
+              <div style={{
+                fontSize: 11, color: C.muted, fontStyle: "italic",
+                marginBottom: 12, marginTop: -8,
+              }}>
+                ({duplicatePrompt.extraConflicts} other draft{duplicatePrompt.extraConflicts === 1 ? "" : "s"} in this batch also matches the pile.)
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+              <button
+                onClick={() => {
+                  // Merge: keep existing, drop the new draft + close the source form.
+                  setDuplicatePrompt(null);
+                  if (duplicatePrompt.source === "addTask") {
+                    setDraftTitle("");
+                    setShowAddForm(false);
+                  } else if (duplicatePrompt.source === "addBrainDump") {
+                    setBrainDumpText("");
+                    setShowBrainDump(false);
+                  }
+                }}
+                style={{
+                  background: C.mommy, color: "#fff",
+                  border: "none", borderRadius: 8,
+                  padding: "10px 14px", cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, letterSpacing: "0.10em",
+                  fontWeight: 700, textTransform: "uppercase",
+                }}>Merge · keep existing</button>
+              <button
+                onClick={() => {
+                  // Add anyway: re-run the underlying add with forceDuplicate.
+                  const src = duplicatePrompt.source;
+                  setDuplicatePrompt(null);
+                  if (src === "addTask") addTask({ forceDuplicate: true });
+                  else if (src === "addBrainDump") addBrainDump({ forceDuplicate: true });
+                }}
+                style={{
+                  background: "transparent", color: C.ink,
+                  border: `1.5px solid ${C.line}66`, borderRadius: 8,
+                  padding: "10px 14px", cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, letterSpacing: "0.10em",
+                  fontWeight: 700, textTransform: "uppercase",
+                }}>Add anyway</button>
+              <button
+                onClick={() => setDuplicatePrompt(null)}
+                style={{
+                  background: "transparent", color: C.muted,
+                  border: "none",
+                  padding: "8px 14px", cursor: "pointer",
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 13,
+                }}>Cancel · let me edit the title</button>
             </div>
           </div>
         </div>
