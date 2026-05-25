@@ -15,11 +15,16 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt388";
+const APP_VERSION = "2026.05.05bt393";
 const APP_BUILD_NOTES = [
-  "THE ACTUAL FIX — STICKY HEADER + WHITE BORDER, BOTH FROM #ROOT. Per chat (user pasted Chrome DevTools computed-style dump of #root): a leftover Vite/React starter stylesheet (somewhere in the user's project — likely src/index.css or src/App.css) sets `#root { border-inline: 1px solid var(--border); display: flex; flex-direction: column; width: 1126px; max-width: 100%; min-height: 100svh; text-align: center; }`. (1) The border-inline rule was the visible 'white border' on both left and right edges that the user has been complaining about for 5+ builds. NOT the scrollbar (bt383's styling was a red herring). An actual 1px light-gray border on the #root element itself. (2) The display:flex on #root was a flex containment context that subtly interfered with position:sticky descendants in some Chrome configurations — the dominant cause of sticky not latching after bt356, bt385, bt386, bt387. Fixed by adding a high-specificity override block in FontImports CSS with !important on all the bad properties: border, border-inline, display, flex-direction, width, max-width, min-height, text-align, margin. This is the 'Path B' / nuke-from-App.jsx fix; the cleaner 'Path A' (find and delete the offending CSS file in the source dir) was offered in chat. Apologies for the 5-build cycle on this; should have asked for DOM inspection on turn 1.",
+  "↺ KEEPS TASK IN TODAY + 'MOVED OFF' TAG. Per chat: 'I think tapping ↺ on a scheduled task SHOULD revert it back to today in case one were to decide midday that they want to switch it back in. It could just be tagged so user knows it was one that was unscheduled manually.' User pushed back on bt391/bt392's 'send to Backlog' semantics — they want manually-unscheduled tasks to stay in today's pile with a visible tag, so they're easy to re-slot mid-day instead of getting buried in Backlog.\n\nFOUR CHANGES THAT REVERT/UPDATE bt391:\n\n(1) BUCKET DERIVATION reverted to date-based. forToday = scheduledDate === referenceISO && !scheduledTime. Same as the pre-bt391 logic. Tasks land here whether the engine couldn't fit them OR the user manually unscheduled them.\n\n(2) SECTION HEADER reverted from 'Couldn't fit' (bt391) back to 'For today'. The bucket name needs to cover both engine failures AND user choices, so 'For today' is more honest than either '✗ Couldn't fit' or '↺ Moved off' alone.\n\n(3) ↺ SEMANTICS UPDATED. Both timeline ↺ and pile ↺ now clear scheduledTime + pinned, KEEP scheduledDate, set _unscheduledByUser=true, and clear _couldNotFit + _couldNotFitReason (since this isn't an engine failure). The task stays visible in today's For Today section with a tag.\n\n(4) NEW '↺ MOVED OFF' TAG added next to the existing '✗ WON'T FIT' tag in the row render. Differentiates user-choice unschedules from engine failures so the user knows which is which. Coral→gold color shift signals 'user did this' (not a problem). Tag auto-hides when the task gets a scheduledTime again (whether via drag, edit modal, or reanalyze) so no manual flag management needed.\n\nRationale captured from user: 'if it was originally scheduled for today then likely the user wanted to do it today but had to compromise and unscheduled it for whatever reason and no sense re-hunting it down in backlog.' True. Backlog is for tasks with no day commitment; today's pile is for tasks that wanted today, regardless of why they don't currently have a slot.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt393", summary: "↺ now keeps tasks in today's pile (was sending to Backlog in bt391/392). Per chat: user wants manually-unscheduled tasks visible in today's For Today section with a tag so they can be re-slotted mid-day. (1) Bucket derivation reverted to date-based (forToday = scheduledDate=today + no scheduledTime). (2) Section header reverted from 'Couldn't fit' to 'For today' — bucket now covers both engine failures AND user choices, so the original name is more honest. (3) ↺ semantics: clears scheduledTime + pinned, KEEPS scheduledDate, sets _unscheduledByUser=true, clears _couldNotFit. (4) New '↺ MOVED OFF' tag in row render (gold) sits alongside existing '✗ WON'T FIT' (coral) — differentiates user choice from engine failure. Tag auto-hides when task gets scheduledTime again. Build verified clean via esbuild." },
+  { version: "2026.05.05bt392", summary: "Rolled back bt391's auto-trigger useEffect (caused Schedule-tab error). Kept the 3-state pile and ↺-to-Backlog semantics — though both partially undone in bt393." },
+  { version: "2026.05.05bt391", summary: "3-state pile model attempt — significantly reworked in bt393 after user feedback. Bucket derivation and ↺ semantics partially reverted; section header reverted to 'For today'." },
+  { version: "2026.05.05bt390", summary: "Pile inline title edit now matches the timeline pattern. Removed the bt380 ✎ pencil button. Tapping the title itself enters edit mode + closes any open quick-action panel. In edit mode: input + ↺ (conditional on scheduledTime being set, only Scheduled-section tasks can be unscheduled) + ⋯ (opens full edit modal). ↺ behavior matches timeline: scheduledTime: null, pinned: false. Verified timeline ↺ was already correct before porting. Build verified clean via esbuild." },
+  { version: "2026.05.05bt389", summary: "Pump status button cleanup. (1) Removed the <Timer> Lucide icon from the left of the button — eyebrow + big-number + target line carry all the meaning without the icon. (2) Target time at the bottom now ALWAYS renders, including in overdue and soon states (previously hidden in those states). Language adapts: 'started H:MM' when active, 'was H:MM' when overdue (past tense), 'target H:MM' otherwise. Build verified clean via esbuild." },
   { version: "2026.05.05bt388", summary: "The actual fix for sticky + white border. User's DevTools inspection revealed a leftover Vite/React starter stylesheet setting `#root { border-inline: 1px solid var(--border); display: flex; flex-direction: column; width: 1126px; max-width: 100%; min-height: 100svh; text-align: center }`. The border-inline was the visible white border (NOT the scrollbar — bt383 was a red herring). The display:flex was the dominant cause of sticky not latching after the bt356/bt385/bt386/bt387 cycle. Added a high-specificity override block in FontImports CSS with !important on all the bad properties. Build verified clean via esbuild." },
   { version: "2026.05.05bt387", summary: "Sticky header fix round 3 (still partial — bt388 was the real fix). Dropped #root from the overflow-x:hidden CSS rule (now applies to body only). #root having overflow-x:hidden was making it a scroll container in CSS terms, which steals the scrolling-ancestor designation from the viewport for position:sticky descendants. Legitimate improvement on its own but not the dominant cause. Body's overflow-x propagates to the viewport automatically via CSS viewport-propagation (active since bt385 removed html's overflow), so horizontal escapes are still clipped. Build verified clean via esbuild." },
   { version: "2026.05.05bt386", summary: "Sticky header fix attempt 2 (partial). Commented out the @media body { zoom: 1.20 - 1.55 } rules at min-width 760/1100/1500/1900px. These would have been creating a stacking context on laptop windows >= 760px, but on the user's narrower window they weren't firing — bt387 (#root overflow drop) was the dominant cause. Trade-off: app no longer auto-scales bigger on laptop screens; user can use browser zoom (Cmd+=) instead. Build verified clean via esbuild." },
@@ -12362,7 +12367,12 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             textAlign: "left",
             fontFamily: "inherit",
           }}>
-          <Timer size={28} className={activePump ? "pulse-soft" : ""} />
+          {/* v05.05bt389 — Per chat: 'remove clock just leave overdue
+              and what time was the target'. Dropped the <Timer> icon
+              that used to sit on the left (was a Lucide clock-face
+              glyph reading as visual clutter). The pump status reads
+              from the eyebrow + big number + target line, no icon
+              needed. */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 700, opacity: 0.9 }}>
               {stateLabel}
@@ -12387,17 +12397,21 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 ? `${minsToNextPump} min`
                 : `${Math.floor(minsToNextPump / 60)}h ${minsToNextPump % 60}m`}
             </div>
-            {/* Bottom reference line — only shown for active pump (where
-                it shows when the timer started) or on-schedule (where the
-                target time is useful context). Dropped for overdue/soon
-                because the duration in the big number is what matters. */}
-            {(activePump || (!pumpOverdue && !pumpSoon)) && (
-              <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", opacity: 0.85, marginTop: 2 }}>
-                {activePump
-                  ? `started ${fmtTimeShort(activePump.startedAt)}`
-                  : `target ${fmtTimeShort(nextPumpAt)}`}
-              </div>
-            )}
+            {/* v05.05bt389 — Per chat: 'remove clock just leave overdue
+                and what time was the target'. Previously this target
+                line was hidden in overdue/soon states ('the duration in
+                the big number is what matters'). User asked for it to
+                be visible when overdue so they can see when the pump
+                was supposed to happen ('what time was the target').
+                Language adapts: 'target H:MM' for upcoming/active,
+                'was H:MM' for overdue (past tense — that ship sailed). */}
+            <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", opacity: 0.85, marginTop: 2 }}>
+              {activePump
+                ? `started ${fmtTimeShort(activePump.startedAt)}`
+                : pumpOverdue
+                ? `was ${fmtTimeShort(nextPumpAt)}`
+                : `target ${fmtTimeShort(nextPumpAt)}`}
+            </div>
           </div>
         </button>
         );
@@ -27600,6 +27614,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     reanalyze();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reanalyzeTrigger]);
+  // v05.05bt391 (rolled back in bt392) — Auto-trigger useEffect for the
+  // 3-state pile model was here. Caused a Schedule-tab error (likely
+  // reanalyze re-running on every tasks change in a way that interacted
+  // badly with cross-tab render). Bucket model + section rename + ↺
+  // semantics retained; the engine just doesn't auto-run on send-to-today
+  // anymore. User triggers Reanalyze manually (existing affordance) to
+  // process pending tasks. Tasks in the "pending" state (scheduledDate=
+  // today + no time + no _couldNotFit) show in Backlog until reanalyzed.
   // v05.05bt264 — Panel-level trade-ideas dismissal. Per chat: 'the whole
   // panel should be dismissed if user wants to not request trade - it
   // can pop up again when reanalyze if there's still some valuable trade.'
@@ -32537,7 +32559,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setInlineTitleEdit(null);
-                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, scheduledTime: null, pinned: false } : t));
+                                  // v05.05bt288/291/391/393 — Send back to
+                                  // today's unscheduled section. Per chat
+                                  // (bt393): user wants manually-unscheduled
+                                  // tasks to STAY in today's pile with a
+                                  // visible tag — not exiled to Backlog —
+                                  // so they can be re-slotted mid-day
+                                  // without hunting. Clears scheduledTime
+                                  // + pinned, KEEPS scheduledDate, sets
+                                  // _unscheduledByUser=true so the pile
+                                  // row shows the ↺ MOVED OFF tag. Clears
+                                  // _couldNotFit too since this isn't an
+                                  // engine failure, it's a deliberate
+                                  // choice.
+                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, scheduledTime: null, pinned: false, _unscheduledByUser: true, _couldNotFit: false, _couldNotFitReason: null } : t));
                                 }}
                                 title="Remove from today's schedule (keeps task in unscheduled list)"
                                 style={{
@@ -34015,13 +34050,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   if (aFit !== bFit) return aFit - bFit;
                   return (b.regretScore || 0) - (a.regretScore || 0);
                 });
-              // v05.05bt373 — Per chat: 'I like the mockup with the
-              // three sections for planning.' Split the legacy
-              // "unscheduled" bucket into today-no-time vs backlog.
-              //   forToday = scheduledDate=today + no time
-              //   backlog  = no scheduledDate at all (brain dump)
-              // unscheduledTodayBucket already filtered to today via
-              // todayTasks; backlog needs its own pull from myTasks.
+              // v05.05bt373 → bt391 → bt393. Per chat (bt393): user
+              // pushed back on bt391's "↺ sends task to Backlog" — they
+              // want manually-unscheduled tasks to STAY in today's pile
+              // with a visual tag, so they don't have to hunt them in
+              // Backlog later. So the bucket model is back to date-based:
+              //   forToday = scheduledDate=today + no scheduledTime
+              //              (includes engine-couldn't-fit AND
+              //               user-manually-unscheduled)
+              //   backlog  = no scheduledDate at all
+              // The 3-section pile shape stays the same; what changed is
+              // the bucket FILTER (date again, not _couldNotFit flag) and
+              // the row-level tags inside the "For today" section now
+              // distinguish ✗ WON'T FIT (engine failure) from ↺ MOVED OFF
+              // (user choice). See the row render below.
               const forToday = unscheduledTodayBucket.filter(t =>
                 t.scheduledDate === referenceISO
               );
@@ -34029,9 +34071,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 .filter(t => !t.scheduledTime && !t.scheduledDate)
                 .filter(t => !t.completedAt || isCompletedToday(t))
                 .sort((a, b) => regretSortFrozen ? 0 : (b.regretScore || 0) - (a.regretScore || 0));
-              // Back-compat: code below still refers to "unscheduled".
-              // Map it to forToday so existing render paths stay working.
+              // Back-compat: render below uses `unscheduled`. Same data
+              // as forToday (the whole "today, no time" bucket).
               const unscheduled = forToday;
+              // Aliased here so the auto-trigger logic if re-introduced
+              // can reference it; no current consumer.
+              const couldntFit = forToday;
               // v05.05bt294 — Don't hide the pile when empty. Per chat:
               // 'What happened to my like table wit schedule ba
                // unscheduled divided?' — pile was disappearing on
@@ -34196,68 +34241,127 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         minWidth: 0,
                         textAlign: "left",
                       }}>
-                        {/* v05.05bt380 — Per chat: 'i should also be
-                            able to edit task name right there and
-                            then on the task pile.' Reuses the
-                            existing inlineTitleEdit infrastructure
-                            (already wired into the timeline render):
-                            when this task's id is the active inline
-                            edit, the title becomes an autofocused
-                            input that commits on blur / Enter and
-                            cancels on Escape. Tap-to-enter is on a
-                            small ✎ button rendered after the title
-                            so the row's main click can still expand
-                            the quick-action panel without conflict. */}
+                        {/* v05.05bt390 — Per chat: 'i dont like the
+                            pencil icons in the task pile - lets do
+                            it like we do the schedule above where we
+                            click on the task title and we can edit
+                            it as well a little rotating arrow button
+                            comes up so can unschedule it.' Replaced
+                            the ✎ button (bt380) with the same
+                            click-the-title-itself pattern used on
+                            the scheduled timeline. When inlineTitleEdit
+                            matches this task, render input + ↺ (only
+                            if scheduledTime is set — Today/Backlog
+                            tasks have nothing to unschedule) + ⋯
+                            (opens the full edit modal). When NOT
+                            editing, the title text itself is the
+                            tap target; tapping enters edit mode and
+                            closes any open quick-action panel so the
+                            row doesn't show two affordances at once. */}
                         {inlineTitleEdit === t.id ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            defaultValue={t.title}
-                            onClick={(e) => e.stopPropagation()}
-                            onBlur={(e) => commitInlineTitle(t.id, e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitInlineTitle(t.id, e.currentTarget.value);
-                              else if (e.key === "Escape") setInlineTitleEdit(null);
-                            }}
-                            style={{
-                              width: "100%",
-                              padding: "2px 6px",
-                              background: C.bg, color: C.ink,
-                              border: `1px solid ${C.mommy}66`,
-                              borderRadius: 4,
-                              fontFamily: "'Cormorant Garamond', serif",
-                              fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
-                              fontStyle: "italic",
-                            }}
-                          />
+                          <span style={{
+                            display: "inline-flex", alignItems: "center",
+                            gap: 4, flex: 1, minWidth: 0,
+                            verticalAlign: "middle",
+                          }}>
+                            <input
+                              type="text"
+                              autoFocus
+                              defaultValue={t.title}
+                              onClick={(e) => e.stopPropagation()}
+                              onBlur={(e) => commitInlineTitle(t.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitInlineTitle(t.id, e.currentTarget.value);
+                                else if (e.key === "Escape") setInlineTitleEdit(null);
+                              }}
+                              style={{
+                                flex: 1, minWidth: 0,
+                                padding: "2px 6px",
+                                background: C.bg, color: C.ink,
+                                border: `1px solid ${C.mommy}66`,
+                                borderRadius: 4,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
+                                fontStyle: "italic",
+                              }}
+                            />
+                            {t.scheduledTime && (
+                              <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setInlineTitleEdit(null);
+                                  // v05.05bt390/391/393 — Matches timeline
+                                  // ↺ semantics (bt393): keep scheduledDate,
+                                  // clear scheduledTime + pinned, tag with
+                                  // _unscheduledByUser so the task lands in
+                                  // For Today with the ↺ MOVED OFF badge.
+                                  setTasks(prev => prev.map(task =>
+                                    task.id === t.id
+                                      ? { ...task, scheduledTime: null, pinned: false, _unscheduledByUser: true, _couldNotFit: false, _couldNotFitReason: null }
+                                      : task
+                                  ));
+                                }}
+                                title="Move off the timeline (stays in today's pile)"
+                                aria-label="Unschedule task"
+                                style={{
+                                  width: 28, height: 28,
+                                  padding: 0,
+                                  background: "transparent",
+                                  border: `1px solid ${C.gold}66`,
+                                  borderRadius: 6,
+                                  color: C.gold, cursor: "pointer",
+                                  fontSize: 14, lineHeight: 1, fontWeight: 700,
+                                  display: "inline-flex",
+                                  alignItems: "center", justifyContent: "center",
+                                  flexShrink: 0,
+                                  fontFamily: "inherit",
+                                  touchAction: "manipulation",
+                                  WebkitTapHighlightColor: "transparent",
+                                }}>↺</button>
+                            )}
+                            <button
+                              type="button"
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setInlineTitleEdit(null);
+                                setEditingTask(t);
+                              }}
+                              title="Edit all task fields"
+                              aria-label="Open edit modal"
+                              style={{
+                                padding: "3px 7px",
+                                background: "transparent",
+                                border: `1px solid ${C.line}55`,
+                                borderRadius: 4,
+                                color: C.muted, cursor: "pointer",
+                                fontSize: 12, lineHeight: 1,
+                                fontFamily: "inherit",
+                                flexShrink: 0,
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                              }}>⋯</button>
+                          </span>
                         ) : (
-                          <>
-                          {t.title}
-                          <button
-                            type="button"
+                          <span
                             onClick={(e) => {
                               e.stopPropagation();
                               setInlineTitleEdit(t.id);
-                              // Close any open quick-action panel
-                              // when entering rename mode so the row
-                              // doesn't show two affordances at once.
+                              // Close any open quick-action panel so
+                              // the row doesn't show two affordances
+                              // at once.
                               setPileQuickActionId(null);
                             }}
-                            title="Rename"
-                            aria-label="Rename task"
                             style={{
-                              marginLeft: 5,
-                              padding: "0 4px",
-                              background: "transparent", border: "none",
                               cursor: "pointer",
-                              fontSize: 11, color: C.muted,
-                              opacity: 0.55,
-                              fontFamily: "inherit",
                               touchAction: "manipulation",
                               WebkitTapHighlightColor: "transparent",
-                              verticalAlign: "baseline",
-                            }}>✎</button>
-                          </>
+                            }}
+                          >
+                            {t.title}
+                          </span>
                         )}
                         {/* v05.05bt376 — Per chat: 'for things that are
                             scheduled, can you update the time beside
@@ -34289,7 +34393,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             letterSpacing: "0.08em",
                           }}>↻ ROLLOVER</span>
                         )}
-                        {side === "unscheduled" && t._couldNotFit && (
+                        {side === "unscheduled" && t._couldNotFit && !t._unscheduledByUser && (
                           <span style={{
                             marginLeft: 5,
                             fontFamily: "'JetBrains Mono', monospace",
@@ -34299,6 +34403,30 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             padding: "1px 4px",
                             borderRadius: 3,
                           }} title={t._couldNotFitReason || "no block fit during reanalyze"}>✗ WON'T FIT</span>
+                        )}
+                        {/* v05.05bt393 — Per chat: '↺ on a scheduled task
+                            should revert back to today ... tagged so user
+                            knows it was one that was unscheduled manually.'
+                            Tag for tasks the user moved off the timeline
+                            (kept scheduledDate but cleared scheduledTime).
+                            Visible only in the "For Today" section while
+                            the task has no scheduledTime — if the user
+                            schedules it again (or reanalyze re-slots it),
+                            it leaves this section automatically. Coral
+                            color to match the visual weight of WON'T FIT
+                            but with the ↺ glyph + softer "moved off" copy
+                            so the user can tell it apart from an engine
+                            failure. */}
+                        {side === "unscheduled" && t._unscheduledByUser && !t.scheduledTime && (
+                          <span style={{
+                            marginLeft: 5,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 8.5, color: C.gold, fontWeight: 700,
+                            letterSpacing: "0.08em",
+                            background: `${C.gold}14`,
+                            padding: "1px 4px",
+                            borderRadius: 3,
+                          }} title="You moved this off the timeline. Tap to reschedule.">↺ MOVED OFF</span>
                         )}
                       </span>
                       {/* v05.05bt363/365/367 — Per chat (bt367):
@@ -34748,7 +34876,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           ) : scheduled.map(t => <TaskRow key={t.id} t={t} side="scheduled" />)
                         )}
                       </div>
-                      {/* FOR TODAY section (formerly "Unscheduled") */}
+                      {/* FOR TODAY section. bt391 renamed this to "Couldn't
+                          fit" but bt393 reverted — the bucket includes both
+                          engine failures AND user-manual-unschedules, so
+                          "couldn't fit" was inaccurate. Differentiation now
+                          happens at the row level via small tags (✗ WON'T
+                          FIT for engine, ↺ MOVED OFF for user). */}
                       <div style={{
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
