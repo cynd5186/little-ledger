@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt403";
+const APP_VERSION = "2026.05.05bt405";
 const APP_BUILD_NOTES = [
-  "THREE FEATURES per chat. Stayed disciplined and split the user's 7-feature mega-request across three sequential builds (bt403/404/405) rather than one mega-build that crashes.\\n\\n(1) SUB-TASK / PREDICTED VISUAL TREATMENT (your stated priority — 'really waiting on that'). Per chat: 'feeding baby shows up as a new task but it is confusing because it should be a SUB TASK since it is a prediction that this may or may not happen here and the probability of it happening here is 70%.' Feed-predicted rows now get extra left padding (20px more than regular rows) so they visually nest under the slot above them as a sub-bullet rather than reading as a peer task. Combined with the bt400 opacity 0.72 + existing italic title + PREDICTED tag, the prediction now reads as ambient context, not actionable work. Added an explicit probability badge: 'N% likely' derived from sampleSize / 7 (the lookback window is 7 days), capped at 99%. Renders alongside the typical-oz hint, e.g., '· typical 4.2oz · 71% likely'.\\n\\n(2) DUPLICATE DETECTION ON ADD. Per chat: 'i added a wash hair to the schedule because i didnt see it on the list but then when i go to the task pile i noticed there was a wash hair routine.' New module-level helper findSimilarTitles(newTitle, existing) runs on every addTask + addBrainDump call. Algorithm: lowercase + strip punct + drop common filler words, then check substring either direction OR Jaccard token similarity >= 0.5. Empty / very short titles never match (prevents false positives on 'go'/'do'/etc). When matches found, the new DuplicatePromptModal renders with three options per chat: MERGE · keep existing (drops new draft, closes form), ADD ANYWAY (commits via opts.forceDuplicate=true bypass), CANCEL (keeps form open with draft intact so user can edit). Brain-dump batches detect across all parsed drafts and surface the first conflict + a count of others.\\n\\n(3) EXPORT FINISHED TASKS. Per chat: 'for end-of-day monday export - i had told you to just export the info like i had before but now only the finished task and i can copy or import into monday myself.' New exportFinishedTasks function next to the existing exportMondayCsv. Filters to completedAt + ownerName=currentUser + scheduledDate matching today, sorts by completedAt asc, formats as a markdown-friendly header + bullet list ('- 9:38a · wash hair (15m)'). Same clipboard-or-fallback path as the CSV export. New menu item '✓ Export finished tasks · for Monday' in the ⋯ overflow next to the existing CSV export, both call sites (Mommy and Daddy menus).",
+  "TIME-CREDIT CHOOSER. Per chat: 'for #7, maybe dealers choice? they can choose either a or b?' bt398's time-credit banner was info-only — gold ✨ FREED pill showing freed minutes + which task. Now it's a chooser: tap the banner body to expand and reveal two options.\\n\\nOPTION A — SLOT A TASK INTO THIS TIME. Shows up to 3 unscheduled tasks owned by the current user that fit in the freed minutes (effortMin <= freedMin), sorted by regret score. Tap one → it gets scheduledTime set to the freed start time (the time the finished task was actually completed), scheduledDate set to today, drawer flag cleared, pinned. Banner dismisses. If no candidates fit, shows a muted 'No unscheduled tasks fit in N min.'\\n\\nOPTION B — PULL NEXT TASK EARLIER. Finds the next upcoming scheduled task for the current user today, shows a button 'Pull <title> to H:MM'. Tap → its scheduledTime updates to the freed start time + pinned. Banner dismisses. If no upcoming task, shows muted 'No upcoming task to pull earlier.'\\n\\nThe freed start time = completedAt of the finished task. So if you finished 'thaw milk' at 9:40a in a slot ending 10:08a, the freed slot is 9:40a-10:08a, and option A/B both schedule the chosen task to start at 9:40a.\\n\\nNOTE on swipe-right quick-select for uncategorized (bt409): held for its own focused build. Touch gestures on top of an existing complex row component need careful handling so the new swipe doesn't break the existing left-swipe-to-delete + drag-to-reorder gestures. Will tackle in a dedicated build with a test plan.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt405", summary: "Time-credit banner upgraded from info-only to action chooser. Tap banner body expands two options: (A) Slot a task into this time — shows top 3 unscheduled tasks that fit in the freed minutes, tap to schedule at the freed start time; (B) Pull next task earlier — moves the next upcoming task's scheduledTime to the freed start. Both pin after change. Freed start time = completedAt of the finished task. Banner × still dismisses. Swipe quick-select (bt409) deferred to its own build — touch gestures on existing row need careful test plan. Build verified clean via esbuild." },
+  { version: "2026.05.05bt404", summary: "Overlap algorithm + pump mitigation. (1) autoResolveOverlaps now tries COMPRESSION first (preserve original end, shrink duration) before falling back to SHIFT-FORWARD. Compression viable when remaining duration >= max(15min, 50% of original). New AUTO-SHRINK −Nm badge (gold, tap to undo); shift fallback gets a coral MOVE ME tag warning the task is too tight to fit here cleanly. Cascade benefit: compression doesn't extend prevEnd so downstream tasks aren't displaced. (2) Pump tile gains a tiered mitigation hint: 30-60min late suggests a quick partial pump, 60-120min late suggests a power pump, >120min late upgrades to a coral urgency level. Build verified clean via esbuild." },
   { version: "2026.05.05bt403", summary: "Three features per chat (split from 7-feature mega-ask into three sequential builds bt403/404/405). (1) Feed-predicted rows get +20px left indent to read as sub-bullets, plus '% likely' badge derived from sampleSize / 7 (capped at 99%). (2) Duplicate detection: new findSimilarTitles helper (substring + Jaccard token overlap >= 0.5) hooked into addTask + addBrainDump. New DuplicatePromptModal with Merge / Add anyway / Cancel options. (3) New exportFinishedTasks function + ⋯ menu item: copies today's completed tasks as a plain bullet list for paste into monday.com. Build verified clean via esbuild." },
   { version: "2026.05.05bt402", summary: "Hotfix + dismiss-ability. (1) Hotfix bt400 lastPump crash: lastPump is App-level state; bt400 added the prop directly on MilkPanel but MilkPanel is mounted inside OnDutyCard which didn't have lastPump. Threaded through NowView → OnDutyCard → MilkPanel. Same lesson as bt399 hydrated crash. (2) Auto-shifted banner gains × dismiss with count-based gating: dismissedCount stored, banner re-appears if count grows beyond dismissed. Banner restructured from a single big button to flex layout (content + UNDO ALL + ×). (3) Overlap banner gains × dismiss with same count-based gating, sits next to existing Auto-fix + Show buttons. Build verified clean via esbuild." },
   { version: "2026.05.05bt401", summary: "Three row-level UI cleanups per chat screenshots. (1) ⋮⋮ move button: removed mauve border + bg tint, now a bare glyph at 32×32 tap target. (2) Pin: removed inline '◆ PIN' next to title; added Lucide Pin icon on right side (between R-chip and ⋮⋮) — always visible on incomplete tasks, gold-filled when pinned, muted-outline at 0.45 opacity when not. Tap toggles. (3) Auto-shift tag: '↻ +60m' renamed to 'AUTO-SHIFT +60m' uppercase mono so the verb is clear. Deeper overlap-compress algorithm queued for later. Build verified clean via esbuild." },
@@ -12452,6 +12454,33 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 ? `was ${fmtTimeShort(nextPumpAt)}`
                 : `target ${fmtTimeShort(nextPumpAt)}`}
             </div>
+            {/* v05.05bt404 — Pump mitigation hint. Per chat: 'i need to
+                better manage my pump so include the pump mitigation
+                banner' — 'next pump = power pump or pump for longer or
+                try to fit in a little pump even if doesnt completely
+                empty.' Tiered by lateness so the suggestion matches
+                the severity: 30-60min late → squeeze in a quick partial
+                pump; 60-120min late → power pump (extra-long, fully
+                empty); >120min late → urgent recovery (power pump now
+                + plan an extra session today). Only renders when not
+                actively pumping (already pumping is the resolution). */}
+            {!activePump && pumpOverdue && Math.abs(minsToNextPump) >= 30 && (() => {
+              const lateMin = Math.abs(minsToNextPump);
+              let tip;
+              if (lateMin >= 120) tip = "POWER PUMP NOW · plan an extra session today";
+              else if (lateMin >= 60) tip = "TRY: power pump (60m, full empty)";
+              else tip = "TRY: quick 15-20m pump (partial OK)";
+              return (
+                <div style={{
+                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                  color: lateMin >= 120 ? C.accent : C.gold,
+                  fontWeight: 700, letterSpacing: "0.06em",
+                  marginTop: 3, opacity: 0.95,
+                }}>
+                  ⚡ {tip}
+                </div>
+              );
+            })()}
             {/* v05.05bt400 — Per chat: 'maybe it would also help if we
                 put a last pump time as well'. Renders only when there
                 IS a last pump and we're not currently pumping (active
@@ -28606,9 +28635,44 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         }
         if (prevEnd && item.start < prevEnd) {
           if (item.kind === "task") {
-            const dur = item.end.getTime() - item.start.getTime();
-            const shiftMs = prevEnd.getTime() - item.start.getTime();
+            // v05.05bt404 — Per chat: 'autofixes with overlaps should
+            // not completely move an item out of the way but rather
+            // reasonable adjust time durations so that it does not
+            // overlap...if it has significantly shrunk like a 60 min
+            // one is now 15 min then need to tag and suggest for the
+            // user to move it into another slot.' New strategy:
+            // COMPRESS first (preserve original end, shrink duration),
+            // fall back to SHIFT only when compression would shrink
+            // below 50% of original OR below 15 min minimum. The
+            // compress path is cleaner because it doesn't cascade
+            // downstream (prevEnd stays at original end, not extended).
+            const originalDur = item.end.getTime() - item.start.getTime();
+            const originalEnd = item.end;
             const newStart = new Date(prevEnd);
+            const compressedDur = originalEnd.getTime() - newStart.getTime();
+            const minDurMs = 15 * 60 * 1000;
+            const halfOrigMs = originalDur * 0.5;
+            if (compressedDur >= Math.max(minDurMs, halfOrigMs)) {
+              // Compression viable — preserve original end, shrink duration.
+              const shrunkMin = Math.round((originalDur - compressedDur) / 60000);
+              out.push({
+                ...item,
+                start: newStart,
+                end: originalEnd,
+                _compressedByOverlap: shrunkMin,
+                _compressedAfter: prevTitle,
+                _originalStart: item.start,
+                _originalEnd: item.end,
+              });
+              // prevEnd stays at the original end — no downstream cascade.
+              if (originalEnd > prevEnd) prevEnd = originalEnd;
+              prevTitle = item.title;
+              continue;
+            }
+            // Compression would over-shrink (< 50% of original or < 15 min).
+            // Fall back to shift-forward AND tag for "suggest move" treatment.
+            const dur = originalDur;
+            const shiftMs = prevEnd.getTime() - item.start.getTime();
             const newEnd = new Date(newStart.getTime() + dur);
             shiftIntervals.push([newStart.getTime(), newEnd.getTime()]);
             out.push({
@@ -28616,7 +28680,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               start: newStart, end: newEnd,
               _shiftedByOverlap: Math.round(shiftMs / 60000),
               _shiftedAfter: prevTitle,
-              _originalStart: item.start, // for undo
+              _originalStart: item.start,
+              _wouldShrinkToMin: Math.round(compressedDur / 60000),
+              _suggestMove: true,
             });
             if (newEnd > prevEnd) prevEnd = newEnd;
             prevTitle = item.title;
@@ -31921,6 +31987,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 signal (vs the coral drift banner). Info-only for MVP
                 — × dismisses. Apply-to-something affordance comes
                 next iteration. */}
+            {/* v05.05bt398 / bt405 — Time-credit banner with action
+                chooser. Per chat: 'for #7, maybe dealers choice? they
+                can choose either a or b?' On tap, banner expands to
+                show two actions: (a) Apply to a task — pick an
+                unscheduled task that fits in the freed minutes,
+                schedule it at the freed slot; (b) Pull next forward —
+                move the next upcoming scheduled task to start at the
+                freed time. × still dismisses regardless of expand. */}
             {!isTomorrow && timeCreditBanner && (
               <div style={{
                 background: `${C.gold}14`,
@@ -31928,28 +32002,144 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 borderRadius: 10,
                 padding: "10px 14px",
                 marginBottom: 12,
-                display: "flex", alignItems: "center", gap: 10,
               }}>
-                <div style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10.5, letterSpacing: "0.10em",
-                  color: C.gold, fontWeight: 800,
-                }}>✨ FREED</div>
-                <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{timeCreditBanner.freedMin}</span>{" "}
-                  min back from{" "}
-                  <span style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
-                    {timeCreditBanner.fromTitle}
-                  </span>
-                  <span style={{ color: C.muted, fontStyle: "italic" }}> — finished early.</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10.5, letterSpacing: "0.10em",
+                    color: C.gold, fontWeight: 800,
+                  }}>✨ FREED</div>
+                  <button
+                    onClick={() => setTimeCreditBanner(b => b ? { ...b, expanded: !b.expanded } : b)}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      background: "transparent", border: "none", padding: 0,
+                      cursor: "pointer", textAlign: "left",
+                      fontSize: 12.5, color: C.ink, lineHeight: 1.4,
+                    }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{timeCreditBanner.freedMin}</span>{" "}
+                    min back from{" "}
+                    <span style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+                      {timeCreditBanner.fromTitle}
+                    </span>
+                    <span style={{ color: C.muted, fontStyle: "italic" }}> — {timeCreditBanner.expanded ? "tap to collapse" : "tap for options"}.</span>
+                  </button>
+                  <button
+                    onClick={() => setTimeCreditBanner(null)}
+                    style={{
+                      background: "transparent", border: "none",
+                      fontSize: 16, color: C.muted, cursor: "pointer",
+                      padding: 0, lineHeight: 1,
+                    }}>×</button>
                 </div>
-                <button
-                  onClick={() => setTimeCreditBanner(null)}
-                  style={{
-                    background: "transparent", border: "none",
-                    fontSize: 16, color: C.muted, cursor: "pointer",
-                    padding: 0, lineHeight: 1,
-                  }}>×</button>
+                {timeCreditBanner.expanded && (() => {
+                  // Compute candidates for option (a): unscheduled today
+                  // tasks that fit in the freed minutes.
+                  const candidates = (tasks || [])
+                    .filter(t => t.ownerName === currentUser
+                              && !t.completedAt
+                              && !t.scheduledTime
+                              && (!t.scheduledDate || t.scheduledDate === referenceISO)
+                              && (t.effortMin || 30) <= timeCreditBanner.freedMin)
+                    .sort((a, b) => (b.regretScore || 0) - (a.regretScore || 0))
+                    .slice(0, 3);
+                  // Find finished task to derive the freed slot's start.
+                  const finishedTask = (tasks || []).find(t => t.id === timeCreditBanner.fromTaskId);
+                  const freedStartTime = finishedTask?.completedAt
+                    ? (() => {
+                        const d = new Date(finishedTask.completedAt);
+                        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                      })()
+                    : null;
+                  // Option (b) helper — find next upcoming scheduled task.
+                  const nextUpcoming = (tasks || [])
+                    .filter(t => t.ownerName === currentUser
+                              && !t.completedAt
+                              && t.scheduledTime
+                              && (!t.scheduledDate || t.scheduledDate === referenceISO))
+                    .map(t => {
+                      const [h, m] = t.scheduledTime.split(":").map(Number);
+                      const dt = new Date(now);
+                      dt.setHours(h, m || 0, 0, 0);
+                      return { task: t, dt };
+                    })
+                    .filter(({ dt }) => dt > now)
+                    .sort((a, b) => a.dt - b.dt)[0];
+                  return (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.gold}33` }}>
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9, color: C.gold, fontWeight: 700,
+                        letterSpacing: "0.10em", textTransform: "uppercase",
+                        marginBottom: 6, opacity: 0.85,
+                      }}>(A) SLOT A TASK INTO THIS TIME</div>
+                      {candidates.length > 0 ? candidates.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            if (!freedStartTime) return;
+                            setTasks(prev => prev.map(t => t.id === c.id
+                              ? { ...t, scheduledTime: freedStartTime, scheduledDate: referenceISO, drawer: false, pinned: true }
+                              : t));
+                            setTimeCreditBanner(null);
+                          }}
+                          style={{
+                            display: "block", width: "100%", textAlign: "left",
+                            padding: "6px 8px", marginBottom: 4,
+                            background: `${C.gold}0a`,
+                            border: `1px solid ${C.gold}33`,
+                            borderRadius: 6, cursor: "pointer",
+                            fontFamily: "'Cormorant Garamond', serif",
+                            fontSize: 13, color: C.ink,
+                          }}>
+                          <span style={{ fontStyle: "italic" }}>{c.title}</span>{" "}
+                          <span style={{
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9, color: C.muted, marginLeft: 4,
+                          }}>{c.effortMin || 30}m · R{c.regretScore || 3}</span>
+                        </button>
+                      )) : (
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginBottom: 6 }}>
+                          No unscheduled tasks fit in {timeCreditBanner.freedMin} min.
+                        </div>
+                      )}
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9, color: C.gold, fontWeight: 700,
+                        letterSpacing: "0.10em", textTransform: "uppercase",
+                        margin: "10px 0 6px", opacity: 0.85,
+                      }}>(B) OR PULL NEXT TASK EARLIER</div>
+                      {nextUpcoming ? (
+                        <button
+                          onClick={() => {
+                            if (!freedStartTime) return;
+                            setTasks(prev => prev.map(t => t.id === nextUpcoming.task.id
+                              ? { ...t, scheduledTime: freedStartTime, pinned: true }
+                              : t));
+                            setTimeCreditBanner(null);
+                          }}
+                          style={{
+                            display: "block", width: "100%", textAlign: "left",
+                            padding: "6px 8px",
+                            background: `${C.mommy}10`,
+                            border: `1px solid ${C.mommy}55`,
+                            borderRadius: 6, cursor: "pointer",
+                            fontFamily: "'Cormorant Garamond', serif",
+                            fontSize: 13, color: C.ink,
+                          }}>
+                          Pull <span style={{ fontStyle: "italic" }}>{nextUpcoming.task.title}</span> to{" "}
+                          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
+                            {freedStartTime ? `${(() => { const [h,m] = freedStartTime.split(":").map(Number); const h12 = ((h+11)%12)+1; return `${h12}:${String(m).padStart(2,"0")}${h<12?"a":"p"}`; })()}` : "—"}
+                          </span>
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>
+                          No upcoming task to pull earlier.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {/* v05.05bt181 — Drift banner. Shows when tasks have
@@ -33291,6 +33481,66 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     of displacing" overlap algorithm
                                     is queued for a later build. */}
                                   AUTO-SHIFT +{slot._shiftedByOverlap}m</button>
+                            )}
+                            {/* v05.05bt404 — Compressed-by-overlap badge.
+                                When the autoResolve algorithm shrinks the
+                                task duration instead of displacing it
+                                forward (preferred path: preserves the
+                                original end time, no downstream cascade).
+                                Tap to undo: restore original start +
+                                end + pin. */}
+                            {isTask && slot._compressedByOverlap > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const orig = slot._originalStart;
+                                  const origEnd = slot._originalEnd;
+                                  if (!orig) return;
+                                  const hh = String(orig.getHours()).padStart(2, "0");
+                                  const mm = String(orig.getMinutes()).padStart(2, "0");
+                                  const origDurMin = origEnd ? Math.round((origEnd.getTime() - orig.getTime()) / 60000) : null;
+                                  setTasks(prev => prev.map(t => t.id === slot.id ? {
+                                    ...t,
+                                    scheduledTime: `${hh}:${mm}`,
+                                    pinned: true,
+                                    ...(origDurMin ? { effortMin: origDurMin } : {}),
+                                  } : t));
+                                }}
+                                title={`Auto-compressed by ${slot._compressedByOverlap}m to fit after ${slot._compressedAfter || "previous"} · tap to undo + restore full duration + pin`}
+                                style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 9, color: C.gold,
+                                  fontWeight: 800, marginLeft: 6,
+                                  letterSpacing: "0.08em",
+                                  background: `${C.gold}18`,
+                                  padding: "1px 5px", borderRadius: 3,
+                                  border: "none", cursor: "pointer",
+                                  textTransform: "uppercase",
+                                }}>
+                                AUTO-SHRINK −{slot._compressedByOverlap}m
+                              </button>
+                            )}
+                            {/* v05.05bt404 — "Too tight to fit here"
+                                hint. Shows when the autoResolve tried
+                                to compress but the shrink would have
+                                been > 50% of original / < 15 min. The
+                                task was shifted instead AND tagged so
+                                the user knows to move it manually. */}
+                            {isTask && slot._suggestMove && (
+                              <span
+                                title={`Too tight to fit here without shrinking to ${slot._wouldShrinkToMin}m — consider moving to another slot.`}
+                                style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 9, color: C.accent,
+                                  fontWeight: 800, marginLeft: 6,
+                                  letterSpacing: "0.08em",
+                                  background: `${C.accent}22`,
+                                  padding: "1px 5px", borderRadius: 3,
+                                  textTransform: "uppercase",
+                                  cursor: "help",
+                                }}>
+                                MOVE ME
+                              </span>
                             )}
                             {/* v05.05bt277 — Coverage badge: this slice is
                                 a coverage adjustment (e.g. Mommy covering
