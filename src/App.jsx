@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt406";
+const APP_VERSION = "2026.05.05bt407";
 const APP_BUILD_NOTES = [
-  "ROW-LEVEL CLEANUP per chat. Three changes plus a note on swipe-on-Mac.\\n\\n(1) 'WHY HERE' LINK REMOVED FROM ROW FACE. Per chat: 'i thought i told you to remove the why me on the face of the card and have it as an option under the ellipse menu.' Right — earlier ask, hadn't actioned. Inline 'why here' button on scheduled task rows is now gone. The reasoning panel (expandedReasonTaskId state + the IIFE that computes effectiveBlockProfile output) is left in place for a future entry point inside EditTaskModal, but it has no visible trigger on the row right now. Quieter row.\\n\\n(2) AUTO-SHIFT + AUTO-SHRINK + MOVE ME BADGES SHORTER. Per chat: 'the ato shift wording was also too long.' All three badges tone-matched to a lighter style: lowercase, regular tracking, lower-opacity background. '↻ shifted +60m' (was 'AUTO-SHIFT +60m'), '↻ shrunk −15m' (was 'AUTO-SHRINK −15m'), '↳ move me?' (was 'MOVE ME'). Verb is still clear, visual weight is half what it was.\\n\\n(3) MOVE ME explained in chat: the badge appears when bt404's overlap algorithm tried to compress a task to fit but the result would have been too tight (under 15 min OR under 50% of original duration). In that case it falls back to shift-forward + tags 'move me?' so the user knows the task ended up in a sub-optimal spot and should drag it manually. Tooltip on hover spells out the math.\\n\\nSWIPE-ON-MAC NOTE. User asked 'how do you swipe on a mac?' — fair point. Two-finger trackpad fires wheel events, not touch, so swipe gestures don't translate cleanly to desktop testing. Swipe-right quick-select (originally bt409) will get a different affordance — likely a small tap target on the row that opens the category chip strip inline. That way both mobile and Mac trackpad work identically. Held for a focused build.",
+  "END-OF-DAY REVIEW (summary + rollover). Per chat: 'combination — likely summary + rollover together. triggers when you mark the day done somehow.'\\n\\nNEW MENU ITEM. Top of the ⋯ overflow under a new 'Day' section: '✓ Wrap up day · summary + rollover' with hint 'End-of-day stats + decide what carries to tomorrow.' Added to both Mommy and Daddy menus. Tapping it opens the EndOfDayReviewModal.\\n\\nMODAL — SUMMARY HALF. Top of the modal: eyebrow '✓ DAY DONE' + the day's date in serif italic. Below, a 2x2 grid of stat boxes:\\n  • Tasks: 'N done' with sub-line '{unfinishedCount} unfinished · {totalEffort} logged'\\n  • Pumps: 'N sessions' with sub-line '{oz}oz produced' (— if none)\\n  • Feeds · Solène: 'N feeds' with sub-line '{oz}oz' (— if none)\\n  • Diapers: 'N' (— if none)\\nAll derived from today's events filtered to dayStart-dayEnd window. Completed tasks = current-user tasks with completedAt timestamp inside today.\\n\\nMODAL — ROLLOVER HALF. Below stats, lists every unfinished task owned by the user that was either scheduled-for-today or in the pile. Each row shows the title (italic) + a meta line ('was 3:00p' for scheduled tasks, 'pile' for un-scheduled ones). Three radio-style chips per row: ☼ TOMORROW (mauve), ☷ TO PILE (gold), ✕ DROP (coral). Tapping a chip toggles selection (tap again to undo). Leave a task untouched to keep as-is. If there are no unfinished tasks, the section is replaced with a sage 'Nothing unfinished. Beautiful day.' message.\\n\\nAPPLY. Footer button reads 'Close' when no changes selected, or 'Apply · N changes' when at least one task is marked. Pressing it walks all tasks and patches based on choice:\\n  • tomorrow → scheduledDate = tomorrowISO, drawer=false, pinned=false (keeps any scheduledTime so user can adjust later)\\n  • pile → drawer=true, scheduledDate=null, scheduledTime=null, pinned=false\\n  • drop → removed from tasks array (hard delete, no undo)\\nUntouched tasks pass through unchanged. One setTasks call commits the batch.\\n\\nDISMISS. × via overlay-tap or Cancel button (only renders when there are pending changes). Both reset endOfDayChoices state so opening the modal again starts clean.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt407", summary: "End-of-day review modal. Triggered from new ⋯ menu item '✓ Wrap up day · summary + rollover' (top of menu under new 'Day' section, added to both Mommy and Daddy menus). Modal renders: (a) 2x2 stats grid — tasks done/unfinished/effort, pump sessions+oz, feed count+oz, diaper count, all computed from today's events; (b) rollover list of every unfinished task with three chips per row: ☼ tomorrow (sets scheduledDate=tomorrow + keeps scheduledTime), ☷ pile (drawer=true, clears all schedule), ✕ drop (hard delete). Apply commits all choices in one setTasks call. Untouched tasks pass through. Cancel/overlay-tap resets choices. Build verified clean via esbuild." },
   { version: "2026.05.05bt406", summary: "Row-level cleanup. (1) Inline 'why here' link removed from scheduled task rows per chat. Reasoning panel JSX left in place but no trigger on row face — future entry point will be inside EditTaskModal. (2) Auto-shift, auto-shrink, and move-me badges all tone-matched lighter: lowercase verbs, regular tracking, lighter background. '↻ shifted +60m' / '↻ shrunk −15m' / '↳ move me?'. Half the visual weight. (3) Chat reply explained MOVE ME (fallback tag when overlap compression would over-shrink). Swipe-right quick-select still deferred — will use a tap affordance instead so it works on both mobile and Mac trackpad. Build verified clean via esbuild." },
   { version: "2026.05.05bt405", summary: "Time-credit banner upgraded from info-only to action chooser. Tap banner body expands two options: (A) Slot a task into this time — shows top 3 unscheduled tasks that fit in the freed minutes, tap to schedule at the freed start time; (B) Pull next task earlier — moves the next upcoming task's scheduledTime to the freed start. Both pin after change. Freed start time = completedAt of the finished task. Banner × still dismisses. Swipe quick-select (bt409) deferred to its own build — touch gestures on existing row need careful test plan. Build verified clean via esbuild." },
   { version: "2026.05.05bt404", summary: "Overlap algorithm + pump mitigation. (1) autoResolveOverlaps now tries COMPRESSION first (preserve original end, shrink duration) before falling back to SHIFT-FORWARD. Compression viable when remaining duration >= max(15min, 50% of original). New AUTO-SHRINK −Nm badge (gold, tap to undo); shift fallback gets a coral MOVE ME tag warning the task is too tight to fit here cleanly. Cascade benefit: compression doesn't extend prevEnd so downstream tasks aren't displaced. (2) Pump tile gains a tiered mitigation hint: 30-60min late suggests a quick partial pump, 60-120min late suggests a power pump, >120min late upgrades to a coral urgency level. Build verified clean via esbuild." },
@@ -27834,6 +27835,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // — arrays so brain-dump batches (which can have many drafts) carry
   // the same shape as single-add flow.
   const [duplicatePrompt, setDuplicatePrompt] = useState(null);
+  // v05.05bt407 — End-of-day review state. Per chat: 'combination —
+  // likely summary + rollover together. triggers when you mark the
+  // day "done" somehow.' showEndOfDayReview opens the modal;
+  // endOfDayChoices is keyed by taskId with values 'tomorrow' | 'pile'
+  // | 'drop' | null. Unset taskIds stay as-is when the user commits.
+  const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
+  const [endOfDayChoices, setEndOfDayChoices] = useState({});
   // v05.05bt280 — Per chat: 'when i hit on "fits..." the app still accepts
   // the suggestion rather than giving me options.' Track which open slot
   // is currently showing the picker (slot key = start ms). Tap "fits"
@@ -31001,6 +31009,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             maxHeight: "70vh", overflowY: "auto",
                           }}>
                             {[
+                              { section: "Day" },
+                              { icon: "✓", label: "Wrap up day · summary + rollover", onClick: () => { setShowEndOfDayReview(true); setShowActionsMenu(false); }, hint: "End-of-day stats + decide what carries to tomorrow" },
                               { section: "Today's plan" },
                               { icon: "⚙", label: "Today's setup · wake / sleep / mode", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
                               { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
@@ -31188,6 +31198,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               Pump-card settings linked but not duplicated
                               (open Milk tab to access). */}
                           {[
+                            { section: "Day" },
+                            { icon: "✓", label: "Wrap up day · summary + rollover", onClick: () => { setShowEndOfDayReview(true); setShowActionsMenu(false); }, hint: "End-of-day stats + decide what carries to tomorrow" },
                             { section: "Today's plan" },
                             { icon: "⚙", label: "Today's setup · wake / sleep / mode", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
                             { icon: "✦", label: "Re-analyze schedule", onClick: () => { reanalyze(); setShowActionsMenu(false); }, disabled: myTasks.filter(t => !t.completedAt).length === 0 },
@@ -36518,6 +36530,284 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           </div>
         </div>
       )}
+
+      {/* v05.05bt407 — End-of-day review modal. Per chat: 'combination
+          — likely summary + rollover together. triggers when you mark
+          the day "done" somehow.' Top: stats grid (tasks, pumps, feeds,
+          diapers). Middle: list of unfinished tasks with per-task
+          radio: tomorrow / pile / drop. Bottom: Apply commits all
+          choices in one setTasks call (drops marked-drop, patches the
+          rest). */}
+      {showEndOfDayReview && (() => {
+        const todayKey = referenceISO;
+        const tomorrowKey = (() => {
+          const d = new Date(now);
+          d.setDate(d.getDate() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+        const todayDate = new Date(now);
+        const todayStr = todayDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+        // Stats
+        const myTodayTasks = (tasks || []).filter(t => t.ownerName === currentUser);
+        const completed = myTodayTasks.filter(t => t.completedAt && (() => {
+          const c = new Date(t.completedAt);
+          return c >= new Date(todayDate).setHours(0,0,0,0) && c <= new Date(todayDate).setHours(23,59,59,999);
+        })());
+        const unfinishedScheduled = myTodayTasks.filter(t => !t.completedAt && t.scheduledTime && (t.scheduledDate === todayKey || !t.scheduledDate));
+        const unfinishedPile = myTodayTasks.filter(t => !t.completedAt && !t.scheduledTime && (t.drawer || (t.scheduledDate === todayKey || !t.scheduledDate)));
+        const unfinishedAll = [...unfinishedScheduled, ...unfinishedPile];
+        const dayStart = new Date(todayDate); dayStart.setHours(0,0,0,0);
+        const dayEnd = new Date(todayDate); dayEnd.setHours(23,59,59,999);
+        const todayEvents = (events || []).filter(e => {
+          const t = new Date(e.ts);
+          return t >= dayStart && t <= dayEnd;
+        });
+        const pumps = todayEvents.filter(e => e.type === "pump" && e.mode !== "start");
+        const pumpOz = pumps.reduce((s, e) => s + (Number(e.oz) || 0), 0);
+        const feeds = todayEvents.filter(e => e.type === "feed" || e.type === "breastfeed");
+        const feedOz = feeds.reduce((s, e) => s + (Number(e.oz) || 0), 0);
+        const diapers = todayEvents.filter(e => e.type === "diaper");
+        const totalEffortDone = completed.reduce((s, t) => s + (t.effortMin || 0), 0);
+        const fmtHrMin = (m) => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`;
+
+        const applyRollover = () => {
+          setTasks(prev => {
+            const out = [];
+            for (const t of prev) {
+              const choice = endOfDayChoices[t.id];
+              if (!choice) { out.push(t); continue; }
+              if (choice === "drop") continue; // remove
+              if (choice === "tomorrow") {
+                out.push({
+                  ...t,
+                  scheduledDate: tomorrowKey,
+                  // Preserve scheduledTime if it had one (user can edit later);
+                  // clear pinned so the scheduler can rearrange tomorrow.
+                  pinned: false,
+                  drawer: false,
+                });
+                continue;
+              }
+              if (choice === "pile") {
+                out.push({
+                  ...t,
+                  scheduledDate: null,
+                  scheduledTime: null,
+                  pinned: false,
+                  drawer: true,
+                });
+                continue;
+              }
+              out.push(t);
+            }
+            return out;
+          });
+          setShowEndOfDayReview(false);
+          setEndOfDayChoices({});
+        };
+
+        const setChoice = (taskId, value) => {
+          setEndOfDayChoices(prev => ({ ...prev, [taskId]: prev[taskId] === value ? null : value }));
+        };
+        const StatBox = ({ label, value, sub }) => (
+          <div style={{
+            background: `${C.line}11`,
+            border: `1px solid ${C.line}33`,
+            borderRadius: 8,
+            padding: "8px 10px",
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, color: C.muted, letterSpacing: "0.12em",
+              fontWeight: 700, textTransform: "uppercase", marginBottom: 2,
+            }}>{label}</div>
+            <div style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 18, color: C.ink, fontWeight: 600,
+              lineHeight: 1.1,
+            }}>{value}</div>
+            {sub && (
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9, color: C.muted, marginTop: 2,
+              }}>{sub}</div>
+            )}
+          </div>
+        );
+        const ChoiceChip = ({ taskId, value, label, color }) => {
+          const active = endOfDayChoices[taskId] === value;
+          return (
+            <button
+              type="button"
+              onClick={() => setChoice(taskId, value)}
+              style={{
+                padding: "4px 8px",
+                background: active ? color : "transparent",
+                color: active ? "#1c1820" : color,
+                border: `1.5px solid ${color}${active ? "" : "55"}`,
+                borderRadius: 6,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9.5, letterSpacing: "0.06em",
+                fontWeight: 700, textTransform: "uppercase",
+                cursor: "pointer",
+              }}>{label}</button>
+          );
+        };
+
+        return (
+          <div
+            onClick={() => { setShowEndOfDayReview(false); setEndOfDayChoices({}); }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 105,
+              background: "rgba(28, 24, 32, 0.55)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 16,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.paper,
+                borderRadius: 14,
+                maxWidth: 520, width: "100%", maxHeight: "90vh",
+                overflowY: "auto",
+                padding: 22,
+                boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+                border: `1px solid ${C.line}55`,
+              }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, letterSpacing: "0.16em",
+                fontWeight: 800, color: C.gold,
+                textTransform: "uppercase", marginBottom: 4,
+              }}>✓ Day done</div>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 22,
+                color: C.ink, marginBottom: 14,
+              }}>{todayStr}</div>
+
+              {/* Stats grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: 6, marginBottom: 16,
+              }}>
+                <StatBox
+                  label="Tasks"
+                  value={`${completed.length} done`}
+                  sub={`${unfinishedAll.length} unfinished · ${fmtHrMin(totalEffortDone)} logged`}
+                />
+                <StatBox
+                  label="Pumps"
+                  value={pumps.length === 0 ? "—" : `${pumps.length} session${pumps.length === 1 ? "" : "s"}`}
+                  sub={pumpOz > 0 ? `${pumpOz.toFixed(1)}oz produced` : null}
+                />
+                <StatBox
+                  label="Feeds · Solène"
+                  value={feeds.length === 0 ? "—" : `${feeds.length} feed${feeds.length === 1 ? "" : "s"}`}
+                  sub={feedOz > 0 ? `${feedOz.toFixed(1)}oz` : null}
+                />
+                <StatBox
+                  label="Diapers"
+                  value={diapers.length === 0 ? "—" : `${diapers.length}`}
+                  sub={null}
+                />
+              </div>
+
+              {/* Rollover section */}
+              {unfinishedAll.length > 0 ? (
+                <>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, letterSpacing: "0.14em",
+                    fontWeight: 700, color: C.muted,
+                    textTransform: "uppercase", marginBottom: 8,
+                  }}>Rollover · {unfinishedAll.length} unfinished</div>
+                  <div style={{ marginBottom: 14 }}>
+                    {unfinishedAll.map((t, i) => (
+                      <div key={t.id} style={{
+                        padding: "8px 0",
+                        borderBottom: i === unfinishedAll.length - 1 ? "none" : `1px solid ${C.line}22`,
+                      }}>
+                        <div style={{
+                          fontFamily: "'Cormorant Garamond', serif",
+                          fontSize: 14, color: C.ink, lineHeight: 1.3,
+                          marginBottom: 5,
+                        }}>
+                          <span style={{ fontStyle: "italic" }}>{t.title}</span>
+                          {t.scheduledTime && (
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, color: C.muted, marginLeft: 8,
+                            }}>was {(() => { const [h,m] = t.scheduledTime.split(":").map(Number); const h12 = ((h+11)%12)+1; return `${h12}:${String(m).padStart(2,"0")}${h<12?"a":"p"}`; })()}</span>
+                          )}
+                          {!t.scheduledTime && (
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, color: C.muted, marginLeft: 8,
+                            }}>pile</span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          <ChoiceChip taskId={t.id} value="tomorrow" label="☼ tomorrow" color={C.mommy} />
+                          <ChoiceChip taskId={t.id} value="pile" label="☷ to pile" color={C.gold} />
+                          <ChoiceChip taskId={t.id} value="drop" label="✕ drop" color={C.accent} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: C.muted, fontStyle: "italic",
+                    marginBottom: 14, lineHeight: 1.4,
+                  }}>
+                    Leave a task untouched to keep it as-is. Tap a chip to toggle.
+                  </div>
+                </>
+              ) : (
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 14,
+                  color: C.sage, marginBottom: 14, textAlign: "center",
+                  padding: "12px 0",
+                }}>
+                  ✓ Nothing unfinished. Beautiful day.
+                </div>
+              )}
+
+              {/* Footer actions */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={applyRollover}
+                  style={{
+                    flex: 1,
+                    background: C.mommy, color: "#1c1820",
+                    border: "none", borderRadius: 8,
+                    padding: "11px 14px", cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 11, letterSpacing: "0.10em",
+                    fontWeight: 700, textTransform: "uppercase",
+                  }}>
+                  {Object.values(endOfDayChoices).filter(Boolean).length > 0
+                    ? `Apply · ${Object.values(endOfDayChoices).filter(Boolean).length} change${Object.values(endOfDayChoices).filter(Boolean).length === 1 ? "" : "s"}`
+                    : "Close"}
+                </button>
+                {Object.values(endOfDayChoices).filter(Boolean).length > 0 && (
+                  <button
+                    onClick={() => { setShowEndOfDayReview(false); setEndOfDayChoices({}); }}
+                    style={{
+                      background: "transparent", color: C.muted,
+                      border: `1.5px solid ${C.line}55`, borderRadius: 8,
+                      padding: "11px 14px", cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11, letterSpacing: "0.10em",
+                      fontWeight: 700, textTransform: "uppercase",
+                    }}>Cancel</button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {showBrainDump && (
         <div
