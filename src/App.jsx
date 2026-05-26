@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt405";
+const APP_VERSION = "2026.05.05bt406";
 const APP_BUILD_NOTES = [
-  "TIME-CREDIT CHOOSER. Per chat: 'for #7, maybe dealers choice? they can choose either a or b?' bt398's time-credit banner was info-only — gold ✨ FREED pill showing freed minutes + which task. Now it's a chooser: tap the banner body to expand and reveal two options.\\n\\nOPTION A — SLOT A TASK INTO THIS TIME. Shows up to 3 unscheduled tasks owned by the current user that fit in the freed minutes (effortMin <= freedMin), sorted by regret score. Tap one → it gets scheduledTime set to the freed start time (the time the finished task was actually completed), scheduledDate set to today, drawer flag cleared, pinned. Banner dismisses. If no candidates fit, shows a muted 'No unscheduled tasks fit in N min.'\\n\\nOPTION B — PULL NEXT TASK EARLIER. Finds the next upcoming scheduled task for the current user today, shows a button 'Pull <title> to H:MM'. Tap → its scheduledTime updates to the freed start time + pinned. Banner dismisses. If no upcoming task, shows muted 'No upcoming task to pull earlier.'\\n\\nThe freed start time = completedAt of the finished task. So if you finished 'thaw milk' at 9:40a in a slot ending 10:08a, the freed slot is 9:40a-10:08a, and option A/B both schedule the chosen task to start at 9:40a.\\n\\nNOTE on swipe-right quick-select for uncategorized (bt409): held for its own focused build. Touch gestures on top of an existing complex row component need careful handling so the new swipe doesn't break the existing left-swipe-to-delete + drag-to-reorder gestures. Will tackle in a dedicated build with a test plan.",
+  "ROW-LEVEL CLEANUP per chat. Three changes plus a note on swipe-on-Mac.\\n\\n(1) 'WHY HERE' LINK REMOVED FROM ROW FACE. Per chat: 'i thought i told you to remove the why me on the face of the card and have it as an option under the ellipse menu.' Right — earlier ask, hadn't actioned. Inline 'why here' button on scheduled task rows is now gone. The reasoning panel (expandedReasonTaskId state + the IIFE that computes effectiveBlockProfile output) is left in place for a future entry point inside EditTaskModal, but it has no visible trigger on the row right now. Quieter row.\\n\\n(2) AUTO-SHIFT + AUTO-SHRINK + MOVE ME BADGES SHORTER. Per chat: 'the ato shift wording was also too long.' All three badges tone-matched to a lighter style: lowercase, regular tracking, lower-opacity background. '↻ shifted +60m' (was 'AUTO-SHIFT +60m'), '↻ shrunk −15m' (was 'AUTO-SHRINK −15m'), '↳ move me?' (was 'MOVE ME'). Verb is still clear, visual weight is half what it was.\\n\\n(3) MOVE ME explained in chat: the badge appears when bt404's overlap algorithm tried to compress a task to fit but the result would have been too tight (under 15 min OR under 50% of original duration). In that case it falls back to shift-forward + tags 'move me?' so the user knows the task ended up in a sub-optimal spot and should drag it manually. Tooltip on hover spells out the math.\\n\\nSWIPE-ON-MAC NOTE. User asked 'how do you swipe on a mac?' — fair point. Two-finger trackpad fires wheel events, not touch, so swipe gestures don't translate cleanly to desktop testing. Swipe-right quick-select (originally bt409) will get a different affordance — likely a small tap target on the row that opens the category chip strip inline. That way both mobile and Mac trackpad work identically. Held for a focused build.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt406", summary: "Row-level cleanup. (1) Inline 'why here' link removed from scheduled task rows per chat. Reasoning panel JSX left in place but no trigger on row face — future entry point will be inside EditTaskModal. (2) Auto-shift, auto-shrink, and move-me badges all tone-matched lighter: lowercase verbs, regular tracking, lighter background. '↻ shifted +60m' / '↻ shrunk −15m' / '↳ move me?'. Half the visual weight. (3) Chat reply explained MOVE ME (fallback tag when overlap compression would over-shrink). Swipe-right quick-select still deferred — will use a tap affordance instead so it works on both mobile and Mac trackpad. Build verified clean via esbuild." },
   { version: "2026.05.05bt405", summary: "Time-credit banner upgraded from info-only to action chooser. Tap banner body expands two options: (A) Slot a task into this time — shows top 3 unscheduled tasks that fit in the freed minutes, tap to schedule at the freed start time; (B) Pull next task earlier — moves the next upcoming task's scheduledTime to the freed start. Both pin after change. Freed start time = completedAt of the finished task. Banner × still dismisses. Swipe quick-select (bt409) deferred to its own build — touch gestures on existing row need careful test plan. Build verified clean via esbuild." },
   { version: "2026.05.05bt404", summary: "Overlap algorithm + pump mitigation. (1) autoResolveOverlaps now tries COMPRESSION first (preserve original end, shrink duration) before falling back to SHIFT-FORWARD. Compression viable when remaining duration >= max(15min, 50% of original). New AUTO-SHRINK −Nm badge (gold, tap to undo); shift fallback gets a coral MOVE ME tag warning the task is too tight to fit here cleanly. Cascade benefit: compression doesn't extend prevEnd so downstream tasks aren't displaced. (2) Pump tile gains a tiered mitigation hint: 30-60min late suggests a quick partial pump, 60-120min late suggests a power pump, >120min late upgrades to a coral urgency level. Build verified clean via esbuild." },
   { version: "2026.05.05bt403", summary: "Three features per chat (split from 7-feature mega-ask into three sequential builds bt403/404/405). (1) Feed-predicted rows get +20px left indent to read as sub-bullets, plus '% likely' badge derived from sampleSize / 7 (capped at 99%). (2) Duplicate detection: new findSimilarTitles helper (substring + Jaccard token overlap >= 0.5) hooked into addTask + addBrainDump. New DuplicatePromptModal with Merge / Add anyway / Cancel options. (3) New exportFinishedTasks function + ⋯ menu item: copies today's completed tasks as a plain bullet list for paste into monday.com. Build verified clean via esbuild." },
@@ -33464,23 +33465,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 style={{
                                   fontFamily: "'JetBrains Mono', monospace",
                                   fontSize: 9, color: C.accent,
-                                  fontWeight: 800, marginLeft: 6,
-                                  letterSpacing: "0.08em",
-                                  background: `${C.accent}14`,
+                                  fontWeight: 700, marginLeft: 6,
+                                  letterSpacing: "0.02em",
+                                  background: `${C.accent}10`,
                                   padding: "1px 5px", borderRadius: 3,
                                   border: "none", cursor: "pointer",
-                                  textTransform: "uppercase",
-                                }}>{/* v05.05bt401 — Per chat (2nd screenshot):
-                                    'i have NO idea what the tag means
-                                    with the arrow and the +60m.' Was
-                                    "↻ +60m" — too cryptic to read out
-                                    of context. Now reads as "AUTO-SHIFT
-                                    +60m" so the verb is clear; the
-                                    tooltip still explains undo. The
-                                    deeper "compress duration instead
-                                    of displacing" overlap algorithm
-                                    is queued for a later build. */}
-                                  AUTO-SHIFT +{slot._shiftedByOverlap}m</button>
+                                }}>{/* v05.05bt401 → bt406 — Was "↻ +60m"
+                                    (too cryptic), then "AUTO-SHIFT +60m"
+                                    (too long per chat). Now lowercase
+                                    "shifted +60m" — verb is clear,
+                                    visual weight lower. Tooltip still
+                                    explains undo. */}
+                                  ↻ shifted +{slot._shiftedByOverlap}m</button>
                             )}
                             {/* v05.05bt404 — Compressed-by-overlap badge.
                                 When the autoResolve algorithm shrinks the
@@ -33510,14 +33506,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 style={{
                                   fontFamily: "'JetBrains Mono', monospace",
                                   fontSize: 9, color: C.gold,
-                                  fontWeight: 800, marginLeft: 6,
-                                  letterSpacing: "0.08em",
-                                  background: `${C.gold}18`,
+                                  fontWeight: 700, marginLeft: 6,
+                                  letterSpacing: "0.02em",
+                                  background: `${C.gold}10`,
                                   padding: "1px 5px", borderRadius: 3,
                                   border: "none", cursor: "pointer",
-                                  textTransform: "uppercase",
                                 }}>
-                                AUTO-SHRINK −{slot._compressedByOverlap}m
+                                {/* v05.05bt406 — shortened from "AUTO-SHRINK −Nm". */}
+                                ↻ shrunk −{slot._compressedByOverlap}m
                               </button>
                             )}
                             {/* v05.05bt404 — "Too tight to fit here"
@@ -33532,14 +33528,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 style={{
                                   fontFamily: "'JetBrains Mono', monospace",
                                   fontSize: 9, color: C.accent,
-                                  fontWeight: 800, marginLeft: 6,
-                                  letterSpacing: "0.08em",
-                                  background: `${C.accent}22`,
+                                  fontWeight: 700, marginLeft: 6,
+                                  letterSpacing: "0.02em",
+                                  background: `${C.accent}18`,
                                   padding: "1px 5px", borderRadius: 3,
-                                  textTransform: "uppercase",
                                   cursor: "help",
                                 }}>
-                                MOVE ME
+                                {/* v05.05bt406 — tone-matched with the
+                                    bt406 shifted/shrunk badges. Was
+                                    uppercase MOVE ME; now lowercase
+                                    "move me?" reads more like a hint
+                                    than a command. */}
+                                ↳ move me?
                               </span>
                             )}
                             {/* v05.05bt277 — Coverage badge: this slice is
@@ -33637,31 +33637,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 ADJ
                               </span>
                             )}
-                            {/* v05.05bt193 — 'why here?' link on scheduled
-                                tasks. Surfaces the placement reasoning that
-                                was previously only visible on free blocks.
-                                Tap toggles expandedReasonTaskId. */}
-                            {isTask && !slot.completedAt && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedReasonTaskId(prev => prev === slot.id ? null : slot.id);
-                                }}
-                                style={{
-                                  marginLeft: 8,
-                                  background: "transparent",
-                                  border: "none", padding: 0,
-                                  cursor: "pointer",
-                                  fontFamily: "'Cormorant Garamond', serif",
-                                  fontStyle: "italic",
-                                  fontSize: 11, color: C.muted,
-                                  textDecoration: "underline dotted",
-                                  textDecorationColor: `${C.gold}88`,
-                                  textUnderlineOffset: 2,
-                                }}>
-                                {expandedReasonTaskId === slot.id ? "hide" : "why here"}
-                              </button>
-                            )}
+                            {/* v05.05bt406 — 'why here' link removed
+                                from the row face per chat ('i dont
+                                like the why here placement - it is too
+                                visually heavy and i had suggested that
+                                maybe if you click on the task then
+                                that option can be included in the
+                                ellipses menu'). The reasoning panel is
+                                still wired up below; entry-point is
+                                deferred to the EditTaskModal in a
+                                later build. expandedReasonTaskId state
+                                kept for that future use. */}
                           </span>
                           )}
                         </div>
