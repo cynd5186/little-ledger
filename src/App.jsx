@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt407";
+const APP_VERSION = "2026.05.05bt409";
 const APP_BUILD_NOTES = [
-  "END-OF-DAY REVIEW (summary + rollover). Per chat: 'combination — likely summary + rollover together. triggers when you mark the day done somehow.'\\n\\nNEW MENU ITEM. Top of the ⋯ overflow under a new 'Day' section: '✓ Wrap up day · summary + rollover' with hint 'End-of-day stats + decide what carries to tomorrow.' Added to both Mommy and Daddy menus. Tapping it opens the EndOfDayReviewModal.\\n\\nMODAL — SUMMARY HALF. Top of the modal: eyebrow '✓ DAY DONE' + the day's date in serif italic. Below, a 2x2 grid of stat boxes:\\n  • Tasks: 'N done' with sub-line '{unfinishedCount} unfinished · {totalEffort} logged'\\n  • Pumps: 'N sessions' with sub-line '{oz}oz produced' (— if none)\\n  • Feeds · Solène: 'N feeds' with sub-line '{oz}oz' (— if none)\\n  • Diapers: 'N' (— if none)\\nAll derived from today's events filtered to dayStart-dayEnd window. Completed tasks = current-user tasks with completedAt timestamp inside today.\\n\\nMODAL — ROLLOVER HALF. Below stats, lists every unfinished task owned by the user that was either scheduled-for-today or in the pile. Each row shows the title (italic) + a meta line ('was 3:00p' for scheduled tasks, 'pile' for un-scheduled ones). Three radio-style chips per row: ☼ TOMORROW (mauve), ☷ TO PILE (gold), ✕ DROP (coral). Tapping a chip toggles selection (tap again to undo). Leave a task untouched to keep as-is. If there are no unfinished tasks, the section is replaced with a sage 'Nothing unfinished. Beautiful day.' message.\\n\\nAPPLY. Footer button reads 'Close' when no changes selected, or 'Apply · N changes' when at least one task is marked. Pressing it walks all tasks and patches based on choice:\\n  • tomorrow → scheduledDate = tomorrowISO, drawer=false, pinned=false (keeps any scheduledTime so user can adjust later)\\n  • pile → drawer=true, scheduledDate=null, scheduledTime=null, pinned=false\\n  • drop → removed from tasks array (hard delete, no undo)\\nUntouched tasks pass through unchanged. One setTasks call commits the batch.\\n\\nDISMISS. × via overlay-tap or Cancel button (only renders when there are pending changes). Both reset endOfDayChoices state so opening the modal again starts clean.",
+  "ONE-TAP AUTO-SLOT for pile rows. Per chat: 'i should also be able to pull anything from the unscheduled for today or backlog list up into the scheduled list.'\\n\\nNew '↑ slot' button rendered on every incomplete pile row (where !scheduledTime). Sits in the right meta cluster next to the focus emoji and R chip. Mauve-tinted, mono, small (11px), tap target ~24px wide. ONE TAP path:\\n\\n  1) Read getWorkableBlocks() — the existing free-block computation that accounts for routines + scheduled tasks + meetings + bedtime + feed predictions\\n  2) Find the first block whose durationMin >= the task's effortMin (defaults to 30 min if unset)\\n  3) If found → set scheduledTime to the block's start (HH:MM), set scheduledDate = referenceISO, clear drawer\\n  4) If no block fits → fall back to opening the existing quick-action panel so user can enter a time manually\\n\\nThis is on top of the existing flow where tapping the row title opens a 'Move to · Scheduled / Today / Backlog' panel with an inline time input + Slot button. The ↑ button is the one-tap version; the row-tap panel is the precision version. Both paths coexist.\\n\\nNOTE on the repeated 'caregiver mode does not stick / limbo' lines in chat: those landed in bt408 already (userKey ternary fix that was mapping Caregiver → Mommy + new LIMBO banner for stale tasks + EOD modal stale-task inclusion). If after the bt408 deploy you still see caregiver mode appearing to revert, send a screenshot + describe what specifically you see (sage banner missing? tab bar not shrinking?) and I'll dig deeper.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt409", summary: "One-tap auto-slot button '↑ slot' on every incomplete pile row. Mauve mono pill in the right meta cluster. Tap reads current workable blocks, finds first block that fits the task's effortMin (default 30m), schedules to that block's start. Falls back to manual time-entry panel if nothing fits. Existing row-tap quick-action panel (Move to · Scheduled / Today / Backlog with time input) still works for precision moves. Build verified clean via esbuild." },
+  { version: "2026.05.05bt408", summary: "Caregiver persistence fix + stale-task limbo banner. (1) Four per-user data buckets had a ternary that mapped Caregiver → Mommy, causing Caregiver mode to load Mommy's data — looked like the mode didn't stick. Fixed all four sites; Caregiver now gets its own data bucket. Added a useEffect that mirrors currentUser → localStorage on every change as a safety net. (2) New 'LIMBO' banner renders when tasks scheduled for past dates are still unfinished. Tap opens the EOD review modal, which now includes stale tasks in its rollover list with 'from M/D' tags showing the original date. Three chip actions work the same: tomorrow (move date forward), pile (drawer), drop (delete). Untouched tasks stay where they are. Build verified clean via esbuild." },
   { version: "2026.05.05bt407", summary: "End-of-day review modal. Triggered from new ⋯ menu item '✓ Wrap up day · summary + rollover' (top of menu under new 'Day' section, added to both Mommy and Daddy menus). Modal renders: (a) 2x2 stats grid — tasks done/unfinished/effort, pump sessions+oz, feed count+oz, diaper count, all computed from today's events; (b) rollover list of every unfinished task with three chips per row: ☼ tomorrow (sets scheduledDate=tomorrow + keeps scheduledTime), ☷ pile (drawer=true, clears all schedule), ✕ drop (hard delete). Apply commits all choices in one setTasks call. Untouched tasks pass through. Cancel/overlay-tap resets choices. Build verified clean via esbuild." },
   { version: "2026.05.05bt406", summary: "Row-level cleanup. (1) Inline 'why here' link removed from scheduled task rows per chat. Reasoning panel JSX left in place but no trigger on row face — future entry point will be inside EditTaskModal. (2) Auto-shift, auto-shrink, and move-me badges all tone-matched lighter: lowercase verbs, regular tracking, lighter background. '↻ shifted +60m' / '↻ shrunk −15m' / '↳ move me?'. Half the visual weight. (3) Chat reply explained MOVE ME (fallback tag when overlap compression would over-shrink). Swipe-right quick-select still deferred — will use a tap affordance instead so it works on both mobile and Mac trackpad. Build verified clean via esbuild." },
   { version: "2026.05.05bt405", summary: "Time-credit banner upgraded from info-only to action chooser. Tap banner body expands two options: (A) Slot a task into this time — shows top 3 unscheduled tasks that fit in the freed minutes, tap to schedule at the freed start time; (B) Pull next task earlier — moves the next upcoming task's scheduledTime to the freed start. Both pin after change. Freed start time = completedAt of the finished task. Banner × still dismisses. Swipe quick-select (bt409) deferred to its own build — touch gestures on existing row need careful test plan. Build verified clean via esbuild." },
@@ -2866,6 +2868,16 @@ function SoleneHandoffInner() {
     setCurrentUserState(next);
     try { localStorage.setItem("ll:devicePersona", next); } catch {}
   };
+  // v05.05bt408 — Belt-and-suspenders persistence. Per chat: 'caregiver
+  // mode does not stick and reverts back.' The setCurrentUser wrapper
+  // already writes to localStorage on every call, but if anything ever
+  // mutates currentUserState through a different path (a re-hydration,
+  // a stale closure, future code), this effect re-mirrors the value to
+  // localStorage on every change. Cheap. Idempotent. Catches any silent
+  // persistence gap that the wrapper alone would miss.
+  useEffect(() => {
+    try { localStorage.setItem("ll:devicePersona", currentUser); } catch {}
+  }, [currentUser]);
   const [showProfileSwitcher, setShowProfileSwitcher] = useState(false);
   // v05.05bt351 — Expose existing fontScale (declared above near
   // events) to a window global so ProfileSwitcherModal can read +
@@ -3492,19 +3504,19 @@ function SoleneHandoffInner() {
   // v05.05bt174 — focusProfile saved under per-user key.
   useEffect(() => {
     if (!hydrated || isWiping()) return;
-    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    const userKey = (currentUser === "Daddy" || currentUser === "Caregiver" ? currentUser : "Mommy");
     storage.set(`solene:focusProfile_${userKey}`, focusProfile);
   }, [focusProfile, hydrated, currentUser]);
   // v05.05bt212 — routineLibrary saved per-user.
   useEffect(() => {
     if (!hydrated || isWiping()) return;
-    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    const userKey = (currentUser === "Daddy" || currentUser === "Caregiver" ? currentUser : "Mommy");
     storage.set(`solene:routines_${userKey}`, routineLibrary);
   }, [routineLibrary, hydrated, currentUser]);
   // When user switches between Mommy/Daddy, swap in the right profile.
   useEffect(() => {
     if (!hydrated) return;
-    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    const userKey = (currentUser === "Daddy" || currentUser === "Caregiver" ? currentUser : "Mommy");
     (async () => {
       const fp = await storage.get(`solene:focusProfile_${userKey}`);
       setFocusProfile(fp && typeof fp === "object" ? fp : null);
@@ -3517,7 +3529,7 @@ function SoleneHandoffInner() {
   // v05.05bt181 — autosave dailyEnergy per user
   useEffect(() => {
     if (!hydrated || isWiping()) return;
-    const userKey = (currentUser === "Daddy" ? "Daddy" : "Mommy");
+    const userKey = (currentUser === "Daddy" || currentUser === "Caregiver" ? currentUser : "Mommy");
     storage.set(`solene:dailyEnergy_${userKey}`, dailyEnergy);
   }, [dailyEnergy, hydrated, currentUser]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:handoffNote", handoffNote); }, [handoffNote, hydrated]);
@@ -32008,6 +32020,55 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 schedule it at the freed slot; (b) Pull next forward —
                 move the next upcoming scheduled task to start at the
                 freed time. × still dismisses regardless of expand. */}
+            {/* v05.05bt408 — Stale-task safety net. Per chat: 'how
+                about if you forget to rollover your day? should this
+                be in limbo so that the data is not lost?' Right —
+                tasks scheduled for a past date with no completion
+                will silently fall off today's timeline (which filters
+                to scheduledDate === today). We catch them here and
+                surface a soft banner that points to the EOD review
+                modal, which now includes stale tasks in its rollover
+                list with a 'from M/D' tag. */}
+            {!isTomorrow && (() => {
+              const todayISO_actual = (() => {
+                const d = new Date(now);
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                return `${y}-${m}-${dd}`;
+              })();
+              const stale = (myTasks || []).filter(t =>
+                !t.completedAt && t.scheduledDate && t.scheduledDate < todayISO_actual
+              );
+              if (stale.length === 0) return null;
+              return (
+                <button
+                  onClick={() => setShowEndOfDayReview(true)}
+                  style={{
+                    width: "100%",
+                    background: `${C.gold}10`,
+                    border: `1.5px dashed ${C.gold}55`,
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    marginBottom: 12,
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 10,
+                    textAlign: "left",
+                  }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10.5, letterSpacing: "0.10em",
+                    color: C.gold, fontWeight: 800,
+                    flexShrink: 0,
+                  }}>⌛ LIMBO</div>
+                  <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{stale.length}</span>{" "}
+                    task{stale.length === 1 ? "" : "s"} from previous days unfinished.{" "}
+                    <span style={{ color: C.muted, fontStyle: "italic" }}>Tap to wrap up + decide.</span>
+                  </div>
+                </button>
+              );
+            })()}
             {!isTomorrow && timeCreditBanner && (
               <div style={{
                 background: `${C.gold}14`,
@@ -35303,6 +35364,53 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             pointerEvents: "none",
                           }}>◆</span>
                       )}
+                      {/* v05.05bt409 — One-tap auto-slot for pile
+                          rows. Per chat: 'i should also be able to
+                          pull anything from the unscheduled for
+                          today or backlog list up into the scheduled
+                          list.' Visible only on incomplete pile
+                          tasks (no scheduledTime yet). Tap → finds
+                          the first workable block fitting the task's
+                          effortMin and schedules the task to its
+                          start. If no block fits, opens the existing
+                          quick-action panel for manual time entry. */}
+                      {!t.scheduledTime && !done && (
+                        <button
+                          type="button"
+                          onPointerUp={(e) => {
+                            e.stopPropagation();
+                            if (e.preventDefault) e.preventDefault();
+                            const blocks = getWorkableBlocks();
+                            const dur = t.effortMin || 30;
+                            const fit = (blocks || []).find(b => (b.durationMin || 0) >= dur);
+                            if (fit && fit.start) {
+                              const hh = String(fit.start.getHours()).padStart(2, "0");
+                              const mm = String(fit.start.getMinutes()).padStart(2, "0");
+                              setTasks(prev => prev.map(x => x.id === t.id
+                                ? { ...x, scheduledTime: `${hh}:${mm}`, scheduledDate: referenceISO, drawer: false }
+                                : x
+                              ));
+                            } else {
+                              // No block fits — fall back to manual entry panel.
+                              setPileQuickActionId(t.id);
+                              setPileQuickTimeDraft("");
+                            }
+                          }}
+                          title="Slot into next free block · tap row title for time control"
+                          style={{
+                            fontSize: 11, color: C.mommy,
+                            fontWeight: 800, flexShrink: 0, marginTop: 1,
+                            padding: "1px 6px",
+                            background: `${C.mommy}18`,
+                            borderRadius: 4,
+                            border: `1px solid ${C.mommy}44`,
+                            cursor: "pointer",
+                            letterSpacing: "0.04em",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}>↑ slot</button>
+                      )}
                       <span
                         onPointerUp={cycleFocus}
                         title={`${fl === "deep" ? "Deep" : "Shallow"} focus · tap to flip`}
@@ -36555,7 +36663,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         })());
         const unfinishedScheduled = myTodayTasks.filter(t => !t.completedAt && t.scheduledTime && (t.scheduledDate === todayKey || !t.scheduledDate));
         const unfinishedPile = myTodayTasks.filter(t => !t.completedAt && !t.scheduledTime && (t.drawer || (t.scheduledDate === todayKey || !t.scheduledDate)));
-        const unfinishedAll = [...unfinishedScheduled, ...unfinishedPile];
+        // v05.05bt408 — Stale tasks from previous days. Surfaced here
+        // (in addition to the limbo banner that opens this modal) so
+        // the rollover list is a single place to clear backlog. Each
+        // gets a 'from M/D' meta tag instead of 'was H:MM' so the
+        // user sees the original date context.
+        const staleUnfinished = myTodayTasks.filter(t =>
+          !t.completedAt && t.scheduledDate && t.scheduledDate < todayKey
+        );
+        const unfinishedAll = [...staleUnfinished, ...unfinishedScheduled, ...unfinishedPile];
         const dayStart = new Date(todayDate); dayStart.setHours(0,0,0,0);
         const dayEnd = new Date(todayDate); dayEnd.setHours(23,59,59,999);
         const todayEvents = (events || []).filter(e => {
@@ -36735,13 +36851,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           marginBottom: 5,
                         }}>
                           <span style={{ fontStyle: "italic" }}>{t.title}</span>
-                          {t.scheduledTime && (
+                          {/* v05.05bt408 — Stale-task date tag. If the
+                              task's scheduledDate is before today, show
+                              'from M/D' instead of 'was H:MM' / 'pile'
+                              so the user sees the original date. */}
+                          {t.scheduledDate && t.scheduledDate < todayKey ? (
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, color: C.gold, marginLeft: 8, fontWeight: 700,
+                            }}>from {(() => {
+                              const [y, m, d] = t.scheduledDate.split("-");
+                              return `${Number(m)}/${Number(d)}`;
+                            })()}</span>
+                          ) : t.scheduledTime ? (
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10, color: C.muted, marginLeft: 8,
                             }}>was {(() => { const [h,m] = t.scheduledTime.split(":").map(Number); const h12 = ((h+11)%12)+1; return `${h12}:${String(m).padStart(2,"0")}${h<12?"a":"p"}`; })()}</span>
-                          )}
-                          {!t.scheduledTime && (
+                          ) : (
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10, color: C.muted, marginLeft: 8,
