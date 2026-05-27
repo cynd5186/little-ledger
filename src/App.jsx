@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt409";
+const APP_VERSION = "2026.05.05bt412";
 const APP_BUILD_NOTES = [
-  "ONE-TAP AUTO-SLOT for pile rows. Per chat: 'i should also be able to pull anything from the unscheduled for today or backlog list up into the scheduled list.'\\n\\nNew '↑ slot' button rendered on every incomplete pile row (where !scheduledTime). Sits in the right meta cluster next to the focus emoji and R chip. Mauve-tinted, mono, small (11px), tap target ~24px wide. ONE TAP path:\\n\\n  1) Read getWorkableBlocks() — the existing free-block computation that accounts for routines + scheduled tasks + meetings + bedtime + feed predictions\\n  2) Find the first block whose durationMin >= the task's effortMin (defaults to 30 min if unset)\\n  3) If found → set scheduledTime to the block's start (HH:MM), set scheduledDate = referenceISO, clear drawer\\n  4) If no block fits → fall back to opening the existing quick-action panel so user can enter a time manually\\n\\nThis is on top of the existing flow where tapping the row title opens a 'Move to · Scheduled / Today / Backlog' panel with an inline time input + Slot button. The ↑ button is the one-tap version; the row-tap panel is the precision version. Both paths coexist.\\n\\nNOTE on the repeated 'caregiver mode does not stick / limbo' lines in chat: those landed in bt408 already (userKey ternary fix that was mapping Caregiver → Mommy + new LIMBO banner for stale tasks + EOD modal stale-task inclusion). If after the bt408 deploy you still see caregiver mode appearing to revert, send a screenshot + describe what specifically you see (sage banner missing? tab bar not shrinking?) and I'll dig deeper.",
+  "ROW-LEVEL CAREGIVER OVERRIDE. Per chat: 'Still says daddy in duty even though I have caregiver on.' bt411 fixed the editorial duty line at the top of Mommy's Day, but the SAME bug existed at the per-row level: each timeline slot derived babyContext + owner from shift lookup with no caregiver branch.\\n\\nFIX: row babyContext derivation now checks getCaregiverWindows(events, now) FIRST. If a slot's time range overlaps any caregiver window (slotStart < window.end && slotEnd > window.start), babyContext becomes 'caregiver has Solène' and owner becomes null (no parent rail color, no parent letter glyph, no Mommy/Daddy reasoning text). Propagates downstream to:\\n  • metaContext (the row's textual meta — caregiver phrase passes through; Mommy/Daddy-on-duty texts get filtered to null)\\n  • getBlockReasoning (the 'why here' text used the babyContext directly — now reads correctly during handoffs)\\n  • Row tint + avatar logic that switches on owner (no longer paints the row mauve/blue when caregiver has the baby)\\n\\nWORKING THROUGH OnDutyCard: I checked, and that card already has a caregiver-active guard (bt310) that hides the normal duty banner and renders a sage 'Caregiver has Solène' card instead. So that one was correct. The row-level was the remaining surface — the per-slot timeline meta — and is now consistent.\\n\\nNOTE: this only catches windows that are ACTIVE (now within start..end) AND windows that the user has logged as full caregiver_window events. If the user is seeing 'Daddy on duty' on a different surface (Shifts tab, Today's Plan summary, the journal day header, etc.) please send a screenshot and I'll patch that site too. The core principle — caregiver handoff overrides shift duty — applies everywhere; I'm fixing the surfaces as they surface.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt412", summary: "Row-level caregiver override. Per-slot babyContext + owner derivation now checks getCaregiverWindows FIRST. When a slot overlaps an active caregiver window, babyContext becomes 'caregiver has Solène' and owner becomes null. Propagates to metaContext, getBlockReasoning, row tint, and avatar rendering. bt411 covered the editorial duty line; this covers the per-row text + rail color. OnDutyCard already had its own caregiver-active branch (bt310). Build verified clean via esbuild." },
+  { version: "2026.05.05bt411", summary: "Editorial duty line override during active caregiver handoff. Previously the if/else chain checked Mommy/Daddy/joint shift FIRST and caregiverActive last, so during an active caregiver_window the line still said 'you have Solène' when Mommy's shift overlapped. Moved caregiverActive to the top of the chain — now reads 'Solène with caregiver' in sage (matching caregiver persona color) regardless of shift. Also recolored the onsite-without-discreet branch from gold to sage for consistency. Build verified clean via esbuild." },
+  { version: "2026.05.05bt410", summary: "Three usage-conscious fixes. (1) New care-domain color tokens on every palette variant (pump #4DA89C teal, feed #C97A47 burnt orange, nap #9B6BB5 dusky violet) — distinct from parent + alert colors. Feed-predicted rendering switched to the new feed color (PREDICTED tag + typical-oz hint). Pump and nap tokens reserved for the upcoming A2.v1 inline-annotation pattern. (2) Caregiver handoff journal label: type==='caregiver_window' had no render branch in LogView so rows showed as blank. Added '🤝 Handed off to caregiver · until H:MM'. (3) Live pump update fix: when a plan exists + user logs a catch-up pump, the picker could return a planned slot sooner than lastPump + interval. New guard bumps to lastStart + PUMP_INTERVAL_HRS if the plan slot lands too soon. Build verified clean via esbuild." },
   { version: "2026.05.05bt409", summary: "One-tap auto-slot button '↑ slot' on every incomplete pile row. Mauve mono pill in the right meta cluster. Tap reads current workable blocks, finds first block that fits the task's effortMin (default 30m), schedules to that block's start. Falls back to manual time-entry panel if nothing fits. Existing row-tap quick-action panel (Move to · Scheduled / Today / Backlog with time input) still works for precision moves. Build verified clean via esbuild." },
   { version: "2026.05.05bt408", summary: "Caregiver persistence fix + stale-task limbo banner. (1) Four per-user data buckets had a ternary that mapped Caregiver → Mommy, causing Caregiver mode to load Mommy's data — looked like the mode didn't stick. Fixed all four sites; Caregiver now gets its own data bucket. Added a useEffect that mirrors currentUser → localStorage on every change as a safety net. (2) New 'LIMBO' banner renders when tasks scheduled for past dates are still unfinished. Tap opens the EOD review modal, which now includes stale tasks in its rollover list with 'from M/D' tags showing the original date. Three chip actions work the same: tomorrow (move date forward), pile (drawer), drop (delete). Untouched tasks stay where they are. Build verified clean via esbuild." },
   { version: "2026.05.05bt407", summary: "End-of-day review modal. Triggered from new ⋯ menu item '✓ Wrap up day · summary + rollover' (top of menu under new 'Day' section, added to both Mommy and Daddy menus). Modal renders: (a) 2x2 stats grid — tasks done/unfinished/effort, pump sessions+oz, feed count+oz, diaper count, all computed from today's events; (b) rollover list of every unfinished task with three chips per row: ☼ tomorrow (sets scheduledDate=tomorrow + keeps scheduledTime), ☷ pile (drawer=true, clears all schedule), ✕ drop (hard delete). Apply commits all choices in one setTasks call. Untouched tasks pass through. Cancel/overlay-tap resets choices. Build verified clean via esbuild." },
@@ -1887,13 +1890,13 @@ const PALETTES = {
   // toward gold). Dark modes pick a slightly-warmer-than-paper tone so
   // the panel still reads as a distinct elevated surface.
   day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A" },
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856" },
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   // v05.05bt338/340 — Cadence palettes. Per chat (bt340): user picked
   // mockup D · Champagne Blush — softer, more romantic, candlelit.
   // Primary moves from #B7848C dusty rose → #D4A0A0 champagne blush.
@@ -1925,11 +1928,11 @@ const PALETTES = {
   // and App-wrapper insertion (see FontImports + App render).
   // Daddy variant uses slate-blue base for parallel symmetry.
   cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#B8A8C8", line: "#C6B0DB",
-                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8" },
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#B0BCCC", line: "#8B9BBC",
-                   mommy: "#A88299", daddy: "#8B9BBC", gold: "#C4A886" },
+                   mommy: "#A88299", daddy: "#8B9BBC", gold: "#C4A886", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#B8A8C8", line: "#C6B0DB",
-                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8" },
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -3831,7 +3834,31 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       // Try today's sessions first — pick first one not yet past (with grace)
       for (const h of sorted) {
         const dt = buildAt(h);
-        if (dt.getTime() >= nowMs - graceMs) return dt;
+        if (dt.getTime() >= nowMs - graceMs) {
+          // v05.05bt410 — Per chat: 'does the pump session in Cadence
+          // update LIVE whenever i miss a pump and log it and it takes
+          // 3h from that time of pump?' Yes — useMemo deps include
+          // lastPump + now so the calc runs on every clock tick + every
+          // new pump log. But there was a gap: when a manualSessions
+          // plan exists, the picker grabs the next FUTURE planned slot,
+          // which can be SOONER than 3h after a just-logged catch-up
+          // pump. E.g., plan = 7/10/13/16, user misses 10a + logs at
+          // noon → picker returns 1p ("1h away") when user expects 3p
+          // (noon + 3h interval). Guard: if a recent pump exists and
+          // the picked plan slot is sooner than lastStart + interval,
+          // bump to lastStart + interval. Keeps the plan honored when
+          // user is ON schedule; protects supply when they're not.
+          if (lastPump) {
+            const lastStart = new Date(lastPump.ts);
+            if (!isNaN(lastStart.getTime())) {
+              const earliestFromLast = new Date(lastStart.getTime() + PUMP_INTERVAL_HRS * 3600000);
+              if (dt.getTime() < earliestFromLast.getTime()) {
+                return earliestFromLast;
+              }
+            }
+          }
+          return dt;
+        }
       }
       // All today's sessions past → next is tomorrow's first
       return buildAt(sorted[0], 1);
@@ -15527,6 +15554,18 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                         return `${a?.emoji || "⭐"} ${a?.l || "Activity"}${e.durationMin ? ` · ${e.durationMin}m` : ""}`;
                       })()}
                       {e.type === "takeover" && `↔ ${e.coveringParent} covered ${e.originalParent}${e.durationMin ? ` · ${e.durationMin}m` : ""}`}
+                      {/* v05.05bt410 — Per chat: 'whenever i do a
+                          handover, i get a blank entry in the journal -
+                          this needs to be resolved by either removing
+                          or putting that it has been handed off to
+                          caregiver.' Adding the label since the
+                          caregiver_window event was missing a render
+                          branch — fell through to nothing. */}
+                      {e.type === "caregiver_window" && (() => {
+                        const end = e.endTs ? new Date(e.endTs) : null;
+                        const endStr = end && !isNaN(end.getTime()) ? ` · until ${fmtTimeShort(end)}` : "";
+                        return `🤝 Handed off to caregiver${endStr}`;
+                      })()}
                     </span>
                     {/* v05.05bt36: prediction-accuracy chip.
                         Renders inline only when the event captured a
@@ -24288,7 +24327,7 @@ function getBlockTag(slot) {
   if (slot.kind === "free") return { label: "FLEX", color: "#9C8B7A" };
   if (slot.kind === "meeting") return { label: "MEETING", color: "#8B7AA8" };
   // v05.05bt181 — Predicted feed window during user's solo duty.
-  if (slot.kind === "feed-predicted") return { label: "PREDICTED", color: "#B89B7A" };
+  if (slot.kind === "feed-predicted") return { label: "PREDICTED", color: "#C97A47" };
   // v05.05bt267 — Pump reminder appears as a small mauve PUMP pill.
   if (slot.kind === "pump_reminder") return { label: "PUMP", color: "#B55A8E" };
   if (slot.kind === "routine") {
@@ -30906,7 +30945,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               const caregiverActive = activeCaregiverWin && activeCaregiverWin.state === "active";
               let whoHasPhrase = null;
               let whoColor = C.muted;
-              if (isTomorrow) {
+              // v05.05bt411 — Per chat: 'did you ever correct the
+              // issue where under handoff, Cadence should not show the
+              // now slider as "your duty" or mommy duty, as we are not
+              // on duty.' caregiverActive check used to sit at the
+              // BOTTOM of this if/else chain, after the shift-based
+              // Mommy/Daddy/joint branches — so during an active
+              // caregiver_window the line still said "you have Solène"
+              // if Mommy's shift overlapped. Moved the caregiver
+              // branch to the TOP so an active handoff overrides
+              // whatever the shift schedule says.
+              if (caregiverActive) {
+                whoHasPhrase = beDiscreet ? "covered" : "Solène with caregiver";
+                whoColor = C.sage;
+              } else if (isTomorrow) {
                 whoHasPhrase = beDiscreet ? "tomorrow" : `tomorrow's plan`;
                 whoColor = C.mommy;
               } else if (currentOwner === "Mommy") {
@@ -30918,12 +30970,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               } else if (currentOwner === "joint") {
                 whoHasPhrase = beDiscreet ? "joint" : "together with Solène";
                 whoColor = C.gold;
-              } else if (caregiverActive) {
-                whoHasPhrase = beDiscreet ? "covered" : "Solène with caregiver";
-                whoColor = C.gold;
               } else if (onsite && !beDiscreet) {
                 whoHasPhrase = "Solène with caregiver";
-                whoColor = C.gold;
+                whoColor = C.sage;
               }
 
               return (
@@ -32662,7 +32711,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   // implicitly Mommy's already.
                   let babyContext = null;
                   let owner = null;
-                  if (onsite) {
+                  // v05.05bt412 — Per chat: 'Still says daddy in duty
+                  // even though I have caregiver on.' The row-level
+                  // babyContext + owner derivation also had no
+                  // caregiver branch (same shape as the bt411 fix on
+                  // the editorial line). When a slot's time overlaps
+                  // an active caregiver window, the duty info per row
+                  // should reflect caregiver, not whichever shift the
+                  // schedule says — that propagates to row reasoning
+                  // text (via getBlockReasoning), metaContext, and the
+                  // owner-derived rail color decisions downstream.
+                  const cgWindows = getCaregiverWindows(events || [], now);
+                  const slotStartMs = slot.start.getTime();
+                  const slotEndMs = slot.end.getTime();
+                  const overlapsCaregiver = cgWindows.some(w => slotStartMs < w.end && slotEndMs > w.start);
+                  if (overlapsCaregiver) {
+                    babyContext = "caregiver has Solène";
+                    owner = null;
+                  } else if (onsite) {
                     babyContext = "grandparents have baby";
                     owner = null;
                   } else if (isRoutine && slot.joint) {
@@ -33689,7 +33755,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 70%' — needed an actual % readout. */}
                             {isFeedPred && (slot.typicalOz != null || slot.fromVolume || slot.sampleSize) && (
                               <span style={{
-                                fontSize: 9, color: C.gold,
+                                fontSize: 9, color: C.feed,
                                 marginLeft: 6,
                                 fontWeight: 700,
                                 letterSpacing: "0.06em",
