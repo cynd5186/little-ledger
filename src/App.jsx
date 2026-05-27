@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt414";
+const APP_VERSION = "2026.05.05bt417";
 const APP_BUILD_NOTES = [
-  "TWO CAREGIVER-AWARENESS FIXES + JOURNAL DATE INVESTIGATION. Per chat screenshots: schedule slider says 'NOW · YOUR DUTY' even with caregiver window planned for 9p tonight; OnDutyCard countdown reads '1h 44m until handoff to Daddy' when the real next handoff is to caregiver at 9p (14 min away); journal showing 'Wednesday May 27' entries at 1:19a/1:47a when current time is 8:46p Tuesday.\\n\\n(1) SCHEDULE SLIDER · UPCOMING CAREGIVER HINT. bt413 handled ACTIVE caregiver windows. bt414 extends to UPCOMING: when a caregiver window is planned for later today (state === 'upcoming'), the NOW slider label appends '· CG <startTime>' (e.g., 'NOW · YOUR DUTY · CG 9P'). Parent color stays — Mommy is still technically on duty until handoff — but the upcoming caregiver is now visually acknowledged.\\n\\n(2) ONDUTYCARD NEXT-HANDOFF OVERRIDE. The countdown derivation in OnDutyCard now checks: if an upcoming caregiver window starts BEFORE the next shift change, override the effective next to point at Caregiver instead of Mommy/Daddy. Used a local effectiveNext variable + nullable _effectiveColor (sage when caregiver overrides). The countdownText itself recomputes from the caregiver's start (cgMinsFromNow) when caregiver wins. So 'NOW: Mommy · 1h 44m until handoff to Daddy' becomes 'NOW: Mommy · 14m until handoff to Caregiver' when the window starts at 9p and the next shift wasn't until 10:30p.\\n\\n(3) JOURNAL DATE QUESTION. The 'Wednesday May 27 · 3 events' showing entries at 1:19a/1:47a when the app's now is 8:46p Tuesday IS suspicious. Most likely explanation: time-travel mode. If timeTravelOffset is set, the app's 'now' may be Tuesday 8:46p, but the actual REAL logs (made before time-travel was set) have timestamps in what the app perceives as the future. The journal day-grouping logic (new Date(e.ts).toDateString()) is correct — events bucket into their actual calendar date — but during time-travel, real future-dated events appear as 'tomorrow' which surfaces here. Did NOT fix this in code yet because I want to confirm with the user that time-travel is the cause before patching. If it's NOT time travel, the events were logged with explicitly future timestamps somehow and we need to investigate.",
+  "PARSER FIXES + DUE-DATE DETECTION. Per chat: user typed 'wash hair, R5, 1 hr' / 'map out day for bLG experiment, deep work, R5, 1 hr' / etc. and the brain dump produced wrong-duration tasks + a phantom 'deep' task. Plus 'SOP gap analysis due by Monday' had no visual treatment for the deadline.\\n\\n(1) MARKER_ONLY_RE EXTENDED. The comma-merge pre-pass (bt397) absorbs trailing marker-only segments back into the preceding task title — so 'wash hair, R5' merges into 'wash hair R5'. But the regex didn't include DURATION markers, so 'wash hair, R5, 1 hr' merged R5 but left '1 hr' as a separate phantom segment. Worse, when the next user line started with another short word ('deep'), the parser would merge them: '1 hr deep' parsed as a real task with effortMin=60 and title='deep' — which is exactly the R3 1h 'deep' row visible in the screenshot. Added duration patterns to MARKER_ONLY_RE: (\\\\d+(?:\\\\.\\\\d+)?\\\\s*(?:hrs?|hours?|mins?|minutes?|m|h)) plus 'half hour' / 'an hour' alternates.\\n\\n(2) BARE 'DEEP' AT END. The bt397 bare-word fallback only matched 'shallow $' at end of title because 'deep clean' / 'deep dive' are common verb phrases. But after the comma-merge pass, focus markers reliably land at the END, not in mid-title — so 'deep $' is safe. Extended the fallback regex to /\\\\b(deep|shallow)\\\\s*$/. Now 'wash hair R5 1 hr deep' (post-merge) parses to { title: 'wash hair', effortMin: 60, regretScore: 5, focusLevel: 'deep' }.\\n\\n(3) DUE-DATE DETECTION. New dueDate field on tasks. parseOneNlTask now detects three shapes BEFORE other parsers: weekday ('due by Monday' / 'due Friday'), relative ('due tomorrow' / 'due today' / 'due tmrw'), and numeric ('due 5/30' / 'due by 6/15/2026'). Weekday matches the NEXT occurrence (or +7 if it's the same day today). Phrase stripped from title; dueDate stored as YYYY-MM-DD. Both addBrainDump and the bt416 commitInlineSectionAdd helpers thread dueDate through to the saved task.\\n\\n(4) DUE TAG RENDER. Pile-row TaskRow renders a coral '⚑ DUE Mon 5/30' tag right after the title when dueDate is set + task not completed. Tag computes days-until and adjusts: today appends ' · TODAY' (still coral background, white text — urgent), tomorrow ' · TMRW' (same urgent style), negative ' · ND LATE' (overdue). All other future dates render as a coral outline pill (less alarming but still distinct). Title attribute on hover shows full date.\\n\\nDEFERRED to next build (bt418): suggested-times UX for the Scheduled section's '+ add' button (currently auto-slots into first fit via bt409 logic — user wants instead to see candidate times and pick); 'protected time' guard as due dates approach (auto-schedule + lock so it can't be displaced); tabbed cross-bucket quick add (the original bt417 plan).\\n\\nNOTE on duplication: I checked the bucket filters — forToday requires scheduledDate===today, backlog requires !scheduledDate. They're mutually exclusive at the data level. If the user is seeing the same title in two sections after this build, it's likely two SEPARATE tasks added via different code paths (e.g., brain dump → backlog + per-section '+ add' on Today). Send a screenshot of just the pile after bt417 deploys and I'll trace which paths fired.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt417", summary: "NL parser fixes + due-date detection. (1) MARKER_ONLY_RE extended to include duration patterns ('1 hr', '30 min', '30m', '1h', 'half hour', 'an hour') so they merge back into the preceding task instead of becoming phantom segments. (2) Bare 'deep' / 'shallow' at end of title now matched as focus marker (was only 'shallow' before) — safe because focus markers reliably land at end after the comma-merge pass. (3) New dueDate detection: parses 'due by Monday', 'due Friday', 'due tomorrow', 'due 5/30' and stores YYYY-MM-DD. (4) Pile rows render coral '⚑ DUE Day M/D' tag for tasks with dueDate set. Filled when due today/tomorrow/overdue, outlined otherwise. addBrainDump + commitInlineSectionAdd both thread dueDate. Build verified clean via esbuild." },
+  { version: "2026.05.05bt416", summary: "Per-section add affordance + collapse defaults. (1) scheduledExpanded default flipped to false; taskPileExpanded + backlogExpanded already false — all three pile subsections collapsed on first render. (2) New '+ add' button on each of the three section headers (Scheduled mauve, Unscheduled-for-today gold, Backlog muted). Header restructured from single button to flex row with expand button + add button. (3) Tapping '+ add' opens an inline input below that section. Shared state since only one open at a time. Ref-based focus({preventScroll:true}) prevents iOS jump. (4) New commitInlineSectionAdd helper parses via parseNaturalLanguageTasks for time/duration extraction, routes by section: scheduled auto-slots via bt409 logic, today goes to unscheduled-for-today pile, backlog gets drawer:true. Build verified clean via esbuild." },
+  { version: "2026.05.05bt415", summary: "Two fixes. (1) Title-tap on schedule rows: autoFocus on the inline title input was causing iOS Safari to scroll the page significantly to position the input above the keyboard. Replaced with ref-based focus({ preventScroll: true }) — keyboard still opens, page doesn't jump, UNSCHED + ⋯ buttons render as designed. (2) New App-level auto-rollover useEffect: on first load of each calendar day (per ll:lastRolloverDay localStorage key), sweeps all incomplete tasks owned by current user with scheduledDate < today and moves them to today as unscheduled (drawer:false, scheduledTime:null) so they appear in the 'unscheduled for today' pile awaiting re-slot. Build verified clean via esbuild." },
   { version: "2026.05.05bt414", summary: "Two caregiver-awareness fixes + journal date investigation. (1) Schedule NOW slider appends '· CG <startTime>' when an upcoming caregiver window exists today (color stays parent's). (2) OnDutyCard countdown overrides next to Caregiver when an upcoming window starts before the next shift change — so '1h 44m until handoff to Daddy' becomes '14m until handoff to Caregiver' when caregiver starts first. Sage color when caregiver overrides. (3) Journal date grouping issue (Wed May 27 entries shown when now is Tue) most likely caused by time-travel testing — events have real-future timestamps that bucket by their actual date. Not fixed in code; asking user to confirm cause. Build verified clean via esbuild." },
   { version: "2026.05.05bt413", summary: "Schedule NOW slider gains caregiver branch. Third surface with the same shape: the NOW line label/color derivation in ShiftsView checked Mommy/Daddy/joint shifts but not caregiver. Added caregiverActive check at the top of the chain — slider now reads 'NOW · CAREGIVER' in sage during an active caregiver window. Build verified clean via esbuild." },
   { version: "2026.05.05bt412", summary: "Row-level caregiver override. Per-slot babyContext + owner derivation now checks getCaregiverWindows FIRST. When a slot overlaps an active caregiver window, babyContext becomes 'caregiver has Solène' and owner becomes null. Propagates to metaContext, getBlockReasoning, row tint, and avatar rendering. bt411 covered the editorial duty line; this covers the per-row text + rail color. OnDutyCard already had its own caregiver-active branch (bt310). Build verified clean via esbuild." },
@@ -5874,6 +5877,48 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       autoEnded: true,
     });
   }, [hydrated, takeover, baseOnDuty.parent, now]);
+
+  // v05.05bt415 — Per chat: 'unchecked items did not roll over to
+  // tomorrow (let's make this automatic..a working mom who is
+  // exhausted after work will not always remember to end her day so
+  // let's roll everything that was left uncompleted over to the
+  // scheduled for today list below to be slotted tomorrow).' On the
+  // first app load of any new calendar day, sweep all incomplete
+  // tasks owned by the current user whose scheduledDate is in the
+  // past, move them to today as UNSCHEDULED (scheduledTime cleared,
+  // drawer:false so they appear in 'unscheduled for today' for
+  // re-slotting). Trip counter via ll:lastRolloverDay so the sweep
+  // only fires once per day. The bt408 LIMBO banner still surfaces
+  // anything that doesn't get caught (e.g., if user opens app on the
+  // same day and rollover hasn't run, or if tasks from very old
+  // dates pile up).
+  useEffect(() => {
+    if (!hydrated || isWiping()) return;
+    const todayISO_actual = (() => {
+      const d = new Date(now);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    })();
+    let last;
+    try { last = localStorage.getItem("ll:lastRolloverDay"); } catch { last = null; }
+    if (last === todayISO_actual) return;
+    setTasks(prev => prev.map(t => {
+      if (t.completedAt) return t;
+      if (t.ownerName !== currentUser) return t;
+      if (!t.scheduledDate || t.scheduledDate >= todayISO_actual) return t;
+      return {
+        ...t,
+        scheduledDate: todayISO_actual,
+        scheduledTime: null,
+        pinned: false,
+        drawer: false,
+        _rolledOverFrom: t.scheduledDate,
+      };
+    }));
+    try { localStorage.setItem("ll:lastRolloverDay", todayISO_actual); } catch {}
+  }, [hydrated, currentUser]);
 
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
@@ -23904,7 +23949,13 @@ function parseNaturalLanguageTasks(text) {
   // segment so they parse as task metadata, not separate tasks.
   // Conservative: only matches when the WHOLE segment is the marker —
   // avoids accidentally swallowing "buy shallow dish" or similar.
-  const MARKER_ONLY_RE = /^\s*(?:(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)|(?:deep(?:\s+(?:work|focus))?|shallow(?:\s+work)?|light(?:\s+work)?|low(?:\s+focus)?)|(?:R\s*[1-5]|regret\s*[:\s]?\s*[1-5]|priority\s*[:\s]?\s*[1-5]|pri\s*[:\s]?\s*[1-5])|daily|weekly|every\s+\w+|each\s+\w+)\s*$/i;
+  // v05.05bt397 → bt417 — Per chat: user typed 'wash hair, R5, 1 hr'
+  // and got TWO tasks ('wash hair R5' + '1 hr' which then created a
+  // phantom task or got merged with the next segment). Root cause:
+  // MARKER_ONLY_RE didn't include duration patterns, so '1 hr' / '30
+  // min' / etc. split as standalone segments. Extended to match
+  // duration markers (number+unit + 'half hour' / 'an hour').
+  const MARKER_ONLY_RE = /^\s*(?:(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)|(?:deep(?:\s+(?:work|focus))?|shallow(?:\s+work)?|light(?:\s+work)?|low(?:\s+focus)?)|(?:R\s*[1-5]|regret\s*[:\s]?\s*[1-5]|priority\s*[:\s]?\s*[1-5]|pri\s*[:\s]?\s*[1-5])|daily|weekly|every\s+\w+|each\s+\w+|(?:\d+(?:\.\d+)?\s*(?:hrs?|hours?|mins?|minutes?|m|h))|(?:half\s+(?:an?\s+)?hour|an?\s+hour))\s*$/i;
   if (segments.length > 1) {
     const merged = [];
     for (const seg of segments) {
@@ -23995,6 +24046,62 @@ function parseOneNlTask(text) {
   // "deep clean the kitchen" don't get hijacked into focusLevel: deep.
   let focusLevel = null;
   let regretScore = null;
+  // v05.05bt417 — Per chat: 'things that have a hard due date - how
+  // do we want to address that? a tag or red letter or soemthing that
+  // sticks out that this is a deliverable.' Parse 'due by X' / 'due
+  // X' phrases, strip from title, set dueDate field. Supports:
+  // weekday names ('Monday'/'mon'), 'tomorrow', 'today', and explicit
+  // M/D or M/D/YYYY. The renderer adds a coral DUE tag.
+  let dueDate = null;
+  {
+    // Pattern 1: due by weekday / due weekday
+    const dayMatch = title.match(/\bdue\s+(?:by\s+)?(mon|tues?|wed(?:nes)?|thurs?|fri|satur?|sun)(?:day)?\b/i);
+    if (dayMatch) {
+      const dayMap = { mon: 1, tue: 2, tues: 2, wed: 3, wednes: 3, thu: 4, thur: 4, thurs: 4, fri: 5, sat: 6, satur: 6, sun: 0 };
+      const target = dayMap[dayMatch[1].toLowerCase()];
+      if (target !== undefined) {
+        const today = new Date();
+        const todayDow = today.getDay();
+        let daysAhead = (target - todayDow + 7) % 7;
+        if (daysAhead === 0) daysAhead = 7; // 'due Monday' on Monday → next Monday
+        const d = new Date(today);
+        d.setDate(today.getDate() + daysAhead);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        dueDate = `${y}-${m}-${dd}`;
+        title = title.replace(dayMatch[0], " ").trim();
+      }
+    }
+    // Pattern 2: due tomorrow / due today
+    if (!dueDate) {
+      const relMatch = title.match(/\bdue\s+(?:by\s+)?(today|tomorrow|tmrw|tmw)\b/i);
+      if (relMatch) {
+        const rel = relMatch[1].toLowerCase();
+        const d = new Date();
+        if (rel !== "today") d.setDate(d.getDate() + 1);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        dueDate = `${y}-${m}-${dd}`;
+        title = title.replace(relMatch[0], " ").trim();
+      }
+    }
+    // Pattern 3: due M/D or M/D/YYYY
+    if (!dueDate) {
+      const numMatch = title.match(/\bdue\s+(?:by\s+)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/i);
+      if (numMatch) {
+        const m = parseInt(numMatch[1], 10);
+        const d = parseInt(numMatch[2], 10);
+        let y = numMatch[3] ? parseInt(numMatch[3], 10) : new Date().getFullYear();
+        if (y < 100) y += 2000;
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+          dueDate = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          title = title.replace(numMatch[0], " ").trim();
+        }
+      }
+    }
+  }
 
   // Regexes used in both bracket and bare passes:
   const focusInsideRe = /\b(deep(?:\s+(?:work|focus))?|shallow(?:\s+work)?|light(?:\s+work)?|low(?:\s+focus)?)\b/i;
@@ -24053,9 +24160,15 @@ function parseOneNlTask(text) {
   // common verb phrases). "light" / "low" also skipped — too overloaded
   // ("light dinner" / "low priority").
   if (!focusLevel) {
-    const m = title.match(/\bshallow\s*$/i);
+    // v05.05bt397 → bt417 — Originally only matched 'shallow' at end
+    // because 'deep clean' / 'deep dive' are common verb phrases. But
+    // after the bt397 comma-merge pre-pass, focus markers land at the
+    // END of the title (e.g. 'wash hair R5 1 hr deep' after merging
+    // 'wash hair, R5, 1 hr, deep'). So 'deep $' at end-of-string is
+    // safe to match — user wouldn't naturally write 'kitchen deep'.
+    const m = title.match(/\b(deep|shallow)\s*$/i);
     if (m) {
-      focusLevel = "shallow";
+      focusLevel = /^deep/i.test(m[1]) ? "deep" : "shallow";
       title = title.replace(m[0], " ").trim();
     }
   }
@@ -24130,7 +24243,7 @@ function parseOneNlTask(text) {
   if (effortMin >= 30 && /\bemail|\bemails|\binbox\b/i.test(title)) {
     cadence = 15;
   }
-  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore };
+  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore, dueDate };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -28049,7 +28162,73 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // section.' Per-section collapse for Scheduled + For Today too.
   // Default expanded since these are typically short and most-
   // relevant on first open.
-  const [scheduledExpanded, setScheduledExpanded] = useState(true);
+  const [scheduledExpanded, setScheduledExpanded] = useState(false);
+  // v05.05bt416 — Per chat: 'lets under each section state, have a
+  // way of adding directly to that state in case we dont remember
+  // clicking on the big log button.' Shared state for which section's
+  // inline add is open + the draft title. Single state since only one
+  // section's input is open at a time. Routes destination based on
+  // which section opened it: scheduled → auto-slot (bt409 logic),
+  // today → drawer:false + scheduledDate=today, backlog → drawer:true.
+  const [inlineSectionAdd, setInlineSectionAdd] = useState(null);
+  const [inlineSectionAddDraft, setInlineSectionAddDraft] = useState("");
+  // v05.05bt416 — Helper that commits the inline section add. Parses
+  // the draft via parseNaturalLanguageTasks (handles time + duration
+  // in NL), builds the task, routes by section. No duplicate detection
+  // here since user is being explicit about the destination — for the
+  // bigger cross-bucket quick add (bt417), duplicates still get caught
+  // by the existing addBrainDump path.
+  const commitInlineSectionAdd = (section) => {
+    const text = (inlineSectionAddDraft || "").trim();
+    if (!text) return;
+    const parsed = parseNaturalLanguageTasks(text);
+    const first = parsed[0] || { title: text };
+    const base = {
+      id: `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      title: first.title || text,
+      effortMin: first.durationMin || first.effortMin || 30,
+      regretScore: 3,
+      focusLevel: first.focusLevel || "shallow",
+      taskGroup: first.taskGroup || null,
+      ownerName: currentUser,
+      createdAt: new Date().toISOString(),
+      // v05.05bt417 — Carry parser-detected dueDate.
+      dueDate: first.dueDate || null,
+    };
+    if (section === "scheduled") {
+      // Auto-slot into next workable block fitting the task's effort.
+      // If user typed a time, prefer that. Otherwise use bt409 logic.
+      const dur = base.effortMin;
+      if (first.scheduledTime) {
+        base.scheduledTime = first.scheduledTime;
+        base.scheduledDate = referenceISO;
+        base.drawer = false;
+      } else {
+        const blocks = getWorkableBlocks();
+        const fit = (blocks || []).find(b => (b.durationMin || 0) >= dur);
+        if (fit && fit.start) {
+          const hh = String(fit.start.getHours()).padStart(2, "0");
+          const mm = String(fit.start.getMinutes()).padStart(2, "0");
+          base.scheduledTime = `${hh}:${mm}`;
+          base.scheduledDate = referenceISO;
+          base.drawer = false;
+        } else {
+          // No fit — fall back to today pile.
+          base.scheduledDate = referenceISO;
+          base.drawer = false;
+        }
+      }
+    } else if (section === "today") {
+      base.scheduledDate = referenceISO;
+      base.drawer = false;
+      if (first.scheduledTime) base.scheduledTime = first.scheduledTime;
+    } else if (section === "backlog") {
+      base.drawer = true;
+    }
+    setTasks(prev => [...prev, base]);
+    setInlineSectionAdd(null);
+    setInlineSectionAddDraft("");
+  };
   const [forTodayExpanded, setForTodayExpanded] = useState(true);
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
   // kinda long so have the ability to filter as well by the
@@ -28294,6 +28473,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       scheduledTime: p.scheduledTime || null,
       ownerName: currentUser,
       drawer: !p.scheduledTime, // if NL had a time, it's already scheduled
+      // v05.05bt417 — Carry parser-detected dueDate into the task so
+      // the row renderer can show the coral DUE tag.
+      dueDate: p.dueDate || null,
       sequenceId: p.sequenceId,
       sequenceIndex: p.sequenceIndex,
       sequenceTotal: p.sequenceTotal,
@@ -33398,7 +33580,28 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               <input
                                 type="text"
                                 defaultValue={slot.title}
-                                autoFocus
+                                // v05.05bt415 — Per chat: 'when i am on
+                                // the time by time task section, i
+                                // should be able to click on the title
+                                // and see things like unschedule and
+                                // the ellipses menu that we had created
+                                // but instead it jumps down my screen
+                                // to the bottom as if i did jump to
+                                // task.' Suspected cause: iOS Safari
+                                // autoFocus combined with on-screen
+                                // keyboard appearance scrolls the input
+                                // into view aggressively, sometimes
+                                // landing far below the original tap
+                                // location. Replaced autoFocus with a
+                                // ref-based focus({ preventScroll:
+                                // true }) so the keyboard still opens
+                                // but the page doesn't jump.
+                                ref={(el) => {
+                                  if (!el || el.dataset.focused === "1") return;
+                                  el.dataset.focused = "1";
+                                  try { el.focus({ preventScroll: true }); }
+                                  catch { el.focus(); }
+                                }}
                                 onClick={(e) => e.stopPropagation()}
                                 onBlur={(e) => commitInlineTitle(slot.id, e.target.value)}
                                 onKeyDown={(e) => {
@@ -35398,6 +35601,43 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             {t.title}
                           </span>
                         )}
+                        {/* v05.05bt417 — Hard due-date tag. Coral pill
+                            with the day-of-week and date abbrev so it
+                            sticks out as a deliverable. Rendered right
+                            after the title so it reads inline. Future
+                            build can add urgency tiers (coral / red /
+                            flashing as the date approaches) plus a
+                            protected-time guard. */}
+                        {t.dueDate && !t.completedAt && (() => {
+                          const [y, mo, d] = t.dueDate.split("-").map(Number);
+                          const due = new Date(y, mo - 1, d);
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
+                          const dayShort = due.toLocaleDateString(undefined, { weekday: "short" });
+                          const urgent = diffDays <= 1;
+                          return (
+                            <span style={{
+                              marginLeft: 6,
+                              padding: "1px 6px",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, fontWeight: 800,
+                              letterSpacing: "0.10em",
+                              color: urgent ? "#fff" : C.accent,
+                              background: urgent ? C.accent : `${C.accent}1f`,
+                              border: `1px solid ${C.accent}${urgent ? "" : "66"}`,
+                              borderRadius: 3,
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                              verticalAlign: 1,
+                            }} title={`Due ${due.toLocaleDateString()}`}>
+                              ⚑ DUE {dayShort} {mo}/{d}
+                              {diffDays === 0 && " · TODAY"}
+                              {diffDays === 1 && " · TMRW"}
+                              {diffDays < 0 && ` · ${Math.abs(diffDays)}D LATE`}
+                            </span>
+                          );
+                        })()}
                         {/* v05.05bt376 — Per chat: 'for things that are
                             scheduled, can you update the time beside
                             the task (ie today at X time).' Inline time
@@ -35877,30 +36117,93 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                       {/* SCHEDULED section */}
                       <div style={{ padding: "6px 4px 4px" }}>
-                        <button
-                          type="button"
-                          onClick={() => setScheduledExpanded(v => !v)}
-                          style={{
-                            width: "100%", background: "transparent",
-                            border: "none", padding: "3px 5px 5px",
-                            cursor: "pointer", textAlign: "left",
-                            fontFamily: "inherit",
-                            display: "flex", alignItems: "center", gap: 6,
-                            justifyContent: "flex-start",
-                          }}>
-                          <span style={{ color: C.mommy, fontWeight: 800, fontSize: 10 }}>●</span>
-                          <span style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
-                            color: C.mommy, textTransform: "uppercase",
-                          }}>Scheduled · {scheduled.length}</span>
-                          <span style={{
-                            marginLeft: "auto",
-                            fontSize: 11, color: C.mommy, opacity: 0.5,
-                            transform: scheduledExpanded ? "rotate(90deg)" : "rotate(0)",
-                            transition: "transform 0.15s",
-                          }}>▸</span>
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setScheduledExpanded(v => !v)}
+                            style={{
+                              flex: 1, background: "transparent",
+                              border: "none", padding: "3px 5px 5px",
+                              cursor: "pointer", textAlign: "left",
+                              fontFamily: "inherit",
+                              display: "flex", alignItems: "center", gap: 6,
+                              justifyContent: "flex-start",
+                            }}>
+                            <span style={{ color: C.mommy, fontWeight: 800, fontSize: 10 }}>●</span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              color: C.mommy, textTransform: "uppercase",
+                            }}>Scheduled · {scheduled.length}</span>
+                            <span style={{
+                              marginLeft: "auto",
+                              fontSize: 11, color: C.mommy, opacity: 0.5,
+                              transform: scheduledExpanded ? "rotate(90deg)" : "rotate(0)",
+                              transition: "transform 0.15s",
+                            }}>▸</span>
+                          </button>
+                          {/* v05.05bt416 — per-section quick add */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineSectionAdd(inlineSectionAdd === "scheduled" ? null : "scheduled");
+                              setInlineSectionAddDraft("");
+                            }}
+                            title="Add a task directly to this section"
+                            style={{
+                              padding: "3px 7px",
+                              background: `${C.mommy}14`,
+                              border: `1px solid ${C.mommy}44`,
+                              borderRadius: 5,
+                              color: C.mommy, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing: "0.04em",
+                              flexShrink: 0,
+                            }}>+ add</button>
+                        </div>
+                        {inlineSectionAdd === "scheduled" && (
+                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                            <input
+                              type="text"
+                              value={inlineSectionAddDraft}
+                              onChange={(e) => setInlineSectionAddDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitInlineSectionAdd("scheduled");
+                                if (e.key === "Escape") { setInlineSectionAdd(null); setInlineSectionAddDraft(""); }
+                              }}
+                              ref={(el) => {
+                                if (!el || el.dataset.focused === "1") return;
+                                el.dataset.focused = "1";
+                                try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                              }}
+                              placeholder="title (e.g. 'wash hair' or 'wash hair 3pm')"
+                              style={{
+                                flex: 1, minWidth: 0,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 14, fontStyle: "italic",
+                                color: C.ink,
+                                border: `1.5px solid ${C.mommy}55`,
+                                borderRadius: 6, padding: "5px 8px",
+                                background: C.paper,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onPointerUp={(e) => { e.preventDefault(); commitInlineSectionAdd("scheduled"); }}
+                              disabled={!inlineSectionAddDraft.trim()}
+                              style={{
+                                padding: "5px 12px",
+                                background: inlineSectionAddDraft.trim() ? C.mommy : `${C.line}22`,
+                                color: inlineSectionAddDraft.trim() ? "#fff" : C.muted,
+                                border: "none", borderRadius: 6,
+                                cursor: inlineSectionAddDraft.trim() ? "pointer" : "default",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em",
+                              }}>SLOT</button>
+                          </div>
+                        )}
                         {scheduledExpanded && (
                           scheduled.length === 0 ? (
                             <button
@@ -35934,30 +36237,93 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
                       }}>
-                        <button
-                          type="button"
-                          onClick={() => setForTodayExpanded(v => !v)}
-                          style={{
-                            width: "100%", background: "transparent",
-                            border: "none", padding: "3px 5px 5px",
-                            cursor: "pointer", textAlign: "left",
-                            fontFamily: "inherit",
-                            display: "flex", alignItems: "center", gap: 6,
-                            justifyContent: "flex-start",
-                          }}>
-                          <span style={{ color: C.gold, fontWeight: 800, fontSize: 10 }}>◐</span>
-                          <span style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
-                            color: C.gold, textTransform: "uppercase",
-                          }}>Unscheduled for today · {forToday.length}</span>
-                          <span style={{
-                            marginLeft: "auto",
-                            fontSize: 11, color: C.gold, opacity: 0.5,
-                            transform: forTodayExpanded ? "rotate(90deg)" : "rotate(0)",
-                            transition: "transform 0.15s",
-                          }}>▸</span>
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setForTodayExpanded(v => !v)}
+                            style={{
+                              flex: 1, background: "transparent",
+                              border: "none", padding: "3px 5px 5px",
+                              cursor: "pointer", textAlign: "left",
+                              fontFamily: "inherit",
+                              display: "flex", alignItems: "center", gap: 6,
+                              justifyContent: "flex-start",
+                            }}>
+                            <span style={{ color: C.gold, fontWeight: 800, fontSize: 10 }}>◐</span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              color: C.gold, textTransform: "uppercase",
+                            }}>Unscheduled for today · {forToday.length}</span>
+                            <span style={{
+                              marginLeft: "auto",
+                              fontSize: 11, color: C.gold, opacity: 0.5,
+                              transform: forTodayExpanded ? "rotate(90deg)" : "rotate(0)",
+                              transition: "transform 0.15s",
+                            }}>▸</span>
+                          </button>
+                          {/* v05.05bt416 — per-section quick add */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineSectionAdd(inlineSectionAdd === "today" ? null : "today");
+                              setInlineSectionAddDraft("");
+                            }}
+                            title="Add a task directly to today's unscheduled pile"
+                            style={{
+                              padding: "3px 7px",
+                              background: `${C.gold}14`,
+                              border: `1px solid ${C.gold}44`,
+                              borderRadius: 5,
+                              color: C.gold, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing: "0.04em",
+                              flexShrink: 0,
+                            }}>+ add</button>
+                        </div>
+                        {inlineSectionAdd === "today" && (
+                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                            <input
+                              type="text"
+                              value={inlineSectionAddDraft}
+                              onChange={(e) => setInlineSectionAddDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitInlineSectionAdd("today");
+                                if (e.key === "Escape") { setInlineSectionAdd(null); setInlineSectionAddDraft(""); }
+                              }}
+                              ref={(el) => {
+                                if (!el || el.dataset.focused === "1") return;
+                                el.dataset.focused = "1";
+                                try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                              }}
+                              placeholder="title (lands in today's pile)"
+                              style={{
+                                flex: 1, minWidth: 0,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 14, fontStyle: "italic",
+                                color: C.ink,
+                                border: `1.5px solid ${C.gold}55`,
+                                borderRadius: 6, padding: "5px 8px",
+                                background: C.paper,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onPointerUp={(e) => { e.preventDefault(); commitInlineSectionAdd("today"); }}
+                              disabled={!inlineSectionAddDraft.trim()}
+                              style={{
+                                padding: "5px 12px",
+                                background: inlineSectionAddDraft.trim() ? C.gold : `${C.line}22`,
+                                color: inlineSectionAddDraft.trim() ? "#fff" : C.muted,
+                                border: "none", borderRadius: 6,
+                                cursor: inlineSectionAddDraft.trim() ? "pointer" : "default",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em",
+                              }}>ADD</button>
+                          </div>
+                        )}
                         {forTodayExpanded && (
                           <>
                         {/* v05.05bt356 — Category filter chips. Hidden
@@ -36102,29 +36468,92 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
                       }}>
-                        <button
-                          type="button"
-                          onClick={() => setBacklogExpanded(v => !v)}
-                          style={{
-                            width: "100%", background: "transparent",
-                            border: "none", padding: "3px 5px 5px",
-                            cursor: "pointer", textAlign: "left",
-                            fontFamily: "inherit",
-                            display: "flex", alignItems: "center", gap: 6,
-                          }}>
-                          <span style={{ color: C.muted, fontWeight: 800, fontSize: 10 }}>○</span>
-                          <span style={{
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
-                            color: C.muted, textTransform: "uppercase",
-                          }}>Backlog <span style={{ fontWeight: 500, opacity: 0.7 }}>(brain dump)</span> · {backlog.length}</span>
-                          <span style={{
-                            marginLeft: "auto",
-                            fontSize: 11, color: C.muted, opacity: 0.5,
-                            transform: backlogExpanded ? "rotate(90deg)" : "rotate(0)",
-                            transition: "transform 0.15s",
-                          }}>▸</span>
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setBacklogExpanded(v => !v)}
+                            style={{
+                              flex: 1, background: "transparent",
+                              border: "none", padding: "3px 5px 5px",
+                              cursor: "pointer", textAlign: "left",
+                              fontFamily: "inherit",
+                              display: "flex", alignItems: "center", gap: 6,
+                            }}>
+                            <span style={{ color: C.muted, fontWeight: 800, fontSize: 10 }}>○</span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              color: C.muted, textTransform: "uppercase",
+                            }}>Backlog <span style={{ fontWeight: 500, opacity: 0.7 }}>(brain dump)</span> · {backlog.length}</span>
+                            <span style={{
+                              marginLeft: "auto",
+                              fontSize: 11, color: C.muted, opacity: 0.5,
+                              transform: backlogExpanded ? "rotate(90deg)" : "rotate(0)",
+                              transition: "transform 0.15s",
+                            }}>▸</span>
+                          </button>
+                          {/* v05.05bt416 — per-section quick add */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInlineSectionAdd(inlineSectionAdd === "backlog" ? null : "backlog");
+                              setInlineSectionAddDraft("");
+                            }}
+                            title="Add a task directly to backlog (brain dump)"
+                            style={{
+                              padding: "3px 7px",
+                              background: `${C.muted}14`,
+                              border: `1px solid ${C.muted}44`,
+                              borderRadius: 5,
+                              color: C.muted, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 11, fontWeight: 800,
+                              letterSpacing: "0.04em",
+                              flexShrink: 0,
+                            }}>+ add</button>
+                        </div>
+                        {inlineSectionAdd === "backlog" && (
+                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                            <input
+                              type="text"
+                              value={inlineSectionAddDraft}
+                              onChange={(e) => setInlineSectionAddDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitInlineSectionAdd("backlog");
+                                if (e.key === "Escape") { setInlineSectionAdd(null); setInlineSectionAddDraft(""); }
+                              }}
+                              ref={(el) => {
+                                if (!el || el.dataset.focused === "1") return;
+                                el.dataset.focused = "1";
+                                try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                              }}
+                              placeholder="brain dump (no date assigned)"
+                              style={{
+                                flex: 1, minWidth: 0,
+                                fontFamily: "'Cormorant Garamond', serif",
+                                fontSize: 14, fontStyle: "italic",
+                                color: C.ink,
+                                border: `1.5px solid ${C.muted}55`,
+                                borderRadius: 6, padding: "5px 8px",
+                                background: C.paper,
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onPointerUp={(e) => { e.preventDefault(); commitInlineSectionAdd("backlog"); }}
+                              disabled={!inlineSectionAddDraft.trim()}
+                              style={{
+                                padding: "5px 12px",
+                                background: inlineSectionAddDraft.trim() ? C.muted : `${C.line}22`,
+                                color: inlineSectionAddDraft.trim() ? "#fff" : C.muted,
+                                border: "none", borderRadius: 6,
+                                cursor: inlineSectionAddDraft.trim() ? "pointer" : "default",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em",
+                              }}>ADD</button>
+                          </div>
+                        )}
                         {backlogExpanded && (
                           backlog.length === 0 ? (
                             <button
