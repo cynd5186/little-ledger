@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt412";
+const APP_VERSION = "2026.05.05bt414";
 const APP_BUILD_NOTES = [
-  "ROW-LEVEL CAREGIVER OVERRIDE. Per chat: 'Still says daddy in duty even though I have caregiver on.' bt411 fixed the editorial duty line at the top of Mommy's Day, but the SAME bug existed at the per-row level: each timeline slot derived babyContext + owner from shift lookup with no caregiver branch.\\n\\nFIX: row babyContext derivation now checks getCaregiverWindows(events, now) FIRST. If a slot's time range overlaps any caregiver window (slotStart < window.end && slotEnd > window.start), babyContext becomes 'caregiver has Solène' and owner becomes null (no parent rail color, no parent letter glyph, no Mommy/Daddy reasoning text). Propagates downstream to:\\n  • metaContext (the row's textual meta — caregiver phrase passes through; Mommy/Daddy-on-duty texts get filtered to null)\\n  • getBlockReasoning (the 'why here' text used the babyContext directly — now reads correctly during handoffs)\\n  • Row tint + avatar logic that switches on owner (no longer paints the row mauve/blue when caregiver has the baby)\\n\\nWORKING THROUGH OnDutyCard: I checked, and that card already has a caregiver-active guard (bt310) that hides the normal duty banner and renders a sage 'Caregiver has Solène' card instead. So that one was correct. The row-level was the remaining surface — the per-slot timeline meta — and is now consistent.\\n\\nNOTE: this only catches windows that are ACTIVE (now within start..end) AND windows that the user has logged as full caregiver_window events. If the user is seeing 'Daddy on duty' on a different surface (Shifts tab, Today's Plan summary, the journal day header, etc.) please send a screenshot and I'll patch that site too. The core principle — caregiver handoff overrides shift duty — applies everywhere; I'm fixing the surfaces as they surface.",
+  "TWO CAREGIVER-AWARENESS FIXES + JOURNAL DATE INVESTIGATION. Per chat screenshots: schedule slider says 'NOW · YOUR DUTY' even with caregiver window planned for 9p tonight; OnDutyCard countdown reads '1h 44m until handoff to Daddy' when the real next handoff is to caregiver at 9p (14 min away); journal showing 'Wednesday May 27' entries at 1:19a/1:47a when current time is 8:46p Tuesday.\\n\\n(1) SCHEDULE SLIDER · UPCOMING CAREGIVER HINT. bt413 handled ACTIVE caregiver windows. bt414 extends to UPCOMING: when a caregiver window is planned for later today (state === 'upcoming'), the NOW slider label appends '· CG <startTime>' (e.g., 'NOW · YOUR DUTY · CG 9P'). Parent color stays — Mommy is still technically on duty until handoff — but the upcoming caregiver is now visually acknowledged.\\n\\n(2) ONDUTYCARD NEXT-HANDOFF OVERRIDE. The countdown derivation in OnDutyCard now checks: if an upcoming caregiver window starts BEFORE the next shift change, override the effective next to point at Caregiver instead of Mommy/Daddy. Used a local effectiveNext variable + nullable _effectiveColor (sage when caregiver overrides). The countdownText itself recomputes from the caregiver's start (cgMinsFromNow) when caregiver wins. So 'NOW: Mommy · 1h 44m until handoff to Daddy' becomes 'NOW: Mommy · 14m until handoff to Caregiver' when the window starts at 9p and the next shift wasn't until 10:30p.\\n\\n(3) JOURNAL DATE QUESTION. The 'Wednesday May 27 · 3 events' showing entries at 1:19a/1:47a when the app's now is 8:46p Tuesday IS suspicious. Most likely explanation: time-travel mode. If timeTravelOffset is set, the app's 'now' may be Tuesday 8:46p, but the actual REAL logs (made before time-travel was set) have timestamps in what the app perceives as the future. The journal day-grouping logic (new Date(e.ts).toDateString()) is correct — events bucket into their actual calendar date — but during time-travel, real future-dated events appear as 'tomorrow' which surfaces here. Did NOT fix this in code yet because I want to confirm with the user that time-travel is the cause before patching. If it's NOT time travel, the events were logged with explicitly future timestamps somehow and we need to investigate.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt414", summary: "Two caregiver-awareness fixes + journal date investigation. (1) Schedule NOW slider appends '· CG <startTime>' when an upcoming caregiver window exists today (color stays parent's). (2) OnDutyCard countdown overrides next to Caregiver when an upcoming window starts before the next shift change — so '1h 44m until handoff to Daddy' becomes '14m until handoff to Caregiver' when caregiver starts first. Sage color when caregiver overrides. (3) Journal date grouping issue (Wed May 27 entries shown when now is Tue) most likely caused by time-travel testing — events have real-future timestamps that bucket by their actual date. Not fixed in code; asking user to confirm cause. Build verified clean via esbuild." },
+  { version: "2026.05.05bt413", summary: "Schedule NOW slider gains caregiver branch. Third surface with the same shape: the NOW line label/color derivation in ShiftsView checked Mommy/Daddy/joint shifts but not caregiver. Added caregiverActive check at the top of the chain — slider now reads 'NOW · CAREGIVER' in sage during an active caregiver window. Build verified clean via esbuild." },
   { version: "2026.05.05bt412", summary: "Row-level caregiver override. Per-slot babyContext + owner derivation now checks getCaregiverWindows FIRST. When a slot overlaps an active caregiver window, babyContext becomes 'caregiver has Solène' and owner becomes null. Propagates to metaContext, getBlockReasoning, row tint, and avatar rendering. bt411 covered the editorial duty line; this covers the per-row text + rail color. OnDutyCard already had its own caregiver-active branch (bt310). Build verified clean via esbuild." },
   { version: "2026.05.05bt411", summary: "Editorial duty line override during active caregiver handoff. Previously the if/else chain checked Mommy/Daddy/joint shift FIRST and caregiverActive last, so during an active caregiver_window the line still said 'you have Solène' when Mommy's shift overlapped. Moved caregiverActive to the top of the chain — now reads 'Solène with caregiver' in sage (matching caregiver persona color) regardless of shift. Also recolored the onsite-without-discreet branch from gold to sage for consistency. Build verified clean via esbuild." },
   { version: "2026.05.05bt410", summary: "Three usage-conscious fixes. (1) New care-domain color tokens on every palette variant (pump #4DA89C teal, feed #C97A47 burnt orange, nap #9B6BB5 dusky violet) — distinct from parent + alert colors. Feed-predicted rendering switched to the new feed color (PREDICTED tag + typical-oz hint). Pump and nap tokens reserved for the upcoming A2.v1 inline-annotation pattern. (2) Caregiver handoff journal label: type==='caregiver_window' had no render branch in LogView so rows showed as blank. Added '🤝 Handed off to caregiver · until H:MM'. (3) Live pump update fix: when a plan exists + user logs a catch-up pump, the picker could return a planned slot sooner than lastPump + interval. New guard bumps to lastStart + PUMP_INTERVAL_HRS if the plan slot lands too soon. Build verified clean via esbuild." },
@@ -10805,11 +10807,31 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     const t = setTimeout(() => setTagInConfirm(false), 4000);
     return () => clearTimeout(t);
   }, [tagInConfirm]);
+  // v05.05bt414 — Per chat: '1h 44m until handoff to Daddy' was
+  // showing as next handoff at 10:30p even though the user had a
+  // caregiver_window planned starting at 9p. The next REAL handoff
+  // is to caregiver, not the next-shift parent. If an upcoming
+  // caregiver window starts before the next shift change, override
+  // next.parent + minutesToHandoff so the countdown reads correctly.
+  const _cgWinForHandoff = getActiveOrUpcomingCaregiverWindow(events || [], now);
+  const _cgUpcoming = _cgWinForHandoff && _cgWinForHandoff.state === "upcoming";
+  let effectiveNext = next;
+  let _effectiveColor = null;
   const minutesToHandoff = (() => {
     const cur = now.getHours() * 60 + now.getMinutes();
     let target = toMin(next.start);
     let diff = target - cur;
     if (diff <= 0) diff += 24 * 60;
+    // Caregiver-override: if upcoming caregiver window starts BEFORE
+    // the next shift change, the effective next handoff is to caregiver.
+    if (_cgUpcoming) {
+      const cgMinsFromNow = Math.round((_cgWinForHandoff.start - now.getTime()) / 60000);
+      if (cgMinsFromNow > 0 && cgMinsFromNow < diff) {
+        effectiveNext = { ...next, parent: "Caregiver" };
+        _effectiveColor = C.sage;
+        return cgMinsFromNow;
+      }
+    }
     return diff;
   })();
   const handoffH = Math.floor(minutesToHandoff / 60);
@@ -10821,7 +10843,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
 
   const parentColor = onDuty.parent === "Mommy" ? C.mommy : C.daddy;
   const viewerColor = currentUser === "Mommy" ? C.mommy : C.daddy;
-  const nextColor = next.parent === "Mommy" ? C.mommy : C.daddy;
+  const nextColor = _effectiveColor || (effectiveNext.parent === "Mommy" ? C.mommy : effectiveNext.parent === "Daddy" ? C.daddy : C.sage);
   const awayParent = onsite?.parent;
 
   // Show handoff note to whoever it's addressed to (regardless of who's on duty).
@@ -11314,7 +11336,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                 {tripUntil && ` until ${new Date(tripUntil).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`}
               </span>
             ) : (
-              <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{next.parent}</span></span>
+              <span>{countdownText} until handoff to <span style={{ color: isUrgent ? "#fff" : nextColor, fontWeight: 700 }}>{effectiveNext.parent}</span></span>
             )}
           </div>
           {/* v05.05bt346 — Per chat: 'maybe instead of making the whole
@@ -32501,13 +32523,43 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   const _d = _findShift("Daddy");
                   let _color = C.gold;
                   let _label = "NOW";
-                  if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
+                  // v05.05bt413 → bt414 — caregiver check FIRST.
+                  // bt413 handled state==='active'; bt414 also
+                  // acknowledges state==='upcoming' (window set up for
+                  // later today). Per chat: 'the slider in the schedule
+                  // still says now - your duty even when in caregiver
+                  // mode.' At 8:46p with a 9p-9a caregiver window
+                  // planned, the user considers themselves 'in
+                  // caregiver mode' even though the window is 14
+                  // minutes away. We honor that by appending '· CG Hp'
+                  // to whatever the normal label would say — Mommy is
+                  // still on duty until the handoff, but the slider
+                  // now visibly acknowledges the imminent transition.
+                  const _cgWin = getActiveOrUpcomingCaregiverWindow(events || [], now);
+                  const _caregiverActive = _cgWin && _cgWin.state === "active";
+                  if (_caregiverActive) { _color = C.sage; _label = "NOW · CAREGIVER"; }
+                  else if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
                   else if (_m && _d) { _color = C.gold; _label = "NOW · TOGETHER"; }
                   else if ((_m && currentUser === "Mommy") || (_d && currentUser === "Daddy")) {
                     _color = currentUser === "Mommy" ? C.mommy : C.daddy;
                     _label = "NOW · YOUR DUTY";
                   } else if (_m) { _color = C.mommy; _label = "NOW · MOMMY DUTY"; }
                   else if (_d) { _color = C.daddy; _label = "NOW · DADDY DUTY"; }
+                  // v05.05bt414 — Append upcoming-caregiver hint when
+                  // the user has a window set up later today. Shows
+                  // start time so they see at-a-glance when the handoff
+                  // happens.
+                  if (!_caregiverActive && _cgWin && _cgWin.state === "upcoming") {
+                    const startDate = new Date(_cgWin.start);
+                    if (!isNaN(startDate.getTime())) {
+                      const sh = startDate.getHours();
+                      const sm = startDate.getMinutes();
+                      const h12 = ((sh + 11) % 12) + 1;
+                      const ampm = sh < 12 ? "A" : "P";
+                      const startStr = sm > 0 ? `${h12}:${String(sm).padStart(2, "0")}${ampm}` : `${h12}${ampm}`;
+                      _label = `${_label} · CG ${startStr}`;
+                    }
+                  }
                   rows.push(
                     <div key={`nowline-${anchorKey}`}
                       data-now-line="1"
