@@ -15,12 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt417";
+const APP_VERSION = "2026.05.05bt418";
 const APP_BUILD_NOTES = [
-  "PARSER FIXES + DUE-DATE DETECTION. Per chat: user typed 'wash hair, R5, 1 hr' / 'map out day for bLG experiment, deep work, R5, 1 hr' / etc. and the brain dump produced wrong-duration tasks + a phantom 'deep' task. Plus 'SOP gap analysis due by Monday' had no visual treatment for the deadline.\\n\\n(1) MARKER_ONLY_RE EXTENDED. The comma-merge pre-pass (bt397) absorbs trailing marker-only segments back into the preceding task title — so 'wash hair, R5' merges into 'wash hair R5'. But the regex didn't include DURATION markers, so 'wash hair, R5, 1 hr' merged R5 but left '1 hr' as a separate phantom segment. Worse, when the next user line started with another short word ('deep'), the parser would merge them: '1 hr deep' parsed as a real task with effortMin=60 and title='deep' — which is exactly the R3 1h 'deep' row visible in the screenshot. Added duration patterns to MARKER_ONLY_RE: (\\\\d+(?:\\\\.\\\\d+)?\\\\s*(?:hrs?|hours?|mins?|minutes?|m|h)) plus 'half hour' / 'an hour' alternates.\\n\\n(2) BARE 'DEEP' AT END. The bt397 bare-word fallback only matched 'shallow $' at end of title because 'deep clean' / 'deep dive' are common verb phrases. But after the comma-merge pass, focus markers reliably land at the END, not in mid-title — so 'deep $' is safe. Extended the fallback regex to /\\\\b(deep|shallow)\\\\s*$/. Now 'wash hair R5 1 hr deep' (post-merge) parses to { title: 'wash hair', effortMin: 60, regretScore: 5, focusLevel: 'deep' }.\\n\\n(3) DUE-DATE DETECTION. New dueDate field on tasks. parseOneNlTask now detects three shapes BEFORE other parsers: weekday ('due by Monday' / 'due Friday'), relative ('due tomorrow' / 'due today' / 'due tmrw'), and numeric ('due 5/30' / 'due by 6/15/2026'). Weekday matches the NEXT occurrence (or +7 if it's the same day today). Phrase stripped from title; dueDate stored as YYYY-MM-DD. Both addBrainDump and the bt416 commitInlineSectionAdd helpers thread dueDate through to the saved task.\\n\\n(4) DUE TAG RENDER. Pile-row TaskRow renders a coral '⚑ DUE Mon 5/30' tag right after the title when dueDate is set + task not completed. Tag computes days-until and adjusts: today appends ' · TODAY' (still coral background, white text — urgent), tomorrow ' · TMRW' (same urgent style), negative ' · ND LATE' (overdue). All other future dates render as a coral outline pill (less alarming but still distinct). Title attribute on hover shows full date.\\n\\nDEFERRED to next build (bt418): suggested-times UX for the Scheduled section's '+ add' button (currently auto-slots into first fit via bt409 logic — user wants instead to see candidate times and pick); 'protected time' guard as due dates approach (auto-schedule + lock so it can't be displaced); tabbed cross-bucket quick add (the original bt417 plan).\\n\\nNOTE on duplication: I checked the bucket filters — forToday requires scheduledDate===today, backlog requires !scheduledDate. They're mutually exclusive at the data level. If the user is seeing the same title in two sections after this build, it's likely two SEPARATE tasks added via different code paths (e.g., brain dump → backlog + per-section '+ add' on Today). Send a screenshot of just the pile after bt417 deploys and I'll trace which paths fired.",
+  "URGENT PUMP SYNC + ROLLOVER DATA-LOSS FIX + CAREGIVER POLISH. Per chat (multiple items, one flagged NOW).\\n\\n(1) PUMP SYNC TO CADENCE CALENDAR [URGENT]. Per chat: 'pump sessions still are not syncing with my cadence calendar ... i need to plan my day.' Root cause: the timeline's pump blocks (pumpReminders) rendered ONLY from pumpPlan.manualSessions. When that array is empty — user hasn't manually edited the plan, or it got cleared — ZERO pumps appeared on the schedule, even though the user pumps on a regular cadence. The auto-spaced default existed only inside the Milk-tab pump card and never reached the timeline. New module-level getEffectivePumpSessions(pumpPlan) helper: returns manualSessions when present, else computes an evenly-spaced default across the wake window (wakeStart..wakeEnd, default 6a-10p) at ~3h cadence. pumpReminders now uses it, so the cadence calendar ALWAYS shows pump sessions to plan around.\\n\\n(2) ROLLOVER DATA-LOSS [CRITICAL]. Per chat: 'my uncompleted tasks still do not automatically roll over ... all my data disappears - even my unscheduled.' Two bugs in the bt415 effect: (a) ownerName filter required EXACT match to currentUser, so any task with no ownerName (or a slightly-off value) was SKIPPED — left stranded at its past scheduledDate, invisible on today's timeline. Relaxed to roll over tasks owned by currentUser OR untagged. (b) Effect deps were [hydrated, currentUser] — never re-fired across a midnight boundary if the app stayed open. Added a date-string dep so it re-runs when the calendar day changes.\\n\\n(3) RAILS SAGE UNDER CAREGIVER. Per chat: 'when under caregiver mode, the rails should be a greenish color to match caregiver mode.' railColorFor now returns C.sage for any slot that overlaps a caregiver window, regardless of which parent's shift it falls in.\\n\\n(4) HIDE FEED PREDICTIONS DURING CAREGIVER. Per chat: 'No need to have feeding and nap if baby is with caregiver - just clouds my space in the schedule.' feedPredictions chain now drops any predicted feed that overlaps a caregiver window. (Nap predictions aren't on the timeline yet — when that lands, same filter applies.)\\n\\n(5) LABEL: 'Scheduled for today'. Per chat: 'Also add scheduled FOR TODAY.' The Scheduled section header now reads 'Scheduled for today · N' to parallel 'Unscheduled for today · N'.\\n\\nSTILL NEED FROM USER: (a) the NOW slider you said was 'completely removed' under caregiver mode — the SCHEDULE-tab NOW line still renders ('NOW · CAREGIVER' + the live time, bt413). I suspect you mean the NOW-tab OnDutyCard, which collapses to a caregiver card without a time-progress display. Confirm which view and I'll restore the sliding time indicator there. (b) Undo scope. (c) 'if covering for daddy the rails…' — finish the sentence. (d) Timer pause/restart/manual-edit (Monday-style) — queued, need to know which timer (pump? task?).",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt417", summary: "NL parser fixes + due-date detection. (1) MARKER_ONLY_RE extended to include duration patterns ('1 hr', '30 min', '30m', '1h', 'half hour', 'an hour') so they merge back into the preceding task instead of becoming phantom segments. (2) Bare 'deep' / 'shallow' at end of title now matched as focus marker (was only 'shallow' before) — safe because focus markers reliably land at end after the comma-merge pass. (3) New dueDate detection: parses 'due by Monday', 'due Friday', 'due tomorrow', 'due 5/30' and stores YYYY-MM-DD. (4) Pile rows render coral '⚑ DUE Day M/D' tag for tasks with dueDate set. Filled when due today/tomorrow/overdue, outlined otherwise. addBrainDump + commitInlineSectionAdd both thread dueDate. Build verified clean via esbuild." },
+  { version: "2026.05.05bt418", summary: "Urgent pump sync + rollover fix + caregiver polish. (1) PUMP SYNC: timeline pump blocks rendered only from manualSessions; when empty, no pumps showed. New getEffectivePumpSessions helper falls back to an evenly-spaced default across the wake window at ~3h cadence. (2) ROLLOVER: relaxed the ownerName filter (untagged tasks were stranded at past dates and disappearing) + added a date-string dep so it re-fires at midnight. (3) Rails go sage for any slot overlapping a caregiver window. (4) Predicted feeds during caregiver windows are now hidden. (5) 'Scheduled' header renamed to 'Scheduled for today'. Build verified clean via esbuild." },
+  { version: "2026.05.05bt417", summary: "NL parser fixes + due-date detection. (1) MARKER_ONLY_RE extended to include duration patterns ('1 hr', '30 min', '30m', '1h', 'half hour', 'an hour') so they merge back into the preceding task instead of becoming phantom segments. (2) Bare 'deep' / 'shallow' at end of title now matched as focus marker. (3) New dueDate detection: parses 'due by Monday', 'due Friday', 'due tomorrow', 'due 5/30'. (4) Pile rows render coral '⚑ DUE Day M/D' tag for tasks with dueDate set. Build verified clean via esbuild." },
   { version: "2026.05.05bt416", summary: "Per-section add affordance + collapse defaults. (1) scheduledExpanded default flipped to false; taskPileExpanded + backlogExpanded already false — all three pile subsections collapsed on first render. (2) New '+ add' button on each of the three section headers (Scheduled mauve, Unscheduled-for-today gold, Backlog muted). Header restructured from single button to flex row with expand button + add button. (3) Tapping '+ add' opens an inline input below that section. Shared state since only one open at a time. Ref-based focus({preventScroll:true}) prevents iOS jump. (4) New commitInlineSectionAdd helper parses via parseNaturalLanguageTasks for time/duration extraction, routes by section: scheduled auto-slots via bt409 logic, today goes to unscheduled-for-today pile, backlog gets drawer:true. Build verified clean via esbuild." },
   { version: "2026.05.05bt415", summary: "Two fixes. (1) Title-tap on schedule rows: autoFocus on the inline title input was causing iOS Safari to scroll the page significantly to position the input above the keyboard. Replaced with ref-based focus({ preventScroll: true }) — keyboard still opens, page doesn't jump, UNSCHED + ⋯ buttons render as designed. (2) New App-level auto-rollover useEffect: on first load of each calendar day (per ll:lastRolloverDay localStorage key), sweeps all incomplete tasks owned by current user with scheduledDate < today and moves them to today as unscheduled (drawer:false, scheduledTime:null) so they appear in the 'unscheduled for today' pile awaiting re-slot. Build verified clean via esbuild." },
   { version: "2026.05.05bt414", summary: "Two caregiver-awareness fixes + journal date investigation. (1) Schedule NOW slider appends '· CG <startTime>' when an upcoming caregiver window exists today (color stays parent's). (2) OnDutyCard countdown overrides next to Caregiver when an upcoming window starts before the next shift change — so '1h 44m until handoff to Daddy' becomes '14m until handoff to Caregiver' when caregiver starts first. Sage color when caregiver overrides. (3) Journal date grouping issue (Wed May 27 entries shown when now is Tue) most likely caused by time-travel testing — events have real-future timestamps that bucket by their actual date. Not fixed in code; asking user to confirm cause. Build verified clean via esbuild." },
@@ -5904,10 +5905,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     let last;
     try { last = localStorage.getItem("ll:lastRolloverDay"); } catch { last = null; }
     if (last === todayISO_actual) return;
+    // v05.05bt418 — Per chat: 'my uncompleted tasks still do not
+    // automatically roll over ... all my data disappears - even my
+    // unscheduled.' Two fixes vs bt415:
+    //   (1) ownerName filter relaxed. bt415 required EXACT
+    //       ownerName === currentUser, so any task with no ownerName
+    //       (or a slightly-off value) was skipped → stranded at its
+    //       past scheduledDate → invisible on today's timeline. Now
+    //       we roll over tasks owned by currentUser OR untagged.
+    //   (2) The effect now depends on the calendar date string, so
+    //       it re-fires when the day rolls over while the app stays
+    //       open overnight (deps were [hydrated, currentUser] only).
+    let movedCount = 0;
     setTasks(prev => prev.map(t => {
       if (t.completedAt) return t;
-      if (t.ownerName !== currentUser) return t;
+      const ownerOk = !t.ownerName || t.ownerName === currentUser;
+      if (!ownerOk) return t;
       if (!t.scheduledDate || t.scheduledDate >= todayISO_actual) return t;
+      movedCount++;
       return {
         ...t,
         scheduledDate: todayISO_actual,
@@ -5918,7 +5933,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       };
     }));
     try { localStorage.setItem("ll:lastRolloverDay", todayISO_actual); } catch {}
-  }, [hydrated, currentUser]);
+  }, [hydrated, currentUser, (() => {
+    // Date-only key so the effect re-fires across a midnight boundary
+    // even if the app is left open. Recomputed each render; only
+    // changes when the calendar day changes.
+    const d = new Date(now);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  })()]);
 
   const uvNow = weather?.current?.uv_index ?? null;
   const tempNow = weather?.current?.temperature_2m ?? null;
@@ -23100,7 +23121,33 @@ function predictNapWindows(events, now) {
   return out.sort((a, b) => a.start - b.start);
 }
 
-// v05.05bt110 — Build wearable-pump windows from today's pump plan.
+// v05.05bt418 — Per chat (URGENT): 'pump sessions still are not
+// syncing with my cadence calendar ... i need to plan my day.' Root
+// cause: the timeline's pump blocks render ONLY from
+// pumpPlan.manualSessions. When that array is empty (user hasn't
+// manually edited the plan, or it got cleared), NO pumps appear on
+// the schedule — even though the user pumps on a regular cadence.
+// This helper returns manualSessions when present, else computes an
+// evenly-spaced default across the wake window at ~3h cadence so the
+// cadence calendar always shows pump sessions to plan around.
+function getEffectivePumpSessions(pumpPlan) {
+  const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
+  if (manual.length > 0) return manual;
+  const wakeStart = Number.isFinite(pumpPlan?.wakeStart) ? pumpPlan.wakeStart : 6;
+  const wakeEnd = Number.isFinite(pumpPlan?.wakeEnd) ? pumpPlan.wakeEnd : 22;
+  const span = Math.max(0, wakeEnd - wakeStart);
+  if (span === 0) return [];
+  const PUMP_INTERVAL = 3; // hours between sessions
+  const count = Math.max(2, Math.floor(span / PUMP_INTERVAL) + 1);
+  const step = count > 1 ? span / (count - 1) : 0;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(Math.round((wakeStart + i * step) * 10) / 10);
+  }
+  return out;
+}
+
+
 // Each upcoming planned pump becomes a 25-min wearable-only block.
 // User has to actually start the pump as wearable for the block to be
 // usable — block label makes that contingency explicit.
@@ -28719,6 +28766,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     const feedPredictions = (predictedFeeds || [])
       .filter(f => f.sampleSize >= 4)
       .filter(f => {
+        // v05.05bt418 — Per chat: 'No need to have feeding and nap if
+        // baby is with caregiver - just clouds my space in the
+        // schedule.' Drop predicted feeds that fall inside a caregiver
+        // window — the caregiver handles feeds, so they're noise on
+        // the parent's planning timeline.
+        const cgWins = getCaregiverWindows(events || [], now);
+        const fs = f.start.getTime(), fe = f.end.getTime();
+        if (cgWins.some(w => fs < w.end && fe > w.start)) return false;
+        return true;
+      })
+      .filter(f => {
         if (onsite) return false;
         const fH = f.start.getHours() + f.start.getMinutes() / 60;
         const findShift = (parent) => {
@@ -28757,8 +28815,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // so the user sees pumps inline with tasks/routines on the timeline.
     // Mommy-only. Past pumps still render so user can see what was
     // scheduled (the past-block dimming applies).
-    const pumpReminders = (currentUser === "Mommy" && Array.isArray(pumpPlan?.manualSessions))
-      ? pumpPlan.manualSessions
+    const pumpReminders = (currentUser === "Mommy")
+      ? getEffectivePumpSessions(pumpPlan)
           .filter(h => h >= 0 && h < 36) // sanity
           .map((h, i) => {
             const start = new Date(referenceDate);
@@ -33099,6 +33157,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   })();
                   const isMixedOwner = railSegments.length > 1;
                   const railColorFor = (segOwner) => {
+                    // v05.05bt418 — Per chat: 'when under caregiver
+                    // mode, the rails should be a greenish color to
+                    // match caregiver mode.' If this slot overlaps a
+                    // caregiver window, the rail goes sage regardless
+                    // of which parent's shift it falls in.
+                    if (overlapsCaregiver) return C.sage;
                     if (segOwner === "Daddy") return C.daddy;
                     if (segOwner === "joint") return C.gold;
                     if (segOwner === "Mommy") return C.mommy;
@@ -36134,7 +36198,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
                               color: C.mommy, textTransform: "uppercase",
-                            }}>Scheduled · {scheduled.length}</span>
+                            }}>Scheduled for today · {scheduled.length}</span>
                             <span style={{
                               marginLeft: "auto",
                               fontSize: 11, color: C.mommy, opacity: 0.5,
