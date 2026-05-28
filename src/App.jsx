@@ -15,12 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt418";
+const APP_VERSION = "2026.05.05bt421";
 const APP_BUILD_NOTES = [
-  "URGENT PUMP SYNC + ROLLOVER DATA-LOSS FIX + CAREGIVER POLISH. Per chat (multiple items, one flagged NOW).\\n\\n(1) PUMP SYNC TO CADENCE CALENDAR [URGENT]. Per chat: 'pump sessions still are not syncing with my cadence calendar ... i need to plan my day.' Root cause: the timeline's pump blocks (pumpReminders) rendered ONLY from pumpPlan.manualSessions. When that array is empty — user hasn't manually edited the plan, or it got cleared — ZERO pumps appeared on the schedule, even though the user pumps on a regular cadence. The auto-spaced default existed only inside the Milk-tab pump card and never reached the timeline. New module-level getEffectivePumpSessions(pumpPlan) helper: returns manualSessions when present, else computes an evenly-spaced default across the wake window (wakeStart..wakeEnd, default 6a-10p) at ~3h cadence. pumpReminders now uses it, so the cadence calendar ALWAYS shows pump sessions to plan around.\\n\\n(2) ROLLOVER DATA-LOSS [CRITICAL]. Per chat: 'my uncompleted tasks still do not automatically roll over ... all my data disappears - even my unscheduled.' Two bugs in the bt415 effect: (a) ownerName filter required EXACT match to currentUser, so any task with no ownerName (or a slightly-off value) was SKIPPED — left stranded at its past scheduledDate, invisible on today's timeline. Relaxed to roll over tasks owned by currentUser OR untagged. (b) Effect deps were [hydrated, currentUser] — never re-fired across a midnight boundary if the app stayed open. Added a date-string dep so it re-runs when the calendar day changes.\\n\\n(3) RAILS SAGE UNDER CAREGIVER. Per chat: 'when under caregiver mode, the rails should be a greenish color to match caregiver mode.' railColorFor now returns C.sage for any slot that overlaps a caregiver window, regardless of which parent's shift it falls in.\\n\\n(4) HIDE FEED PREDICTIONS DURING CAREGIVER. Per chat: 'No need to have feeding and nap if baby is with caregiver - just clouds my space in the schedule.' feedPredictions chain now drops any predicted feed that overlaps a caregiver window. (Nap predictions aren't on the timeline yet — when that lands, same filter applies.)\\n\\n(5) LABEL: 'Scheduled for today'. Per chat: 'Also add scheduled FOR TODAY.' The Scheduled section header now reads 'Scheduled for today · N' to parallel 'Unscheduled for today · N'.\\n\\nSTILL NEED FROM USER: (a) the NOW slider you said was 'completely removed' under caregiver mode — the SCHEDULE-tab NOW line still renders ('NOW · CAREGIVER' + the live time, bt413). I suspect you mean the NOW-tab OnDutyCard, which collapses to a caregiver card without a time-progress display. Confirm which view and I'll restore the sliding time indicator there. (b) Undo scope. (c) 'if covering for daddy the rails…' — finish the sentence. (d) Timer pause/restart/manual-edit (Monday-style) — queued, need to know which timer (pump? task?).",
+  "PUMP TIMELINE NOW MATCHES THE NOW CARD. Per chat: 'did you make sure pump sessions match the Now card and whatever it says is my next pump?' — they didn't, and this fixes it.\\n\\nTHE MISMATCH: the Now card's 'target 9:36a' comes from nextPumpAt (App-level useMemo). bt420's getEffectivePumpSessions projected with its OWN 3h cadence anchored to the last logged pump — so with a 7:36a last pump it would have projected 10:36a while the card said 9:36a. Two sources, two answers.\\n\\nTHE FIX: (1) Threaded nextPumpAt + lastPump through App → ShiftsView → TodayTaskPlanCard so the timeline can see the exact value the Now card uses. (2) getEffectivePumpSessions(pumpPlan, now, nextPumpAt) now: honors manualSessions ONLY when fresh (same manualSessionsDate===today rule nextPumpAt uses — so a stale overnight plan no longer leaks onto the timeline while the card ignores it); when the fresh plan has a future session, returns it wholesale (card reads the same array → guaranteed agreement); otherwise PROJECTS with the first upcoming session ANCHORED to nextPumpAt exactly, then +3h cadence to wakeEnd. Overnight nextPumpAt (rolls past midnight) folds to a >24 fraction so the sanity filter keeps it. Net: the first upcoming 🍼 block on the cadence calendar is always the same time the Now card shows as your next pump.\\n\\nNo other behavior changed. Still queued: Today's Runway collapse + sticky header, timed Trade-Ideas snooze. Still pending answers: undo scope, 'covering rails' sentence, which timer for pause/restart.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt418", summary: "Urgent pump sync + rollover fix + caregiver polish. (1) PUMP SYNC: timeline pump blocks rendered only from manualSessions; when empty, no pumps showed. New getEffectivePumpSessions helper falls back to an evenly-spaced default across the wake window at ~3h cadence. (2) ROLLOVER: relaxed the ownerName filter (untagged tasks were stranded at past dates and disappearing) + added a date-string dep so it re-fires at midnight. (3) Rails go sage for any slot overlapping a caregiver window. (4) Predicted feeds during caregiver windows are now hidden. (5) 'Scheduled' header renamed to 'Scheduled for today'. Build verified clean via esbuild." },
+  { version: "2026.05.05bt421", summary: "Pump timeline now matches the Now card. The card's next-pump target comes from nextPumpAt; bt420's projection used its own cadence anchored to the last pump, so they could disagree (card 9:36a vs timeline 10:36a). Threaded nextPumpAt + lastPump through App → ShiftsView → TodayTaskPlanCard. getEffectivePumpSessions now (a) honors manualSessions only when fresh — same rule nextPumpAt uses, (b) returns the fresh plan wholesale when it has a future session so both read the same array, (c) otherwise anchors the first projected session to nextPumpAt exactly + 3h cadence. Build verified clean via esbuild." },
+  { version: "2026.05.05bt420", summary: "Pump-sync real fix + caregiver polish. (1) PUMP: manualSessions holds only past sessions; getEffectivePumpSessions(pumpPlan, now) projects future sessions at ~3h cadence when none exist ahead of now. (2) Current-block ring sage (not gold) under caregiver. (3) Boss/solo mode drops '· CAREGIVER' suffix on NOW line. (4) Trade Ideas suppressed during caregiver windows. Build verified clean via esbuild." },
+  { version: "2026.05.05bt419", summary: "NOW-line visibility fix + current-block highlight. Brighter CAREGIVER_NOW #A8D49A, thicker line, bigger pills with glow. New isNowBlock inset ring. Build verified clean via esbuild." },
   { version: "2026.05.05bt417", summary: "NL parser fixes + due-date detection. (1) MARKER_ONLY_RE extended to include duration patterns ('1 hr', '30 min', '30m', '1h', 'half hour', 'an hour') so they merge back into the preceding task instead of becoming phantom segments. (2) Bare 'deep' / 'shallow' at end of title now matched as focus marker. (3) New dueDate detection: parses 'due by Monday', 'due Friday', 'due tomorrow', 'due 5/30'. (4) Pile rows render coral '⚑ DUE Day M/D' tag for tasks with dueDate set. Build verified clean via esbuild." },
   { version: "2026.05.05bt416", summary: "Per-section add affordance + collapse defaults. (1) scheduledExpanded default flipped to false; taskPileExpanded + backlogExpanded already false — all three pile subsections collapsed on first render. (2) New '+ add' button on each of the three section headers (Scheduled mauve, Unscheduled-for-today gold, Backlog muted). Header restructured from single button to flex row with expand button + add button. (3) Tapping '+ add' opens an inline input below that section. Shared state since only one open at a time. Ref-based focus({preventScroll:true}) prevents iOS jump. (4) New commitInlineSectionAdd helper parses via parseNaturalLanguageTasks for time/duration extraction, routes by section: scheduled auto-slots via bt409 logic, today goes to unscheduled-for-today pile, backlog gets drawer:true. Build verified clean via esbuild." },
   { version: "2026.05.05bt415", summary: "Two fixes. (1) Title-tap on schedule rows: autoFocus on the inline title input was causing iOS Safari to scroll the page significantly to position the input above the keyboard. Replaced with ref-based focus({ preventScroll: true }) — keyboard still opens, page doesn't jump, UNSCHED + ⋯ buttons render as designed. (2) New App-level auto-rollover useEffect: on first load of each calendar day (per ll:lastRolloverDay localStorage key), sweeps all incomplete tasks owned by current user with scheduledDate < today and moves them to today as unscheduled (drawer:false, scheduledTime:null) so they appear in the 'unscheduled for today' pile awaiting re-slot. Build verified clean via esbuild." },
@@ -7014,6 +7016,8 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             tasks={tasks} setTasks={setTasks}
             parentAway={parentAway} setParentAway={setParentAway}
             pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
+           nextPumpAt={nextPumpAt} lastPump={lastPump}
+            nextPumpAt={nextPumpAt} lastPump={lastPump}
             todaySetup={todaySetup} setTodaySetup={setTodaySetup}
             focusProfile={focusProfile} setFocusProfile={setFocusProfile}
             dailyEnergy={dailyEnergy} setDailyEnergy={setDailyEnergy}
@@ -18577,7 +18581,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -23121,31 +23125,69 @@ function predictNapWindows(events, now) {
   return out.sort((a, b) => a.start - b.start);
 }
 
-// v05.05bt418 — Per chat (URGENT): 'pump sessions still are not
-// syncing with my cadence calendar ... i need to plan my day.' Root
-// cause: the timeline's pump blocks render ONLY from
-// pumpPlan.manualSessions. When that array is empty (user hasn't
-// manually edited the plan, or it got cleared), NO pumps appear on
-// the schedule — even though the user pumps on a regular cadence.
-// This helper returns manualSessions when present, else computes an
-// evenly-spaced default across the wake window at ~3h cadence so the
-// cadence calendar always shows pump sessions to plan around.
-function getEffectivePumpSessions(pumpPlan) {
-  const manual = Array.isArray(pumpPlan?.manualSessions) ? pumpPlan.manualSessions : [];
-  if (manual.length > 0) return manual;
+// v05.05bt418 → bt420 — Per chat (URGENT, reported 3×): 'pump
+// sessions still are not syncing with my cadence calendar.' The real
+// root cause (bt418's empty-array fallback wasn't enough): manualSessions
+// typically holds only LOGGED/PAST sessions (e.g. [7.6] for the 7:36a
+// pump). The 'target 9:36a' shown in the Milk card comes from a SEPARATE
+// nextPumpAt computation that never writes back to manualSessions. So the
+// timeline — which reads manualSessions — shows past pumps but ZERO
+// upcoming ones. This helper now PROJECTS future sessions at ~3h cadence
+// whenever manualSessions has no entry at/after now, so the cadence
+// calendar always shows the upcoming pumps the user needs to plan around.
+function getEffectivePumpSessions(pumpPlan, now, nextPumpAt) {
   const wakeStart = Number.isFinite(pumpPlan?.wakeStart) ? pumpPlan.wakeStart : 6;
   const wakeEnd = Number.isFinite(pumpPlan?.wakeEnd) ? pumpPlan.wakeEnd : 22;
-  const span = Math.max(0, wakeEnd - wakeStart);
-  if (span === 0) return [];
   const PUMP_INTERVAL = 3; // hours between sessions
-  const count = Math.max(2, Math.floor(span / PUMP_INTERVAL) + 1);
-  const step = count > 1 ? span / (count - 1) : 0;
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    out.push(Math.round((wakeStart + i * step) * 10) / 10);
+  const nowH = now ? (now.getHours() + now.getMinutes() / 60) : wakeStart;
+
+  // v05.05bt421 — Per chat: 'did you make sure pump sessions match the
+  // Now card and whatever it says is my next pump?' To GUARANTEE the
+  // timeline agrees with the Now card, we honor manualSessions only
+  // when fresh (same freshness rule nextPumpAt uses), and we ANCHOR
+  // the first upcoming projected session to nextPumpAt itself (the
+  // exact value the Now card shows). Subsequent sessions follow at
+  // PUMP_INTERVAL cadence up to wakeEnd.
+  const todayKey = (() => {
+    const d = new Date(now || Date.now()); d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  })();
+  const planIsFresh = !pumpPlan?.manualSessionsDate
+    || pumpPlan.manualSessionsDate === todayKey;
+  const manual = (planIsFresh && Array.isArray(pumpPlan?.manualSessions))
+    ? pumpPlan.manualSessions.filter(h => Number.isFinite(h))
+    : [];
+
+  // If the fresh plan already has a session at/after now, trust the
+  // plan wholesale — nextPumpAt picks its next-due entry from this same
+  // array, so the timeline and the card are reading identical data.
+  const hasFuture = manual.some(h => h >= nowH - 0.25);
+  if (manual.length > 0 && hasFuture) {
+    return [...manual].sort((a, b) => a - b);
   }
-  return out;
+
+  // Otherwise PROJECT. Anchor to nextPumpAt (what the Now card shows)
+  // when available, else last logged session + interval, else now.
+  let anchorH;
+  if (nextPumpAt instanceof Date && !isNaN(nextPumpAt.getTime())) {
+    anchorH = nextPumpAt.getHours() + nextPumpAt.getMinutes() / 60;
+    // nextPumpAt may roll to tomorrow (overnight) — fold back into a
+    // same-day fraction >24 so the sanity filter (h < 36) keeps it.
+    if (anchorH < nowH - 1) anchorH += 24;
+  } else {
+    const lastManual = manual.length > 0 ? Math.max(...manual) : null;
+    anchorH = lastManual != null ? lastManual + PUMP_INTERVAL : Math.max(wakeStart, nowH);
+  }
+  if (anchorH < nowH) anchorH = nowH;
+
+  const projected = [];
+  for (let h = anchorH; h <= wakeEnd + 0.01; h += PUMP_INTERVAL) {
+    projected.push(Math.round(h * 10) / 10);
+  }
+  // Keep past logged sessions (dimmed) + the projected upcoming ones.
+  return [...manual, ...projected].sort((a, b) => a - b);
 }
+
 
 
 // Each upcoming planned pump becomes a 25-min wearable-only block.
@@ -27347,7 +27389,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -28816,7 +28858,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // Mommy-only. Past pumps still render so user can see what was
     // scheduled (the past-block dimming applies).
     const pumpReminders = (currentUser === "Mommy")
-      ? getEffectivePumpSessions(pumpPlan)
+      ? getEffectivePumpSessions(pumpPlan, now, nextPumpAt)
           .filter(h => h >= 0 && h < 36) // sanity
           .map((h, i) => {
             const start = new Date(referenceDate);
@@ -31987,8 +32029,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             {/* v05.05bt211 — Trade suggestions. Surfaces 1-2 windows
                 where Daddy could take baby duty and unlock significant
                 deep focus for the user. Informational for v1 — tap
-                later could pre-fill a swap request. */}
-            {!isTomorrow && currentUser === "Mommy" && tradeSuggestions.length > 0 && !tradePanelDismissed && (
+                later could pre-fill a swap request.
+                v05.05bt420 — Per chat: 'trade ideas do not apply when
+                caregiver has baby.' When a caregiver window is active,
+                trading shifts with Daddy is moot — the caregiver
+                already has Solène — so suppress the banner entirely. */}
+            {!isTomorrow && currentUser === "Mommy" && tradeSuggestions.length > 0 && !tradePanelDismissed
+              && !(getActiveOrUpcomingCaregiverWindow(events, now)?.state === "active") && (
               <div style={{
                 background: `${C.daddy}0e`,
                 border: `1px dashed ${C.daddy}55`,
@@ -32763,6 +32810,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   const _d = _findShift("Daddy");
                   let _color = C.gold;
                   let _label = "NOW";
+                  // v05.05bt419 — Per chat: 'there is no NOW slider
+                  // that shows up at all.' The sage NOW line from bt413
+                  // (#7B9B6E) is too low-luminance on the dark Cadence
+                  // bg — it renders nearly invisible vs the bright
+                  // mauve/gold lines. Use a BRIGHTER sage just for the
+                  // NOW line so caregiver mode stays visible. The line
+                  // is a transient indicator; it earns the extra pop.
+                  const CAREGIVER_NOW = "#A8D49A"; // brightened sage
                   // v05.05bt413 → bt414 — caregiver check FIRST.
                   // bt413 handled state==='active'; bt414 also
                   // acknowledges state==='upcoming' (window set up for
@@ -32777,7 +32832,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   // now visibly acknowledges the imminent transition.
                   const _cgWin = getActiveOrUpcomingCaregiverWindow(events || [], now);
                   const _caregiverActive = _cgWin && _cgWin.state === "active";
-                  if (_caregiverActive) { _color = C.sage; _label = "NOW · CAREGIVER"; }
+                  if (_caregiverActive) {
+                    _color = CAREGIVER_NOW;
+                    // v05.05bt420 — Per chat: 'since i am at work under
+                    // boss mode then NOW is sufficient when under
+                    // caregiver mode so that colleagues don't see it.'
+                    // In solo/Cadence (boss) mode, drop the '· CAREGIVER'
+                    // suffix for discretion — just 'NOW'. The sage color
+                    // is subtle enough to not read as a personal status.
+                    _label = productMode === "solo" ? "NOW" : "NOW · CAREGIVER";
+                  }
                   else if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
                   else if (_m && _d) { _color = C.gold; _label = "NOW · TOGETHER"; }
                   else if ((_m && currentUser === "Mommy") || (_d && currentUser === "Daddy")) {
@@ -32808,25 +32872,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         "--nl-color": _color,
                         position: "relative",
                         height: 0, margin: "0 14px",
-                        borderTop: `1.5px solid ${_color}`,
+                        borderTop: `2.5px solid ${_color}`,
                         zIndex: 2,
                       }}>
                       <span className="nl-now-pill-pulse"
                         style={{
                           "--nl-color": _color,
-                          position: "absolute", top: -10, left: 0,
-                          background: _color, padding: "3px 9px",
-                          font: "800 8.5px/1 'JetBrains Mono', monospace",
-                          letterSpacing: "0.18em", color: C.bg,
+                          position: "absolute", top: -11, left: 0,
+                          background: _color, padding: "4px 10px",
+                          font: "800 9px/1 'JetBrains Mono', monospace",
+                          letterSpacing: "0.16em", color: "#1c1820",
                           borderRadius: 4,
+                          boxShadow: `0 1px 6px -1px ${_color}`,
                         }}>{_label}</span>
                       <span className="nl-now-pill-pulse"
                         style={{
                           "--nl-color": _color,
-                          position: "absolute", top: -9, right: 0,
-                          background: _color, padding: "3px 7px",
-                          font: "700 9px/1 'JetBrains Mono', monospace",
-                          color: C.bg, borderRadius: 4,
+                          position: "absolute", top: -10, right: 0,
+                          background: _color, padding: "4px 8px",
+                          font: "700 9.5px/1 'JetBrains Mono', monospace",
+                          color: "#1c1820", borderRadius: 4,
+                          boxShadow: `0 1px 6px -1px ${_color}`,
                         }}>{nowFmt}</span>
                     </div>
                   );
@@ -32989,6 +33055,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   // view excludes this (everything is future).
                   const isPast = !isTomorrow && slot.end <= now;
                   const isPastFree = isFree && isPast;
+                  // v05.05bt419 — Per chat: 'the time block we are in
+                  // is no longer highlighted.' Flag the slot whose
+                  // [start, end) contains now so we can give it a gentle
+                  // inset glow — the bright NOW line used to be the
+                  // visual anchor, but the dim sage caregiver version
+                  // lost that. This makes 'where am I right now' obvious
+                  // regardless of the NOW-line color.
+                  const isNowBlock = !isTomorrow &&
+                    slot.start.getTime() <= now.getTime() &&
+                    now.getTime() < slot.end.getTime();
                   const fmt = d => fmtTimeShort(d);
                   const tag = getBlockTag(slot);
                   const icon = getBlockIcon(slot);
@@ -33315,6 +33391,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       ...(justMoved ? {
                         boxShadow: `inset 0 0 0 2px ${C.gold}99, 0 0 14px -2px ${C.gold}66`,
                         animation: "ll-glow-pulse 1.4s ease-out infinite",
+                      } : isNowBlock ? {
+                        // v05.05bt419 → bt420 — Current block inset ring.
+                        // Per chat: 'if under caregiver mode then how
+                        // come the rails and the current task box is
+                        // still pink or blue? should be neutral or
+                        // indicative of caregiver.' Ring goes sage when
+                        // this slot overlaps a caregiver window, else
+                        // the neutral gold anchor.
+                        boxShadow: `inset 0 0 0 1.5px ${overlapsCaregiver ? C.sage : C.gold}77`,
                       } : {}),
                       // v05.05bt280 — Bedtime: thick double-border above as HARD STOP marker
                       ...(slot.id === "bedtime" ? {
