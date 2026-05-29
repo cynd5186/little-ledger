@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt427";
+const APP_VERSION = "2026.05.05bt429";
 const APP_BUILD_NOTES = [
-  "THREE BUILDS FROM YOUR ANSWERS (Q3, Q7, Q8).\\n\\n(1) TASK TIMER PAUSE / RESUME / DONE / MANUAL-EDIT (Q3 = 'task time on task timer'). The single ⏸ button used to STOP and mark complete — so anyone tapping it to pause actually lost the task. Now three distinct controls live in the time column on running/paused task and routine rows:\\n  • ⏸ pause (gold) — banks the elapsed time into a new accumulatedMin field; you can resume later without losing your count.\\n  • ▶ resume (sage) — restarts the timer, continues counting from the banked total.\\n  • ✓ done (coral) — commits the final total as actualMin, marks complete.\\nLong-press the elapsed display ('17m', '34m', etc.) → window.prompt opens to manually edit elapsed minutes (e.g. if you forgot to start the timer for 20m). Works on both tasks (slot.accumulatedMin) and routines (rtTimer.accumulatedMin). Existing actualMin / completion behavior unchanged.\\n\\n(2) CONCURRENT SYNTAX CANONICAL (Q7 = 'you pick'). Locked the recommended syntax to 'while' (simplest English keyword, lowest typing friction). Placeholder in the inline add input now reads 'while gel running 25m'. Parser still accepts ‖ and 'meanwhile' as conveniences — removing them was unnecessary work and might break habits.\\n\\n(3) NOTIFICATION FATIGUE / OVERLAP DEDUP (Q8 = yes). New overlapWarningsUnresolved memo filters overlapWarnings by checking if both members of each pair have a _compressedByOverlap flag set in the dayTimeline (meaning the timeline already auto-shrunk them into viable shorter slots). Pairs that were auto-resolved silently no longer trigger the banner. The banner only flags genuinely unresolved conflicts — embodies your principle 'Notify only when user must act. Auto-resolve silently with row-level badge when we succeed. Banner only when we failed and need help.'\\n\\nDROPPED (your answers): Q2 (rails covering), Q4 (Wed May 27 journal), Q9 (audit summary), Q10 (concurrent pill on pile rows). Q6 (free host slot for scheduling) re-asked with example in chat. Q1 (universal undo) + Q5 (real browser notifications) require larger M-L builds — queued, ready when usage permits. Build verified clean via esbuild.",
+  "HOTFIX: 'Cannot access pa before initialization' render error. Per chat with stack trace. Root cause was in bt427 (not bt428): the overlapWarningsUnresolved useMemo was declared at ~line 28246, but it reads dayTimeline which is declared at ~line 28880 — so the useMemo factory ran BEFORE dayTimeline existed, causing a temporal dead zone (TDZ) on first render. Minifier rename made it show as 'pa' in the deployed bundle.\\n\\nFIX: relocated overlapWarningsUnresolved to AFTER the dayTimeline useMemo (now at ~line 29272). Order is now: overlapWarnings (line 28214) → dayTimeline (line 28877) → overlapWarningsUnresolved (line 29272). All references resolved at definition time.\\n\\nAlso inlined the PASSIVE_VERB_LOOKUP table inside detectPassive() to remove a SECOND potential TDZ source (bt428 left the const at module level after parseOneNlTask, which could have failed if any module-init code called the parser before the const was reached). Function declarations are hoisted; const declarations are not — inlining the lookup eliminates any temporal dependency.\\n\\nBoth changes are safety-net fixes — the user's data is untouched. All bt428 features (passive task detection, ⏳ toggle, freed-time strip, FILL picker) are intact and now load successfully. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt429", summary: "HOTFIX for bt427 TDZ render error 'Cannot access pa before initialization'. overlapWarningsUnresolved useMemo was declared before dayTimeline (which it reads), causing TDZ on first render. Relocated to after dayTimeline. Also inlined PASSIVE_VERB_LOOKUP inside detectPassive() to remove a second potential TDZ source from bt428. All bt428 features intact. Build verified clean via esbuild." },
+  { version: "2026.05.05bt428", summary: "Concurrent/passive tasks built (option 2 + 3 hybrid). Parser auto-detects passive verbs (laundry/incubation/dishwasher/etc.) and sets isPassive + handleTimeMin. New ⏳ toggle on pile rows lets user manually mark/un-mark + an auto-detect badge ('FREES Xm+') confirms the state. Passive scheduled tasks render with a sage-dashed freed-time strip below the title: '+ Xm FREED · light tasks ok' with a FILL button that opens a bottom-sheet picker of light tasks that fit. Selected task stamps slottedIntoFreedTimeOf on the chosen task and renders INSIDE the host's strip. Dedup filters slotted tasks out of the pile + timeline so they only appear in the strip. Defaults: per-verb handle-time lookup (5/2/0 min by verb category); FILL opens picker (not auto-pick). Build verified clean via esbuild." },
   { version: "2026.05.05bt427", summary: "Three builds from user answers. (1) Task timer pause/resume/done/manual-edit — replaced single 'stops and completes' button with ⏸ pause / ▶ resume / ✓ done; new accumulatedMin field on tasks + routineTimers banks elapsed across pause cycles; long-press elapsed to manually edit. (2) Concurrent syntax: 'while' locked as canonical recommendation in input placeholder; parser still accepts ‖ and 'meanwhile'. (3) Overlap notification dedup: new overlapWarningsUnresolved memo filters pairs where both members were auto-compressed into viable slots — banner only fires for genuinely unresolved conflicts. Build verified clean via esbuild." },
   { version: "2026.05.05bt426", summary: "Four fixes from screenshot feedback. (1) Slot tier badge redundancy: removed badge on free blocks since middle of card already shows focus level there; kept on task/routine rows where it adds info. (2) Today's Runway now shows in tomorrow view too — dropped !isTomorrow guard. (3) Cadence sub-header (day toggle + h1) now sticks beneath the LL top header (top:56, zIndex:4) so you can switch days mid-scroll. (4) Renamed 'Unscheduled for today' → 'Not yet scheduled' per user request. Build verified clean via esbuild." },
   { version: "2026.05.05bt425", summary: "Today's Runway card now collapsible. New runwayCollapsed state persists via ll:runwayCollapsed localStorage. Eyebrow became a full-width toggle button with rotating chevron; when collapsed, an italic Cormorant chip beside the eyebrow shows 'Xh Ym deep · Xh Ym light' totals so you still see runway at a glance. Body (deep source breakdown, stretches, fit status, meetings) is conditionally rendered. Build verified clean via esbuild." },
@@ -24393,7 +24395,39 @@ function parseOneNlTask(text) {
   if (effortMin >= 30 && /\bemail|\bemails|\binbox\b/i.test(title)) {
     cadence = 15;
   }
-  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore, dueDate, concurrentItems };
+  // v05.05bt428 — Auto-detect passive tasks (laundry / incubation /
+  // dishwasher / etc.). Marks isPassive + handleTimeMin if a known
+  // verb is found in the title; user can override via the ⏳ pile-row
+  // toggle. Computed last so all earlier title-stripping has settled.
+  const { isPassive, handleTimeMin } = detectPassive(title);
+  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore, dueDate, concurrentItems, isPassive, handleTimeMin };
+}
+
+// v05.05bt428 → bt429 — Per chat: app hit 'Cannot access pa before
+// initialization' TDZ error after bt428. Root cause: PASSIVE_VERB_LOOKUP
+// was a module-level const declared AFTER parseOneNlTask, and the
+// parser called detectPassive which referenced it. If anything
+// touched parseOneNlTask during module init (e.g., a useState
+// initializer running before line ~24410), TDZ. Fix: inline the
+// table inside the function so the lookup is created on each call
+// — no temporal dependency, slight perf cost is negligible (called
+// only on task creation).
+function detectPassive(title) {
+  if (!title || typeof title !== "string") return { isPassive: false, handleTimeMin: null };
+  const lookup = [
+    // 5-min loaders (you load, then walk away)
+    { re: /\b(laundry|wash(?:ing)?|laundry\s*load|dishwasher|dishes(?:\s+running)?)\b/i, handleMin: 5 },
+    // 2-min set-and-wait lab tasks
+    { re: /\b(incubat\w*|calibrat\w*|equilibrat\w*|charg(?:e|ing)|centrifug\w*|spin(?:ning)?)\b/i, handleMin: 2 },
+    // Set-and-forget (no real handle time)
+    { re: /\b(simmer\w*|bak(?:e|ing)|roast\w*|brew(?:ing)?|steep\w*|defrost\w*|thaw\w*|rise|proof)\b/i, handleMin: 0 },
+    // Lab "running" — gel running / column running etc.
+    { re: /\b(gel\s+running|column\s+running|running\s+(?:gel|column|wb|western)|wb\s+running)\b/i, handleMin: 2 },
+  ];
+  for (const v of lookup) {
+    if (v.re.test(title)) return { isPassive: true, handleTimeMin: v.handleMin };
+  }
+  return { isPassive: false, handleTimeMin: null };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -27570,6 +27604,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // null when collapsed. Add-item drafts so user can type a new
   // concurrent item inline at the bottom of the tray.
   const [expandedConcurrentId, setExpandedConcurrentId] = useState(null);
+  // v05.05bt428 — Freed-time FILL picker. When user taps "+ FILL" on a
+  // passive task's freed strip, this stores { hostId, freedMin,
+  // freedStart } and a modal renders the fitting light tasks from
+  // the pile. Picking one stamps slottedIntoFreedTimeOf + scheduledTime
+  // on the chosen task so the host slot's strip shows it inline.
+  const [freedFillPickerFor, setFreedFillPickerFor] = useState(null);
   const [concurrentAddDraft, setConcurrentAddDraft] = useState("");
   // Toggle a concurrent item's completedAt for a given task.
   const toggleConcurrentItem = (taskId, itemId) => {
@@ -28204,12 +28244,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // was shrunk to fit and still retained at least half its original
   // duration (a 'viable' compression). Pairs where neither or only one
   // side was compressed remain in the banner so the user knows to act.
-  const overlapWarningsUnresolved = useMemo(() => {
-    const compressedIds = new Set(
-      (dayTimeline || []).filter(s => s && s._compressedByOverlap > 0 && s.id).map(s => s.id)
-    );
-    return overlapWarnings.filter(w => !(compressedIds.has(w.a.id) && compressedIds.has(w.b.id)));
-  }, [overlapWarnings, dayTimeline]);
+  // v05.05bt428 → bt429 — Moved AFTER dayTimeline declaration to fix
+  // TDZ error 'Cannot access pa before initialization'. See line ~28880
+  // for the actual definition.
   const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
   // v05.05bt402 — Per chat: 'still an issue with some of the
   // notifications not being able to be ignored or dismissed.' Both
@@ -28414,6 +28451,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       dueDate: first.dueDate || null,
       // v05.05bt423 — Carry parser-detected concurrent items.
       concurrentItems: Array.isArray(first.concurrentItems) && first.concurrentItems.length > 0 ? first.concurrentItems : undefined,
+      // v05.05bt428 — Auto-detected passive verb (laundry, incubation,
+      // dishwasher, etc.). handleTimeMin is the active portion at the
+      // start; the rest of the task duration is "freed" for light tasks.
+      isPassive: first.isPassive || undefined,
+      handleTimeMin: Number.isFinite(first.handleTimeMin) ? first.handleTimeMin : undefined,
     };
     if (section === "scheduled") {
       // Auto-slot into next workable block fitting the task's effort.
@@ -28698,6 +28740,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       dueDate: p.dueDate || null,
       // v05.05bt423 — Carry parser-detected concurrent items.
       concurrentItems: Array.isArray(p.concurrentItems) && p.concurrentItems.length > 0 ? p.concurrentItems : undefined,
+      // v05.05bt428 — Auto-detected passive verb.
+      isPassive: p.isPassive || undefined,
+      handleTimeMin: Number.isFinite(p.handleTimeMin) ? p.handleTimeMin : undefined,
       sequenceId: p.sequenceId,
       sequenceIndex: p.sequenceIndex,
       sequenceTotal: p.sequenceTotal,
@@ -28815,6 +28860,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // so completed entries are included; drawer items still excluded.
   const scheduledTasks = myTasks
     .filter(t => t.scheduledTime && !t.drawer)
+    // v05.05bt428 — Tasks slotted into a passive host's freed time
+    // render INSIDE the host's freed strip; don't also render them
+    // as their own slot on the timeline (would duplicate visually).
+    .filter(t => !t.slottedIntoFreedTimeOf)
     .map(t => {
       const [h, m] = t.scheduledTime.split(":").map(Number);
       // v05.05bt160 — anchor scheduled tasks to referenceDate so they
@@ -29222,6 +29271,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     };
     return autoResolveOverlaps(splitFreeAtBoundaries(rawTimeline));
   }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan, appointments]);
+
+  // v05.05bt427 (relocated bt429) — Per chat (Q8): 'Notify only when
+  // user must act. Auto-resolve silently with row-level badge when we
+  // succeed. Banner only when we failed and need help.' If the
+  // timeline already auto-compressed BOTH members of an overlap pair
+  // into viable shorter slots, the situation is handled visually —
+  // drop those pairs from the banner so it only flags genuinely
+  // unresolved conflicts. Must be declared AFTER dayTimeline (bt429
+  // TDZ fix) since it reads it.
+  const overlapWarningsUnresolved = useMemo(() => {
+    const compressedIds = new Set(
+      (dayTimeline || []).filter(s => s && s._compressedByOverlap > 0 && s.id).map(s => s.id)
+    );
+    return overlapWarnings.filter(w => !(compressedIds.has(w.a.id) && compressedIds.has(w.b.id)));
+  }, [overlapWarnings, dayTimeline]);
 
   // Derive available blocks today: off-duty windows from the current
   // user's shift schedule (when they have time to themselves), plus
@@ -34555,6 +34619,102 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           </span>
                           )}
                         </div>
+                        {/* v05.05bt428 — Per chat: 'i like option 2 and 3'.
+                            Freed-time strip for passive tasks (option D
+                            from the prior round, rendered when the host
+                            task has isPassive=true). The host owns the
+                            full duration; handleTimeMin is hands-on at
+                            the start; the rest is FREED for a light
+                            task. Strip shows the freed minutes + an "in"
+                            time range + a FILL button. If a task is
+                            already slotted INTO this freed time (via
+                            slottedIntoFreedTimeOf), it renders inline
+                            instead of the FILL button. */}
+                        {isTask && slot.isPassive && (() => {
+                          const handleMin = Number.isFinite(slot.handleTimeMin) ? slot.handleTimeMin : 5;
+                          const totalMin = slot.durationMin || 0;
+                          const freedMin = Math.max(0, totalMin - handleMin);
+                          if (freedMin < 5) return null; // not worth surfacing
+                          // Freed window start = slot.start + handleMin
+                          const freedStart = new Date(slot.start.getTime() + handleMin * 60000);
+                          const freedEnd = slot.end;
+                          const filledTask = (tasks || []).find(t => t.slottedIntoFreedTimeOf === slot.id && !t.completedAt);
+                          return (
+                            <div style={{ marginTop: 6 }}>
+                              {filledTask ? (
+                                <div style={{
+                                  display: "flex", alignItems: "center", gap: 8,
+                                  padding: "5px 9px",
+                                  background: `${C.sage}26`,
+                                  borderLeft: `3px solid ${C.sage}`,
+                                  borderRadius: "0 6px 6px 0",
+                                }}>
+                                  <span style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 9.5, color: C.sage, fontWeight: 700,
+                                  }}>{fmtTimeRange(freedStart, freedEnd)}</span>
+                                  <span style={{
+                                    fontFamily: "'Cormorant Garamond', serif",
+                                    fontSize: 13.5, color: C.ink,
+                                    flex: 1, minWidth: 0, fontStyle: "italic",
+                                  }}>{filledTask.title}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTasks(prev => prev.map(t =>
+                                        t.id === filledTask.id
+                                          ? { ...t, slottedIntoFreedTimeOf: null, scheduledTime: null, scheduledDate: null }
+                                          : t
+                                      ));
+                                    }}
+                                    title="Remove from freed time"
+                                    style={{
+                                      width: 18, height: 18, padding: 0,
+                                      background: "transparent", border: "none",
+                                      color: C.muted, cursor: "pointer",
+                                      fontSize: 13, lineHeight: 1, opacity: 0.55,
+                                    }}>×</button>
+                                </div>
+                              ) : (
+                                <div style={{
+                                  display: "flex", alignItems: "center", gap: 8,
+                                  padding: "5px 9px",
+                                  background: `${C.sage}1a`,
+                                  border: `1px dashed ${C.sage}80`,
+                                  borderRadius: 6,
+                                }}>
+                                  <span style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 9, fontWeight: 800, letterSpacing: "0.10em",
+                                    color: C.sage,
+                                  }}>+ {freedMin}M FREED</span>
+                                  <span style={{
+                                    fontFamily: "'Cormorant Garamond', serif",
+                                    fontStyle: "italic", fontSize: 12,
+                                    color: C.muted, flex: 1, minWidth: 0,
+                                  }}>{fmtTimeRange(freedStart, freedEnd)} · light tasks ok</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFreedFillPickerFor({ hostId: slot.id, freedMin, freedStart: freedStart.toISOString() });
+                                    }}
+                                    title="Fill with a light task from your pile"
+                                    style={{
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                                      color: C.sage,
+                                      background: "transparent",
+                                      border: `1px solid ${C.sage}80`,
+                                      borderRadius: 4, padding: "3px 8px",
+                                      cursor: "pointer",
+                                    }}>+ FILL</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {/* v05.05bt423 — Concurrent subtasks (option E:
                             pill that expands to checklist). Renders for
                             tasks that have one or more concurrentItems.
@@ -35936,6 +36096,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   if (!t.scheduledTime) return false;
                   // Past lights-out + incomplete → moves to unscheduled column
                   if (pastLightsOut && !t.completedAt) return false;
+                  // v05.05bt428 — Tasks slotted into a passive host's
+                  // freed time render inside the host's strip; don't
+                  // also list them as their own pile row.
+                  if (t.slottedIntoFreedTimeOf) return false;
                   return true;
                 })
                 .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
@@ -36416,6 +36580,70 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             opacity: 0.85,
                             pointerEvents: "none",
                           }}>◆</span>
+                      )}
+                      {/* v05.05bt428 — Per chat: 'i like option 2 and 3'.
+                          Per-row ⏳ toggle. Always visible on pile rows
+                          regardless of side. Greyed = active (default),
+                          sage-filled = passive (frees host slot for
+                          light tasks during the wait portion). Tap to
+                          flip. handleTimeMin auto-populates from the
+                          verb lookup on first flip; user can edit it
+                          in the task modal later. */}
+                      {!done && (
+                        <button
+                          type="button"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTasks(prev => prev.map(x => {
+                              if (x.id !== t.id) return x;
+                              if (x.isPassive) {
+                                return { ...x, isPassive: false, handleTimeMin: undefined };
+                              }
+                              const detected = detectPassive(x.title || "");
+                              const ht = Number.isFinite(x.handleTimeMin)
+                                ? x.handleTimeMin
+                                : (Number.isFinite(detected.handleTimeMin) ? detected.handleTimeMin : 5);
+                              return { ...x, isPassive: true, handleTimeMin: ht };
+                            }));
+                          }}
+                          title={t.isPassive
+                            ? "Passive: frees host slot for light tasks · tap to flip to active"
+                            : "Mark passive: frees host slot for light tasks during the wait"}
+                          style={{
+                            fontSize: 11,
+                            color: t.isPassive ? C.sage : C.muted,
+                            fontWeight: 700, flexShrink: 0, marginTop: 1,
+                            padding: "1px 5px",
+                            background: t.isPassive ? `${C.sage}1f` : "transparent",
+                            borderRadius: 4,
+                            border: `1px solid ${t.isPassive ? C.sage : C.line}55`,
+                            cursor: "pointer",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
+                            lineHeight: 1.1,
+                          }}>⏳</button>
+                      )}
+                      {/* v05.05bt428 — Option 2: passive badge. Visible
+                          whenever the task is marked passive, signaling
+                          that this task frees its host slot for light
+                          tasks during the wait portion. Sits next to
+                          the toggle so user sees marking + status. */}
+                      {t.isPassive && !done && (
+                        <span
+                          title="This task frees its host slot for light tasks during the wait"
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 3,
+                            padding: "1px 5px",
+                            background: `${C.sage}26`,
+                            border: `1px solid ${C.sage}66`,
+                            borderRadius: 11,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 8, fontWeight: 800, letterSpacing: "0.08em",
+                            color: C.sage,
+                            flexShrink: 0, marginTop: 1,
+                            pointerEvents: "none",
+                          }}>FREES {Number.isFinite(t.handleTimeMin) ? `${t.handleTimeMin}+` : ""}</span>
                       )}
                       {/* v05.05bt409 — One-tap auto-slot for pile
                           rows. Per chat: 'i should also be able to
@@ -38355,6 +38583,131 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           </div>
         </ModalShell>
       )}
+
+      {/* v05.05bt428 — Freed-time FILL picker. Lists light tasks from
+          the user's pile that fit in the freed minutes of the host
+          passive task. Tap one to slot it into the freed window
+          (stamps slottedIntoFreedTimeOf + scheduledTime). The strip
+          in the host row re-renders to show the chosen task inline. */}
+      {freedFillPickerFor && (() => {
+        const { hostId, freedMin, freedStart } = freedFillPickerFor;
+        const startDate = new Date(freedStart);
+        const hh = String(startDate.getHours()).padStart(2, "0");
+        const mm = String(startDate.getMinutes()).padStart(2, "0");
+        // Find light tasks that fit: not completed, not already scheduled
+        // into this slot, effortMin <= freedMin, focusLevel light/shallow
+        // (or unset — assume safe for light slot).
+        const candidates = (tasks || [])
+          .filter(t => !t.completedAt)
+          .filter(t => t.ownerName === currentUser || !t.ownerName)
+          .filter(t => !t.slottedIntoFreedTimeOf || t.slottedIntoFreedTimeOf === hostId)
+          .filter(t => (t.effortMin || 30) <= freedMin)
+          .filter(t => {
+            const fl = (t.focusLevel || "").toLowerCase();
+            return fl === "" || fl === "light" || fl === "shallow";
+          })
+          .sort((a, b) => (a.effortMin || 30) - (b.effortMin || 30));
+        const close = () => setFreedFillPickerFor(null);
+        const pick = (taskId) => {
+          setTasks(prev => prev.map(t =>
+            t.id === taskId
+              ? { ...t, slottedIntoFreedTimeOf: hostId, scheduledTime: `${hh}:${mm}`, scheduledDate: todayISO }
+              : t
+          ));
+          close();
+        };
+        return (
+          <div
+            onClick={close}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.55)",
+              display: "flex", alignItems: "flex-end", justifyContent: "center",
+              zIndex: 60, padding: 12,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.paper, borderRadius: 14,
+                border: `1px solid ${C.sage}55`,
+                maxWidth: 460, width: "100%",
+                maxHeight: "70vh", overflowY: "auto",
+                padding: "14px 16px 16px",
+              }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9.5, letterSpacing: "0.18em",
+                color: C.sage, fontWeight: 700, textTransform: "uppercase",
+                marginBottom: 4,
+              }}>+ {freedMin}M FREED</div>
+              <div style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontStyle: "italic", fontSize: 14, color: C.muted,
+                marginBottom: 12,
+              }}>
+                Fill with a light task — {candidates.length} fit{candidates.length === 1 ? "s" : ""}
+              </div>
+              {candidates.length === 0 ? (
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 13, color: C.muted,
+                  padding: "20px 4px", textAlign: "center",
+                  border: `1px dashed ${C.line}66`, borderRadius: 8,
+                }}>
+                  No light tasks under {freedMin}m in your pile. Add one in "Not yet scheduled" first.
+                </div>
+              ) : (
+                <div>
+                  {candidates.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => pick(t.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        width: "100%", textAlign: "left",
+                        padding: "9px 11px", marginBottom: 4,
+                        background: "transparent",
+                        border: `1px solid ${C.line}44`,
+                        borderRadius: 7,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 9.5, color: C.sage, fontWeight: 700,
+                        flexShrink: 0,
+                      }}>{t.effortMin || 30}m</span>
+                      <span style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontSize: 14, color: C.ink, flex: 1, minWidth: 0,
+                      }}>{t.title}</span>
+                      {t.focusLevel && (
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+                          color: C.muted, textTransform: "uppercase",
+                        }}>{t.focusLevel}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={close}
+                style={{
+                  marginTop: 10, width: "100%",
+                  padding: "8px 10px",
+                  background: "transparent",
+                  border: `1px solid ${C.line}44`,
+                  borderRadius: 7,
+                  color: C.muted, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                }}>CANCEL</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {editingTask && (
         <EditTaskModal
