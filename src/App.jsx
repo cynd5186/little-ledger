@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt429";
+const APP_VERSION = "2026.05.05bt431";
 const APP_BUILD_NOTES = [
-  "HOTFIX: 'Cannot access pa before initialization' render error. Per chat with stack trace. Root cause was in bt427 (not bt428): the overlapWarningsUnresolved useMemo was declared at ~line 28246, but it reads dayTimeline which is declared at ~line 28880 — so the useMemo factory ran BEFORE dayTimeline existed, causing a temporal dead zone (TDZ) on first render. Minifier rename made it show as 'pa' in the deployed bundle.\\n\\nFIX: relocated overlapWarningsUnresolved to AFTER the dayTimeline useMemo (now at ~line 29272). Order is now: overlapWarnings (line 28214) → dayTimeline (line 28877) → overlapWarningsUnresolved (line 29272). All references resolved at definition time.\\n\\nAlso inlined the PASSIVE_VERB_LOOKUP table inside detectPassive() to remove a SECOND potential TDZ source (bt428 left the const at module level after parseOneNlTask, which could have failed if any module-init code called the parser before the const was reached). Function declarations are hoisted; const declarations are not — inlining the lookup eliminates any temporal dependency.\\n\\nBoth changes are safety-net fixes — the user's data is untouched. All bt428 features (passive task detection, ⏳ toggle, freed-time strip, FILL picker) are intact and now load successfully. Build verified clean via esbuild.",
+  "TWO FIXES.\\n\\n(1) TITLE-TAP NO LONGER BOUNCES TO BOTTOM. Per chat: 'when i try to click on task title to edit it, instead of the menu coming up, i get pushed to the bottom of the screen.' The bt415 preventScroll:true fix didn't help because the bounce isn't from the focus() call — it's from iOS Safari's keyboard-appearance behavior, which scrolls any focused input above the keyboard, often putting it near the bottom of the visible viewport. The user wanted the MENU (↺ ⋯ × action buttons), not necessarily to start typing immediately. FIX: removed auto-focus on the inline title edit. Tapping the title now reveals the input + the action buttons WITHOUT triggering the keyboard. To rename, tap the input itself — the keyboard opens then, but it's an intentional second tap rather than a surprise.\\n\\n(2) PUMP SESSIONS NOW SHOW AS PASSIVE / FREED. Per chat: 'how come for pumping session it doesnt show up as open? it is a concurrent task so as long as it doesnt require me to be in the lab when WFH or getting wet — like showering or something like that, then i can schedule things in between.' Wearable pumps are inherently hands-free; the bt312 pump unification annotated WHEN a pump overlapped a task, but pump-only slots still rendered as blocking blocks. FIX: extended the freed-time-strip render condition to fire on slot.kind === 'pump_reminder' too. Default handle time is 5min (setup); the rest of the slot becomes freed for light tasks via the standard sage-dashed strip + FILL picker. So a 30min pump session now shows '+25M FREED · light tasks ok' below the pump label.\\n\\nCAVEAT (not addressed in this build): the freed-time picker doesn't yet filter out wet/lab-attendance tasks (showering, lab-only). You're trusted to use judgment — if you slot 'shower' inside a pump, that's on you. Future build can add a 'wet?' or 'lab-only?' tag and auto-filter at pick time. Tell me if you want that.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt431", summary: "Two fixes. (1) Title-tap no longer bounces to bottom of screen: removed auto-focus on inline title edit. Tap title → menu (↺ ⋯ ×) appears without keyboard; tap the input itself only when you want to rename, so iOS keyboard opens intentionally. (2) Pump sessions now show the freed-time strip (+25M FREED · light tasks ok with FILL button) since wearable pumps are inherently hands-free. Default handle = 5min. Caveat: picker doesn't filter wet/lab-attendance tasks yet — your judgment. Build verified clean via esbuild." },
+  { version: "2026.05.05bt430", summary: "Scroll anchoring on section add. Adding a task to Scheduled/Today/Backlog used to auto-slot it on the timeline above, growing the timeline and pushing the section header you were looking at down — losing your place. Added data-pile-section attributes to the three section wrappers and wrapped commitInlineSectionAdd with capture-before / adjust-after-2-rAFs scroll-anchoring logic. Uses behavior:'instant' so the view doesn't visibly move. Build verified clean via esbuild." },
   { version: "2026.05.05bt429", summary: "HOTFIX for bt427 TDZ render error 'Cannot access pa before initialization'. overlapWarningsUnresolved useMemo was declared before dayTimeline (which it reads), causing TDZ on first render. Relocated to after dayTimeline. Also inlined PASSIVE_VERB_LOOKUP inside detectPassive() to remove a second potential TDZ source from bt428. All bt428 features intact. Build verified clean via esbuild." },
   { version: "2026.05.05bt428", summary: "Concurrent/passive tasks built (option 2 + 3 hybrid). Parser auto-detects passive verbs (laundry/incubation/dishwasher/etc.) and sets isPassive + handleTimeMin. New ⏳ toggle on pile rows lets user manually mark/un-mark + an auto-detect badge ('FREES Xm+') confirms the state. Passive scheduled tasks render with a sage-dashed freed-time strip below the title: '+ Xm FREED · light tasks ok' with a FILL button that opens a bottom-sheet picker of light tasks that fit. Selected task stamps slottedIntoFreedTimeOf on the chosen task and renders INSIDE the host's strip. Dedup filters slotted tasks out of the pile + timeline so they only appear in the strip. Defaults: per-verb handle-time lookup (5/2/0 min by verb category); FILL opens picker (not auto-pick). Build verified clean via esbuild." },
   { version: "2026.05.05bt427", summary: "Three builds from user answers. (1) Task timer pause/resume/done/manual-edit — replaced single 'stops and completes' button with ⏸ pause / ▶ resume / ✓ done; new accumulatedMin field on tasks + routineTimers banks elapsed across pause cycles; long-press elapsed to manually edit. (2) Concurrent syntax: 'while' locked as canonical recommendation in input placeholder; parser still accepts ‖ and 'meanwhile'. (3) Overlap notification dedup: new overlapWarningsUnresolved memo filters pairs where both members were auto-compressed into viable slots — banner only fires for genuinely unresolved conflicts. Build verified clean via esbuild." },
@@ -28436,6 +28438,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const commitInlineSectionAdd = (section) => {
     const text = (inlineSectionAddDraft || "").trim();
     if (!text) return;
+    // v05.05bt430 — Per chat: 'evrytime i add something to the
+    // scheduled for today, i dont like how my screen moves alot and
+    // loses my place.' When a new task lands (especially a scheduled
+    // one that auto-slots into a timeline block ABOVE the user's
+    // current view), the timeline grows taller and pushes everything
+    // below it down. The user's scrollY stays the same but the
+    // section they were typing into has visually moved. Fix: capture
+    // the section header's viewport position BEFORE the state change,
+    // then after React re-renders, adjust scroll by the delta so the
+    // section header stays at the same screen position. Standard
+    // scroll-anchoring pattern.
+    let anchorEl = null;
+    let anchorTopBefore = null;
+    try {
+      if (typeof document !== "undefined") {
+        anchorEl = document.querySelector(`[data-pile-section="${section}"]`);
+        if (anchorEl) anchorTopBefore = anchorEl.getBoundingClientRect().top;
+      }
+    } catch {}
     const parsed = parseNaturalLanguageTasks(text);
     const first = parsed[0] || { title: text };
     const base = {
@@ -28490,6 +28511,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     setTasks(prev => [...prev, base]);
     setInlineSectionAdd(null);
     setInlineSectionAddDraft("");
+    // v05.05bt430 — After React paints, measure the anchor again and
+    // adjust scroll so it sits where it did before. Two rAFs ensure
+    // the new layout has settled (one for React's commit, one for
+    // browser paint). Uses 'instant' to avoid an animated scroll
+    // that would itself be jarring.
+    if (anchorEl && anchorTopBefore !== null) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          try {
+            const newTop = anchorEl.getBoundingClientRect().top;
+            const delta = newTop - anchorTopBefore;
+            if (Math.abs(delta) > 1) {
+              window.scrollBy({ top: delta, left: 0, behavior: "instant" });
+            }
+          } catch {}
+        });
+      });
+    }
   };
   const [forTodayExpanded, setForTodayExpanded] = useState(true);
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
@@ -34118,27 +34157,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               <input
                                 type="text"
                                 defaultValue={slot.title}
-                                // v05.05bt415 — Per chat: 'when i am on
-                                // the time by time task section, i
-                                // should be able to click on the title
-                                // and see things like unschedule and
-                                // the ellipses menu that we had created
-                                // but instead it jumps down my screen
-                                // to the bottom as if i did jump to
-                                // task.' Suspected cause: iOS Safari
-                                // autoFocus combined with on-screen
-                                // keyboard appearance scrolls the input
-                                // into view aggressively, sometimes
-                                // landing far below the original tap
-                                // location. Replaced autoFocus with a
-                                // ref-based focus({ preventScroll:
-                                // true }) so the keyboard still opens
-                                // but the page doesn't jump.
+                                // v05.05bt415 → bt431 — Per chat: 'when
+                                // i try to click on task title to edit
+                                // it, instead of the menu coming up, i
+                                // get pushed to the bottom of the
+                                // screen'. The bt415 fix used
+                                // preventScroll:true on focus, but the
+                                // bounce isn't from focus — it's from
+                                // the iOS soft keyboard appearing and
+                                // scrolling the input above it. The
+                                // user wanted the MENU (the ↺ ⋯ ×
+                                // buttons), not necessarily to start
+                                // typing immediately. Solution: don't
+                                // auto-focus. The input is visible and
+                                // editable, but the keyboard only
+                                // opens when the user explicitly taps
+                                // the input — making the scroll
+                                // intentional rather than surprising.
+                                // The ref still tags first-mount so
+                                // we don't trigger a click-loop, but
+                                // no focus call.
                                 ref={(el) => {
-                                  if (!el || el.dataset.focused === "1") return;
-                                  el.dataset.focused = "1";
-                                  try { el.focus({ preventScroll: true }); }
-                                  catch { el.focus(); }
+                                  if (!el || el.dataset.mounted === "1") return;
+                                  el.dataset.mounted = "1";
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 onBlur={(e) => commitInlineTitle(slot.id, e.target.value)}
@@ -34630,8 +34671,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             already slotted INTO this freed time (via
                             slottedIntoFreedTimeOf), it renders inline
                             instead of the FILL button. */}
-                        {isTask && slot.isPassive && (() => {
-                          const handleMin = Number.isFinite(slot.handleTimeMin) ? slot.handleTimeMin : 5;
+                        {((isTask && slot.isPassive) || isPumpReminder) && (() => {
+                          // v05.05bt428 → bt431 — Per chat: 'how come
+                          // for pumping session it doesnt show up as
+                          // open? it is a concurrent task so as long
+                          // as it doesnt require me to be in the lab
+                          // when WFH or getting wet — like showering
+                          // or something like that, then i can
+                          // schedule things in between'. Pump sessions
+                          // are inherently passive (wearable pump =
+                          // hands-free) so they get the freed-time
+                          // strip too. Default handle is 5min for
+                          // setup; freed window = rest of the slot.
+                          // Note: caller is responsible for not
+                          // slotting wet/lab-attendance tasks here;
+                          // future build could add a 'wet?' tag and
+                          // filter at pick time.
+                          const defaultHandle = isPumpReminder ? 5 : 5;
+                          const handleMin = Number.isFinite(slot.handleTimeMin) ? slot.handleTimeMin : defaultHandle;
                           const totalMin = slot.durationMin || 0;
                           const freedMin = Math.max(0, totalMin - handleMin);
                           if (freedMin < 5) return null; // not worth surfacing
@@ -37039,7 +37096,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       borderTop: `1px solid ${C.line}22`,
                     }}>
                       {/* SCHEDULED section */}
-                      <div style={{ padding: "6px 4px 4px" }}>
+                      <div data-pile-section="scheduled" style={{ padding: "6px 4px 4px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
                             type="button"
@@ -37156,7 +37213,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           "couldn't fit" was inaccurate. Differentiation now
                           happens at the row level via small tags (✗ WON'T
                           FIT for engine, ↺ MOVED OFF for user). */}
-                      <div style={{
+                      <div data-pile-section="today" style={{
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
                       }}>
@@ -37387,7 +37444,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           dump" in parens since that's the input vocab.
                           Moved to live INSIDE the outer IIFE so backlog
                           variable is in scope. */}
-                      <div style={{
+                      <div data-pile-section="backlog" style={{
                         padding: "6px 4px 4px",
                         borderTop: `1px solid ${C.line}22`,
                       }}>
