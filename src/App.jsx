@@ -15,12 +15,17 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt421";
+const APP_VERSION = "2026.05.05bt427";
 const APP_BUILD_NOTES = [
-  "PUMP TIMELINE NOW MATCHES THE NOW CARD. Per chat: 'did you make sure pump sessions match the Now card and whatever it says is my next pump?' — they didn't, and this fixes it.\\n\\nTHE MISMATCH: the Now card's 'target 9:36a' comes from nextPumpAt (App-level useMemo). bt420's getEffectivePumpSessions projected with its OWN 3h cadence anchored to the last logged pump — so with a 7:36a last pump it would have projected 10:36a while the card said 9:36a. Two sources, two answers.\\n\\nTHE FIX: (1) Threaded nextPumpAt + lastPump through App → ShiftsView → TodayTaskPlanCard so the timeline can see the exact value the Now card uses. (2) getEffectivePumpSessions(pumpPlan, now, nextPumpAt) now: honors manualSessions ONLY when fresh (same manualSessionsDate===today rule nextPumpAt uses — so a stale overnight plan no longer leaks onto the timeline while the card ignores it); when the fresh plan has a future session, returns it wholesale (card reads the same array → guaranteed agreement); otherwise PROJECTS with the first upcoming session ANCHORED to nextPumpAt exactly, then +3h cadence to wakeEnd. Overnight nextPumpAt (rolls past midnight) folds to a >24 fraction so the sanity filter keeps it. Net: the first upcoming 🍼 block on the cadence calendar is always the same time the Now card shows as your next pump.\\n\\nNo other behavior changed. Still queued: Today's Runway collapse + sticky header, timed Trade-Ideas snooze. Still pending answers: undo scope, 'covering rails' sentence, which timer for pause/restart.",
+  "THREE BUILDS FROM YOUR ANSWERS (Q3, Q7, Q8).\\n\\n(1) TASK TIMER PAUSE / RESUME / DONE / MANUAL-EDIT (Q3 = 'task time on task timer'). The single ⏸ button used to STOP and mark complete — so anyone tapping it to pause actually lost the task. Now three distinct controls live in the time column on running/paused task and routine rows:\\n  • ⏸ pause (gold) — banks the elapsed time into a new accumulatedMin field; you can resume later without losing your count.\\n  • ▶ resume (sage) — restarts the timer, continues counting from the banked total.\\n  • ✓ done (coral) — commits the final total as actualMin, marks complete.\\nLong-press the elapsed display ('17m', '34m', etc.) → window.prompt opens to manually edit elapsed minutes (e.g. if you forgot to start the timer for 20m). Works on both tasks (slot.accumulatedMin) and routines (rtTimer.accumulatedMin). Existing actualMin / completion behavior unchanged.\\n\\n(2) CONCURRENT SYNTAX CANONICAL (Q7 = 'you pick'). Locked the recommended syntax to 'while' (simplest English keyword, lowest typing friction). Placeholder in the inline add input now reads 'while gel running 25m'. Parser still accepts ‖ and 'meanwhile' as conveniences — removing them was unnecessary work and might break habits.\\n\\n(3) NOTIFICATION FATIGUE / OVERLAP DEDUP (Q8 = yes). New overlapWarningsUnresolved memo filters overlapWarnings by checking if both members of each pair have a _compressedByOverlap flag set in the dayTimeline (meaning the timeline already auto-shrunk them into viable shorter slots). Pairs that were auto-resolved silently no longer trigger the banner. The banner only flags genuinely unresolved conflicts — embodies your principle 'Notify only when user must act. Auto-resolve silently with row-level badge when we succeed. Banner only when we failed and need help.'\\n\\nDROPPED (your answers): Q2 (rails covering), Q4 (Wed May 27 journal), Q9 (audit summary), Q10 (concurrent pill on pile rows). Q6 (free host slot for scheduling) re-asked with example in chat. Q1 (universal undo) + Q5 (real browser notifications) require larger M-L builds — queued, ready when usage permits. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
-  { version: "2026.05.05bt421", summary: "Pump timeline now matches the Now card. The card's next-pump target comes from nextPumpAt; bt420's projection used its own cadence anchored to the last pump, so they could disagree (card 9:36a vs timeline 10:36a). Threaded nextPumpAt + lastPump through App → ShiftsView → TodayTaskPlanCard. getEffectivePumpSessions now (a) honors manualSessions only when fresh — same rule nextPumpAt uses, (b) returns the fresh plan wholesale when it has a future session so both read the same array, (c) otherwise anchors the first projected session to nextPumpAt exactly + 3h cadence. Build verified clean via esbuild." },
+  { version: "2026.05.05bt427", summary: "Three builds from user answers. (1) Task timer pause/resume/done/manual-edit — replaced single 'stops and completes' button with ⏸ pause / ▶ resume / ✓ done; new accumulatedMin field on tasks + routineTimers banks elapsed across pause cycles; long-press elapsed to manually edit. (2) Concurrent syntax: 'while' locked as canonical recommendation in input placeholder; parser still accepts ‖ and 'meanwhile'. (3) Overlap notification dedup: new overlapWarningsUnresolved memo filters pairs where both members were auto-compressed into viable slots — banner only fires for genuinely unresolved conflicts. Build verified clean via esbuild." },
+  { version: "2026.05.05bt426", summary: "Four fixes from screenshot feedback. (1) Slot tier badge redundancy: removed badge on free blocks since middle of card already shows focus level there; kept on task/routine rows where it adds info. (2) Today's Runway now shows in tomorrow view too — dropped !isTomorrow guard. (3) Cadence sub-header (day toggle + h1) now sticks beneath the LL top header (top:56, zIndex:4) so you can switch days mid-scroll. (4) Renamed 'Unscheduled for today' → 'Not yet scheduled' per user request. Build verified clean via esbuild." },
+  { version: "2026.05.05bt425", summary: "Today's Runway card now collapsible. New runwayCollapsed state persists via ll:runwayCollapsed localStorage. Eyebrow became a full-width toggle button with rotating chevron; when collapsed, an italic Cormorant chip beside the eyebrow shows 'Xh Ym deep · Xh Ym light' totals so you still see runway at a glance. Body (deep source breakdown, stretches, fit status, meetings) is conditionally rendered. Build verified clean via esbuild." },
+  { version: "2026.05.05bt424", summary: "Four S-effort UX polish items shipped together. (1) Slot tier badge in time column — ▲ DEEP / ○ LIGHT below duration for every non-past slot, reading from blockFocus (option A from brainstorm). (2) Scheduled ↔ Unscheduled row swap — pile rows with side='unscheduled' get dashed gold left border + indent + italic title (option B from brainstorm). (3) Why-here trigger in EditTaskModal — '↳ why here? (show slot reasoning)' link at bottom for scheduled tasks; closes modal and triggers expandedReasonTaskId so existing inline reasoning panel renders below the task. (4) Delete tap-target — new × button next to ↺ + ⋯ in the inline title-edit menu on schedule rows; gives Mac trackpad users access to delete that previously required the swipe gesture. window.confirm guards accidental taps. Build verified clean via esbuild." },
+  { version: "2026.05.05bt422", summary: "Fix: editing a pump session no longer makes it disappear. bt421's projection meant the edited pump might be a projected session not in manualSessions; the edit handler found no match, wrote back an array without it, and the next render re-projected — vanishing the edit. Now onSave materializes the full effective session set (incl. projected) into manualSessions before applying the edit, so every visible pump is concrete and persists. KNOWN: per-session duration value still not stored (manualSessions holds only start hours) — schema change queued. Build verified clean via esbuild." },
+  { version: "2026.05.05bt421", summary: "Pump timeline now matches the Now card. Threaded nextPumpAt + lastPump through App → ShiftsView → TodayTaskPlanCard. getEffectivePumpSessions honors manualSessions only when fresh, returns the fresh plan wholesale when it has a future session, otherwise anchors the first projected session to nextPumpAt exactly + 3h cadence. Build verified clean via esbuild." },
   { version: "2026.05.05bt420", summary: "Pump-sync real fix + caregiver polish. (1) PUMP: manualSessions holds only past sessions; getEffectivePumpSessions(pumpPlan, now) projects future sessions at ~3h cadence when none exist ahead of now. (2) Current-block ring sage (not gold) under caregiver. (3) Boss/solo mode drops '· CAREGIVER' suffix on NOW line. (4) Trade Ideas suppressed during caregiver windows. Build verified clean via esbuild." },
   { version: "2026.05.05bt419", summary: "NOW-line visibility fix + current-block highlight. Brighter CAREGIVER_NOW #A8D49A, thicker line, bigger pills with glow. New isNowBlock inset ring. Build verified clean via esbuild." },
   { version: "2026.05.05bt417", summary: "NL parser fixes + due-date detection. (1) MARKER_ONLY_RE extended to include duration patterns ('1 hr', '30 min', '30m', '1h', 'half hour', 'an hour') so they merge back into the preceding task instead of becoming phantom segments. (2) Bare 'deep' / 'shallow' at end of title now matched as focus marker. (3) New dueDate detection: parses 'due by Monday', 'due Friday', 'due tomorrow', 'due 5/30'. (4) Pile rows render coral '⚑ DUE Day M/D' tag for tasks with dueDate set. Build verified clean via esbuild." },
@@ -7016,7 +7021,6 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             tasks={tasks} setTasks={setTasks}
             parentAway={parentAway} setParentAway={setParentAway}
             pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
-           nextPumpAt={nextPumpAt} lastPump={lastPump}
             nextPumpAt={nextPumpAt} lastPump={lastPump}
             todaySetup={todaySetup} setTodaySetup={setTodaySetup}
             focusProfile={focusProfile} setFocusProfile={setFocusProfile}
@@ -24096,6 +24100,63 @@ function parseOneNlTask(text) {
   let title = text;
   let effortMin = 30;
   let scheduledTime = null;
+  // v05.05bt423 — Per chat: 'sometimes i may have a task and i have a
+  // subtask occurring at the same time...incubating while i do
+  // something else or column equilibrating or instrument is
+  // calibrating or i am having lunch but going to do something else
+  // as well.' Detect concurrent-item syntax BEFORE other parsers so
+  // marker words don't leak into title. Three accepted syntaxes:
+  //   • '‖ X'             pipe-bar prefix
+  //   • 'while X'         keyword
+  //   • 'meanwhile X'     keyword
+  // Each match can have an optional duration ('25m', '30 min', '1h',
+  // 'half hour') which is parsed into durationMin. Title before the
+  // marker is the host task. Multiple concurrents are supported via
+  // repeat markers ('lunch ‖ review SOP ‖ skim reviews').
+  const concurrentItems = [];
+  {
+    // Split on any of the markers, preserving order. Capture group keeps
+    // delimiters so we can stitch the host title back from index 0.
+    const splitRe = /\s*(?:‖|\bmeanwhile\b|\bwhile\b)\s+/i;
+    if (splitRe.test(title)) {
+      const parts = title.split(splitRe).map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        title = parts[0];
+        for (let i = 1; i < parts.length; i++) {
+          let body = parts[i];
+          // Parse optional duration on each concurrent item.
+          let durationMin = null;
+          const hrMatch = body.match(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i);
+          const minMatch = body.match(/\b(\d+)\s*(?:minutes?|mins?|m)\b/i);
+          const halfMatch = body.match(/\bhalf\s+(?:an?\s+)?hour\b/i);
+          const anHourMatch = body.match(/\ban?\s+hour\b/i);
+          if (hrMatch) {
+            durationMin = Math.round(parseFloat(hrMatch[1]) * 60);
+            body = body.replace(hrMatch[0], " ").trim();
+          } else if (minMatch) {
+            durationMin = parseInt(minMatch[1], 10);
+            body = body.replace(minMatch[0], " ").trim();
+          } else if (halfMatch) {
+            durationMin = 30;
+            body = body.replace(halfMatch[0], " ").trim();
+          } else if (anHourMatch) {
+            durationMin = 60;
+            body = body.replace(anHourMatch[0], " ").trim();
+          }
+          // Clean trailing punctuation (e.g. "review SOP,") + collapse whitespace.
+          body = body.replace(/[,;:]+$/, "").replace(/\s+/g, " ").trim();
+          if (body) {
+            concurrentItems.push({
+              id: `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}-${i}`,
+              title: body,
+              durationMin,
+              completedAt: null,
+            });
+          }
+        }
+      }
+    }
+  }
   // v05.05bt199 — Recurring detection. Strips rule phrases from the
   // title BEFORE other parsers so they don't leak in. Patterns:
   //   • 'every day', 'daily', 'each day' → daily
@@ -24332,7 +24393,7 @@ function parseOneNlTask(text) {
   if (effortMin >= 30 && /\bemail|\bemails|\binbox\b/i.test(title)) {
     cadence = 15;
   }
-  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore, dueDate };
+  return { title, effortMin, scheduledTime, recurringRule, cadence, focusLevel, regretScore, dueDate, concurrentItems };
 }
 
 // v05.05bt116 — Infer focus level from task title using keyword
@@ -27504,6 +27565,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }));
   };
   const [inlineTimeEdit, setInlineTimeEdit] = useState(null); // taskId or null
+  // v05.05bt423 — Concurrent subtasks (the "meanwhile" feature). One
+  // tray open at a time. expandedConcurrentId stores the host taskId,
+  // null when collapsed. Add-item drafts so user can type a new
+  // concurrent item inline at the bottom of the tray.
+  const [expandedConcurrentId, setExpandedConcurrentId] = useState(null);
+  const [concurrentAddDraft, setConcurrentAddDraft] = useState("");
+  // Toggle a concurrent item's completedAt for a given task.
+  const toggleConcurrentItem = (taskId, itemId) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const items = (t.concurrentItems || []).map(ci =>
+        ci.id === itemId
+          ? { ...ci, completedAt: ci.completedAt ? null : new Date().toISOString() }
+          : ci
+      );
+      return { ...t, concurrentItems: items };
+    }));
+  };
+  // Add a new concurrent item from the inline input.
+  const addConcurrentItem = (taskId) => {
+    const text = (concurrentAddDraft || "").trim();
+    if (!text) return;
+    // Reuse the parser by wrapping: 'host ‖ <text>' so duration parsing applies.
+    const parsed = parseOneNlTask(`host ‖ ${text}`);
+    const newItem = (parsed.concurrentItems && parsed.concurrentItems[0]) || {
+      id: `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      title: text, durationMin: null, completedAt: null,
+    };
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const existing = Array.isArray(t.concurrentItems) ? t.concurrentItems : [];
+      return { ...t, concurrentItems: [...existing, newItem] };
+    }));
+    setConcurrentAddDraft("");
+  };
+  // Remove a concurrent item.
+  const removeConcurrentItem = (taskId, itemId) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const items = (t.concurrentItems || []).filter(ci => ci.id !== itemId);
+      return { ...t, concurrentItems: items };
+    }));
+  };
   // v05.05bt148 — fallback CSV holder when clipboard write fails
   const [mondayCsvFallback, setMondayCsvFallback] = useState(null);
   // v05.05bt148 — Inline title edit. Tap title → input + delete button
@@ -28090,6 +28194,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }
     return overlaps;
   }, [tasks, currentUser, now, todayISO]);
+  // v05.05bt427 — Per chat (Q8 confirmed): 'Notify only when user must
+  // act. Auto-resolve silently with row-level badge when we succeed.
+  // Banner only when we failed and need help.' If the timeline already
+  // auto-compressed BOTH members of an overlap pair into viable shorter
+  // slots, the situation is handled visually — drop those pairs from
+  // the banner so it only flags genuinely unresolved conflicts. The
+  // _compressedByOverlap flag is set by the timeline build when a slot
+  // was shrunk to fit and still retained at least half its original
+  // duration (a 'viable' compression). Pairs where neither or only one
+  // side was compressed remain in the banner so the user knows to act.
+  const overlapWarningsUnresolved = useMemo(() => {
+    const compressedIds = new Set(
+      (dayTimeline || []).filter(s => s && s._compressedByOverlap > 0 && s.id).map(s => s.id)
+    );
+    return overlapWarnings.filter(w => !(compressedIds.has(w.a.id) && compressedIds.has(w.b.id)));
+  }, [overlapWarnings, dayTimeline]);
   const [overlapBannerExpanded, setOverlapBannerExpanded] = useState(false);
   // v05.05bt402 — Per chat: 'still an issue with some of the
   // notifications not being able to be ignored or dismissed.' Both
@@ -28260,6 +28380,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // which section opened it: scheduled → auto-slot (bt409 logic),
   // today → drawer:false + scheduledDate=today, backlog → drawer:true.
   const [inlineSectionAdd, setInlineSectionAdd] = useState(null);
+  // v05.05bt425 — Per chat: 'today's runway should have the option of
+  // being collapsed as well'. Defaults to expanded so first-time users
+  // see the forecast; persists choice via localStorage.
+  const [runwayCollapsed, setRunwayCollapsed] = useState(() => {
+    try { return localStorage.getItem("ll:runwayCollapsed") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:runwayCollapsed", runwayCollapsed ? "1" : "0"); } catch {}
+  }, [runwayCollapsed]);
   const [inlineSectionAddDraft, setInlineSectionAddDraft] = useState("");
   // v05.05bt416 — Helper that commits the inline section add. Parses
   // the draft via parseNaturalLanguageTasks (handles time + duration
@@ -28283,6 +28412,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       createdAt: new Date().toISOString(),
       // v05.05bt417 — Carry parser-detected dueDate.
       dueDate: first.dueDate || null,
+      // v05.05bt423 — Carry parser-detected concurrent items.
+      concurrentItems: Array.isArray(first.concurrentItems) && first.concurrentItems.length > 0 ? first.concurrentItems : undefined,
     };
     if (section === "scheduled") {
       // Auto-slot into next workable block fitting the task's effort.
@@ -28565,6 +28696,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       // v05.05bt417 — Carry parser-detected dueDate into the task so
       // the row renderer can show the coral DUE tag.
       dueDate: p.dueDate || null,
+      // v05.05bt423 — Carry parser-detected concurrent items.
+      concurrentItems: Array.isArray(p.concurrentItems) && p.concurrentItems.length > 0 ? p.concurrentItems : undefined,
       sequenceId: p.sequenceId,
       sequenceIndex: p.sequenceIndex,
       sequenceTotal: p.sequenceTotal,
@@ -31287,7 +31420,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       have the date no? and the today vs. tomorrow
                       pill maybe move to the right side of the
                       panel?' */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 10 }}>
+                  {/* v05.05bt426 — Per chat: 'the sticky part should
+                      be the cadence as well as the regular header LL'.
+                      LL top header is already sticky at top:0; this
+                      cadence/scheduler header (Today | Tomorrow toggle
+                      + h1) now also sticks just beneath it so you can
+                      switch days mid-scroll without going back up.
+                      Background matches the card paper so timeline
+                      rows scrolling underneath stay hidden. Padding +
+                      negative margin counter the parent's 16px padding
+                      so the sticky area spans full card width. */}
+                  <div style={{
+                    position: "sticky", top: 56, zIndex: 4,
+                    background: C.paper,
+                    margin: "-16px -16px 6px -16px",
+                    padding: "10px 16px 6px",
+                    borderBottom: `1px solid ${C.line}22`,
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                  }}>
                     <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
                       <h1 style={{
                         fontFamily: "'Cormorant Garamond', serif",
@@ -31714,7 +31864,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 to total task-effort to surface "fits / overcommitted".
                 Placed FIRST below the header per bt351 chat: 'todays
                 runway panel should be at the top always.' */}
-            {currentUser === "Mommy" && !isTomorrow && dayTimeline.length > 0 && (() => {
+            {/* v05.05bt425 → bt426 — Per chat: 'i also do not see the
+                runway at all for tomorrow.' Dropped the !isTomorrow
+                guard so the runway forecast renders for both today and
+                tomorrow. Future free + planned tasks are already
+                computed off referenceDate, so the math just works for
+                tomorrow too. */}
+            {currentUser === "Mommy" && dayTimeline.length > 0 && (() => {
               // v05.05bt280 — Per chat: 'we lost the runway completely now.'
               // Previously returned null when futureFree empty; now always
               // renders so user has visual confirmation it exists.
@@ -31847,14 +32003,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       then the forecast stays the forecast'). The NOW
                       line now color-codes by current owner and reads
                       'NOW · YOUR DUTY' or 'NOW · DADDY DUTY'. Runway
-                      card is back to pure forecast. */}
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, letterSpacing: "0.22em",
-                    textTransform: "uppercase",
-                    color: C.gold, fontWeight: 700,
-                    marginBottom: 8,
-                  }}>Today's runway</div>
+                      card is back to pure forecast.
+                      v05.05bt425 — Per chat: 'today's runway should
+                      have the option of being collapsed.' Eyebrow is
+                      now a toggle; collapsed state hides the body and
+                      shows a one-line summary chip beside the eyebrow
+                      so you can still glance at deep/light totals
+                      without expanding. Persists via localStorage. */}
+                  <button
+                    type="button"
+                    onClick={() => setRunwayCollapsed(v => !v)}
+                    style={{
+                      width: "100%", background: "transparent", border: "none",
+                      padding: 0, cursor: "pointer", textAlign: "left",
+                      fontFamily: "inherit",
+                      display: "flex", alignItems: "center", gap: 8,
+                      marginBottom: runwayCollapsed ? 0 : 8,
+                    }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, letterSpacing: "0.22em",
+                      textTransform: "uppercase",
+                      color: C.gold, fontWeight: 700,
+                    }}>Today's runway</div>
+                    {runwayCollapsed && (
+                      <div style={{
+                        fontFamily: "'Cormorant Garamond', serif",
+                        fontStyle: "italic", fontSize: 12.5,
+                        color: C.muted, flex: 1, minWidth: 0,
+                      }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", color: FOCUS_COLOR.deep, fontWeight: 600 }}>{fmtHM(deepMin)}</span>
+                        {" deep · "}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", color: FOCUS_COLOR.shallow, fontWeight: 600 }}>{fmtHM(lightMin)}</span>
+                        {" light"}
+                      </div>
+                    )}
+                    <span style={{
+                      marginLeft: "auto",
+                      fontSize: 11, color: C.gold, opacity: 0.6,
+                      transform: runwayCollapsed ? "rotate(0)" : "rotate(90deg)",
+                      transition: "transform 0.15s",
+                    }}>▸</span>
+                  </button>
+                  {!runwayCollapsed && (<>
                   <div style={{
                     fontFamily: "'Cormorant Garamond', serif",
                     fontSize: 14, lineHeight: 1.55,
@@ -31936,6 +32127,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </span>
                     )}
                   </div>
+                  </>)}
                 </div>
               );
             })()}
@@ -32277,9 +32469,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               </div>
             )}
 
-            {/* v05.05bt273 — Overlap warning. Tasks scheduled to
-                overlap each other = real correctness problem. */}
-            {!isTomorrow && overlapWarnings.length > 0 && (overlapDismissedCount === null || overlapWarnings.length > overlapDismissedCount) && (
+            {/* v05.05bt273 → bt427 — Overlap warning. Tasks scheduled to
+                overlap each other = real correctness problem. Per chat
+                (Q8): now reads overlapWarningsUnresolved so the banner
+                hides when the timeline already auto-compressed both
+                sides — only flags pairs we couldn't auto-resolve. */}
+            {!isTomorrow && overlapWarningsUnresolved.length > 0 && (overlapDismissedCount === null || overlapWarningsUnresolved.length > overlapDismissedCount) && (
               <div style={{
                 background: `${C.accent}14`,
                 border: `1.5px solid ${C.accent}55`,
@@ -32294,8 +32489,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     color: C.accent, fontWeight: 800,
                   }}>⚠ OVERLAP</div>
                   <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{overlapWarnings.length}</span>{" "}
-                    {overlapWarnings.length === 1 ? "pair of tasks" : "pairs of tasks"} overlap{overlapWarnings.length === 1 ? "s" : ""} in time.
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{overlapWarningsUnresolved.length}</span>{" "}
+                    {overlapWarningsUnresolved.length === 1 ? "pair of tasks" : "pairs of tasks"} overlap{overlapWarningsUnresolved.length === 1 ? "s" : "\u200B"} in time.
                   </div>
                   <button
                     type="button"
@@ -33586,44 +33781,138 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               // can start any near-term task even if diverting
                               // from original plan. Far-future + done rows
                               // stay quiet.
+                              // v05.05bt427 — Per chat: 'timer pause /
+                              // restart / manual-edit (Monday-style) ·
+                              // task time on task timer.' Replaced the
+                              // single 'stop and complete' button with
+                              // three distinct controls: ⏸ pause (keeps
+                              // accumulated time, can resume), ▶ resume
+                              // (when paused), ✓ done (commits final
+                              // total as actualMin). Long-press the
+                              // elapsed display opens a prompt for
+                              // manual edit. Schema: tasks/routineTimers
+                              // gain optional accumulatedMin (minutes
+                              // banked from prior pause cycles). Total
+                              // elapsed while running = (now - startedAt)
+                              // / 60000 + accumulatedMin.
                               const rtTimer = isRoutine ? routineTimers[slot.id] : null;
+                              const accumulatedMin = isTask
+                                ? (slot.accumulatedMin || 0)
+                                : ((rtTimer && rtTimer.accumulatedMin) || 0);
                               const isRunning = isTask
                                 ? (slot.actualStartedAt && !slot.completedAt)
                                 : (rtTimer && rtTimer.startedAt && !rtTimer.actualMin);
+                              const isPaused = !isRunning && accumulatedMin > 0 && (isTask
+                                ? !slot.completedAt && !slot.actualMin
+                                : (rtTimer && !rtTimer.actualMin));
                               const actualMin = isTask ? slot.actualMin : (rtTimer && rtTimer.actualMin);
                               const startedAt = isTask ? slot.actualStartedAt : (rtTimer && rtTimer.startedAt);
 
-                              // Running state: show ⏸ + elapsed prominently
+                              const computeElapsed = () => {
+                                if (isRunning && startedAt) {
+                                  const sinceStart = (Date.now() - new Date(startedAt).getTime()) / 60000;
+                                  return Math.max(1, Math.round(sinceStart + accumulatedMin));
+                                }
+                                return Math.max(1, Math.round(accumulatedMin));
+                              };
+
+                              const writePartial = (patch) => {
+                                if (isTask) {
+                                  setTasks(prev => prev.map(t => t.id === slot.id ? { ...t, ...patch } : t));
+                                } else {
+                                  setRoutineTimers(prev => ({
+                                    ...prev,
+                                    [slot.id]: { ...(prev[slot.id] || {}), ...patch },
+                                  }));
+                                }
+                              };
+
+                              const onPauseClick = (e) => {
+                                e.stopPropagation();
+                                const elapsed = computeElapsed();
+                                writePartial({ actualStartedAt: null, startedAt: null, accumulatedMin: elapsed });
+                              };
+                              const onResumeClick = (e) => {
+                                e.stopPropagation();
+                                if (isTask) writePartial({ actualStartedAt: new Date().toISOString() });
+                                else writePartial({ startedAt: new Date().toISOString() });
+                              };
+                              const onDoneClick = (e) => {
+                                e.stopPropagation();
+                                const elapsed = computeElapsed();
+                                if (isTask) {
+                                  writePartial({ actualMin: elapsed, actualStartedAt: null, accumulatedMin: 0, completedAt: new Date().toISOString() });
+                                } else {
+                                  writePartial({ actualMin: elapsed, startedAt: null, accumulatedMin: 0, completedAt: new Date().toISOString() });
+                                }
+                              };
+                              const onElapsedLongPress = (e) => {
+                                e.stopPropagation();
+                                if (typeof window === "undefined") return;
+                                const current = computeElapsed();
+                                const input = window.prompt("Edit elapsed minutes:", String(current));
+                                if (input == null) return;
+                                const n = parseInt(input, 10);
+                                if (!Number.isFinite(n) || n < 0) return;
+                                // If running, anchor a new startedAt at now so
+                                // the new accumulatedMin = entered value and
+                                // elapsed display continues counting up from there.
+                                writePartial({
+                                  accumulatedMin: n,
+                                  ...(isRunning ? (isTask ? { actualStartedAt: new Date().toISOString() } : { startedAt: new Date().toISOString() }) : {}),
+                                });
+                              };
+
+                              // Running state: ⏸ pause + ✓ done + elapsed
                               if ((isTask || isRoutine) && isRunning && startedAt) {
-                                const elapsedMin = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
-                                const onStopClick = (e) => {
-                                  e.stopPropagation();
-                                  if (isTask) {
-                                    const elapsedMs = Date.now() - new Date(startedAt).getTime();
-                                    const aMin = Math.max(1, Math.round(elapsedMs / 60000));
-                                    setTasks(prev => prev.map(t =>
-                                      t.id === slot.id
-                                        ? { ...t, actualMin: aMin, actualStartedAt: null, completedAt: new Date().toISOString() }
-                                        : t
-                                    ));
-                                  } else {
-                                    const elapsedMs = Date.now() - new Date(startedAt).getTime();
-                                    const aMin = Math.max(1, Math.round(elapsedMs / 60000));
-                                    setRoutineTimers(prev => ({
-                                      ...prev,
-                                      [slot.id]: { startedAt: prev[slot.id]?.startedAt || new Date().toISOString(), actualMin: aMin, completedAt: new Date().toISOString() }
-                                    }));
-                                  }
-                                };
+                                const elapsedMin = computeElapsed();
                                 return (
-                                  <button onClick={onStopClick} title="Stop timer · captures actual time" style={{
-                                    background: "transparent", border: "none", padding: 0,
-                                    color: C.accent, fontWeight: 700, fontSize: 9,
-                                    fontFamily: "'JetBrains Mono', monospace",
-                                    cursor: "pointer",
-                                  }}>
-                                    ⏸ {elapsedMin}m
-                                  </button>
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                    <button onClick={onPauseClick} title="Pause (keeps elapsed time, tap ▶ to resume)" style={{
+                                      background: "transparent", border: "none", padding: "0 2px",
+                                      color: C.gold, fontWeight: 700, fontSize: 11,
+                                      cursor: "pointer", lineHeight: 1,
+                                    }}>⏸</button>
+                                    <button
+                                      onClick={onDoneClick}
+                                      onContextMenu={(e) => { e.preventDefault(); onElapsedLongPress(e); }}
+                                      title="Mark done · long-press to edit elapsed minutes"
+                                      style={{
+                                        background: "transparent", border: "none", padding: 0,
+                                        color: C.accent, fontWeight: 700, fontSize: 9,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        cursor: "pointer",
+                                      }}>
+                                      ✓ {elapsedMin}m
+                                    </button>
+                                  </span>
+                                );
+                              }
+
+                              // Paused state: ▶ resume + ✓ done + accumulated
+                              if ((isTask || isRoutine) && isPaused) {
+                                const elapsedMin = computeElapsed();
+                                return (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                    <button onClick={onResumeClick} title="Resume timer (continues from paused total)" style={{
+                                      background: "transparent", border: "none", padding: "0 2px",
+                                      color: C.sage, fontWeight: 700, fontSize: 11,
+                                      cursor: "pointer", lineHeight: 1,
+                                    }}>▶</button>
+                                    <button
+                                      onClick={onDoneClick}
+                                      onContextMenu={(e) => { e.preventDefault(); onElapsedLongPress(e); }}
+                                      title="Mark done · long-press to edit elapsed minutes"
+                                      style={{
+                                        background: "transparent", border: "none", padding: 0,
+                                        color: C.muted, fontWeight: 600, fontSize: 9,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        cursor: "pointer",
+                                        fontStyle: "italic",
+                                      }}>
+                                      {elapsedMin}m ‖
+                                    </button>
+                                  </span>
                                 );
                               }
 
@@ -33675,6 +33964,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             })()}
                           </div>
                         )}
+                        {/* v05.05bt424 → bt426 — Slot tier badge.
+                            bt424 showed this for all non-past slots,
+                            but on FREE blocks the middle of the card
+                            already says 'LIGHT · uninterrupted...' or
+                            'DEEP · ...' so the badge was redundant.
+                            Per chat: 'now there is a redundance where
+                            there is the badge under the timer but then
+                            in the middle fo the task card you see the
+                            focus as well.' Restrict to non-free slots
+                            — that's where the badge actually adds info,
+                            since task/routine rows show the title in
+                            the middle, not the focus. */}
+                        {!isPast && !isFree && (() => {
+                          const tier = (blockFocus || "").toLowerCase();
+                          if (tier !== "deep" && tier !== "shallow") return null;
+                          const isDeep = tier === "deep";
+                          const c = isDeep ? FOCUS_COLOR.deep : FOCUS_COLOR.shallow;
+                          return (
+                            <div style={{
+                              marginTop: 2,
+                              display: "inline-flex",
+                              padding: "1px 5px",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8, fontWeight: 800,
+                              letterSpacing: "0.10em",
+                              color: c,
+                              background: `${c}1a`,
+                              border: `1px solid ${c}55`,
+                              borderRadius: 3,
+                              textTransform: "uppercase",
+                              whiteSpace: "nowrap",
+                            }} title={isDeep ? "Intrinsic deep-work window" : "Intrinsic light-work / shallow window"}>
+                              {isDeep ? "▲ DEEP" : "○ LIGHT"}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* v05.05bt132 — Circle icons removed; tag pill + border
@@ -33830,6 +34155,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   fontSize: 13, lineHeight: 1,
                                   fontFamily: "inherit",
                                 }}>⋯</button>
+                              {/* v05.05bt424 — Per chat: 'bt409 swipe →
+                                  tap-target alternative · Replace
+                                  swipe-right (untestable on trackpad)
+                                  with tap-target affordance.' Delete is
+                                  currently reachable only via the
+                                  swipe-to-reveal-delete gesture (touch-
+                                  only, broken on Mac trackpad) or via
+                                  the ⋯ modal. Adding × right here gives
+                                  every device a one-tap delete from the
+                                  schedule row. Confirms before destroying
+                                  so accidental taps don't wipe a task. */}
+                              <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const ok = typeof window !== "undefined"
+                                    ? window.confirm(`Delete "${slot.title}"?`)
+                                    : true;
+                                  if (ok) {
+                                    setInlineTitleEdit(null);
+                                    deleteTask(slot.id);
+                                  }
+                                }}
+                                title="Delete this task"
+                                style={{
+                                  width: 32, height: 32, padding: 0,
+                                  background: "transparent",
+                                  border: `1px solid ${C.accent}66`,
+                                  borderRadius: 6,
+                                  color: C.accent, cursor: "pointer",
+                                  fontSize: 16, lineHeight: 1, fontWeight: 700,
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  flexShrink: 0,
+                                  fontFamily: "inherit",
+                                }}>×</button>
                             </div>
                           ) : (
                           <span
@@ -34194,6 +34555,153 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           </span>
                           )}
                         </div>
+                        {/* v05.05bt423 — Concurrent subtasks (option E:
+                            pill that expands to checklist). Renders for
+                            tasks that have one or more concurrentItems.
+                            Collapsed by default — small pill below title
+                            with count. Tap to expand into a tray with
+                            each item as a checkbox row + optional timer
+                            chip. Tap the chevron / pill again to collapse. */}
+                        {isTask && Array.isArray(slot.concurrentItems) && slot.concurrentItems.length > 0 && (() => {
+                          const items = slot.concurrentItems;
+                          const isExpanded = expandedConcurrentId === slot.id;
+                          const incomplete = items.filter(ci => !ci.completedAt).length;
+                          const total = items.length;
+                          return (
+                            <div style={{ marginTop: 5 }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedConcurrentId(isExpanded ? null : slot.id);
+                                  setConcurrentAddDraft("");
+                                }}
+                                style={{
+                                  display: "inline-flex", alignItems: "center", gap: 6,
+                                  padding: "3px 9px 3px 7px",
+                                  background: `${C.pump}1f`,
+                                  border: `1px solid ${C.pump}66`,
+                                  borderRadius: 20,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                                title={isExpanded ? "Collapse concurrent items" : "Show concurrent items"}>
+                                <span style={{
+                                  color: C.pump, fontFamily: "'JetBrains Mono', monospace",
+                                  fontWeight: 800, fontSize: 11,
+                                }}>‖</span>
+                                <span style={{
+                                  fontSize: 13, fontStyle: "italic", color: C.ink,
+                                }}>
+                                  {total === 1 ? items[0].title : `${incomplete}/${total} concurrent`}
+                                </span>
+                                {items.some(ci => ci.durationMin && !ci.completedAt) && (
+                                  <span style={{
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 9.5, fontWeight: 700, color: C.pump,
+                                    marginLeft: 2,
+                                  }}>⏳</span>
+                                )}
+                                <span style={{ fontSize: 10, color: C.muted, marginLeft: 2 }}>
+                                  {isExpanded ? "▾" : "▸"}
+                                </span>
+                              </button>
+                              {isExpanded && (
+                                <div style={{
+                                  marginTop: 7, marginLeft: 3,
+                                  padding: "7px 10px",
+                                  borderLeft: `2px dotted ${C.pump}80`,
+                                  background: `${C.pump}0a`,
+                                  borderRadius: "0 6px 6px 0",
+                                }}>
+                                  {items.map(ci => (
+                                    <div key={ci.id} style={{
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      padding: "4px 2px",
+                                    }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); toggleConcurrentItem(slot.id, ci.id); }}
+                                        style={{
+                                          width: 14, height: 14, borderRadius: 3,
+                                          border: `1.5px solid ${ci.completedAt ? C.pump : C.muted}`,
+                                          background: ci.completedAt ? C.pump : "transparent",
+                                          padding: 0, cursor: "pointer", flexShrink: 0,
+                                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                          color: "#fff", fontSize: 9, lineHeight: 1, fontWeight: 800,
+                                        }}>{ci.completedAt ? "✓" : ""}</button>
+                                      <span style={{
+                                        fontSize: 13.5,
+                                        color: ci.completedAt ? C.muted : C.ink,
+                                        textDecoration: ci.completedAt ? "line-through" : "none",
+                                        fontStyle: ci.durationMin ? "italic" : "normal",
+                                        flex: 1, minWidth: 0,
+                                      }}>{ci.title}</span>
+                                      {ci.durationMin && !ci.completedAt && (
+                                        <span style={{
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                          fontSize: 9.5, fontWeight: 700, color: C.pump,
+                                          marginLeft: "auto",
+                                        }} title="Bell will alert when timer ends (coming soon)">
+                                          ⏳ {ci.durationMin}m 🔔
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); removeConcurrentItem(slot.id, ci.id); }}
+                                        title="Remove this concurrent item"
+                                        style={{
+                                          width: 18, height: 18, padding: 0,
+                                          background: "transparent", border: "none",
+                                          color: C.muted, cursor: "pointer",
+                                          fontSize: 13, lineHeight: 1, opacity: 0.55,
+                                        }}>×</button>
+                                    </div>
+                                  ))}
+                                  {/* Inline add new concurrent item */}
+                                  <div style={{
+                                    display: "flex", gap: 6, marginTop: 6,
+                                    paddingTop: 6, borderTop: `1px dotted ${C.pump}33`,
+                                  }}>
+                                    <input
+                                      type="text"
+                                      value={concurrentAddDraft}
+                                      onChange={(e) => setConcurrentAddDraft(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") addConcurrentItem(slot.id);
+                                        if (e.key === "Escape") { setExpandedConcurrentId(null); setConcurrentAddDraft(""); }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      placeholder="+ add concurrent (e.g. 'while gel running 25m')"
+                                      style={{
+                                        flex: 1, minWidth: 0,
+                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontSize: 13, fontStyle: "italic",
+                                        color: C.ink,
+                                        border: `1px solid ${C.pump}55`,
+                                        borderRadius: 5, padding: "3px 7px",
+                                        background: C.paper,
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); addConcurrentItem(slot.id); }}
+                                      disabled={!concurrentAddDraft.trim()}
+                                      style={{
+                                        padding: "3px 10px",
+                                        background: concurrentAddDraft.trim() ? C.pump : `${C.line}22`,
+                                        color: concurrentAddDraft.trim() ? "#fff" : C.muted,
+                                        border: "none", borderRadius: 5,
+                                        cursor: concurrentAddDraft.trim() ? "pointer" : "default",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em",
+                                      }}>ADD</button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {/* v05.05bt193 — Task reasoning panel. Renders
                             below the title when expanded. Pulls the
                             same effectiveBlockProfile reasoning the
@@ -35339,14 +35847,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         task={{ ...slot, scheduledTime: `${String(slot.start.getHours()).padStart(2,"0")}:${String(slot.start.getMinutes()).padStart(2,"0")}`, effortMin: 20 }}
                         onCancel={() => setInlineTimeEdit(null)}
                         onSave={(patch) => {
+                          // v05.05bt421 → bt422 — Per chat: 'i tried to
+                          // edit my pump session duration and it just
+                          // disappeared.' Root cause: the pump being
+                          // edited may be a PROJECTED session (bt421)
+                          // that isn't in manualSessions yet. The old
+                          // code mapped over manualSessions, found no
+                          // match, wrote back an array without the
+                          // edited session, and the next render's
+                          // projection recomputed from nextPumpAt — so
+                          // the pump vanished. Fix: MATERIALIZE the full
+                          // effective session set (incl. projected) into
+                          // manualSessions first, THEN apply the edit, so
+                          // every visible pump becomes concrete and the
+                          // edit sticks.
+                          const effective = getEffectivePumpSessions(pumpPlan, now, nextPumpAt)
+                            .filter(h => h >= 0 && h < 36);
+                          let updated;
                           if (patch.scheduledTime) {
                             const [h, m] = patch.scheduledTime.split(":").map(Number);
                             const newHour = Math.round((h + (m || 0) / 60) * 100) / 100;
-                            const updated = (pumpPlan?.manualSessions || [])
+                            updated = effective
                               .map(s => Math.abs(s - oldHour) < 0.02 ? newHour : s)
                               .sort((a, b) => a - b);
-                            setPumpPlan(p => ({ ...(p || {}), manualSessions: updated, manualSessionsDate: todayISO }));
+                          } else {
+                            // No time change (e.g. duration-only edit) —
+                            // still materialize so the session persists.
+                            updated = [...effective].sort((a, b) => a - b);
                           }
+                          setPumpPlan(p => ({ ...(p || {}), manualSessions: updated, manualSessionsDate: todayISO }));
                           setInlineTimeEdit(null);
                         }}
                       />
@@ -35566,8 +36095,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <div style={{
                     display: "flex", alignItems: "flex-start", gap: 5,
                     justifyContent: "flex-start",
-                    width: "100%", padding: "5px 6px",
+                    width: "100%", padding: side === "unscheduled" ? "5px 6px 5px 12px" : "5px 6px",
                     borderBottom: isQuickOpen ? "none" : `1px solid ${C.line}15`,
+                    // v05.05bt424 — Per chat: 'when i am quickly scrolling
+                    // through - in cadence mode, it is hard to tell where
+                    // the scheduled tasks stop and the unscheduled starts'.
+                    // Option B from the brainstorm: row-level visual swap.
+                    // Unscheduled rows get a left dashed border + slight
+                    // indent so they read as 'not time-anchored' at a
+                    // glance — scheduled rows keep their normal treatment.
+                    // Title-italic + em-dash time are applied below where
+                    // those elements render.
+                    borderLeft: side === "unscheduled"
+                      ? `2px dashed ${C.gold}55`
+                      : undefined,
                     background: isQuickOpen ? `${C.gold}08` : (isPinned ? `${C.gold}0a` : "transparent"),
                     textAlign: "left",
                   }}>
@@ -35621,6 +36162,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         flex: 1, color: C.ink,
                         fontFamily: "'Cormorant Garamond', serif",
                         fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
+                        // v05.05bt424 — Option B from brainstorm:
+                        // unscheduled-pile titles render italic so they
+                        // visually read as 'not yet placed in time',
+                        // distinct from the upright scheduled rows.
+                        fontStyle: side === "unscheduled" ? "italic" : "normal",
                         whiteSpace: "normal",
                         wordBreak: "break-word",
                         textDecoration: done ? "line-through" : "none",
@@ -36403,7 +36949,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               fontFamily: "'JetBrains Mono', monospace",
                               fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
                               color: C.gold, textTransform: "uppercase",
-                            }}>Unscheduled for today · {forToday.length}</span>
+                            }}>Not yet scheduled · {forToday.length}</span>
                             <span style={{
                               marginLeft: "auto",
                               fontSize: 11, color: C.gold, opacity: 0.5,
@@ -37822,6 +38368,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               t.id === id ? { ...t, scheduledTime: null, scheduledDate: null } : t
             ));
           }}
+          onShowReasoning={(id) => {
+            // v05.05bt424 — Per chat: '"Why here" trigger in EditTaskModal
+            // - Reasoning JSX from bt406 already in place; needs trigger
+            // button.' The reasoning panel renders inline beneath the
+            // scheduled task row when expandedReasonTaskId matches. From
+            // the modal, close the modal and expand that task's panel —
+            // the schedule scrolls into view with reasoning shown.
+            setExpandedReasonTaskId(id);
+            setEditingTask(null);
+          }}
         />
       )}
       {/* v05.05bt134 — Routine override modal. Adjusts the start time
@@ -38182,7 +38738,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
 // v05.05bt107 — Edit existing task. Same shape as add form but
 // pre-populated. Delete affordance also surfaces here.
-function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) {
+function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, onShowReasoning }) {
   const [title, setTitle] = useState(task.title);
   const [effortMin, setEffortMin] = useState(task.effortMin);
   const [regretScore, setRegretScore] = useState(task.regretScore);
@@ -38714,6 +39270,28 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay }) 
               borderBottom: `1px dotted ${C.line}66`,
             }}>
             remove from today (keep in task list)
+          </button>
+        </div>
+      )}
+      {/* v05.05bt424 — Per chat: '"Why here" trigger in EditTaskModal —
+          Reasoning JSX from bt406 already in place; needs trigger
+          button.' Tap → closes the modal and expands the reasoning
+          panel inline beneath this task on the schedule timeline.
+          Only shown for scheduled tasks (the reasoning explains slot
+          alignment + circadian fit + baby context — meaningless for
+          tasks that aren't placed yet). */}
+      {task.scheduledTime && onShowReasoning && (
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          <button
+            onClick={() => onShowReasoning(task.id)}
+            style={{
+              background: "transparent", border: "none", padding: 0,
+              fontFamily: "'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 12,
+              color: C.gold, cursor: "pointer",
+              borderBottom: `1px dotted ${C.gold}66`,
+            }}>
+            ↳ why here? (show slot reasoning)
           </button>
         </div>
       )}
