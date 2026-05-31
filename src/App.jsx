@@ -15,11 +15,15 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt437";
+const APP_VERSION = "2026.05.05bt441";
 const APP_BUILD_NOTES = [
-  "FITS/FILL DIALOG NOW CENTERED. Per chat: 'The fit dialog is too low.' The bt434 unified modal opened bottom-sheet style (anchored to bottom of viewport with alignItems:'flex-end') — fine for short sheets but awkward for this dialog, which has tabs, a search bar, a candidate list, and an optional 'why' panel. On taller phones it landed far from where you tapped + felt like you had to drag your eye down. FIX: changed alignItems to 'center' so the modal floats mid-screen. Maxheight stays at 88vh so it scrolls if the list is long. Padding (12px) keeps it off the edges. Build verified clean via esbuild.",
+  "MULTIPLE SMALL FIXES + PARTIAL DELIVERY OF THE BIGGER ASKS.\\n\\n(1) FIND DIALOG IS NOW A COMPACT POP-OUT (~340px wide, was 460). Pop-in animation: 220ms scale (0.85 → 1) + opacity (0 → 1) + slight upward translate with overshoot (cubic-bezier 0.34, 1.56, 0.64, 1). Reverses on close. iOS-sheet feel. Per chat: 'i want a dialog pop up box not something that fills the whole page'.\\n\\n(2) THREE DRAWER FILTER PILLS UNDER FIND. UNSCHEDULED · ↻ SCHEDULED · BACKLOG — multi-select toggles with live counts. Default state: UNSCHEDULED + SCHEDULED on, BACKLOG off. Tap a pill to flip. Replaces the old 'show backlog' link.\\n\\n(3) INTERNAL SCROLL (Option C from the v4 mockup). The candidate list is now inside a maxHeight 280px scroll container with subtle dashed top/bottom borders so you know there's more. Footer reads 'SHOWING N OF M · SCROLL FOR MORE'. No pagination.\\n\\n(4) PILE SECTION EXPAND DEFAULTS FLIPPED. Per chat: 'scheduled for today should be the only expanded'. SCHEDULED now opens expanded; UNSCHEDULED + BACKLOG collapsed. Tap header to toggle.\\n\\n(5) LEFT RAILS for state distinction. Each pile drawer card now has a 5px solid colored stripe down the LEFT in addition to the 2px top border: gold (SCHEDULED) / muted (UNSCHEDULED) / violet (BACKLOG). Reads at a glance.\\n\\n(6) UP/DOWN ARROW EVENT FIX. Per chat: 'the up and down arrows should work'. The bt440 arrows used onPointerUp + stopPropagation but the row's onClick still fired (different event type). Added onClick={e.stopPropagation()} as a defensive measure so the row's quick-action panel doesn't open over the arrow action.\\n\\n(7) INLINE RENAME FOR FILLED TASKS IN FREED STRIP. Per chat: 'when editing that task title i just want to edit then and there without having a big dialog box'. Tap a filled task's title (e.g., 'drive to toche' inside a pump strip) → it converts to an inline editable input right there. Enter or blur saves, Escape cancels. The big EditTaskModal is gone for this specific surface (still available via the kebab on regular pile rows for full editing).\\n\\n(8) FILL BUTTON READABILITY. Per chat: 'the fill button i cannot read when i can fill in a concurrent task'. Bumped fontSize 10→11, padding 5/12→7/14, removed the boxShadow halo that was washing out the letters. Should now read cleanly against the dashed freed strip.\\n\\nNOT IN THIS BUILD (will need a follow-up conversation):\\n• PRIMARY/SECONDARY TASK SEMANTICS — when a non-passive task is slotted INTO a passive session, the slotted task should become the 'primary' that blocks completion of the host. Example: pump 4:18-5:18 + drive 4:23-5:18 means the next schedule block starts at 5:18 (drive ends), not 4:48 (pump duration would have ended). The pump can't be crossed off until drive is done. This is a meaningful scheduler change (host slot effective end = max of host end and slotted task end) plus visual changes (slotted task becomes prominent, host becomes annotation). Needs a mockup discussion first.\\n• UNIVERSAL UNDO — was on backlog (Q1 from the multi-question session). Needs design: hotkey (cmd+Z), undo toast after destructive actions, OR a persistent button somewhere. Also needs the action-stack data model.\\n• DELETE CONFIRMATION — the kebab → 🗑 already has a 2-tap confirm (the row turns coral with 'Tap again to confirm'). Want me to upgrade it to a window.confirm() dialog instead? Or stronger visual confirm? Tell me which surface feels under-protected and I'll fix.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt441", summary: "Compact pop-out Find dialog (340px) with pop-in animation, drawer filter pills (UNSCHEDULED/SCHEDULED/BACKLOG multi-select, counts visible), internal scroll on the candidate list. Pile section defaults: scheduled expanded, others collapsed. Each section card has a 5px colored left rail (gold/muted/violet) plus top border for state distinction. Up/down arrow buttons now also stopPropagation on onClick (the bt440 version only stopped onPointerUp, letting the row's onClick still fire). Filled-task title in freed strip is now inline-editable (input + Enter/Escape) instead of opening EditTaskModal. FILL button readability bumped (size 10→11, padding 5/12→7/14, no halo). Pushed to next conversation: primary/secondary task semantics for passive sessions, universal undo, delete confirm pattern. Build verified clean via esbuild." },
+  { version: "2026.05.05bt440", summary: "Pile drawers redesign ships (Option 2 + Cleanup B from pile_drawers.html mockup). Each section is now an index card: paper bg, rounded corners, 2px colored top-edge (gold/muted/violet). Row right-side cluster reduced to focus emoji + R + ↑ ↓ arrows + ⋯ kebab; passive toggle + delete moved into kebab popout (pin, passive, edit, delete with two-tap confirm). ↑↓ arrows move tasks between drawers (backlog → unscheduled → scheduled), disabled directions stay greyed in place. Build verified clean via esbuild." },
+  { version: "2026.05.05bt439", summary: "Pile Manager modal ships. Small ⚙ MANAGE · DELETE button at top of pile area opens a modal with two modes: ALL (every incomplete task grouped by section — UNSCHEDULED / SCHEDULED / BACKLOG) and DUPLICATES (tasks clustered by fuzzy-match siblings via bt403's findSimilarTitles). Each row is a checkbox; group-level ✓ ALL / × CLEAR shortcuts. Footer shows live SELECTED count + coral DELETE button. Stays open after delete to keep cleaning. Build verified clean via esbuild." },
+  { version: "2026.05.05bt438", summary: "Two fixes. (1) Cadence NOW marker now reads onDuty.parent (Solène's source of truth) before falling back to GRANDPARENTS — fixes the 'Solène shows Mommy on duty / Cadence shows GRANDPARENTS' disagreement. Threaded onDuty App→ShiftsView→TodayTaskPlanCard. (2) Sticky top brand strip restored its viewer-color tint (mauve for Mommy / blue for Daddy / sage for Caregiver) via a soft top-to-bottom gradient + 2px colored bottom border. Visible from across the room. Build verified clean via esbuild." },
   { version: "2026.05.05bt437", summary: "Unified Fits/FILL dialog now centers vertically instead of bottom-anchored. Was bottom-sheet style (alignItems:'flex-end'), now alignItems:'center' so the modal floats mid-screen near the user's eye line rather than at the bottom of the viewport. Same maxHeight 88vh. Build verified clean via esbuild." },
   { version: "2026.05.05bt436", summary: "Defensive shift-time formatting. fmtShiftRange used to render 'NaN' when shift.end's minutes couldn't be parsed (e.g. '12' without ':MM'). Now validates hour (returns '?' if not finite) and defaults minutes to '00' if unparseable. So '11:22p–12:NaN' becomes '11:22p–12:00' — graceful instead of broken. Upstream cause of malformed shift data not yet identified; re-saving the shift via edit should normalize. Build verified clean via esbuild." },
   { version: "2026.05.05bt435", summary: "NOW marker now respects takeover state. Was hardcoded to 'NOW · GRANDPARENTS' whenever onsite=true — but when a parent has done an impromptu takeover during work hours, they have the baby and grandparents are not involved. Added branch before the onsite fallback: shows 'NOW · COVERING DADDY' (or appropriate variant) with the covering parent's color. Threaded takeover prop App → ShiftsView → TodayTaskPlanCard. Other slot-level 'grandparents have baby' labels not yet updated (broader caregiver-aware refactor pending). Build verified clean via esbuild." },
@@ -6272,8 +6276,15 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           journal. */}
       <div style={{
         position: "sticky", top: 0, zIndex: 5,
-        background: C.bg,
-        borderBottom: `1px solid ${C.line}25`,
+        // v05.05bt438 — Per chat: 'it used to be that when i switch
+        // views, i could tell it was mommy vs. daddy view from far
+        // away. i think something changed. the background was more of
+        // a blue-ish color for daddy and a mauve-ish color for mommy.'
+        // Restored the visible viewer-color wash on the sticky top
+        // strip + a heavier bottom border in the same color so the
+        // identity reads across the room without overpowering content.
+        background: `linear-gradient(${userTint}33, ${userTint}1a 60%, ${C.bg})`,
+        borderBottom: `2px solid ${userTint}66`,
         paddingTop: "env(safe-area-inset-top, 0px)",
         boxShadow: `0 2px 12px rgba(31, 27, 22, 0.04)`,
       }}>
@@ -7045,6 +7056,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             nextPumpAt={nextPumpAt} lastPump={lastPump}
             activePump={activePump}
             takeover={takeover}
+            onDuty={onDuty}
             todaySetup={todaySetup} setTodaySetup={setTodaySetup}
             focusProfile={focusProfile} setFocusProfile={setFocusProfile}
             dailyEnergy={dailyEnergy} setDailyEnergy={setDailyEnergy}
@@ -18608,7 +18620,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -18777,6 +18789,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
           pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
           nextPumpAt={nextPumpAt} lastPump={lastPump} activePump={activePump}
           takeover={takeover}
+          onDuty={onDuty}
           onsite={onsite} setOnsite={setOnsite}
           todaySetup={todaySetup} setTodaySetup={setTodaySetup}
           meetings={meetings} setMeetings={setMeetings}
@@ -27507,7 +27520,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -27646,6 +27659,34 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const [freedFillTab, setFreedFillTab] = useState("find");
   const [freedFillShowBacklog, setFreedFillShowBacklog] = useState(false);
   const [freedFillShowWhy, setFreedFillShowWhy] = useState(false);
+  // v05.05bt441 — Drawer filter pills under FIND tab. Multi-select
+  // toggles: scheduled / unscheduled / backlog. Defaults match the
+  // current pile expand behavior — UNSCHEDULED off (since by default
+  // the user wants quick access to her scheduled-today tasks for
+  // moving / FILLing in freed slots).
+  // Actually per chat: 'scheduled for today should be the only
+  // expanded' — but for the FIND filter, the user typically wants
+  // unscheduled candidates (things to slot). Default both SCHEDULED
+  // and UNSCHEDULED on; backlog off to keep the list short.
+  const [freedFillDrawerFilter, setFreedFillDrawerFilter] = useState(() => ({
+    scheduled: true, unscheduled: true, backlog: false,
+  }));
+  // v05.05bt439 — Per chat: 'i also need a way of selecting multiple
+  // from the pile and deleting it instead of going one by one. also
+  // need to delete duplicates'. Pile-manager modal: multi-select with
+  // bulk delete + duplicate-detection mode that groups fuzzy matches.
+  const [pileManagerOpen, setPileManagerOpen] = useState(false);
+  const [pileSelectedIds, setPileSelectedIds] = useState(() => new Set());
+  const [pileManagerMode, setPileManagerMode] = useState("all"); // "all" | "dupes"
+  // v05.05bt440 — Pile drawers redesign (cleanup B from pile_drawers.html).
+  // Tracks which row's kebab popout is open, mutually exclusive.
+  // v05.05bt441 — Inline rename for filled-task title in freed strip.
+  // Tracks which filled task is currently being renamed. Null = none.
+  const [renamingFilledTaskId, setRenamingFilledTaskId] = useState(null);
+  const [pileKebabOpenId, setPileKebabOpenId] = useState(null);
+  // Tracks pending delete confirmation per row (kebab delete) so the
+  // user gets a two-tap commit pattern, mirroring the old × button.
+  const [pileKebabPendingDeleteId, setPileKebabPendingDeleteId] = useState(null);
   // v05.05bt433 — Tier badge rationale expand. Single id, mutually
   // exclusive — tapping a second badge collapses the first.
   const [expandedTierReasonId, setExpandedTierReasonId] = useState(null);
@@ -28443,11 +28484,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // sections for planning.' Backlog has its own collapsed-by-default
   // state since it can be long.
   const [backlogExpanded, setBacklogExpanded] = useState(false);
-  // v05.05bt376 — Per chat: 'i need to be able to collapse each
-  // section.' Per-section collapse for Scheduled + For Today too.
-  // Default expanded since these are typically short and most-
-  // relevant on first open.
-  const [scheduledExpanded, setScheduledExpanded] = useState(false);
+  // v05.05bt376 → bt441 — Per chat: 'scheduled for today should be
+  // the only expanded. the other state should be collapsed by
+  // default.' Scheduled stays expanded as the actionable drawer;
+  // Unscheduled + Backlog collapse to keep the pile compact.
+  const [scheduledExpanded, setScheduledExpanded] = useState(true);
   // v05.05bt416 — Per chat: 'lets under each section state, have a
   // way of adding directly to that state in case we dont remember
   // clicking on the big log button.' Shared state for which section's
@@ -28567,7 +28608,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       });
     }
   };
-  const [forTodayExpanded, setForTodayExpanded] = useState(true);
+  const [forTodayExpanded, setForTodayExpanded] = useState(false);
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
   // kinda long so have the ability to filter as well by the
   // different categories.' Same chip pattern as fits picker.
@@ -33227,6 +33268,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       ? `NOW · COVERING ${(takeover.originalParent || "").toUpperCase()}`
                       : `NOW · ${(takeover.coveringParent || "").toUpperCase()} COVERS`;
                   }
+                  // v05.05bt435 → bt438 — Per chat: 'right now it
+                  // shows mommy on duty but in the cadence scheduler
+                  // it shows grandparents on the slider'. Solène's
+                  // OnDutyCard takes onDuty.parent as the truth for
+                  // who has the baby right now (it already accounts
+                  // for shift schedule + takeover via onDuty
+                  // derivation at App level). Cadence's NOW marker
+                  // was diverging by using bare onsite=true → always
+                  // GRANDPARENTS. Now: if onDuty says a parent is on
+                  // duty, respect that — show their name, in their
+                  // color, before falling back to the GRANDPARENTS
+                  // label. This makes the two views consistent.
+                  else if (onDuty && onDuty.parent) {
+                    const isYou = onDuty.parent === currentUser;
+                    const dutyColor = onDuty.parent === "Mommy" ? C.mommy : C.daddy;
+                    _color = dutyColor;
+                    _label = isYou
+                      ? "NOW · YOU"
+                      : `NOW · ${(onDuty.parent || "").toUpperCase()}`;
+                  }
                   else if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
                   else if (_m && _d) { _color = C.gold; _label = "NOW · TOGETHER"; }
                   else if ((_m && currentUser === "Mommy") || (_d && currentUser === "Daddy")) {
@@ -34857,13 +34918,57 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       can change title / effort / focus
                                       / unschedule. × on the right still
                                       un-slots without deleting. */}
+                                  {/* v05.05bt433 → bt441 — Per chat:
+                                      'when editing that task title i
+                                      just want to edit then and there
+                                      without having a big dialog box
+                                      that is clunky to fill'. Tap →
+                                      converts the title to an inline
+                                      editable input (instead of
+                                      opening EditTaskModal). Enter or
+                                      blur saves; Escape cancels. */}
+                                  {renamingFilledTaskId === filledTask.id ? (
+                                    <input
+                                      type="text"
+                                      defaultValue={filledTask.title}
+                                      autoFocus
+                                      onClick={(e) => e.stopPropagation()}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          const next = e.currentTarget.value.trim();
+                                          if (next) {
+                                            setTasks(prev => prev.map(t => t.id === filledTask.id ? { ...t, title: next } : t));
+                                          }
+                                          setRenamingFilledTaskId(null);
+                                        } else if (e.key === "Escape") {
+                                          setRenamingFilledTaskId(null);
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        const next = e.currentTarget.value.trim();
+                                        if (next && next !== filledTask.title) {
+                                          setTasks(prev => prev.map(t => t.id === filledTask.id ? { ...t, title: next } : t));
+                                        }
+                                        setRenamingFilledTaskId(null);
+                                      }}
+                                      style={{
+                                        flex: 1, minWidth: 0,
+                                        background: C.bg,
+                                        border: `1px solid ${C.sage}66`,
+                                        padding: "4px 8px", borderRadius: 5,
+                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontStyle: "italic", fontSize: 13.5,
+                                        color: C.ink,
+                                      }}
+                                    />
+                                  ) : (
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setEditingTask(filledTask);
+                                      setRenamingFilledTaskId(filledTask.id);
                                     }}
-                                    title="Tap to edit · × on the right unfills"
+                                    title="Tap to rename · × on the right unfills"
                                     style={{
                                       flex: 1, minWidth: 0,
                                       background: "transparent", border: "none",
@@ -34872,6 +34977,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       fontSize: 13.5, color: C.ink,
                                       fontStyle: "italic",
                                     }}>{filledTask.title}</button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -34924,20 +35030,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     title="Fill with a light task from your pile"
                                     style={{
                                       fontFamily: "'JetBrains Mono', monospace",
-                                      fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
-                                      // v05.05bt431 → bt432 — Per chat: 'did
-                                      // you mean the fill for the concurrent
-                                      // to be barely perceptible?' No — it
-                                      // should be the clear primary action.
-                                      // Solid sage with light text + slight
-                                      // glow so it pops against the dashed
-                                      // freed strip.
+                                      // v05.05bt432 → bt441 — Per chat:
+                                      // 'the fill button i cannot read
+                                      // when i can fill in a concurrent
+                                      // task'. Bumped fontSize 10→11,
+                                      // padding 5/12→7/14, made text
+                                      // more visible. Background is
+                                      // brighter sage with no halo
+                                      // (which was washing out the
+                                      // letters).
+                                      fontSize: 11, fontWeight: 800, letterSpacing: "0.10em",
                                       color: "#fff",
                                       background: C.sage,
                                       border: `1px solid ${C.sage}`,
-                                      borderRadius: 5, padding: "5px 12px",
+                                      borderRadius: 6, padding: "7px 14px",
                                       cursor: "pointer",
-                                      boxShadow: `0 0 0 2px ${C.sage}33`,
                                     }}>+ FILL</button>
                                 </div>
                               )}
@@ -36861,15 +36968,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             pointerEvents: "none",
                           }}>◆</span>
                       )}
-                      {/* v05.05bt428 — Per chat: 'i like option 2 and 3'.
-                          Per-row ⏳ toggle. Always visible on pile rows
-                          regardless of side. Greyed = active (default),
-                          sage-filled = passive (frees host slot for
-                          light tasks during the wait portion). Tap to
-                          flip. handleTimeMin auto-populates from the
-                          verb lookup on first flip; user can edit it
-                          in the task modal later. */}
-                      {!done && (
+                      {/* v05.05bt428 → bt440 — Visible ⏳ toggle is
+                          now hidden behind the kebab popout (Cleanup
+                          B). The standalone visible button stayed
+                          while data model was new; now that the
+                          status is well-known and the kebab carries
+                          it, the inline button is redundant. The
+                          FREES badge below still renders (passive
+                          read of state, not an action). */}
+                      {false && !done && (
                         <button
                           type="button"
                           onPointerDown={(e) => {
@@ -36935,12 +37042,37 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           effortMin and schedules the task to its
                           start. If no block fits, opens the existing
                           quick-action panel for manual time entry. */}
-                      {!t.scheduledTime && !done && (
-                        <button
-                          type="button"
-                          onPointerUp={(e) => {
-                            e.stopPropagation();
-                            if (e.preventDefault) e.preventDefault();
+                      {/* v05.05bt409 → bt440 — Pile drawers redesign
+                          (cleanup B). Per chat: 'we have arrows to
+                          move it from one drawer to another'. The
+                          single '↑ slot' button is gone; in its place
+                          a side-aware ↑↓ pair that promotes/demotes
+                          between drawers. Movement rules:
+                            • backlog row: ↑ → unscheduled, ↓ disabled
+                            • unscheduled row: ↑ → scheduled (existing
+                              auto-slot logic), ↓ → backlog
+                            • scheduled row: ↑ disabled, ↓ → unscheduled
+                          Disabled directions render greyed but stay
+                          in place so the row's right edge stays
+                          aligned across drawers. */}
+                      {!done && (() => {
+                        // Determine drawer position from side prop.
+                        const drawer = side === "scheduled" ? "scheduled"
+                          : side === "backlog" ? "backlog"
+                          : "unscheduled";
+                        const canUp = drawer !== "scheduled";
+                        const canDown = drawer !== "backlog";
+                        const moveUp = (e) => {
+                          e.stopPropagation();
+                          if (e.preventDefault) e.preventDefault();
+                          if (drawer === "backlog") {
+                            // backlog → unscheduled
+                            setTasks(prev => prev.map(x => x.id === t.id
+                              ? { ...x, drawer: false, scheduledDate: referenceISO }
+                              : x
+                            ));
+                          } else if (drawer === "unscheduled") {
+                            // unscheduled → auto-slot into scheduled (existing logic)
                             const blocks = getWorkableBlocks();
                             const dur = t.effortMin || 30;
                             const fit = (blocks || []).find(b => (b.durationMin || 0) >= dur);
@@ -36952,26 +37084,62 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 : x
                               ));
                             } else {
-                              // No block fits — fall back to manual entry panel.
                               setPileQuickActionId(t.id);
                               setPileQuickTimeDraft("");
                             }
-                          }}
-                          title="Slot into next free block · tap row title for time control"
-                          style={{
-                            fontSize: 11, color: C.mommy,
-                            fontWeight: 800, flexShrink: 0, marginTop: 1,
-                            padding: "1px 6px",
-                            background: `${C.mommy}18`,
-                            borderRadius: 4,
-                            border: `1px solid ${C.mommy}44`,
-                            cursor: "pointer",
-                            letterSpacing: "0.04em",
-                            touchAction: "manipulation",
-                            WebkitTapHighlightColor: "transparent",
-                            fontFamily: "'JetBrains Mono', monospace",
-                          }}>↑ slot</button>
-                      )}
+                          }
+                        };
+                        const moveDown = (e) => {
+                          e.stopPropagation();
+                          if (e.preventDefault) e.preventDefault();
+                          if (drawer === "scheduled") {
+                            // scheduled → unscheduled
+                            setTasks(prev => prev.map(x => x.id === t.id
+                              ? { ...x, scheduledTime: null, drawer: false }
+                              : x
+                            ));
+                          } else if (drawer === "unscheduled") {
+                            // unscheduled → backlog
+                            setTasks(prev => prev.map(x => x.id === t.id
+                              ? { ...x, drawer: true, scheduledTime: null }
+                              : x
+                            ));
+                          }
+                        };
+                        const arrowStyle = (enabled, accent) => ({
+                          fontSize: 12, color: enabled ? accent : C.muted,
+                          fontWeight: 800, flexShrink: 0, marginTop: 1,
+                          padding: "1px 6px",
+                          background: enabled ? `${accent}14` : "transparent",
+                          borderRadius: 4,
+                          border: `1px solid ${enabled ? `${accent}55` : `${C.line}33`}`,
+                          cursor: enabled ? "pointer" : "default",
+                          opacity: enabled ? 1 : 0.35,
+                          letterSpacing: "0.04em",
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          lineHeight: 1.1,
+                        });
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onPointerUp={canUp ? moveUp : undefined}
+                              onClick={(e) => { e.stopPropagation(); }}
+                              disabled={!canUp}
+                              title={canUp ? (drawer === "backlog" ? "↑ to unscheduled" : "↑ schedule for today") : "Already at top drawer"}
+                              style={arrowStyle(canUp, C.sage)}>↑</button>
+                            <button
+                              type="button"
+                              onPointerUp={canDown ? moveDown : undefined}
+                              onClick={(e) => { e.stopPropagation(); }}
+                              disabled={!canDown}
+                              title={canDown ? (drawer === "scheduled" ? "↓ to unscheduled" : "↓ to backlog") : "Already in backlog"}
+                              style={arrowStyle(canDown, C.nap)}>↓</button>
+                          </>
+                        );
+                      })()}
                       <span
                         onPointerUp={cycleFocus}
                         title={`${fl === "deep" ? "Deep" : "Shallow"} focus · tap to flip`}
@@ -37001,47 +37169,168 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         'Under task pile there's no need for a pin.'
                         Pin remains editable in the EditTaskModal
                         (Basics tab) for users who want it. */}
-                    {/* v05.05bt363 — Per chat: 'the X is not clear
-                        if this deletes off master list or not.'
-                        Behavior is side-aware:
-                          scheduled → unschedule (keeps in master)
-                          unscheduled → delete from master
-                        Both use two-tap confirm: first tap arms
-                        (label flips to red 'unschedule?' / 'delete?'),
-                        second tap commits. */}
-                    <button
-                      type="button"
-                      data-pile-delete-btn="1"
-                      onPointerUp={handleX}
-                      title={isPendingAction
-                        ? "Tap again to confirm"
-                        : side === "scheduled"
-                          ? "Remove from today (keeps task in your list)"
-                          : "Delete from master list"}
-                      aria-label={side === "scheduled" ? "Unschedule" : "Delete"}
-                      style={{
-                        background: isPendingAction ? C.accent : "transparent",
-                        color: isPendingAction ? "#fff" : (side === "scheduled" ? C.muted : C.accent),
-                        border: isPendingAction ? "none" : `1px solid ${(side === "scheduled" ? C.muted : C.accent) + "33"}`,
-                        borderRadius: isPendingAction ? 6 : 4,
-                        padding: isPendingAction ? "4px 7px" : "4px 9px",
-                        fontSize: isPendingAction ? 9.5 : 17,
-                        fontWeight: 700, lineHeight: 1,
-                        cursor: "pointer", fontFamily: isPendingAction ? "'JetBrains Mono', monospace" : "inherit",
-                        letterSpacing: isPendingAction ? "0.10em" : "0",
-                        textTransform: isPendingAction ? "uppercase" : "none",
-                        flexShrink: 0,
-                        minWidth: isPendingAction ? 90 : 36, minHeight: 32,
-                        opacity: 0.8,
-                        touchAction: "manipulation",
-                        WebkitTapHighlightColor: "transparent",
-                        WebkitAppearance: "none",
-                        userSelect: "none",
-                      }}>
-                      {isPendingAction
-                        ? (side === "scheduled" ? "unschedule?" : "delete?")
-                        : "×"}
-                    </button>
+                    {/* v05.05bt363 → bt440 — Per chat (Cleanup B):
+                        action chip cleanup. The visible × button + ⏳
+                        passive toggle are now hidden inside a single
+                        ⋯ kebab popout. Two-tap confirm pattern for
+                        delete preserved via pileKebabPendingDeleteId.
+                        Pin toggle now also accessible inline (it was
+                        previously hidden in EditTaskModal). */}
+                    <div style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        data-pile-delete-btn="1"
+                        onPointerUp={(e) => {
+                          e.stopPropagation();
+                          if (e.preventDefault) e.preventDefault();
+                          setPileKebabOpenId(prev => prev === t.id ? null : t.id);
+                          setPileKebabPendingDeleteId(null);
+                        }}
+                        title="More actions"
+                        aria-label="More actions"
+                        style={{
+                          background: pileKebabOpenId === t.id ? `${C.line}26` : "transparent",
+                          color: C.muted,
+                          border: `1px solid ${C.line}44`,
+                          borderRadius: 4,
+                          padding: "4px 9px",
+                          fontSize: 17, fontWeight: 700, lineHeight: 1,
+                          cursor: "pointer", flexShrink: 0,
+                          minWidth: 36, minHeight: 32,
+                          opacity: 0.8,
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
+                          userSelect: "none",
+                        }}>⋯</button>
+                      {pileKebabOpenId === t.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: "absolute", right: 0, top: "calc(100% + 4px)",
+                            background: C.paper,
+                            border: `1px solid ${C.line}66`,
+                            borderRadius: 7,
+                            padding: 4, minWidth: 150,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+                            zIndex: 8,
+                          }}>
+                          {/* Pin / unpin */}
+                          <button
+                            type="button"
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                              if (e.preventDefault) e.preventDefault();
+                              setTasks(prev => prev.map(x => x.id === t.id ? { ...x, pinned: !x.pinned } : x));
+                              setPileKebabOpenId(null);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left",
+                              padding: "7px 9px", borderRadius: 5,
+                              background: "transparent", border: "none",
+                              color: t.pinned ? C.gold : C.ink,
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                            }}>
+                            <span style={{ width: 16, textAlign: "center" }}>{t.pinned ? "📌" : "○"}</span>
+                            <span style={{ flex: 1 }}>{t.pinned ? "Unpin" : "Pin to time"}</span>
+                          </button>
+                          {/* Passive toggle */}
+                          <button
+                            type="button"
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                              if (e.preventDefault) e.preventDefault();
+                              setTasks(prev => prev.map(x => {
+                                if (x.id !== t.id) return x;
+                                if (x.isPassive) return { ...x, isPassive: false, handleTimeMin: undefined };
+                                const detected = detectPassive(x.title || "");
+                                return {
+                                  ...x,
+                                  isPassive: true,
+                                  handleTimeMin: detected.isPassive ? detected.handleTimeMin : 5,
+                                };
+                              }));
+                              setPileKebabOpenId(null);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left",
+                              padding: "7px 9px", borderRadius: 5,
+                              background: "transparent", border: "none",
+                              color: t.isPassive ? C.sage : C.ink,
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                            }}>
+                            <span style={{ width: 16, textAlign: "center" }}>⏳</span>
+                            <span style={{ flex: 1 }}>{t.isPassive ? "Mark active" : "Mark passive"}</span>
+                          </button>
+                          {/* Edit */}
+                          <button
+                            type="button"
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                              if (e.preventDefault) e.preventDefault();
+                              setEditingTask(t);
+                              setPileKebabOpenId(null);
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left",
+                              padding: "7px 9px", borderRadius: 5,
+                              background: "transparent", border: "none",
+                              color: C.ink, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                            }}>
+                            <span style={{ width: 16, textAlign: "center" }}>✏</span>
+                            <span style={{ flex: 1 }}>Edit details</span>
+                          </button>
+                          <div style={{ height: 1, background: `${C.line}33`, margin: "4px 2px" }} />
+                          {/* Delete with two-tap confirm */}
+                          <button
+                            type="button"
+                            onPointerUp={(e) => {
+                              e.stopPropagation();
+                              if (e.preventDefault) e.preventDefault();
+                              if (pileKebabPendingDeleteId === t.id) {
+                                // Confirmed — perform side-aware action
+                                if (side === "scheduled") {
+                                  setTasks(prev => prev.map(x => x.id === t.id
+                                    ? { ...x, scheduledTime: null, scheduledDate: null }
+                                    : x
+                                  ));
+                                } else {
+                                  setTasks(prev => prev.filter(x => x.id !== t.id));
+                                }
+                                setPileKebabPendingDeleteId(null);
+                                setPileKebabOpenId(null);
+                              } else {
+                                setPileKebabPendingDeleteId(t.id);
+                              }
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left",
+                              padding: "7px 9px", borderRadius: 5,
+                              background: pileKebabPendingDeleteId === t.id ? `${C.accent}1a` : "transparent",
+                              border: "none",
+                              color: C.accent, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                            }}>
+                            <span style={{ width: 16, textAlign: "center" }}>🗑</span>
+                            <span style={{ flex: 1 }}>
+                              {pileKebabPendingDeleteId === t.id
+                                ? "Tap again to confirm"
+                                : (side === "scheduled" ? "Unschedule" : "Delete")}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {/* v05.05bt379 — Inline quick-action panel. Renders
                       below the row when its ID is the pileQuickActionId.
@@ -37316,10 +37605,47 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         section headers. Each row now gets the full
                         card width. */}
                     <div style={{
-                      borderTop: `1px solid ${C.line}22`,
+                      paddingTop: 6,
                     }}>
-                      {/* SCHEDULED section */}
-                      <div data-pile-section="scheduled" style={{ padding: "6px 4px 4px" }}>
+                      {/* v05.05bt439 — Per chat: 'i also need a way of
+                          selecting multiple from the pile and deleting
+                          it instead of going one by one. also need to
+                          delete duplicates'. Pile-manager entry: small
+                          link above sections. Opens a modal with multi-
+                          select + duplicate-detection. */}
+                      <div style={{
+                        padding: "6px 8px 0", display: "flex", justifyContent: "flex-end",
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPileSelectedIds(new Set());
+                            setPileManagerMode("all");
+                            setPileManagerOpen(true);
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: `1px solid ${C.line}44`,
+                            borderRadius: 5,
+                            padding: "3px 8px",
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9, fontWeight: 700,
+                            letterSpacing: "0.08em",
+                            color: C.muted,
+                          }}>⚙ MANAGE · DELETE</button>
+                      </div>
+                      {/* SCHEDULED section — v05.05bt441 left rail for state distinction. */}
+                      <div data-pile-section="scheduled" style={{
+                        position: "relative",
+                        marginBottom: 10,
+                        background: C.paper,
+                        border: `1px solid ${C.line}66`,
+                        borderLeft: `5px solid ${C.gold}`,
+                        borderTop: `2px solid ${C.gold}`,
+                        borderRadius: 10,
+                        padding: "8px 10px 10px",
+                      }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
                             type="button"
@@ -37436,9 +37762,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           "couldn't fit" was inaccurate. Differentiation now
                           happens at the row level via small tags (✗ WON'T
                           FIT for engine, ↺ MOVED OFF for user). */}
+                      {/* FOR TODAY section — v05.05bt441 muted left rail. */}
                       <div data-pile-section="today" style={{
-                        padding: "6px 4px 4px",
-                        borderTop: `1px solid ${C.line}22`,
+                        position: "relative",
+                        marginBottom: 10,
+                        background: C.paper,
+                        border: `1px solid ${C.line}66`,
+                        borderLeft: `5px solid ${C.muted}`,
+                        borderTop: `2px solid ${C.muted}`,
+                        borderRadius: 10,
+                        padding: "8px 10px 10px",
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
@@ -37668,8 +38001,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           Moved to live INSIDE the outer IIFE so backlog
                           variable is in scope. */}
                       <div data-pile-section="backlog" style={{
-                        padding: "6px 4px 4px",
-                        borderTop: `1px solid ${C.line}22`,
+                        position: "relative",
+                        marginBottom: 10,
+                        background: C.paper,
+                        border: `1px solid ${C.line}66`,
+                        borderLeft: `5px solid ${C.nap}`,
+                        borderTop: `2px solid ${C.nap}`,
+                        borderRadius: 10,
+                        padding: "8px 10px 10px",
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
@@ -37779,9 +38118,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               }}>+ tap to brain-dump · capture anything to remember</button>
                           ) : (
                             <>
-                              {backlog.slice(0, 12).map(t => (
-                                <TaskRow key={t.id} t={t} side="unscheduled" />
-                              ))}
+                                {backlog.slice(0, 12).map(t => (
+                                  <TaskRow key={t.id} t={t} side="backlog" />
+                                ))}
                               {backlog.length > 12 && (
                                 <button
                                   onClick={openAllTasksModal}
@@ -38973,11 +39312,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           .filter(t => isFill ? (!t.slottedIntoFreedTimeOf || t.slottedIntoFreedTimeOf === hostId) : true)
           .filter(t => !searchLower || (t.title || "").toLowerCase().includes(searchLower))
           .sort((a, b) => scoreFit(b) - scoreFit(a));
-        const visibleCandidates = freedFillShowBacklog
-          ? allCandidates
-          : allCandidates.filter(t => classify(t) !== "backlog" || searchLower);
-        const backlogCount = allCandidates.filter(t => classify(t) === "backlog").length;
-        const hasBacklogHits = backlogCount > 0 && !freedFillShowBacklog;
+        // v05.05bt441 — Drawer-pill filter cuts candidates by their
+        // current state (scheduled / unscheduled / backlog). Counts
+        // computed before filtering so each pill shows what it would
+        // reveal.
+        const drawerCounts = {
+          scheduled: allCandidates.filter(t => classify(t) === "scheduled").length,
+          unscheduled: allCandidates.filter(t => classify(t) === "unscheduled").length,
+          backlog: allCandidates.filter(t => classify(t) === "backlog").length,
+        };
+        const visibleCandidates = allCandidates.filter(t => {
+          const cls = classify(t);
+          return freedFillDrawerFilter[cls];
+        });
+        const hasBacklogHits = false; // pill replaces the old show-link
         const topMatch = allCandidates.find(t => fits(t)) || null;
 
         // ───── NEW tab data: dup detection ─────
@@ -39061,14 +39409,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 60, padding: 12,
             }}>
+            {/* v05.05bt441 — Pop-in animation keyframes. */}
+            <style>{`@keyframes fitsPopIn {
+              0%   { opacity: 0; transform: scale(0.85) translateY(8px); }
+              100% { opacity: 1; transform: scale(1) translateY(0); }
+            }`}</style>
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: C.paper, borderRadius: 14,
+                background: C.paper, borderRadius: 12,
                 border: `1px solid ${C.sage}55`,
-                maxWidth: 460, width: "100%",
-                maxHeight: "88vh", overflowY: "auto",
-                padding: "14px 16px 16px",
+                maxWidth: 340, width: "100%",
+                maxHeight: "75vh", overflowY: "auto",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+                animation: "fitsPopIn 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                padding: "12px 14px 14px",
               }}>
               {/* ───── EYEBROW ───── */}
               <div style={{
@@ -39280,7 +39635,48 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     />
                   </div>
 
-                  {visibleCandidates.length === 0 && !searchLower ? (
+                  {/* v05.05bt441 — Drawer filter pills (multi-select). */}
+                  <div style={{
+                    display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap",
+                  }}>
+                    {[
+                      { key: "unscheduled", label: "UNSCHEDULED", color: C.muted, count: drawerCounts.unscheduled },
+                      { key: "scheduled", label: "↻ SCHEDULED", color: C.gold, count: drawerCounts.scheduled },
+                      { key: "backlog", label: "BACKLOG", color: C.nap, count: drawerCounts.backlog },
+                    ].map(p => {
+                      const on = !!freedFillDrawerFilter[p.key];
+                      return (
+                        <button
+                          key={p.key}
+                          onClick={() => setFreedFillDrawerFilter(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
+                          style={{
+                            padding: "3px 8px",
+                            background: on ? `${p.color}12` : "transparent",
+                            border: `1px solid ${on ? `${p.color}99` : `${C.line}55`}`,
+                            borderRadius: 99,
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 8.5, fontWeight: 700,
+                            letterSpacing: "0.04em",
+                            color: on ? p.color : C.muted,
+                            opacity: on ? 1 : 0.7,
+                          }}>
+                          {p.label} <span style={{ color: on ? C.sage : C.muted, opacity: 0.85, marginLeft: 2 }}>{p.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* v05.05bt441 — Internal scroll list (Option C from
+                      mockup). Max-height keeps the dialog short; the
+                      list scrolls internally. */}
+                  <div style={{
+                    maxHeight: 280, overflowY: "auto",
+                    borderTop: `1px dashed ${C.line}33`,
+                    borderBottom: `1px dashed ${C.line}33`,
+                    padding: "4px 0", marginBottom: 4,
+                  }}>
+                    {visibleCandidates.length === 0 && !searchLower ? (
                     <div style={{
                       fontFamily: "'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 13, color: C.muted,
@@ -39342,25 +39738,17 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       })}
                     </div>
                   )}
+                  </div>{/* /internal-scroll list (bt441) */}
 
-                  {hasBacklogHits && (
-                    <button
-                      onClick={() => setFreedFillShowBacklog(true)}
-                      style={{
-                        marginTop: 8, width: "100%",
-                        padding: "7px 11px",
-                        background: "transparent",
-                        border: `1px dashed ${C.nap}55`,
-                        borderRadius: 7,
-                        color: C.muted, cursor: "pointer",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                      }}>
-                      <span>↓ show backlog · {backlogCount} item{backlogCount === 1 ? "" : "s"}</span>
-                      <span style={{ opacity: 0.5 }}>▸</span>
-                    </button>
-                  )}
+                  {/* v05.05bt441 — Show-N-of-M footer (read-only info) */}
+                  <div style={{
+                    textAlign: "center",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 8.5, color: C.muted,
+                    padding: "4px 0", letterSpacing: "0.08em",
+                  }}>
+                    SHOWING {visibleCandidates.length} OF {allCandidates.length} · SCROLL FOR MORE
+                  </div>
                 </>
               )}
 
@@ -39376,6 +39764,293 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
                 }}>CANCEL</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* v05.05bt439 — Pile Manager modal: multi-select with bulk
+          delete and duplicate-detection mode. Per chat: 'i also need
+          a way of selecting multiple from the pile and deleting it
+          instead of going one by one. also need to delete duplicates'.
+          Two modes:
+            'all' — all user tasks (incomplete) shown with checkboxes
+                    grouped by state (UNSCHEDULED / SCHEDULED / BACKLOG)
+            'dupes' — only tasks that have at least one fuzzy-match
+                      sibling, grouped together so user can pick which
+                      duplicates to remove */}
+      {pileManagerOpen && (() => {
+        const userTasks = (tasks || []).filter(t =>
+          !t.completedAt && (t.ownerName === currentUser || !t.ownerName)
+        );
+        const close = () => {
+          setPileManagerOpen(false);
+          setPileSelectedIds(new Set());
+        };
+        const toggleOne = (id) => {
+          setPileSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        };
+        const classify = (t) => {
+          if (t.scheduledTime && (!t.scheduledDate || t.scheduledDate === todayISO)) return "scheduled";
+          if (t.drawer) return "backlog";
+          return "unscheduled";
+        };
+        const BADGE_STYLE = {
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 8, fontWeight: 800, letterSpacing: "0.10em",
+          padding: "2px 6px", borderRadius: 11, whiteSpace: "nowrap",
+          textTransform: "uppercase",
+        };
+        const badgeFor = (t) => {
+          const cls = classify(t);
+          if (cls === "scheduled") return (
+            <span style={{ ...BADGE_STYLE, color: C.gold, background: `${C.gold}1f`, border: `1px solid ${C.gold}66` }}>↻ SCHEDULED · {t.scheduledTime}</span>
+          );
+          if (cls === "backlog") return (
+            <span style={{ ...BADGE_STYLE, color: C.nap, background: `${C.nap}1a`, border: `1px solid ${C.nap}55` }}>BACKLOG</span>
+          );
+          return (
+            <span style={{ ...BADGE_STYLE, color: C.muted, background: `${C.line}26`, border: `1px solid ${C.line}44` }}>UNSCHEDULED</span>
+          );
+        };
+        // ── Build groups depending on mode ──
+        // 'all' mode: 3 groups by classify()
+        // 'dupes' mode: groups returned by findSimilarTitles
+        const buildAllGroups = () => {
+          const groups = { unscheduled: [], scheduled: [], backlog: [] };
+          userTasks.forEach(t => groups[classify(t)].push(t));
+          return [
+            { key: "unscheduled", label: "UNSCHEDULED", items: groups.unscheduled },
+            { key: "scheduled", label: "SCHEDULED FOR TODAY", items: groups.scheduled },
+            { key: "backlog", label: "BACKLOG", items: groups.backlog },
+          ].filter(g => g.items.length > 0);
+        };
+        const buildDupeGroups = () => {
+          // For each task, look up its fuzzy matches; build groups of
+          // {seed, matches}. Dedup so each task is only in one group
+          // (skip a task that's already in a group as a match).
+          const claimed = new Set();
+          const groups = [];
+          userTasks.forEach(t => {
+            if (claimed.has(t.id)) return;
+            const matches = findSimilarTitles(t.title || "", userTasks.filter(x => x.id !== t.id));
+            if (matches.length === 0) return;
+            const cluster = [t, ...matches];
+            cluster.forEach(x => claimed.add(x.id));
+            groups.push({
+              key: `dupe-${t.id}`,
+              label: `SIMILAR TO "${t.title}"`,
+              items: cluster,
+            });
+          });
+          return groups;
+        };
+        const groups = pileManagerMode === "dupes" ? buildDupeGroups() : buildAllGroups();
+        const totalShown = groups.reduce((n, g) => n + g.items.length, 0);
+        const selectedCount = pileSelectedIds.size;
+        const handleDelete = () => {
+          if (selectedCount === 0) return;
+          const toDelete = new Set(pileSelectedIds);
+          setTasks(prev => prev.filter(t => !toDelete.has(t.id)));
+          setPileSelectedIds(new Set());
+          // Stay open so user can keep cleaning
+        };
+        const selectAllInGroup = (group) => {
+          setPileSelectedIds(prev => {
+            const next = new Set(prev);
+            group.items.forEach(t => next.add(t.id));
+            return next;
+          });
+        };
+        const clearAllInGroup = (group) => {
+          setPileSelectedIds(prev => {
+            const next = new Set(prev);
+            group.items.forEach(t => next.delete(t.id));
+            return next;
+          });
+        };
+        return (
+          <div
+            onClick={close}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(0,0,0,0.55)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 60, padding: 12,
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: C.paper, borderRadius: 14,
+                border: `1px solid ${C.line}66`,
+                maxWidth: 500, width: "100%",
+                maxHeight: "88vh", display: "flex", flexDirection: "column",
+              }}>
+              {/* Header */}
+              <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.line}33` }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, letterSpacing: "0.18em",
+                  color: C.muted, fontWeight: 700, textTransform: "uppercase",
+                  marginBottom: 4,
+                }}>⚙ MANAGE TASKS · {totalShown}</div>
+                <div style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontStyle: "italic", fontSize: 14, color: C.muted, lineHeight: 1.4,
+                }}>
+                  Tap to select. {pileManagerMode === "dupes"
+                    ? "Groups show similar titles — pick which to remove."
+                    : "Select multiple to delete in one go."}
+                </div>
+                {/* Mode toggle */}
+                <div style={{
+                  display: "flex", gap: 4, marginTop: 10,
+                  padding: 3, background: `${C.line}14`, borderRadius: 8,
+                }}>
+                  {[
+                    { key: "all", label: "ALL" },
+                    { key: "dupes", label: "DUPLICATES" },
+                  ].map(m => {
+                    const active = pileManagerMode === m.key;
+                    return (
+                      <button
+                        key={m.key}
+                        onClick={() => setPileManagerMode(m.key)}
+                        style={{
+                          flex: 1, padding: "7px 8px",
+                          background: active ? C.paper : "transparent",
+                          border: "none", borderRadius: 6,
+                          boxShadow: active ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
+                          color: active ? C.ink : C.muted,
+                          cursor: "pointer",
+                        }}>{m.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px" }}>
+                {groups.length === 0 ? (
+                  <div style={{
+                    fontFamily: "'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 14, color: C.muted,
+                    padding: "30px 4px", textAlign: "center",
+                    border: `1px dashed ${C.line}66`, borderRadius: 8,
+                  }}>
+                    {pileManagerMode === "dupes"
+                      ? "No duplicate-like tasks detected. Nothing to clean up here."
+                      : "Nothing to manage — your pile is empty."}
+                  </div>
+                ) : groups.map(group => {
+                  const allSelected = group.items.every(t => pileSelectedIds.has(t.id));
+                  return (
+                    <div key={group.key} style={{ marginBottom: 14 }}>
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        marginBottom: 4, padding: "0 2px",
+                      }}>
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, letterSpacing: "0.14em", fontWeight: 700,
+                          color: C.muted, textTransform: "uppercase",
+                          flex: 1, minWidth: 0,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{group.label} <span style={{ color: C.sage }}>· {group.items.length}</span></span>
+                        <button
+                          type="button"
+                          onClick={() => allSelected ? clearAllInGroup(group) : selectAllInGroup(group)}
+                          style={{
+                            background: "transparent", border: "none",
+                            color: C.muted, cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 8.5, fontWeight: 700, letterSpacing: "0.06em",
+                            textDecoration: "underline", textUnderlineOffset: 2,
+                          }}>{allSelected ? "× CLEAR" : "✓ ALL"}</button>
+                      </div>
+                      {group.items.map(t => {
+                        const selected = pileSelectedIds.has(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => toggleOne(t.id)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              width: "100%", textAlign: "left",
+                              padding: "9px 11px", marginBottom: 4,
+                              background: selected ? `${C.accent}12` : "transparent",
+                              border: `1px solid ${selected ? C.accent : `${C.line}44`}`,
+                              borderRadius: 7,
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                            }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              width: 18, height: 18, borderRadius: 4,
+                              background: selected ? C.accent : "transparent",
+                              border: `1.5px solid ${selected ? C.accent : C.muted}`,
+                              color: "#fff", fontSize: 12, fontWeight: 800, flexShrink: 0,
+                            }}>{selected ? "✓" : ""}</span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9.5, color: C.sage, fontWeight: 700, flexShrink: 0,
+                            }}>{t.effortMin || 30}m</span>
+                            <span style={{
+                              fontFamily: "'Cormorant Garamond', serif",
+                              fontSize: 14, color: C.ink, flex: 1, minWidth: 0,
+                            }}>{t.title}</span>
+                            {badgeFor(t)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: "10px 16px 14px",
+                borderTop: `1px solid ${C.line}33`,
+                display: "flex", gap: 8, alignItems: "center",
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                  color: selectedCount > 0 ? C.accent : C.muted,
+                  flex: 1, minWidth: 0,
+                }}>SELECTED · {selectedCount}</span>
+                <button
+                  onClick={close}
+                  style={{
+                    padding: "8px 14px",
+                    background: "transparent",
+                    border: `1px solid ${C.line}44`,
+                    borderRadius: 7,
+                    color: C.muted, cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
+                  }}>CLOSE</button>
+                <button
+                  onClick={handleDelete}
+                  disabled={selectedCount === 0}
+                  style={{
+                    padding: "8px 16px",
+                    background: selectedCount > 0 ? C.accent : `${C.line}22`,
+                    color: selectedCount > 0 ? "#fff" : C.muted,
+                    border: "none", borderRadius: 7,
+                    cursor: selectedCount > 0 ? "pointer" : "default",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+                  }}>✕ DELETE {selectedCount > 0 ? selectedCount : ""}</button>
+              </div>
             </div>
           </div>
         );
