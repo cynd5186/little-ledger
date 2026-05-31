@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt434";
+const APP_VERSION = "2026.05.05bt437";
 const APP_BUILD_NOTES = [
-  "UNIFIED FITS/FILL DIALOG — variant A from fits_fill_v3.html. Per chat: 'ok the fill and fits dialog should match. lets redesign fits dialog' followed by 'variant A' and 'build with no match score'. Same dialog now serves both contexts: tapping + FILL on a passive task's freed time AND tapping fits-affordance on a free schedule block both open this modal.\\n\\nLAYOUT:\\n• EYEBROW — '+ XM FREED · DURING PUMP' (FILL) or '+ XM FREE BLOCK' (FITS) plus context line with time range. If the engine finds a best-fit candidate, it's surfaced inline after the time range: '★ reply to Sarah · 10m' on a dotted underline. Tap the name → expands a 'Why this one' panel below (fits room, regret, age, focus match).\\n• TABS — two: '+ NEW' and 'FIND · N'. Defaults to FIND.\\n• NEW TAB — title input + ADD button. As you type, runs the bt403 findSimilarTitles engine against ALL of your tasks (scheduled + unscheduled + backlog). If matches ≥60% similar, a gold panel slides in below the input showing up to 3 matches with their state badge. Tap one to USE it (slots into the freed window). Or tap '⚠ ADD ANYWAY' to create a new one. No % score shown — per your call.\\n• FIND TAB — search bar that filters across everything. Results sorted by best-fit score (fits-status, focus-match, regret, age). Top match has ★. Each row carries a CONSISTENT BADGE matching the actual app section names:\\n    UNSCHEDULED → muted (matches 'Not yet scheduled' section)\\n    ↻ SCHEDULED · 2:00p → gold (matches 'Scheduled for today'; tapping the row moves it here)\\n    BACKLOG → violet (matches 'Backlog' section)\\n    TOO LONG → coral, greyed, not tappable (effort > slot minutes)\\n• BACKLOG HIDDEN BY DEFAULT — '↓ show backlog · N items' link appears at the bottom of FIND if any backlog items exist; tap to reveal them. Search auto-shows backlog matches.\\n• FILL CONSTRAINS focus to light/shallow (since it's a passive task's hands-free window). FITS accepts any focus.\\n\\nWIRED: both '+ FILL' button (passive task freed strip) and the 'fits' affordance on free blocks now set freedFillPickerFor with kind:'fill' or 'fits'. The inline Fits picker code stays defined but never activates on user taps anymore — replaced by this modal. Future cleanup can fully remove the dead inline UI.\\n\\nNot in this build: '↻ MOVE FROM ELSEWHERE' as a separate section (collapsed into FIND results via the SCHEDULED badge — tap the badge moves the task from where it was). Other minor inline Fits picker features (category-filter chips, show-all toggle) — can be ported into the modal in a follow-up if you use them.\\n\\nBuild verified clean via esbuild.",
+  "FITS/FILL DIALOG NOW CENTERED. Per chat: 'The fit dialog is too low.' The bt434 unified modal opened bottom-sheet style (anchored to bottom of viewport with alignItems:'flex-end') — fine for short sheets but awkward for this dialog, which has tabs, a search bar, a candidate list, and an optional 'why' panel. On taller phones it landed far from where you tapped + felt like you had to drag your eye down. FIX: changed alignItems to 'center' so the modal floats mid-screen. Maxheight stays at 88vh so it scrolls if the list is long. Padding (12px) keeps it off the edges. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt437", summary: "Unified Fits/FILL dialog now centers vertically instead of bottom-anchored. Was bottom-sheet style (alignItems:'flex-end'), now alignItems:'center' so the modal floats mid-screen near the user's eye line rather than at the bottom of the viewport. Same maxHeight 88vh. Build verified clean via esbuild." },
+  { version: "2026.05.05bt436", summary: "Defensive shift-time formatting. fmtShiftRange used to render 'NaN' when shift.end's minutes couldn't be parsed (e.g. '12' without ':MM'). Now validates hour (returns '?' if not finite) and defaults minutes to '00' if unparseable. So '11:22p–12:NaN' becomes '11:22p–12:00' — graceful instead of broken. Upstream cause of malformed shift data not yet identified; re-saving the shift via edit should normalize. Build verified clean via esbuild." },
+  { version: "2026.05.05bt435", summary: "NOW marker now respects takeover state. Was hardcoded to 'NOW · GRANDPARENTS' whenever onsite=true — but when a parent has done an impromptu takeover during work hours, they have the baby and grandparents are not involved. Added branch before the onsite fallback: shows 'NOW · COVERING DADDY' (or appropriate variant) with the covering parent's color. Threaded takeover prop App → ShiftsView → TodayTaskPlanCard. Other slot-level 'grandparents have baby' labels not yet updated (broader caregiver-aware refactor pending). Build verified clean via esbuild." },
   { version: "2026.05.05bt434", summary: "Unified Fits/FILL dialog ships. Same modal serves both passive-task freed time AND free schedule blocks. Two tabs (NEW | FIND). NEW has live dup detection via bt403's findSimilarTitles engine — no % shown, just up-to-3 matches with USE / ADD ANYWAY. FIND has best-fit + dotted-underline 'why' in the eyebrow, search across everything, consistent badges (UNSCHEDULED / ↻ SCHEDULED · TIME / BACKLOG / TOO LONG) mirroring the app's actual section names, backlog hidden behind a show-link. Both FILL button and Fits tap-to-expand triggers wired to open this modal; inline Fits picker code stays defined but never activates. Build verified clean via esbuild." },
   { version: "2026.05.05bt433", summary: "Three fixes. (1) Filled task in freed strip is now tappable to edit (opens EditTaskModal). (2) FILL modal upgraded to mirror Fits picker UX: inline + new task input, 🔍 search field, primary candidate list, collapsible ↻ MOVE FROM ELSEWHERE section showing currently-scheduled tasks that could be moved here. (3) DEEP/LIGHT tier badge has a subtle dotted underline indicating tap for rationale; tap toggles inline italic panel with reasons from effectiveBlockProfile (circadian, caregiver, post-meeting decay, energy). Build verified clean via esbuild." },
   { version: "2026.05.05bt432", summary: "Three fixes from screenshot. (1) In-progress pump (activePump.startedAt) now renders on the timeline as a 'in progress' slot; threaded activePump App→ShiftsView→TodayTaskPlanCard; projected reminders overlapping with it are dropped so no duplicate. (2) Always-visible ↺ unschedule button in the right column of scheduled task rows — one tap drops the task back to 'Not yet scheduled' without burying the action in the title edit menu. (3) FILL button now solid sage with white text + soft halo (was transparent outline-only). Build verified clean via esbuild." },
@@ -1365,12 +1368,23 @@ const fmtDurationHM = (totalMin) => {
   return `${h}h ${rem}m`;
 };
 const fmtShiftRange = (s) => {
+  // v05.05bt436 — Per chat: screenshot showed shift display as
+  // '11:22p-12:NaN'. Root cause: when s.end is malformed (e.g. '12'
+  // without the ':MM' minutes part, or '12:' with a trailing colon),
+  // split + Number returns undefined or NaN for the minutes, which
+  // pads to 'undefined' or 'NaN' in the output. Now defensive:
+  // missing/invalid hour returns '?', missing/invalid minute
+  // defaults to '00'. Logs nothing — silent fallback is safer than
+  // a render crash for a label.
+  if (!s || typeof s.start !== "string" || typeof s.end !== "string") return "";
   const [a, b] = s.start.split(":").map(Number);
   const [c, d] = s.end.split(":").map(Number);
   const fmt = (h, m) => {
+    if (!Number.isFinite(h)) return "?";
     const ap = h >= 12 ? "p" : "a";
     const hr = h % 12 || 12;
-    return `${hr}:${pad(m)}${ap}`;
+    const minStr = Number.isFinite(m) ? pad(m) : "00";
+    return `${hr}:${minStr}${ap}`;
   };
   return `${fmt(a, b)}–${fmt(c, d)}`;
 };
@@ -7030,6 +7044,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
             nextPumpAt={nextPumpAt} lastPump={lastPump}
             activePump={activePump}
+            takeover={takeover}
             todaySetup={todaySetup} setTodaySetup={setTodaySetup}
             focusProfile={focusProfile} setFocusProfile={setFocusProfile}
             dailyEnergy={dailyEnergy} setDailyEnergy={setDailyEnergy}
@@ -18593,7 +18608,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -18761,6 +18776,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
           parentAway={parentAway}
           pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
           nextPumpAt={nextPumpAt} lastPump={lastPump} activePump={activePump}
+          takeover={takeover}
           onsite={onsite} setOnsite={setOnsite}
           todaySetup={todaySetup} setTodaySetup={setTodaySetup}
           meetings={meetings} setMeetings={setMeetings}
@@ -27491,7 +27507,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -33195,6 +33211,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     // suffix for discretion — just 'NOW'. The sage color
                     // is subtle enough to not read as a personal status.
                     _label = productMode === "solo" ? "NOW" : "NOW · CAREGIVER";
+                  }
+                  // v05.05bt435 — Per chat (screenshot): 'still says
+                  // grandparents when it is clear that parents have
+                  // reclaimed baby'. When the user has done an
+                  // impromptu takeover (active `takeover` state), the
+                  // covering parent has the baby — grandparents are
+                  // NOT involved even if `onsite` is true. This branch
+                  // must run BEFORE the bare `onsite` fallback below.
+                  else if (takeover && takeover.coveringParent && takeover.originalParent) {
+                    const isYou = takeover.coveringParent === currentUser;
+                    const coverColor = takeover.coveringParent === "Mommy" ? C.mommy : C.daddy;
+                    _color = coverColor;
+                    _label = isYou
+                      ? `NOW · COVERING ${(takeover.originalParent || "").toUpperCase()}`
+                      : `NOW · ${(takeover.coveringParent || "").toUpperCase()} COVERS`;
                   }
                   else if (onsite) { _color = C.gold; _label = "NOW · GRANDPARENTS"; }
                   else if (_m && _d) { _color = C.gold; _label = "NOW · TOGETHER"; }
@@ -39021,7 +39052,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
               background: "rgba(0,0,0,0.55)",
-              display: "flex", alignItems: "flex-end", justifyContent: "center",
+              // v05.05bt434 → bt437 — Per chat: 'The fit dialog is too
+              // low'. Was alignItems:'flex-end' (bottom-sheet style)
+              // which anchored the dialog at the bottom of the screen,
+              // far from where the user tapped FILL/fits. Now center-
+              // aligned so the modal floats mid-screen — closer to
+              // the eye and far easier to reach on tall phones.
+              display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 60, padding: 12,
             }}>
             <div
