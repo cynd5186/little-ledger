@@ -15,11 +15,16 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt441";
+const APP_VERSION = "2026.05.05bt446";
 const APP_BUILD_NOTES = [
-  "MULTIPLE SMALL FIXES + PARTIAL DELIVERY OF THE BIGGER ASKS.\\n\\n(1) FIND DIALOG IS NOW A COMPACT POP-OUT (~340px wide, was 460). Pop-in animation: 220ms scale (0.85 → 1) + opacity (0 → 1) + slight upward translate with overshoot (cubic-bezier 0.34, 1.56, 0.64, 1). Reverses on close. iOS-sheet feel. Per chat: 'i want a dialog pop up box not something that fills the whole page'.\\n\\n(2) THREE DRAWER FILTER PILLS UNDER FIND. UNSCHEDULED · ↻ SCHEDULED · BACKLOG — multi-select toggles with live counts. Default state: UNSCHEDULED + SCHEDULED on, BACKLOG off. Tap a pill to flip. Replaces the old 'show backlog' link.\\n\\n(3) INTERNAL SCROLL (Option C from the v4 mockup). The candidate list is now inside a maxHeight 280px scroll container with subtle dashed top/bottom borders so you know there's more. Footer reads 'SHOWING N OF M · SCROLL FOR MORE'. No pagination.\\n\\n(4) PILE SECTION EXPAND DEFAULTS FLIPPED. Per chat: 'scheduled for today should be the only expanded'. SCHEDULED now opens expanded; UNSCHEDULED + BACKLOG collapsed. Tap header to toggle.\\n\\n(5) LEFT RAILS for state distinction. Each pile drawer card now has a 5px solid colored stripe down the LEFT in addition to the 2px top border: gold (SCHEDULED) / muted (UNSCHEDULED) / violet (BACKLOG). Reads at a glance.\\n\\n(6) UP/DOWN ARROW EVENT FIX. Per chat: 'the up and down arrows should work'. The bt440 arrows used onPointerUp + stopPropagation but the row's onClick still fired (different event type). Added onClick={e.stopPropagation()} as a defensive measure so the row's quick-action panel doesn't open over the arrow action.\\n\\n(7) INLINE RENAME FOR FILLED TASKS IN FREED STRIP. Per chat: 'when editing that task title i just want to edit then and there without having a big dialog box'. Tap a filled task's title (e.g., 'drive to toche' inside a pump strip) → it converts to an inline editable input right there. Enter or blur saves, Escape cancels. The big EditTaskModal is gone for this specific surface (still available via the kebab on regular pile rows for full editing).\\n\\n(8) FILL BUTTON READABILITY. Per chat: 'the fill button i cannot read when i can fill in a concurrent task'. Bumped fontSize 10→11, padding 5/12→7/14, removed the boxShadow halo that was washing out the letters. Should now read cleanly against the dashed freed strip.\\n\\nNOT IN THIS BUILD (will need a follow-up conversation):\\n• PRIMARY/SECONDARY TASK SEMANTICS — when a non-passive task is slotted INTO a passive session, the slotted task should become the 'primary' that blocks completion of the host. Example: pump 4:18-5:18 + drive 4:23-5:18 means the next schedule block starts at 5:18 (drive ends), not 4:48 (pump duration would have ended). The pump can't be crossed off until drive is done. This is a meaningful scheduler change (host slot effective end = max of host end and slotted task end) plus visual changes (slotted task becomes prominent, host becomes annotation). Needs a mockup discussion first.\\n• UNIVERSAL UNDO — was on backlog (Q1 from the multi-question session). Needs design: hotkey (cmd+Z), undo toast after destructive actions, OR a persistent button somewhere. Also needs the action-stack data model.\\n• DELETE CONFIRMATION — the kebab → 🗑 already has a 2-tap confirm (the row turns coral with 'Tap again to confirm'). Want me to upgrade it to a window.confirm() dialog instead? Or stronger visual confirm? Tell me which surface feels under-protected and I'll fix.\\n\\nBuild verified clean via esbuild.",
+  "ROUNDED CARD AESTHETIC ON TIMELINE ROWS. Per chat (screenshot): 'i kinda like this aesthetic with the rounded corner for a task card and the subtle contrast or difference between the background and the task cards. the task card in the timeline blends too much with the inky background.'\\n\\nTHE PROBLEM: Cadence solo mode had been styled as flat architectural cards — borderRadius 2px on right edges only (Mommy) or 0 (Daddy), marginBottom 0 so rows touched, and transparent bg for regular tasks (no owner tint = invisible card outline against the inky bg).\\n\\nTHE FIX:\\n  • borderRadius: 10px on all four corners (was 2px right-only / 0).\\n  • marginBottom: 6px (was 0) so cards visibly separate.\\n  • Transparent task rows now get a faint paper tint (C.line at 10 alpha) so the card edge is visible without imposing a strong color on neutral tasks.\\n  • Owner-tinted rows (Mommy/Daddy/joint blocks, pump reminders, routines, pinned tasks) keep their existing tints — those already showed.\\n  • Existing 1px border treatment unchanged, just now wraps a fully rounded card.\\n\\nResult: cards look like the schedule rows in the alltasks_redesign mockup — distinct floating tiles instead of a continuous strip of inky bands.\\n\\nNOT IN THIS BUILD:\\n• INSERT-ROW button + above/below popup. Confirmed in the mockup and I want to do this right (pre-fill the new task's time correctly based on the anchor row + handle the case where 'above' would land on another row). Will land in bt447 as a focused build.\\n• DAY SETUP · PTO/WEEKEND. Standalone build.\\n• PUMP SESSION DISAPPEARING — still need next-time reproduction info (is it gone from Settings → Pump plan when it happens?).\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt446", summary: "Timeline rows now look like rounded cards. Per chat (screenshot): 'the task card in the timeline blends too much with the inky background'. Was flat architectural with 2px corners + 0 margin + transparent bg for regular tasks. Now 10px all-corner radius, 6px margin between cards, faint paper tint (C.line at 10 alpha) for previously-transparent tasks so the card edge is visible. Owner-tinted rows (Mommy/Daddy/joint/routines/pump/pinned) keep their existing tints. Build verified clean via esbuild." },
+  { version: "2026.05.05bt445", summary: "Three ships. (1) All-tasks view is now two columns when grouped by category (mockup Option A). Status grouping stays single-column. (2) Contrast pass: category names now ink-bright cream #faf2e2 (was muted g.color), group color moved to 8px solid dot beside the name, counts now in gold for consistency. (3) Down-arrow → backlog fix for real — data move was correct in bt443 but destination drawers were collapsed by default (bt441) so the moved task looked vanished. All four drawer-arrow moves (up/down × scheduled/unsched/backlog) now auto-expand the destination section so the user sees the task land. Build verified clean via esbuild." },
+  { version: "2026.05.05bt444", summary: "Current time now refreshes when the app becomes visible/focused again. iOS Safari and the PWA install pause setInterval when the app is backgrounded, so the 15s `now` ticker stopped while you were away — schedule + NOW marker stayed frozen until next interaction. Added a useEffect that listens to document.visibilitychange + window.focus and snaps `now` to the current time on either event. Likely also fixes the bedtime-override-not-sticking bug since override save depends on `now`-derived today's-ISO matching the read-time today's-ISO. Build verified clean via esbuild." },
+  { version: "2026.05.05bt443", summary: "Five fixes from the screenshot streak. (1) Round 18.3207M → 18M in dialog eyebrow via Math.round(slotMin). (2) Down-arrow → backlog now actually works — moveDown also clears scheduledDate so the backlog filter accepts the task. (3) Both ↑↓ arrows now sage (was sage + nap). (4) Edit no longer transports to pile drawers — kebab popout buttons now stopPropagation on onClick (the bt441 arrow-fix pattern applied to pin/passive/edit/delete + kebab toggle). (5) UNSCHEDULED filter pill in Find dialog now actually lights up — was using C.muted which matched the off-state color; switched to C.ink + boosted on-state across all pills (bg 30 alpha, full-alpha border, bold weight 800, halo shadow). Build verified clean via esbuild." },
+  { version: "2026.05.05bt442", summary: "Two fixes. (1) Fits/FILL pop-out and Pile Manager modal now stand out clearly: darker backdrop (0.55→0.72), thicker brighter border (1px→2px at 80% sage), and stacked box-shadow with sage halo. (2) Pile Manager DELETE button is now bigger when armed (padding 8/16→10/18, fontSize 10→11) with a double coral box-shadow ring + the footer is flexShrink:0 with contrasting bg so it never falls below the fold. DELETE also now triggers window.confirm before removing. Build verified clean via esbuild." },
   { version: "2026.05.05bt441", summary: "Compact pop-out Find dialog (340px) with pop-in animation, drawer filter pills (UNSCHEDULED/SCHEDULED/BACKLOG multi-select, counts visible), internal scroll on the candidate list. Pile section defaults: scheduled expanded, others collapsed. Each section card has a 5px colored left rail (gold/muted/violet) plus top border for state distinction. Up/down arrow buttons now also stopPropagation on onClick (the bt440 version only stopped onPointerUp, letting the row's onClick still fire). Filled-task title in freed strip is now inline-editable (input + Enter/Escape) instead of opening EditTaskModal. FILL button readability bumped (size 10→11, padding 5/12→7/14, no halo). Pushed to next conversation: primary/secondary task semantics for passive sessions, universal undo, delete confirm pattern. Build verified clean via esbuild." },
   { version: "2026.05.05bt440", summary: "Pile drawers redesign ships (Option 2 + Cleanup B from pile_drawers.html mockup). Each section is now an index card: paper bg, rounded corners, 2px colored top-edge (gold/muted/violet). Row right-side cluster reduced to focus emoji + R + ↑ ↓ arrows + ⋯ kebab; passive toggle + delete moved into kebab popout (pin, passive, edit, delete with two-tap confirm). ↑↓ arrows move tasks between drawers (backlog → unscheduled → scheduled), disabled directions stay greyed in place. Build verified clean via esbuild." },
   { version: "2026.05.05bt439", summary: "Pile Manager modal ships. Small ⚙ MANAGE · DELETE button at top of pile area opens a modal with two modes: ALL (every incomplete task grouped by section — UNSCHEDULED / SCHEDULED / BACKLOG) and DUPLICATES (tasks clustered by fuzzy-match siblings via bt403's findSimilarTitles). Each row is a checkbox; group-level ✓ ALL / × CLEAR shortcuts. Footer shows live SELECTED count + coral DELETE button. Stays open after delete to keep cleaning. Build verified clean via esbuild." },
@@ -3047,6 +3052,27 @@ function SoleneHandoffInner() {
   // change without waiting for the next 15s tick.
   useEffect(() => {
     setNow(new Date(Date.now() + timeTravelOffset));
+  }, [timeTravelOffset]);
+  // v05.05bt444 — Per chat: 'sometimes i have issues with the current
+  // time not refreshing unless i get out of the app and open it again'.
+  // Root cause: iOS Safari (and PWAs) throttle/pause setInterval when
+  // the app is backgrounded or the screen is locked, so the 15s ticker
+  // above doesn't fire reliably. Add a visibilitychange + focus listener
+  // that snaps `now` to current time whenever the app becomes active
+  // again. Belt-and-suspenders: both events fire on iOS reactivation.
+  useEffect(() => {
+    const refreshNow = () => {
+      if (document.visibilityState === "visible") {
+        setNow(new Date(Date.now() + timeTravelOffset));
+      }
+    };
+    const onFocus = () => setNow(new Date(Date.now() + timeTravelOffset));
+    document.addEventListener("visibilitychange", refreshNow);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshNow);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [timeTravelOffset]);
 
   // Load state — one-time seed on very first launch.
@@ -18317,8 +18343,19 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         const visibleGroupOrder = groups
           .filter(g => !g.isDone && !g.isUncat)
           .map(g => g.key);
-        return groups.map(g => (
-        <div key={g.key} style={{ marginBottom: 18 }}>
+        // v05.05bt445 — Per chat: 'lets do A two column'. Wrap the
+        // category groups in a 2-col grid so the page is half as tall.
+        // Only applies when grouped by category; status grouping
+        // stays single-column (DONE etc would look odd split).
+        return (
+          <div style={{
+            display: useCategoryGroups ? "grid" : "block",
+            gridTemplateColumns: useCategoryGroups ? "repeat(2, 1fr)" : "1fr",
+            gap: useCategoryGroups ? 6 : 0,
+            alignItems: "start",
+          }}>
+            {groups.map(g => (
+        <div key={g.key} style={{ marginBottom: 14 }}>
           {useCategoryGroups && !g.isDone && (
             <div style={{
               width: "100%",
@@ -18331,19 +18368,32 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   flex: 1,
                   background: "transparent", border: "none",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11, letterSpacing: "0.20em", textTransform: "uppercase",
-                  fontWeight: 700, color: g.color,
+                  fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase",
+                  // v05.05bt445 — Per chat: contrast pass. Was
+                  // color: g.color (faded pastel against dark bg).
+                  // Now ink-bright cream so the name actually reads;
+                  // group color moves to a 8px dot to the left of
+                  // the label for at-a-glance pattern matching.
+                  fontWeight: 700, color: "#faf2e2",
                   padding: 0,
-                  display: "flex", alignItems: "center", gap: 10,
+                  display: "flex", alignItems: "center", gap: 8,
                   cursor: "pointer", textAlign: "left",
                   minWidth: 0,
                 }}>
                 <span style={{
                   display: "inline-block",
-                  width: 12, fontSize: 12, opacity: 0.7,
+                  width: 10, fontSize: 11, color: "#faf2e2", opacity: 0.6,
                   transform: !isGroupOpen(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
                   transition: "transform 0.15s",
+                  flexShrink: 0,
                 }}>▾</span>
+                {/* v05.05bt445 — group-color dot, replaces label-tint */}
+                {!g.isUncat && !g.isDone && (
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: g.color, flexShrink: 0,
+                  }} />
+                )}
                 {/* v05.05bt357 — Inline rename via tap on label.
                     When this group is in renaming state, swap to
                     text input. Enter or blur commits; Esc cancels. */}
@@ -18377,11 +18427,14 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 )}
                 <span style={{
                   opacity: 0.95,
-                  background: `${g.color}1f`,
-                  color: g.color,
+                  // v05.05bt445 — count now in gold for consistent
+                  // visual anchor across categories (was group-color
+                  // which made small numbers blend into the bg).
+                  background: `${C.gold}1f`,
+                  color: C.gold,
                   borderRadius: 5,
-                  padding: "2px 8px",
-                  fontSize: 11,
+                  padding: "2px 7px",
+                  fontSize: 10.5,
                   fontWeight: 800,
                   letterSpacing: "0.02em",
                 }}>{g.items.length}</span>
@@ -18602,7 +18655,9 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
             );
           })}
         </div>
-        ));
+        ))}
+        </div>
+        );
       })()}
 
       {/* Footer note */}
@@ -33831,7 +33886,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         if (slot.kind === "appointment") return `#A04F4F2E`;
                         if (isRoutine) return ownerTint;
                         if (isTask && slot.pinned) return ownerTint;
-                        return "transparent";
+                        // v05.05bt446 — Per chat: 'the task card in
+                        // the timeline blends too much with the inky
+                        // background'. Was return "transparent" which
+                        // matched the page bg exactly. Now a faint
+                        // paper-line tint so the card edge reads.
+                        return `${C.line}10`;
                       })(),
                       // v05.05bt360 — Glow shadow when justMoved.
                       ...(justMoved ? {
@@ -33884,16 +33944,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             : isFree ? C.gold + "22"
                             : C.line + "22")
                       }`,
-                      marginBottom: productMode === "solo" ? 0 : 3,
-                      // v05.05bt328 — Cadence flat cards: borderRadius
-                      // 4→2 + tighter spacing. Architectural, not soft.
-                      // v05.05bt328/335 — Cadence card edge treatment
-                      // differs by Mommy vs Daddy mode:
-                      //   Mommy: 2px softer rounded right edges
-                      //   Daddy: 0px square — architectural / tactical
-                      borderRadius: productMode === "solo"
-                        ? (currentUser === "Daddy" ? "0 0 0 0" : "0 2px 2px 0")
-                        : "0 4px 4px 0",
+                      marginBottom: productMode === "solo" ? 6 : 3,
+                      // v05.05bt328 → bt446 — Per chat: 'i kinda like
+                      // this aesthetic with the rounded corner for a
+                      // task card and the subtle contrast between the
+                      // background and the task cards. the task card
+                      // in the timeline blends too much with the inky
+                      // background'. Was 2px right-only corners (flat
+                      // architectural). Now 10px all-corners + a faint
+                      // paper tint as the fallback so tasks pop.
+                      borderRadius: productMode === "solo" ? 10 : "0 4px 4px 0",
                       // v05.05bt334/335/336 — ACTIVE NOW treatment.
                       // Glow color tracks the OWNER of the current
                       // slot — Mommy-owned uses C.mommy (rose in both
@@ -37071,6 +37131,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               ? { ...x, drawer: false, scheduledDate: referenceISO }
                               : x
                             ));
+                            // v05.05bt445 — Auto-expand destination so
+                            // user sees the move.
+                            setForTodayExpanded(true);
                           } else if (drawer === "unscheduled") {
                             // unscheduled → auto-slot into scheduled (existing logic)
                             const blocks = getWorkableBlocks();
@@ -37083,6 +37146,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 ? { ...x, scheduledTime: `${hh}:${mm}`, scheduledDate: referenceISO, drawer: false }
                                 : x
                               ));
+                              setScheduledExpanded(true);
                             } else {
                               setPileQuickActionId(t.id);
                               setPileQuickTimeDraft("");
@@ -37098,12 +37162,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               ? { ...x, scheduledTime: null, drawer: false }
                               : x
                             ));
+                            // v05.05bt445 — Per chat: 'the down arrow
+                            // from not yet scheduled to backlog is not
+                            // working'. The move WAS working but the
+                            // destination drawer was collapsed by
+                            // default (bt441), so the task seemed to
+                            // vanish. Auto-expand whichever drawer the
+                            // task lands in.
+                            setForTodayExpanded(true);
                           } else if (drawer === "unscheduled") {
-                            // unscheduled → backlog
+                            // unscheduled → backlog. v05.05bt443 fix:
+                            // also clear scheduledDate. The backlog
+                            // filter requires `!scheduledTime &&
+                            // !scheduledDate`, so leaving scheduledDate
+                            // set to today caused the task to stay in
+                            // the unscheduled bucket — looked like the
+                            // arrow did nothing.
                             setTasks(prev => prev.map(x => x.id === t.id
-                              ? { ...x, drawer: true, scheduledTime: null }
+                              ? { ...x, drawer: true, scheduledTime: null, scheduledDate: null }
                               : x
                             ));
+                            // v05.05bt445 — Auto-expand backlog so
+                            // user sees the task land.
+                            setBacklogExpanded(true);
                           }
                         };
                         const arrowStyle = (enabled, accent) => ({
@@ -37136,7 +37217,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               onClick={(e) => { e.stopPropagation(); }}
                               disabled={!canDown}
                               title={canDown ? (drawer === "scheduled" ? "↓ to unscheduled" : "↓ to backlog") : "Already in backlog"}
-                              style={arrowStyle(canDown, C.nap)}>↓</button>
+                              style={arrowStyle(canDown, C.sage)}>↓</button>
                           </>
                         );
                       })()}
@@ -37186,6 +37267,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           setPileKebabOpenId(prev => prev === t.id ? null : t.id);
                           setPileKebabPendingDeleteId(null);
                         }}
+                        onClick={(e) => { e.stopPropagation(); }}
                         title="More actions"
                         aria-label="More actions"
                         style={{
@@ -37223,6 +37305,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               setTasks(prev => prev.map(x => x.id === t.id ? { ...x, pinned: !x.pinned } : x));
                               setPileKebabOpenId(null);
                             }}
+                            onClick={(e) => { e.stopPropagation(); }}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
@@ -37254,6 +37337,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               }));
                               setPileKebabOpenId(null);
                             }}
+                            onClick={(e) => { e.stopPropagation(); }}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
@@ -37267,7 +37351,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <span style={{ width: 16, textAlign: "center" }}>⏳</span>
                             <span style={{ flex: 1 }}>{t.isPassive ? "Mark active" : "Mark passive"}</span>
                           </button>
-                          {/* Edit */}
+                          {/* Edit — v05.05bt443: added onClick stop-
+                              propagation to prevent the row's onClick
+                              from firing after this and "transporting"
+                              the user to the pile drawers anchor. */}
                           <button
                             type="button"
                             onPointerUp={(e) => {
@@ -37276,6 +37363,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               setEditingTask(t);
                               setPileKebabOpenId(null);
                             }}
+                            onClick={(e) => { e.stopPropagation(); }}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
@@ -37311,6 +37399,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 setPileKebabPendingDeleteId(t.id);
                               }
                             }}
+                            onClick={(e) => { e.stopPropagation(); }}
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
@@ -39399,7 +39488,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             onClick={close}
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.55)",
+              background: "rgba(0,0,0,0.72)",
+              // v05.05bt437 → bt442 — darker backdrop so the dialog
+              // stands out clearly against the page.
               // v05.05bt434 → bt437 — Per chat: 'The fit dialog is too
               // low'. Was alignItems:'flex-end' (bottom-sheet style)
               // which anchored the dialog at the bottom of the screen,
@@ -39418,10 +39509,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               onClick={(e) => e.stopPropagation()}
               style={{
                 background: C.paper, borderRadius: 12,
-                border: `1px solid ${C.sage}55`,
+                // v05.05bt441 → bt442 — Per chat: 'the dialog box does
+                // not stand out'. Stronger border + box-shadow + a
+                // subtle sage inner glow so it lifts clearly off the
+                // page.
+                border: `2px solid ${C.sage}cc`,
+                boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${C.sage}33`,
                 maxWidth: 340, width: "100%",
                 maxHeight: "75vh", overflowY: "auto",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
                 animation: "fitsPopIn 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
                 padding: "12px 14px 14px",
               }}>
@@ -39431,7 +39526,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 fontSize: 9.5, letterSpacing: "0.18em",
                 color: C.sage, fontWeight: 700, textTransform: "uppercase",
                 marginBottom: 4,
-              }}>+ {slotMin}M {contextLabel}</div>
+              }}>+ {Math.round(slotMin)}M {contextLabel}</div>
 
               {/* Context line + inline best-fit */}
               <div style={{
@@ -39635,12 +39730,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     />
                   </div>
 
-                  {/* v05.05bt441 — Drawer filter pills (multi-select). */}
+                  {/* v05.05bt441 → bt443 — Drawer filter pills (multi-
+                      select). Per chat: 'when select unsheculed under
+                      the find it does not light up'. Bug: UNSCHEDULED
+                      used C.muted as its 'on' color AND C.muted is the
+                      'off' label color — looked identical. Switched
+                      UNSCHEDULED to C.ink (cream) so the on state pops.
+                      Also boosted the on-state across all pills: bg
+                      tint 12 → 30 alpha, border full alpha, bolder
+                      text, slight shadow halo when active. */}
                   <div style={{
                     display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap",
                   }}>
                     {[
-                      { key: "unscheduled", label: "UNSCHEDULED", color: C.muted, count: drawerCounts.unscheduled },
+                      { key: "unscheduled", label: "UNSCHEDULED", color: C.ink, count: drawerCounts.unscheduled },
                       { key: "scheduled", label: "↻ SCHEDULED", color: C.gold, count: drawerCounts.scheduled },
                       { key: "backlog", label: "BACKLOG", color: C.nap, count: drawerCounts.backlog },
                     ].map(p => {
@@ -39650,18 +39753,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           key={p.key}
                           onClick={() => setFreedFillDrawerFilter(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
                           style={{
-                            padding: "3px 8px",
-                            background: on ? `${p.color}12` : "transparent",
-                            border: `1px solid ${on ? `${p.color}99` : `${C.line}55`}`,
+                            padding: "4px 9px",
+                            background: on ? `${p.color}30` : "transparent",
+                            border: `1px solid ${on ? p.color : `${C.line}55`}`,
                             borderRadius: 99,
                             cursor: "pointer",
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 8.5, fontWeight: 700,
+                            fontSize: 8.5, fontWeight: on ? 800 : 700,
                             letterSpacing: "0.04em",
                             color: on ? p.color : C.muted,
                             opacity: on ? 1 : 0.7,
+                            boxShadow: on ? `0 0 0 2px ${p.color}1a` : "none",
                           }}>
-                          {p.label} <span style={{ color: on ? C.sage : C.muted, opacity: 0.85, marginLeft: 2 }}>{p.count}</span>
+                          {p.label} <span style={{ color: on ? p.color : C.muted, opacity: 0.85, marginLeft: 2 }}>{p.count}</span>
                         </button>
                       );
                     })}
@@ -39879,7 +39983,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             onClick={close}
             style={{
               position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(0,0,0,0.55)",
+              // v05.05bt441 → bt442 — Per chat: 'the dialog box does
+              // not stand out — very difficult to differentiate
+              // between the background and this popup'. Darker
+              // backdrop + stronger dialog border + box-shadow lifts
+              // both popups off the page clearly.
+              background: "rgba(0,0,0,0.72)",
               display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 60, padding: 12,
             }}>
@@ -39887,9 +39996,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               onClick={(e) => e.stopPropagation()}
               style={{
                 background: C.paper, borderRadius: 14,
-                border: `1px solid ${C.line}66`,
-                maxWidth: 500, width: "100%",
-                maxHeight: "88vh", display: "flex", flexDirection: "column",
+                border: `2px solid ${C.sage}cc`,
+                boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${C.sage}33`,
+                maxWidth: 460, width: "100%",
+                maxHeight: "82vh", display: "flex", flexDirection: "column",
               }}>
               {/* Header */}
               <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.line}33` }}>
@@ -40015,11 +40125,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 })}
               </div>
 
-              {/* Footer */}
+              {/* Footer — v05.05bt442: sticky background, brighter
+                  DELETE button. Per chat: 'i dont see a delete button
+                  once i select tasks'. The button was always there
+                  but on a small viewport it could fall below the fold
+                  if the body section was tall. Now the footer has a
+                  contrasting bg, bigger DELETE button with a coral
+                  glow when armed, and a confirm step prompt. */}
               <div style={{
-                padding: "10px 16px 14px",
-                borderTop: `1px solid ${C.line}33`,
+                padding: "12px 16px 14px",
+                borderTop: `1px solid ${C.line}55`,
+                background: `${C.bg}cc`,
                 display: "flex", gap: 8, alignItems: "center",
+                flexShrink: 0,
               }}>
                 <span style={{
                   fontFamily: "'JetBrains Mono', monospace",
@@ -40030,26 +40148,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <button
                   onClick={close}
                   style={{
-                    padding: "8px 14px",
+                    padding: "9px 14px",
                     background: "transparent",
-                    border: `1px solid ${C.line}44`,
+                    border: `1px solid ${C.line}55`,
                     borderRadius: 7,
                     color: C.muted, cursor: "pointer",
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
                   }}>CLOSE</button>
                 <button
-                  onClick={handleDelete}
+                  onClick={() => {
+                    if (selectedCount === 0) return;
+                    if (window.confirm(`Delete ${selectedCount} task${selectedCount === 1 ? "" : "s"}? This can't be undone.`)) {
+                      handleDelete();
+                    }
+                  }}
                   disabled={selectedCount === 0}
                   style={{
-                    padding: "8px 16px",
+                    padding: "10px 18px",
                     background: selectedCount > 0 ? C.accent : `${C.line}22`,
                     color: selectedCount > 0 ? "#fff" : C.muted,
                     border: "none", borderRadius: 7,
                     cursor: selectedCount > 0 ? "pointer" : "default",
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
-                  }}>✕ DELETE {selectedCount > 0 ? selectedCount : ""}</button>
+                    fontSize: 11, fontWeight: 800, letterSpacing: "0.08em",
+                    boxShadow: selectedCount > 0 ? `0 0 0 2px ${C.accent}33, 0 4px 12px ${C.accent}55` : "none",
+                  }}>✕ DELETE{selectedCount > 0 ? ` ${selectedCount}` : ""}</button>
               </div>
             </div>
           </div>
