@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt446";
+const APP_VERSION = "2026.05.05bt447";
 const APP_BUILD_NOTES = [
-  "ROUNDED CARD AESTHETIC ON TIMELINE ROWS. Per chat (screenshot): 'i kinda like this aesthetic with the rounded corner for a task card and the subtle contrast or difference between the background and the task cards. the task card in the timeline blends too much with the inky background.'\\n\\nTHE PROBLEM: Cadence solo mode had been styled as flat architectural cards — borderRadius 2px on right edges only (Mommy) or 0 (Daddy), marginBottom 0 so rows touched, and transparent bg for regular tasks (no owner tint = invisible card outline against the inky bg).\\n\\nTHE FIX:\\n  • borderRadius: 10px on all four corners (was 2px right-only / 0).\\n  • marginBottom: 6px (was 0) so cards visibly separate.\\n  • Transparent task rows now get a faint paper tint (C.line at 10 alpha) so the card edge is visible without imposing a strong color on neutral tasks.\\n  • Owner-tinted rows (Mommy/Daddy/joint blocks, pump reminders, routines, pinned tasks) keep their existing tints — those already showed.\\n  • Existing 1px border treatment unchanged, just now wraps a fully rounded card.\\n\\nResult: cards look like the schedule rows in the alltasks_redesign mockup — distinct floating tiles instead of a continuous strip of inky bands.\\n\\nNOT IN THIS BUILD:\\n• INSERT-ROW button + above/below popup. Confirmed in the mockup and I want to do this right (pre-fill the new task's time correctly based on the anchor row + handle the case where 'above' would land on another row). Will land in bt447 as a focused build.\\n• DAY SETUP · PTO/WEEKEND. Standalone build.\\n• PUMP SESSION DISAPPEARING — still need next-time reproduction info (is it gone from Settings → Pump plan when it happens?).\\n\\nBuild verified clean via esbuild.",
+  "FIVE FIXES + ONE BIG MOCKUP for the visual concerns.\\n\\n(1) FITS/FILL TAB DEFAULT = NEW. Per chat: 'when i click to fit something in, i want the new tab to be the default'. Was 'find' (search across all tasks). Now 'new' (type a fresh task title).\\n\\n(2) DIALOGS NOW STAND OUT FROM THE PAGE. Per chat: 'this dialog box needs a border around the popup or something so that it stands out... seems to bleed into the background'. Backed by 2026 dark-mode research findings: elevation in dark mode is achieved via LIGHTER surfaces (not shadows). Was C.paper (#25212a) which is only 4 lightness steps above the page bg. Now a new modal tier (#322c39, ~10 steps brighter) + solid sage border (was 80% alpha) + layered box-shadow (1px line ring + 24px drop + 6px dark halo) that punches a clear hole in the page. Applied to both the Fits/FILL pop-out AND the Pile Manager modal.\\n\\n(3) ROUNDED CORNERS FIX. Per chat: 'how come the bottom half of the cards do not have the rounded corners — is it because of the rails'. Yes. The rail is an absolute-positioned sibling of the card; without overflow on the outer wrapper it extended past the card's rounded shape. Added matching borderRadius:10 + overflow:hidden to the OUTER row container so the rail clips to the card's perimeter. marginBottom moved to outer too (was on inner; now properly spaces row containers).\\n\\n(4) AUTO-DEDUPE DUPLICATES, SILENTLY. Per chat: 'i see alot of straight up duplicates - those should be removed completely by the app without having to make an overtired bosslady new mom have to do yet another thing'. New useEffect runs on every tasks change: groups by title.trim().toLowerCase(), finds groups of >1, keeps a single winner per group (priority: most-completed > most-scheduled > earliest createdAt > first), removes the rest. No popup, no toast. Idempotent — once cleaned, the next render finds no duplicates so the effect is a no-op. Empty-title tasks are not deduped.\\n\\n(5) CAREGIVER RAIL = SAGE — already wired since bt418. The railColorFor function checks `overlapsCaregiver` first and returns C.sage regardless of which parent's shift the slot falls in. If you're seeing parent colors when caregiver is on duty, the slot's start/end is not actually overlapping a caregiver window (events log issue) — tell me which row and I'll trace.\\n\\n(6) MOCKUP DELIVERABLE: cadence_contrast_research.html. Did the dark-mode research you asked for (2026 best practices, 6+ sources). Synthesized into concrete recommendations:\\n  • Palette: bg slightly cooler (#161219), muted brighter (#b4a594 not #9c8b7a — current is too dim per halation research), gold less saturated (#e0b057), sage slightly brighter (#8FAE7E for dark mode visibility). Three elevation tiers visually distinct.\\n  • Font: optional Cormorant Garamond → Newsreader swap. Newsreader is a free Google serif designed FOR digital reading. Same editorial italic feel, more pixel-friendly at small sizes. Body weights bumped 400 → 500 to fight halation thinning.\\n  • Side-by-side popup, body-text, and timeline-row comparisons all in the HTML.\\n\\nThese palette/font changes are NOT in this build — they'd touch every styled element in the app. Want to confirm the look first.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt447", summary: "Five fixes + dark-mode research mockup. (1) Fits/FILL tab defaults to NEW (was FIND). (2) Dialogs now properly elevated — new modal tier #322c39 (was C.paper #25212a, too close to bg), solid sage border, layered box-shadow with dark halo. Applied to Fits/FILL and Pile Manager. (3) Rounded corners now extend to bottom — added overflow:hidden + borderRadius to OUTER row container so the absolutely-positioned rail clips to the card's rounded perimeter. (4) Auto-dedupe useEffect — exact-title duplicates merge silently (winner: most-completed > most-scheduled > earliest). Idempotent, no toast. (5) Caregiver rail = sage already wired via overlapsCaregiver (bt418); if not showing, event-log issue. Plus: cadence_contrast_research.html mockup with research-backed palette + font recommendations awaiting user confirmation. Build verified clean via esbuild." },
   { version: "2026.05.05bt446", summary: "Timeline rows now look like rounded cards. Per chat (screenshot): 'the task card in the timeline blends too much with the inky background'. Was flat architectural with 2px corners + 0 margin + transparent bg for regular tasks. Now 10px all-corner radius, 6px margin between cards, faint paper tint (C.line at 10 alpha) for previously-transparent tasks so the card edge is visible. Owner-tinted rows (Mommy/Daddy/joint/routines/pump/pinned) keep their existing tints. Build verified clean via esbuild." },
   { version: "2026.05.05bt445", summary: "Three ships. (1) All-tasks view is now two columns when grouped by category (mockup Option A). Status grouping stays single-column. (2) Contrast pass: category names now ink-bright cream #faf2e2 (was muted g.color), group color moved to 8px solid dot beside the name, counts now in gold for consistency. (3) Down-arrow → backlog fix for real — data move was correct in bt443 but destination drawers were collapsed by default (bt441) so the moved task looked vanished. All four drawer-arrow moves (up/down × scheduled/unsched/backlog) now auto-expand the destination section so the user sees the task land. Build verified clean via esbuild." },
   { version: "2026.05.05bt444", summary: "Current time now refreshes when the app becomes visible/focused again. iOS Safari and the PWA install pause setInterval when the app is backgrounded, so the 15s `now` ticker stopped while you were away — schedule + NOW marker stayed frozen until next interaction. Added a useEffect that listens to document.visibilitychange + window.focus and snaps `now` to the current time on either event. Likely also fixes the bedtime-override-not-sticking bug since override save depends on `now`-derived today's-ISO matching the read-time today's-ISO. Build verified clean via esbuild." },
@@ -3074,6 +3075,48 @@ function SoleneHandoffInner() {
       window.removeEventListener("focus", onFocus);
     };
   }, [timeTravelOffset]);
+
+  // v05.05bt447 — Per chat: 'i see alot of straight up duplicates -
+  // those should be removed completely by the app without having to
+  // make an overtired bosslady new mom have to do yet another thing'.
+  // Auto-dedupe pass: any group of tasks sharing the same
+  // title.trim().toLowerCase() gets collapsed to a single survivor.
+  // Survivor priority: (1) most-completed (completedAt set), then
+  // (2) most-scheduled (scheduledTime set), then (3) earliest createdAt.
+  // Silent (no toast — user explicitly asked not to be bothered).
+  // Idempotent: once cleaned, no further dupes → no setTasks → no loop.
+  useEffect(() => {
+    if (!tasks || tasks.length < 2) return;
+    const byKey = new Map();
+    for (const t of tasks) {
+      const key = (t.title || "").trim().toLowerCase();
+      if (!key) continue; // ignore empty-titled tasks
+      if (!byKey.has(key)) byKey.set(key, [t]);
+      else byKey.get(key).push(t);
+    }
+    let dupesFound = false;
+    const keepIds = new Set();
+    for (const [key, list] of byKey) {
+      if (list.length === 1) { keepIds.add(list[0].id); continue; }
+      dupesFound = true;
+      // Pick winner: completed > scheduled > earliest > first
+      list.sort((a, b) => {
+        if (!!b.completedAt - !!a.completedAt) return !!b.completedAt - !!a.completedAt;
+        if (!!b.scheduledTime - !!a.scheduledTime) return !!b.scheduledTime - !!a.scheduledTime;
+        const ac = a.createdAt ? new Date(a.createdAt).getTime() : Infinity;
+        const bc = b.createdAt ? new Date(b.createdAt).getTime() : Infinity;
+        return ac - bc;
+      });
+      keepIds.add(list[0].id);
+    }
+    if (dupesFound) {
+      setTasks(prev => prev.filter(t => {
+        const key = (t.title || "").trim().toLowerCase();
+        if (!key) return true; // keep blank-titled
+        return keepIds.has(t.id);
+      }));
+    }
+  }, [tasks]);
 
   // Load state — one-time seed on very first launch.
   // We use a dedicated seed key (solene:seeded:real:v2) so users with prior
@@ -27711,7 +27754,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // v05.05bt434 — Per chat: unified Fits/FILL dialog (variant A from
   // fits_fill_v3.html). Tab key ("new" | "find"), backlog-show toggle,
   // best-fit "why" expansion toggle.
-  const [freedFillTab, setFreedFillTab] = useState("find");
+  // v05.05bt447 — Per chat: 'when i click to fit something in, i
+  // want the new tab to be the default'. Was "find"; flipped to "new"
+  // so the first input is title-of-new-task, not the search field.
+  const [freedFillTab, setFreedFillTab] = useState("new");
   const [freedFillShowBacklog, setFreedFillShowBacklog] = useState(false);
   const [freedFillShowWhy, setFreedFillShowWhy] = useState(false);
   // v05.05bt441 — Drawer filter pills under FIND tab. Multi-select
@@ -33784,7 +33830,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   rows.push(
                     <div
                       key={`${slot.kind}-${i}-${slot.start.getTime()}`}
-                      style={{ position: "relative" }}
+                      style={{
+                        position: "relative",
+                        // v05.05bt447 — Per chat: 'how come the bottom
+                        // half of the cards do not have the rounded
+                        // corners — is it because of the rails'. Yes.
+                        // The rail is a sibling div with position:abs
+                        // left:0 top:0 bottom:0 — without overflow on
+                        // the OUTER container it visually extends past
+                        // the card's rounded corners. Adding matching
+                        // borderRadius + overflow on the outer clips
+                        // the rail to the rounded shape.
+                        ...(productMode === "solo" ? {
+                          borderRadius: 10,
+                          overflow: "hidden",
+                          marginBottom: 6,
+                        } : {}),
+                      }}
                     >
                       {/* v05.05bt144 — swipe-to-delete underlay */}
                       {isTask && !slot.completedAt && swipedTaskId === slot.id && (
@@ -33944,15 +34006,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             : isFree ? C.gold + "22"
                             : C.line + "22")
                       }`,
-                      marginBottom: productMode === "solo" ? 6 : 3,
-                      // v05.05bt328 → bt446 — Per chat: 'i kinda like
-                      // this aesthetic with the rounded corner for a
-                      // task card and the subtle contrast between the
-                      // background and the task cards. the task card
-                      // in the timeline blends too much with the inky
-                      // background'. Was 2px right-only corners (flat
-                      // architectural). Now 10px all-corners + a faint
-                      // paper tint as the fallback so tasks pop.
+                      marginBottom: 0,
+                      // v05.05bt328 → bt446 → bt447 — Card aesthetic.
+                      // borderRadius moved to OUTER (where overflow
+                      // clips the rail). Inner keeps a matching radius
+                      // for any non-solo mode rendering.
                       borderRadius: productMode === "solo" ? 10 : "0 4px 4px 0",
                       // v05.05bt334/335/336 — ACTIVE NOW treatment.
                       // Glow color tracks the OWNER of the current
@@ -39508,13 +39566,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: C.paper, borderRadius: 12,
-                // v05.05bt441 → bt442 — Per chat: 'the dialog box does
-                // not stand out'. Stronger border + box-shadow + a
-                // subtle sage inner glow so it lifts clearly off the
-                // page.
-                border: `2px solid ${C.sage}cc`,
-                boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${C.sage}33`,
+                // v05.05bt441 → bt442 → bt447 — Per chat: 'this dialog
+                // box needs a border around the popup or something so
+                // that it stands out... seems to bleed into the
+                // background and hard to focus on the task at hand'.
+                // Research backing (2026 dark-mode best practices):
+                // elevation in dark mode is achieved via LIGHTER
+                // surfaces, not shadows (which are invisible on dark).
+                // Each tier should be ~6-10 lightness steps brighter.
+                // Was C.paper (#25212a) — only 4 steps brighter than
+                // bg (#1c1820). Now a custom lighter shade for modals,
+                // double-border (solid sage + outer line halo), and
+                // stronger box-shadow.
+                background: "#322c39",
+                borderRadius: 12,
+                border: `2px solid ${C.sage}`,
+                boxShadow: `0 0 0 1px ${C.line}44, 0 24px 60px rgba(0,0,0,0.75), 0 0 0 6px rgba(0,0,0,0.4)`,
                 maxWidth: 340, width: "100%",
                 maxHeight: "75vh", overflowY: "auto",
                 animation: "fitsPopIn 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
@@ -39995,9 +40062,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                background: C.paper, borderRadius: 14,
-                border: `2px solid ${C.sage}cc`,
-                boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${C.sage}33`,
+                // v05.05bt442 → bt447 — Same elevation treatment as
+                // the Fits/FILL dialog: lighter modal bg (#322c39),
+                // solid sage border, layered box-shadow with line halo.
+                background: "#322c39",
+                borderRadius: 14,
+                border: `2px solid ${C.sage}`,
+                boxShadow: `0 0 0 1px ${C.line}44, 0 24px 60px rgba(0,0,0,0.75), 0 0 0 6px rgba(0,0,0,0.4)`,
                 maxWidth: 460, width: "100%",
                 maxHeight: "82vh", display: "flex", flexDirection: "column",
               }}>
