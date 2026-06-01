@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt450";
+const APP_VERSION = "2026.05.05bt452";
 const APP_BUILD_NOTES = [
-  "BEST-FIT CANDIDATES NOW VISIBLY POP + NEW 'FITS ONLY' FILTER. Per chat: 'i dont think it is intuitive that the star means this can fit here nicely. shouldnt other candidates be highlighted - should we have a third button that just lists all of the good candidates or moved towards the top of the find list'.\\n\\n(1) ALL fitting candidates in the FIND tab now get a sage left rail (4px) + faint sage background tint. Was: only the single topMatch got a subtle sage hint + a tiny ★. Now any candidate whose effortMin fits the slot is visually called out — the eye scans down the list and sees a column of sage rails marking what's pickable.\\n\\n(2) THE TOP MATCH gets an explicit '★ BEST FIT' pill (white text on filled sage background) BEFORE the title, plus a brighter ring around the whole row. Unambiguous.\\n\\n(3) NEW FILTER PILL — '★ FITS ONLY'. Right-aligned in the existing pill row under FIND. Tap to toggle. When ON, the candidate list collapses to only the fitting tasks. Default OFF (you still see everything; the fitters just stand out visually).\\n\\n(4) NON-FITTING TASKS now render with a much dimmer treatment (opacity 0.45, no sage rail, line border at 33% alpha). They're still visible if you want to ignore the constraint, but they recede from attention.\\n\\nPENDING — your other ask in the same message: 'i hate that popup where you put details on the task — i want everything to be immediately accessible right now when you click on an empty slot to edit the time right there'. This is the bigger redesign — replacing modal-based task entry with full inline editing on empty slots. Worth a focused build of its own + a quick mockup so we agree on what 'editing time right there on an empty slot' looks like (since there's no row to edit yet — would it be tap → inline input expands in place of the free block, with title + time + duration + add button all inline?). Confirm or push back on that direction and I'll mock it up.\\n\\nBuild verified clean via esbuild.",
+  "THREE BUGS FROM CHAT.\\n\\n(1) COOKING CHOICE NOW STICKS. Per chat: 'my cooking choice does not stick. every time i open up the calendar again then it shows i am cooking even if i put not cooking today'. Found the root cause: todaySetup was the ONLY piece of App state without an autosave useEffect. Every other state slice (events, inventory, meetings, tasks, parentAway, timeBank, etc.) has a paired effect that writes to disk on change. todaySetup hydrates on boot from local + cloud sync but writes never persisted locally. Toggle cooking off → in-memory update → reload → disk still has the default → cookingToday reverts to true. Added the missing autosave effect right after parentAway's. Workout, wake time, sleep hours, and routine overrides will all now also persist (they share the same todaySetup blob).\\n\\n(2) FIND TAB CLASSIFY ALIGNED WITH PILE. Per chat: 'in the fits search - i still see alot of tasks that i dont see in backlog so dont know where that is coming from'. Bug: the classify function used inside the Fits/FILL dialog (and Pile Manager) labeled tasks as 'backlog' only if t.drawer was true. But the actual Backlog pile section filters by !scheduledTime && !scheduledDate. Tasks without scheduledDate would show as UNSCHEDULED in Find but appear in BACKLOG in the pile — same task, two labels, confusing. Fixed in both classify call sites: backlog now means (t.drawer || !t.scheduledDate).\\n\\n(3) PASSIVE TOGGLE IN NEW TAB. Per chat: 'when adding new task under the fits dialog - should also be able to choose if it is passive'. Was inferred from the title via parseOneNlTask (parser detects 'wash dishes' etc as passive). Now there's an explicit checkbox-style toggle: ☑ PASSIVE TASK · 'frees time for other work'. Renders right under the title input in the NEW tab, teal/pump tint when on. Threaded through to addAndPick: the new task's isPassive becomes (freedFillNewIsPassive || parsed.isPassive || undefined) — explicit user choice wins over parser inference. Toggle resets on dialog close.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt452", summary: "Three bugfixes. (1) Cooking choice now persists — todaySetup was the only App state slice without an autosave useEffect; added one matching the pattern used by every other slice. Toggle was updating memory but never writing to disk. (2) Fits/FILL classify now matches the pile's backlog filter (was using t.drawer only; now also !scheduledDate). Tasks were appearing as UNSCHEDULED in Find but BACKLOG in the pile. (3) NEW tab in Fits/FILL gets an explicit PASSIVE TASK toggle (was inferred from title only). Build verified clean via esbuild." },
+  { version: "2026.05.05bt451", summary: "Two fixes. (1) Free blocks no longer render during active pump sessions (the 1-1:30p '+ Open' overlapping pump 1-2p in the screenshot). New dropFreeBlocksOverPumps post-pass in dayTimeline useMemo filters out any free block whose range overlaps a pump_reminder. (2) Inline-add panels now visually obvious — was plain padding-4 div with no bg, now has gold tint + 4px gold left rail + drop shadow + 220ms slide-in animation (new @keyframes ll-slide-in). Bumped to mockup: multi-concurrent slotted tasks per pump host, and inline time/duration editing on empty slots. Build verified clean via esbuild." },
   { version: "2026.05.05bt450", summary: "Best-fit candidates pop visibly in the FIND tab. All fitting candidates get a 4px sage left rail + faint sage tint. Top match gets an explicit '★ BEST FIT' filled-sage pill (was a tiny ★ that wasn't intuitive). Non-fitters render at 0.45 opacity, no rail, dimmed border. New right-aligned '★ FITS ONLY' filter pill (default off) — when on, list collapses to only fitting tasks. Pending: full inline edit on empty slots (no modal for time entry) — needs focused build + a quick mockup. Build verified clean via esbuild." },
   { version: "2026.05.05bt449", summary: "Three ships. (1) Inline backlog multi-select. New ☑ SELECT button in Backlog header puts rows into checkbox mode with sticky bottom DELETE bar (window.confirm before removal). No need to open Pile Manager for backlog cleanups anymore. (2) Fits/FILL popup is flex-column now — eyebrow + tabs always visible at top, CANCEL always visible at bottom, body scrolls between. Was single-scroll outer that hid everything together. (3) All-tasks view reverted from 2-column back to single column per user. bt445 contrast pass stayed. Build verified clean via esbuild." },
   { version: "2026.05.05bt448", summary: "Palette + font swap per confirmed mockup. Newsreader added to Google Fonts; all 327 'Cormorant Garamond' references now read 'Newsreader, Cormorant Garamond' so Newsreader is preferred. Muted text bumped for legibility in all dark palettes (dusk/night #A89A87→#B4A594, cadence lavender #B8A8C8→#C8B5DA, cadenceDaddy slate-blue #B0BCCC→#BCC8DC). Gold slightly less saturated to avoid dark-mode glow. SAGE ADDED TO ALL PALETTES — C.sage was referenced ~20 times but never defined; it was silently undefined. Caregiver rail now actually renders sage. Build verified clean via esbuild." },
@@ -3614,6 +3616,15 @@ function SoleneHandoffInner() {
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:takeover", takeover); }, [takeover, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:tasks", tasks); }, [tasks, hydrated]);
   useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:parentAway", parentAway); }, [parentAway, hydrated]);
+  // v05.05bt452 — Per chat: 'my cooking choice does not stick. every
+  // time i open up the calendar again then it shows i am cooking even
+  // if i put not cooking today'. Found the bug: todaySetup is the ONLY
+  // piece of App state without an autosave useEffect. It hydrates from
+  // disk on boot and from cloud on sync, but writes never persist
+  // locally. Toggle cooking → state updates in memory → user reloads
+  // → disk has stale value → cookingToday reverts to default (true).
+  // Added the same pattern every other state slice uses.
+  useEffect(() => { if (hydrated && !isWiping()) storage.set("solene:todaySetup", todaySetup); }, [todaySetup, hydrated]);
   // v05.05bt174 — focusProfile saved under per-user key.
   useEffect(() => {
     if (!hydrated || isWiping()) return;
@@ -10620,6 +10631,15 @@ function FontImports() {
       @keyframes ll-glow-pulse {
         0%, 100% { filter: brightness(1); }
         50% { filter: brightness(1.15); }
+      }
+      /* v05.05bt451 — Inline panel slide-in. Per chat: 'the little edit
+         thing that pops out from underneath also is too subtle of a
+         change that it take me a minute to realize that something new
+         slid open'. Adds scale + slide + fade for a clearly-noticed
+         entrance. */
+      @keyframes ll-slide-in {
+        from { opacity: 0; transform: translateY(-6px) scale(0.96); max-height: 0; }
+        to   { opacity: 1; transform: translateY(0) scale(1); max-height: 300px; }
       }
       /* v05.05bt43 — LOG button glow. Uses CSS custom properties
          (--glow-color, --glow-color-strong) set inline on the button so
@@ -27752,6 +27772,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // and whether the move-from-elsewhere section is expanded.
   const [freedFillSearch, setFreedFillSearch] = useState("");
   const [freedFillNewTitle, setFreedFillNewTitle] = useState("");
+  // v05.05bt452 — Per chat: 'when adding new task under the fits
+  // dialog - should also be able to choose if it is passive'. Was
+  // inferred from the title (parser detects "wash dishes" etc) — but
+  // user wants an explicit toggle so any task can be marked passive
+  // regardless of phrasing.
+  const [freedFillNewIsPassive, setFreedFillNewIsPassive] = useState(false);
   const [freedFillShowMove, setFreedFillShowMove] = useState(false);
   // v05.05bt434 — Per chat: unified Fits/FILL dialog (variant A from
   // fits_fill_v3.html). Tab key ("new" | "find"), backlog-show toggle,
@@ -29537,7 +29563,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           }));
       });
     };
-    return autoResolveOverlaps(splitFreeAtBoundaries(rawTimeline));
+    // v05.05bt451 — Per chat (screenshot): a 1-1:30p free block was
+    // rendering while the pump session 1-2p (with Bradford slotted in
+    // 1:05-2p) was active. Cause: pump reminders ARE added to buildDay
+    // Timeline as busy items, but in this case a free block survived
+    // the gap-fill — possibly because the pump_reminder's start/end
+    // didn't align with the freed window, or the autoResolveOverlaps
+    // pass didn't catch it. Belt-and-suspenders filter: drop any
+    // free-block whose range overlaps with a pump_reminder, since
+    // those windows are conceptually "occupied" by the pump host
+    // (which renders its own freed-time strip + slot for filling).
+    const dropFreeBlocksOverPumps = (items) => {
+      const pumpRanges = items
+        .filter(x => x.kind === "pump_reminder" && x.start && x.end)
+        .map(x => ({ s: x.start.getTime(), e: x.end.getTime() }));
+      if (!pumpRanges.length) return items;
+      return items.filter(it => {
+        if (it.kind !== "free" || !it.start || !it.end) return true;
+        const s = it.start.getTime();
+        const e = it.end.getTime();
+        return !pumpRanges.some(pr => s < pr.e && e > pr.s);
+      });
+    };
+    return dropFreeBlocksOverPumps(autoResolveOverlaps(splitFreeAtBoundaries(rawTimeline)));
   }, [currentUser, onsite, now, scheduledTasks, todaySetup, meetings, referenceDate, predictedFeeds, activeShifts, routineLibrary, pumpPlan, appointments]);
 
   // v05.05bt427 (relocated bt429) — Per chat (Q8): 'Notify only when
@@ -37855,7 +37903,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "scheduled" && (
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -37982,7 +38030,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "today" && (
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -38243,7 +38291,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "backlog" && (
-                          <div style={{ display: "flex", gap: 4, padding: "4px 6px 8px" }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39526,9 +39574,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           setFreedFillSearch("");
           setFreedFillNewTitle("");
           setFreedFillShowMove(false);
-          setFreedFillTab("find");
+          // v05.05bt447 — default tab back to "new" not "find" so the
+          // next time the dialog opens it lands on the user's preferred
+          // entry point (title-of-new-task, not search).
+          setFreedFillTab("new");
           setFreedFillShowBacklog(false);
           setFreedFillShowWhy(false);
+          // v05.05bt452 — reset passive toggle so it doesn't sticky-on
+          // across dialog opens.
+          setFreedFillNewIsPassive(false);
         };
         const stampForPick = { scheduledTime: `${hh}:${mm}`, scheduledDate: todayISO };
         if (isFill) stampForPick.slottedIntoFreedTimeOf = hostId;
@@ -39550,9 +39604,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         );
         // Classify each task by its current state (matches the app's
         // 3 sections: Scheduled for today / Not yet scheduled / Backlog).
+        // v05.05bt452 — Aligned with pile filter (was using t.drawer
+        // for backlog but pile uses !scheduledDate; tasks without
+        // scheduledDate were showing as UNSCHEDULED in FIND but
+        // appearing in BACKLOG in the pile — same task, two labels).
         const classify = (t) => {
           if (t.scheduledTime && (!t.scheduledDate || t.scheduledDate === todayISO)) return "scheduled";
-          if (t.drawer) return "backlog";
+          if (t.drawer || !t.scheduledDate) return "backlog";
           return "unscheduled";
         };
         const fits = (t) => (t.effortMin || 30) <= slotMin && focusOk(t.focusLevel);
@@ -39620,7 +39678,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             ownerName: currentUser,
             createdAt: new Date().toISOString(),
             ...stampForPick,
-            isPassive: parsed.isPassive || undefined,
+            isPassive: freedFillNewIsPassive || parsed.isPassive || undefined,
             handleTimeMin: Number.isFinite(parsed.handleTimeMin) ? parsed.handleTimeMin : undefined,
           };
           setTasks(prev => [...prev, newTask]);
@@ -39851,6 +39909,37 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em",
                       }}>{hasDup ? "⚠ ADD ANYWAY" : "ADD"}</button>
                   </div>
+
+                  {/* v05.05bt452 — passive toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setFreedFillNewIsPassive(v => !v)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      width: "100%", padding: "7px 11px",
+                      marginBottom: 8,
+                      background: freedFillNewIsPassive ? `${C.pump}1f` : `${C.line}11`,
+                      border: `1px solid ${freedFillNewIsPassive ? C.pump : `${C.line}55`}`,
+                      borderRadius: 7, cursor: "pointer",
+                      fontFamily: "inherit", textAlign: "left",
+                    }}>
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 4,
+                      border: `1.5px solid ${freedFillNewIsPassive ? C.pump : C.muted}`,
+                      background: freedFillNewIsPassive ? C.pump : "transparent",
+                      color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 800, flexShrink: 0,
+                    }}>{freedFillNewIsPassive ? "✓" : ""}</span>
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                      color: freedFillNewIsPassive ? C.pump : C.muted,
+                    }}>PASSIVE TASK</span>
+                    <span style={{
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                      fontStyle: "italic", fontSize: 12, color: C.muted, marginLeft: "auto",
+                    }}>frees time for other work</span>
+                  </button>
 
                   {hasDup && (
                     <div style={{
@@ -40137,9 +40226,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             return next;
           });
         };
+        // v05.05bt452 — Pile Manager classify aligned with pile filter
+        // (same fix as Fits/FILL — backlog = no scheduledDate or drawer).
         const classify = (t) => {
           if (t.scheduledTime && (!t.scheduledDate || t.scheduledDate === todayISO)) return "scheduled";
-          if (t.drawer) return "backlog";
+          if (t.drawer || !t.scheduledDate) return "backlog";
           return "unscheduled";
         };
         const BADGE_STYLE = {
