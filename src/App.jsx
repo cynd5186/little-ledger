@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt447";
+const APP_VERSION = "2026.05.05bt450";
 const APP_BUILD_NOTES = [
-  "FIVE FIXES + ONE BIG MOCKUP for the visual concerns.\\n\\n(1) FITS/FILL TAB DEFAULT = NEW. Per chat: 'when i click to fit something in, i want the new tab to be the default'. Was 'find' (search across all tasks). Now 'new' (type a fresh task title).\\n\\n(2) DIALOGS NOW STAND OUT FROM THE PAGE. Per chat: 'this dialog box needs a border around the popup or something so that it stands out... seems to bleed into the background'. Backed by 2026 dark-mode research findings: elevation in dark mode is achieved via LIGHTER surfaces (not shadows). Was C.paper (#25212a) which is only 4 lightness steps above the page bg. Now a new modal tier (#322c39, ~10 steps brighter) + solid sage border (was 80% alpha) + layered box-shadow (1px line ring + 24px drop + 6px dark halo) that punches a clear hole in the page. Applied to both the Fits/FILL pop-out AND the Pile Manager modal.\\n\\n(3) ROUNDED CORNERS FIX. Per chat: 'how come the bottom half of the cards do not have the rounded corners — is it because of the rails'. Yes. The rail is an absolute-positioned sibling of the card; without overflow on the outer wrapper it extended past the card's rounded shape. Added matching borderRadius:10 + overflow:hidden to the OUTER row container so the rail clips to the card's perimeter. marginBottom moved to outer too (was on inner; now properly spaces row containers).\\n\\n(4) AUTO-DEDUPE DUPLICATES, SILENTLY. Per chat: 'i see alot of straight up duplicates - those should be removed completely by the app without having to make an overtired bosslady new mom have to do yet another thing'. New useEffect runs on every tasks change: groups by title.trim().toLowerCase(), finds groups of >1, keeps a single winner per group (priority: most-completed > most-scheduled > earliest createdAt > first), removes the rest. No popup, no toast. Idempotent — once cleaned, the next render finds no duplicates so the effect is a no-op. Empty-title tasks are not deduped.\\n\\n(5) CAREGIVER RAIL = SAGE — already wired since bt418. The railColorFor function checks `overlapsCaregiver` first and returns C.sage regardless of which parent's shift the slot falls in. If you're seeing parent colors when caregiver is on duty, the slot's start/end is not actually overlapping a caregiver window (events log issue) — tell me which row and I'll trace.\\n\\n(6) MOCKUP DELIVERABLE: cadence_contrast_research.html. Did the dark-mode research you asked for (2026 best practices, 6+ sources). Synthesized into concrete recommendations:\\n  • Palette: bg slightly cooler (#161219), muted brighter (#b4a594 not #9c8b7a — current is too dim per halation research), gold less saturated (#e0b057), sage slightly brighter (#8FAE7E for dark mode visibility). Three elevation tiers visually distinct.\\n  • Font: optional Cormorant Garamond → Newsreader swap. Newsreader is a free Google serif designed FOR digital reading. Same editorial italic feel, more pixel-friendly at small sizes. Body weights bumped 400 → 500 to fight halation thinning.\\n  • Side-by-side popup, body-text, and timeline-row comparisons all in the HTML.\\n\\nThese palette/font changes are NOT in this build — they'd touch every styled element in the app. Want to confirm the look first.\\n\\nBuild verified clean via esbuild.",
+  "BEST-FIT CANDIDATES NOW VISIBLY POP + NEW 'FITS ONLY' FILTER. Per chat: 'i dont think it is intuitive that the star means this can fit here nicely. shouldnt other candidates be highlighted - should we have a third button that just lists all of the good candidates or moved towards the top of the find list'.\\n\\n(1) ALL fitting candidates in the FIND tab now get a sage left rail (4px) + faint sage background tint. Was: only the single topMatch got a subtle sage hint + a tiny ★. Now any candidate whose effortMin fits the slot is visually called out — the eye scans down the list and sees a column of sage rails marking what's pickable.\\n\\n(2) THE TOP MATCH gets an explicit '★ BEST FIT' pill (white text on filled sage background) BEFORE the title, plus a brighter ring around the whole row. Unambiguous.\\n\\n(3) NEW FILTER PILL — '★ FITS ONLY'. Right-aligned in the existing pill row under FIND. Tap to toggle. When ON, the candidate list collapses to only the fitting tasks. Default OFF (you still see everything; the fitters just stand out visually).\\n\\n(4) NON-FITTING TASKS now render with a much dimmer treatment (opacity 0.45, no sage rail, line border at 33% alpha). They're still visible if you want to ignore the constraint, but they recede from attention.\\n\\nPENDING — your other ask in the same message: 'i hate that popup where you put details on the task — i want everything to be immediately accessible right now when you click on an empty slot to edit the time right there'. This is the bigger redesign — replacing modal-based task entry with full inline editing on empty slots. Worth a focused build of its own + a quick mockup so we agree on what 'editing time right there on an empty slot' looks like (since there's no row to edit yet — would it be tap → inline input expands in place of the free block, with title + time + duration + add button all inline?). Confirm or push back on that direction and I'll mock it up.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt450", summary: "Best-fit candidates pop visibly in the FIND tab. All fitting candidates get a 4px sage left rail + faint sage tint. Top match gets an explicit '★ BEST FIT' filled-sage pill (was a tiny ★ that wasn't intuitive). Non-fitters render at 0.45 opacity, no rail, dimmed border. New right-aligned '★ FITS ONLY' filter pill (default off) — when on, list collapses to only fitting tasks. Pending: full inline edit on empty slots (no modal for time entry) — needs focused build + a quick mockup. Build verified clean via esbuild." },
+  { version: "2026.05.05bt449", summary: "Three ships. (1) Inline backlog multi-select. New ☑ SELECT button in Backlog header puts rows into checkbox mode with sticky bottom DELETE bar (window.confirm before removal). No need to open Pile Manager for backlog cleanups anymore. (2) Fits/FILL popup is flex-column now — eyebrow + tabs always visible at top, CANCEL always visible at bottom, body scrolls between. Was single-scroll outer that hid everything together. (3) All-tasks view reverted from 2-column back to single column per user. bt445 contrast pass stayed. Build verified clean via esbuild." },
+  { version: "2026.05.05bt448", summary: "Palette + font swap per confirmed mockup. Newsreader added to Google Fonts; all 327 'Cormorant Garamond' references now read 'Newsreader, Cormorant Garamond' so Newsreader is preferred. Muted text bumped for legibility in all dark palettes (dusk/night #A89A87→#B4A594, cadence lavender #B8A8C8→#C8B5DA, cadenceDaddy slate-blue #B0BCCC→#BCC8DC). Gold slightly less saturated to avoid dark-mode glow. SAGE ADDED TO ALL PALETTES — C.sage was referenced ~20 times but never defined; it was silently undefined. Caregiver rail now actually renders sage. Build verified clean via esbuild." },
   { version: "2026.05.05bt447", summary: "Five fixes + dark-mode research mockup. (1) Fits/FILL tab defaults to NEW (was FIND). (2) Dialogs now properly elevated — new modal tier #322c39 (was C.paper #25212a, too close to bg), solid sage border, layered box-shadow with dark halo. Applied to Fits/FILL and Pile Manager. (3) Rounded corners now extend to bottom — added overflow:hidden + borderRadius to OUTER row container so the absolutely-positioned rail clips to the card's rounded perimeter. (4) Auto-dedupe useEffect — exact-title duplicates merge silently (winner: most-completed > most-scheduled > earliest). Idempotent, no toast. (5) Caregiver rail = sage already wired via overlapsCaregiver (bt418); if not showing, event-log issue. Plus: cadence_contrast_research.html mockup with research-backed palette + font recommendations awaiting user confirmation. Build verified clean via esbuild." },
   { version: "2026.05.05bt446", summary: "Timeline rows now look like rounded cards. Per chat (screenshot): 'the task card in the timeline blends too much with the inky background'. Was flat architectural with 2px corners + 0 margin + transparent bg for regular tasks. Now 10px all-corner radius, 6px margin between cards, faint paper tint (C.line at 10 alpha) for previously-transparent tasks so the card edge is visible. Owner-tinted rows (Mommy/Daddy/joint/routines/pump/pinned) keep their existing tints. Build verified clean via esbuild." },
   { version: "2026.05.05bt445", summary: "Three ships. (1) All-tasks view is now two columns when grouped by category (mockup Option A). Status grouping stays single-column. (2) Contrast pass: category names now ink-bright cream #faf2e2 (was muted g.color), group color moved to 8px solid dot beside the name, counts now in gold for consistency. (3) Down-arrow → backlog fix for real — data move was correct in bt443 but destination drawers were collapsed by default (bt441) so the moved task looked vanished. All four drawer-arrow moves (up/down × scheduled/unsched/backlog) now auto-expand the destination section so the user sees the task land. Build verified clean via esbuild." },
@@ -1934,13 +1937,13 @@ const PALETTES = {
   // toward gold). Dark modes pick a slightly-warmer-than-paper tone so
   // the panel still reads as a distinct elevated surface.
   day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#A89A87", line: "#D9CDB5",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#D6A856", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5",
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5",
+           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   // v05.05bt338/340 — Cadence palettes. Per chat (bt340): user picked
   // mockup D · Champagne Blush — softer, more romantic, candlelit.
   // Primary moves from #B7848C dusty rose → #D4A0A0 champagne blush.
@@ -1971,12 +1974,12 @@ const PALETTES = {
   // Paper texture + gradient outer ring layered on via global CSS
   // and App-wrapper insertion (see FontImports + App render).
   // Daddy variant uses slate-blue base for parallel symmetry.
-  cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#B8A8C8", line: "#C6B0DB",
-                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#B0BCCC", line: "#8B9BBC",
-                   mommy: "#A88299", daddy: "#8B9BBC", gold: "#C4A886", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#B8A8C8", line: "#C6B0DB",
-                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#D8C4A8", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#C8B5DA", line: "#C6B0DB",
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#BCC8DC", line: "#8B9BBC",
+                   mommy: "#A88299", daddy: "#8B9BBC", gold: "#D8B894", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#C8B5DA", line: "#C6B0DB",
+                   mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -2483,7 +2486,7 @@ class AppErrorBoundary extends React.Component {
           fontFamily: "'Inter', -apple-system, sans-serif",
           maxWidth: 600, margin: "0 auto",
         }}>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, marginBottom: 8 }}>
+          <h2 style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, marginBottom: 8 }}>
             Something hiccuped
           </h2>
           <p style={{ fontSize: 14, lineHeight: 1.6, color: "#5A5448", marginBottom: 16 }}>
@@ -6195,7 +6198,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               lineHeight: 1,
             }}>↻</div>
             <h2 style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 24, fontWeight: 500, margin: "0 0 8px",
               fontStyle: "italic",
             }}>A new version is ready</h2>
@@ -6269,7 +6272,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 CLOUD SYNC PAUSED — POSSIBLE DATA LOSS PREVENTED
               </div>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontSize: 14, fontStyle: "italic", lineHeight: 1.4,
                 fontWeight: 500,
               }}>
@@ -6383,7 +6386,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                   unchanged; aesthetic (colors) auto-adapt to active
                   palette via C.muted / userTint. */}
               <span style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 lineHeight: 1.05,
@@ -6450,7 +6453,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
               background: currentUser === "Mommy" ? C.mommy : C.daddy,
               color: "#fff", border: "none",
               width: 32, height: 32, borderRadius: "50%",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 17, fontWeight: 700,
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer", flexShrink: 0,
@@ -6472,13 +6475,13 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             <span style={{
               width: 24, height: 24, borderRadius: "50%",
               background: "#fff", color: currentUser === "Mommy" ? C.mommy : C.daddy,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 15, fontWeight: 700,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>{currentUser[0]}</span>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.05 }}>
               <span style={{ fontSize: 8, opacity: 0.85, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600 }}>viewing as</span>
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, fontWeight: 600, fontStyle: "italic" }}>{currentUser}</span>
+              <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 14, fontWeight: 600, fontStyle: "italic" }}>{currentUser}</span>
             </span>
           </button>
           )}
@@ -6816,7 +6819,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
                 const minLeft = Math.max(0, Math.round((expMs - nowMs) / 60000));
                 return (
                   <div key={b.id} style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 14, color: C.ink, lineHeight: 1.35,
                   }}>
                     <strong>{b.label || `${b.oz}oz bottle`}</strong> · expires in {minLeft}m — use, move, or discard now
@@ -8528,7 +8531,7 @@ function UseBottleModal({ C, location, inventory, now, initialBottleId, onClose,
                       }}>{locBadge}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
                         }}>
                           {b.oz.toFixed(1)} oz
@@ -9641,12 +9644,12 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
               <div style={{
                 width: 44, height: 44, borderRadius: "50%",
                 background: isCurrent ? "#fff" : color, color: isCurrent ? color : "#fff",
-                fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600,
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 24, fontWeight: 600,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,
               }}>{p[0]}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, lineHeight: 1.1 }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, lineHeight: 1.1 }}>
                   {p}
                 </div>
                 <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
@@ -9774,7 +9777,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           </div>
           <div style={{
             marginTop: 8,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 11.5, color: C.muted, lineHeight: 1.4,
           }}>
             Applies to the whole app. Re-open this modal if the size doesn't change after tapping.
@@ -9815,10 +9818,10 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           borderRadius: 10, padding: "12px 14px",
         }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-            <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontStyle: "italic", color: C.mommy, fontWeight: 500 }}>
+            <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontStyle: "italic", color: C.mommy, fontWeight: 500 }}>
               {APP_NAME}
             </span>
-            <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, fontStyle: "italic", color: C.muted }}>
+            <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 13, fontStyle: "italic", color: C.muted }}>
               {APP_SUBTITLE}
             </span>
           </div>
@@ -9918,7 +9921,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
           <div style={{
             marginTop: 14, paddingTop: 10,
             borderTop: `1px solid ${C.line}12`,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 12,
             color: C.muted, lineHeight: 1.5,
           }}>
@@ -10457,7 +10460,7 @@ function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, 
 function FontImports() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
       * { box-sizing: border-box; }
       /* v05.05bt350 — Per chat: 'weird white thin borders on the side
          that needs to be addressed.' Browser defaults give html/body/
@@ -11311,7 +11314,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             background: takeoverWithMins.coveringParent === "Mommy" ? C.mommy : C.daddy,
             color: "#fff", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600,
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 16, fontWeight: 600,
           }}>{takeoverWithMins.coveringParent[0]}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
@@ -11401,7 +11404,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
             </div>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontSize: 48, fontWeight: 500, lineHeight: 1,
                 letterSpacing: "-0.02em",
                 color: "#7B9B6E",
@@ -11472,7 +11475,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                 }}>↩ TAKE BACK NOW</button>
               <span style={{
                 fontSize: 11, color: C.muted, fontStyle: "italic",
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               }}>events logged in this window are quarantined from predictions</span>
             </div>
           </>
@@ -11491,7 +11494,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
       </div>
 
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 52, fontWeight: 500, lineHeight: 1, letterSpacing: "-0.02em", color: parentColor }}>
+        <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 52, fontWeight: 500, lineHeight: 1, letterSpacing: "-0.02em", color: parentColor }}>
           {onDuty.parent}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -11652,7 +11655,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                     margin: "0 0 6px",
                     paddingLeft: 18,
                     fontSize: 13, color: C.ink, lineHeight: 1.6,
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     textAlign: "left",
                     listStylePosition: "outside",
                   }}>
@@ -11732,7 +11735,7 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
                     style={{
                       flex: 1, padding: "6px 8px",
                       background: C.bg, border: `1px solid ${C.line}`,
-                      borderRadius: 4, fontFamily: "'Cormorant Garamond', serif",
+                      borderRadius: 4, fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 13, color: C.ink,
                     }} />
                   <button
@@ -12441,7 +12444,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     Power pump · {totalMinIn}/{POWER_PUMP_TOTAL_MIN} min
                   </div>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
                     lineHeight: 1.05, marginTop: 2, fontStyle: "italic",
                   }}>
                     {phaseLabel}
@@ -12550,7 +12553,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     {pattern.name} · {totalMinIn}/{pattern.totalMin} min
                   </div>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
                     lineHeight: 1.05, marginTop: 2, fontStyle: "italic",
                   }}>
                     {phaseLabel}
@@ -12661,7 +12664,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
               {stateLabel}
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 600,
               lineHeight: 1.05, marginTop: 2,
             }}>
               {activePump
@@ -12812,13 +12815,13 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   {empty
-                    ? <span style={{ fontStyle: "italic", fontSize: 11, color: C.muted, fontFamily: "'Cormorant Garamond', serif" }}>empty · tap to add</span>
+                    ? <span style={{ fontStyle: "italic", fontSize: 11, color: C.muted, fontFamily: "'Newsreader', 'Cormorant Garamond', serif" }}>empty · tap to add</span>
                     : renderEmoji(bottles.length, urgent)}
                 </span>
                 {!empty && (
                   <>
                     <span style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 16, fontWeight: 500,
                       color: urgent ? C.accent : C.ink,
                       lineHeight: 1,
@@ -12865,7 +12868,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                       }}>
                       <span style={{ fontSize: 13 }}>🍼</span>
                       <span style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 13, color: C.ink, flex: 1,
                       }}>
                         {(b.oz || 0).toFixed(1)} oz
@@ -12895,7 +12898,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                       border: `1px dashed ${C.line}44`,
                       borderRadius: 4,
                       cursor: "pointer",
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 11.5,
                       color: C.muted,
                       width: "100%",
@@ -12978,14 +12981,14 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                 {empty
                   ? <span style={{
                       fontStyle: "italic", fontSize: 12, color: C.muted,
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     }}>empty · tap to add</span>
                   : renderEmoji(bottles.length, urgent)}
               </div>
               {/* Bottom: oz number */}
               {!empty && (
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 22, fontWeight: 500,
                   color: urgent ? C.accent : C.ink,
                   lineHeight: 1,
@@ -13107,7 +13110,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                         background: "transparent", border: "none",
                         borderRadius: 4,
                         cursor: "pointer", textAlign: "left",
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 13, color: C.ink,
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
@@ -13292,7 +13295,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             {rtSafeOz > 0 ? <span style={{ opacity: 0.6 }}> · tap to use or add</span> : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
             color: expiryUrgent || expiryRisky ? C.accent : C.ink, marginTop: 2, lineHeight: 1.1,
           }}>
             {rtSafeOz.toFixed(1)} oz
@@ -13338,7 +13341,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                       <div style={{
                         fontSize: 11, lineHeight: 1, color: C.muted,
-                        fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
                         paddingTop: 3,
                       }}>+{overflow}</div>
                       <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: C.muted, marginTop: 3 }}>more</div>
@@ -13370,7 +13373,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
               : <span style={{ opacity: 0.6 }}> · tap to add</span>}
           </div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
             marginTop: 2, lineHeight: 1.1, color: C.ink,
           }}>
             {fridgeOz.toFixed(1)} oz
@@ -13422,7 +13425,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                       <div style={{
                         fontSize: 11, lineHeight: 1, color: C.muted,
-                        fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
                         paddingTop: 3,
                       }}>+{overflow}</div>
                       <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono', monospace", color: C.muted, marginTop: 3 }}>more</div>
@@ -13476,7 +13479,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
             <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 600, marginBottom: 2 }}>
               Last bottle pumped
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, color: C.ink, lineHeight: 1.1 }}>
+            <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, color: C.ink, lineHeight: 1.1 }}>
               {Number(lastPumpedItem.oz || 0).toFixed(1)} oz <span style={{ color: C.muted, fontSize: 14, fontStyle: "italic" }}>· {lastPumpedItem.location === "rt" ? "room temp" : "fridge"}</span>
             </div>
             <div style={{
@@ -13538,7 +13541,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     textAlign: "left", fontFamily: "inherit", color: C.ink,
                   }}>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
                     fontStyle: "italic", color: C.mommy, lineHeight: 1.1,
                   }}>
                     Standard pump
@@ -13556,7 +13559,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     textAlign: "left", fontFamily: "inherit", color: C.ink,
                   }}>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
                     fontStyle: "italic", color: C.gold, lineHeight: 1.1,
                   }}>
                     Power pump
@@ -13582,7 +13585,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                     textAlign: "left", fontFamily: "inherit", color: C.ink,
                   }}>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
                     fontStyle: "italic", color: "#8E6B86", lineHeight: 1.1,
                   }}>
                     Wearable protocol ▸
@@ -13604,7 +13607,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                       textAlign: "left", fontFamily: "inherit", color: C.ink,
                     }}>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
                       fontStyle: "italic", color: C.muted, lineHeight: 1.1,
                     }}>
                       Just log a pump
@@ -13658,7 +13661,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
                           fontFamily: "'JetBrains Mono', monospace",
                         }}>#{p.rank}</span>
                         <span style={{
-                          fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500,
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500,
                           fontStyle: "italic", color: accent, lineHeight: 1.1,
                         }}>
                           {p.name}
@@ -13741,7 +13744,7 @@ function StatTile({ C, label, value, sub, subColor, icon, iconColor, onTap }) {
         {label}
       </div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 26, fontWeight: 600,
         marginTop: 4, lineHeight: 1.05,
         color: subColor || C.ink,
@@ -14163,7 +14166,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
           marginBottom: 6,
         }}>✦ Right now</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 15, lineHeight: 1.5, color: C.ink,
         }}>
           Solène is{" "}
@@ -14195,14 +14198,14 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
           marginBottom: 4,
         }}>Solène's typical day</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12.5, color: C.muted,
           marginBottom: 12, lineHeight: 1.5,
         }}>Based on the last week. Tap a row when it happens — Mommy & Daddy see it logged.</div>
 
         {!hasSchedule ? (
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 13.5, color: C.muted,
             padding: "8px 0",
           }}>
@@ -14273,7 +14276,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
                   <span style={{ flex: 1, display: "block" }}>
                     <span style={{
                       display: "block",
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 15, fontWeight: 500,
                       color: done ? C.muted : C.ink,
                       textDecoration: done ? "line-through" : "none",
@@ -14329,7 +14332,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
               marginBottom: 3,
             }}>Diapers today</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 22, color: C.ink, fontWeight: 600,
               lineHeight: 1.1,
             }}>
@@ -14341,7 +14344,7 @@ function CaregiverView({ C, now, events, lastFeed, addEvent, removeEvent }) {
               logged
               {lastDiaper && diapersTodayCount > 0 && (
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 12, color: C.muted, fontStyle: "italic",
                   marginTop: 2, lineHeight: 1.3, fontWeight: 400,
                 }}>last {fmtAgo(lastDiaper.ts)}</div>
@@ -14478,7 +14481,7 @@ function NowView({ C, mode, now, events, addEvent, lastFeed, lastPump, nextPumpA
                 mot du jour
               </div>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
                 fontSize: 18, color: C.ink, lineHeight: 1.25,
               }}>
                 « {phraseObj.phrase} »
@@ -14703,7 +14706,7 @@ function SleepPlanCard({ C, events, now }) {
           <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
             Sleep plan · target wake 6–7 AM
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, lineHeight: 1.1, marginTop: 2 }}>
+          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, lineHeight: 1.1, marginTop: 2 }}>
             {confidence === "none" ? "Not enough data yet" : `Bedtime ~${formatHrs(recBedtimeHrs)}`}
           </div>
           {confidence !== "none" && (
@@ -14736,7 +14739,7 @@ function SleepPlanCard({ C, events, now }) {
                   <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
                     Last feed by
                   </div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
+                  <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
                     {formatHrs(recLastFeedHrs)}
                   </div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
@@ -14747,7 +14750,7 @@ function SleepPlanCard({ C, events, now }) {
                   <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
                     Then sleep
                   </div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
+                  <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
                     {stretchHrs.toFixed(1)}h
                   </div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
@@ -14773,7 +14776,7 @@ function SleepPlanCard({ C, events, now }) {
                   <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
                     Expect a night feed around
                   </div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
+                  <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, color: C.ink, marginTop: 2, lineHeight: 1.1 }}>
                     {formatHrs(avgNightFeedHr)}
                   </div>
                   <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
@@ -14828,7 +14831,7 @@ function ShiftListGrid({ C, shifts, swaps, isToday, now }) {
             borderRight: parent === "Mommy" ? `1px solid ${C.line}10` : "none",
           }}>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600,
               color, lineHeight: 1, marginBottom: 6,
             }}>
               {parent}
@@ -15126,7 +15129,7 @@ function CollapsibleDailyCard({ C, icon, title, subtitle, expanded, onToggle, co
             {title}
           </div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 16, fontWeight: 500,
             fontStyle: "italic", color: C.ink,
             marginTop: 2, lineHeight: 1.2,
@@ -15175,7 +15178,7 @@ function DailyVerseCard({ C, verse, loading }) {
       {/* Decorative quote mark */}
       <div style={{
         position: "absolute", top: -12, left: 12,
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 96, color: C.accent, opacity: 0.18, lineHeight: 1,
         fontStyle: "italic", pointerEvents: "none",
       }}>"</div>
@@ -15185,7 +15188,7 @@ function DailyVerseCard({ C, verse, loading }) {
           {verse.reference}
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 400,
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 400,
           fontStyle: "italic", color: C.ink, lineHeight: 1.5, marginBottom: 12,
         }}>
           {verse.text}
@@ -15251,7 +15254,7 @@ function FrenchCard({ C, content, loading }) {
 
       <div style={{ padding: 18 }}>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500,
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500,
           color: tabColor, lineHeight: 1.2, fontStyle: "italic",
         }}>
           {phrase.phrase}
@@ -15517,7 +15520,7 @@ function WeatherCard({ C, weather, uvNow, tempNow, walkWindows }) {
         <div>
           <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.2em", textTransform: "uppercase" }}>OUTSIDE NOW</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 2 }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500 }}>
+            <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500 }}>
               {tempNow != null ? `${Math.round(tempNow)}°F` : "—"}
             </div>
             <div style={{ fontSize: 12, color: uvColor, fontWeight: 500 }}>
@@ -15665,7 +15668,7 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
           const dayHeader = (
             <div style={{
               display: "flex", alignItems: "baseline", gap: 8,
-              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
               fontSize: 18, color: C.muted,
             }}>
               {!isToday && (
@@ -16163,7 +16166,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
                   style={{
                     width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
                     borderRadius: 8, fontSize: 18, background: C.bg, color: C.ink,
-                    fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontWeight: 500,
                   }}
                 />
                 {tsLocal && durationMin > 0 && (() => {
@@ -16197,7 +16200,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
                   width: "100%", padding: 10, fontSize: 16,
                   background: C.bg, border: `1px solid ${C.line}33`,
                   borderRadius: 8, color: C.ink, outline: "none",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   letterSpacing: "0.1em", textTransform: "uppercase",
                 }}
               />
@@ -16229,7 +16232,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
               style={{
                 width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
                 borderRadius: 8, fontSize: 18, background: C.bg, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontWeight: 500,
               }}
             />
           </Field>
@@ -16241,7 +16244,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
               style={{
                 width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
                 borderRadius: 8, fontSize: 18, background: C.bg, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontWeight: 500,
               }}
             />
           </Field>
@@ -16260,7 +16263,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
             style={{
               width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
               borderRadius: 8, fontSize: 18, background: C.bg, color: C.ink,
-              fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontWeight: 500,
             }}
           />
         </Field>
@@ -16276,7 +16279,7 @@ function EditEventModal({ C, event, onClose, onSave, onDelete }) {
               style={{
                 width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
                 borderRadius: 8, fontSize: 18, background: C.bg, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif", fontWeight: 500,
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontWeight: 500,
               }}
             />
             <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic", marginTop: 6, lineHeight: 1.5 }}>
@@ -16575,7 +16578,7 @@ function DayPlanCard({
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 19, fontWeight: 600, fontStyle: "italic",
             color: headerColor, lineHeight: 1.1,
           }}>
@@ -17088,7 +17091,7 @@ function DayInLifeCard({ C, events, now }) {
       {expanded && (
         <div style={{ padding: "0 14px 14px" }}>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 13,
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 13,
             fontStyle: "italic", color: C.muted, marginBottom: 10, lineHeight: 1.4,
           }}>
             Simulated from her last 14 days. Times shift naturally — use as a guide, not a clock.
@@ -17110,7 +17113,7 @@ function DayInLifeCard({ C, events, now }) {
                 </div>
                 <div>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 16, color: C.ink, fontStyle: "italic",
                     fontWeight: 500, lineHeight: 1.2,
                   }}>
@@ -17723,7 +17726,7 @@ function SundayRoutineCard({ C, events, now }) {
               return (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.mommy, fontStyle: "italic", fontWeight: 600 }}>
+                    <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 14, color: C.mommy, fontStyle: "italic", fontWeight: 600 }}>
                       Mommy
                     </div>
                     <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
@@ -17734,7 +17737,7 @@ function SundayRoutineCard({ C, events, now }) {
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.daddy, fontStyle: "italic", fontWeight: 600 }}>
+                    <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 14, color: C.daddy, fontStyle: "italic", fontWeight: 600 }}>
                       Daddy
                     </div>
                     <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
@@ -17745,7 +17748,7 @@ function SundayRoutineCard({ C, events, now }) {
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 10, padding: "5px 0", alignItems: "baseline" }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: C.gold, fontStyle: "italic", fontWeight: 600 }}>
+                    <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 14, color: C.gold, fontStyle: "italic", fontWeight: 600 }}>
                       Solène
                     </div>
                     <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>
@@ -18127,7 +18130,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
           style={{
             background: "transparent", border: "none", padding: "0 4px 6px",
             cursor: "pointer", color: C.mommy,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 12.5,
           }}>← Back to Mommy's Day</button>
       )}
@@ -18138,7 +18141,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       {!hideHeader && (
       <div style={{ marginBottom: 14, padding: "0 4px" }}>
         <h1 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontWeight: 500, fontSize: 30,
           color: C.ink, margin: 0, lineHeight: 1.05,
         }}>All tasks across days</h1>
@@ -18179,7 +18182,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
           border: `1px solid ${C.line}55`,
           borderRadius: 10, padding: "9px 14px",
           fontSize: 13, color: C.ink, marginBottom: 10,
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic",
         }}
       />
@@ -18238,7 +18241,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               fontWeight: 700, color: C.gold, textTransform: "uppercase",
             }}>↳ duplicates</span>
             <span style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 13,
               color: C.ink, flex: 1,
             }}>
@@ -18295,7 +18298,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
           <button onClick={() => { setRegretHighOnly(false); setDeepOnly(false); }} style={{
             marginLeft: 2, background: "transparent",
             color: C.muted, border: "none",
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 11.5,
             cursor: "pointer",
           }}>clear</button>
@@ -18343,7 +18346,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               background: "transparent",
               color: C.muted,
               border: "none",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
               cursor: "pointer",
             }}>collapse all</button>
@@ -18356,7 +18359,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
               background: "transparent",
               color: C.gold,
               border: "none",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
               cursor: "pointer",
             }}>expand all</button>
@@ -18368,7 +18371,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       {filtered.length === 0 && (
         <div style={{
           textAlign: "center", padding: "30px 14px",
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", color: C.muted, fontSize: 14,
         }}>
           {search.trim()
@@ -18386,15 +18389,14 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         const visibleGroupOrder = groups
           .filter(g => !g.isDone && !g.isUncat)
           .map(g => g.key);
-        // v05.05bt445 — Per chat: 'lets do A two column'. Wrap the
-        // category groups in a 2-col grid so the page is half as tall.
-        // Only applies when grouped by category; status grouping
-        // stays single-column (DONE etc would look odd split).
+        // v05.05bt445 → bt449 — Per chat: 'i dont like the all tasks
+        // across days - i change my mind about that format'. Reverted
+        // back to single column. Mockup Option B (card grid) or Option
+        // C (sticky tabs) is on the table if she wants a re-pick.
         return (
           <div style={{
-            display: useCategoryGroups ? "grid" : "block",
-            gridTemplateColumns: useCategoryGroups ? "repeat(2, 1fr)" : "1fr",
-            gap: useCategoryGroups ? 6 : 0,
+            display: "block",
+            gap: 0,
             alignItems: "start",
           }}>
             {groups.map(g => (
@@ -18617,7 +18619,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   </span>
                 </div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 15, fontWeight: 500, color: C.ink,
                   lineHeight: 1.2,
                   textDecoration: t._status === "done" ? "line-through" : "none",
@@ -18706,7 +18708,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
       {/* Footer note */}
       <div style={{
         marginTop: 18, padding: "12px 14px",
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic", fontSize: 12,
         color: C.muted, textAlign: "center",
         lineHeight: 1.4,
@@ -18926,7 +18928,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             marginBottom: 14, padding: "0 4px",
           }}>
             <h1 style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontWeight: 500, fontSize: 26,
               color: C.ink, margin: 0,
               lineHeight: 1.05,
@@ -18936,7 +18938,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             </h1>
             <div style={{
               marginTop: 4,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 13,
               color: C.muted, lineHeight: 1.4,
             }}>
@@ -18964,7 +18966,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
                 background: C.paper, borderRadius: 12, padding: 14,
                 border: `1px solid ${C.line}15`, borderTop: `3px solid ${color}`,
               }}>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginBottom: 8, color }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginBottom: 8, color }}>
                   {parent}
                   {onsite?.parent === parent && (
                     <span style={{ fontSize: 10, color: C.accent, marginLeft: 6, letterSpacing: "0.1em", fontFamily: "'Inter', sans-serif", fontWeight: 600 }}>
@@ -19169,7 +19171,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
                       {isToday ? "Today" : isTomorrow ? "Tom." : d.date.toLocaleDateString(undefined, { weekday: "short" })}
                     </div>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 24, fontWeight: 500, fontStyle: "italic",
                       color: isToday ? C.accent : C.ink, lineHeight: 1.05,
                       marginTop: 1,
@@ -19341,7 +19343,7 @@ function DiffCard({ C, swaps, shifts, activeShifts }) {
 
           return (
             <div key={parent} style={{ borderTop: `3px solid ${color}`, paddingTop: 8 }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color, marginBottom: 6 }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color, marginBottom: 6 }}>
                 {parent}
               </div>
               {all.length === 0 ? (
@@ -19469,11 +19471,11 @@ function TimeBankCard({ C, timeBank, onOpen, currentUser, onRedeem }) {
           </div>
           <div style={{ marginTop: 4 }}>
             {balance === 0 ? (
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, fontStyle: "italic", color: C.ink }}>
+              <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 28, fontWeight: 500, fontStyle: "italic", color: C.ink }}>
                 no debts
               </span>
             ) : (
-              <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: primaryColor, lineHeight: 1 }}>
+              <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: primaryColor, lineHeight: 1 }}>
                 {fmtBalance(balance)}
               </span>
             )}
@@ -19710,7 +19712,7 @@ function TimeBankAddForm({ C, onSubmit, balance, initialKind, initialTx }) {
               {kind === "owed" ? "Covered" : kind === "gift" ? "From" : "From"}
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500,
               color: fromColor, marginTop: 2,
             }}>
               {from}
@@ -19728,7 +19730,7 @@ function TimeBankAddForm({ C, onSubmit, balance, initialKind, initialTx }) {
               {kind === "owed" ? "For" : kind === "gift" ? "To" : "To"}
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500,
               color: toColor, marginTop: 2,
             }}>
               {to}
@@ -20140,13 +20142,13 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, cur
           Time bank
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 14, fontStyle: "italic", color: C.muted, marginTop: 2,
         }}>
           {directionLabel}
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: balance === 0 ? 36 : 44,
           fontWeight: 500,
           color: balance === 0 ? C.ink : primaryColor,
@@ -20319,7 +20321,7 @@ function BankView({ C, timeBank, setTimeBank, setMeetings, now, currentUser, cur
             border: `1px solid ${C.line}15`, textAlign: "center",
           }}>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 18,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18,
               fontStyle: "italic", color: C.muted,
             }}>
               No transactions yet.
@@ -20701,7 +20703,7 @@ function ActiveOnsiteCard({ C, onsite, now, onUpdateEta, onArrived }) {
           <MapPin size={18} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, lineHeight: 1.1, color: awayColor }}>
+          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, lineHeight: 1.1, color: awayColor }}>
             {onsite.parent} is on-site
           </div>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -20715,7 +20717,7 @@ function ActiveOnsiteCard({ C, onsite, now, onUpdateEta, onArrived }) {
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
             Earliest back
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, marginTop: 2 }}>
+          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, marginTop: 2 }}>
             {fmtTimeShort(earliest)}
           </div>
         </div>
@@ -20723,7 +20725,7 @@ function ActiveOnsiteCard({ C, onsite, now, onUpdateEta, onArrived }) {
           <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
             {etaUpdate ? "Updated ETA" : "Latest back"}
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, marginTop: 2, color: etaUpdate ? C.accent : C.ink }}>
+          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, marginTop: 2, color: etaUpdate ? C.accent : C.ink }}>
             {fmtTimeShort(effectiveReturn)}
           </div>
         </div>
@@ -21398,7 +21400,7 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
         marginBottom: 4,
       }}>⚙ Plan around a window</div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic", fontSize: 12.5, color: C.muted,
         marginBottom: 12, lineHeight: 1.5,
       }}>
@@ -21419,12 +21421,12 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
         marginBottom: 14, flexWrap: "wrap",
       }}>
         <span style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 14, color: C.ink,
         }}>I'll be away from</span>
         <input type="time" value={winStart} onChange={(e) => setWinStart(e.target.value)} style={inputStyle} />
         <span style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 14, color: C.ink,
         }}>to</span>
         <input type="time" value={winEnd} onChange={(e) => setWinEnd(e.target.value)} style={inputStyle} />
@@ -21432,7 +21434,7 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
 
       {!valid && (winStart || winEnd) && (
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12, color: C.accent,
         }}>Set a start and end time (end must be after start).</div>
       )}
@@ -21462,11 +21464,11 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
               }}>{fmtT(plan.boostBefore)}</span>
               <div style={{ flex: 1 }}>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 14, color: C.ink, fontWeight: 500,
                 }}>Boost session (25 min)</div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11.5, color: C.muted,
                   marginTop: 1, lineHeight: 1.3,
                 }}>Empty fully 30 min before the gap — extends comfort time and protects supply.</div>
@@ -21483,11 +21485,11 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
               }}>{fmtT(plan.afterCatch)}</span>
               <div style={{ flex: 1 }}>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 14, color: C.ink, fontWeight: 500,
                 }}>Catch-up session (20-25 min)</div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11.5, color: C.muted,
                   marginTop: 1, lineHeight: 1.3,
                 }}>Empty as soon as you're back — fullness signals oversupply to your body, not undersupply.</div>
@@ -21507,11 +21509,11 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
                 }}>~9pm</span>
                 <div style={{ flex: 1 }}>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 14, color: C.ink, fontWeight: 500,
                   }}>Power pump (60 min)</div>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 11.5, color: C.muted,
                     marginTop: 1, lineHeight: 1.3,
                   }}>20m / 10m rest / 10m / 10m rest / 10m. The gap is long enough ({plan.missedSessions} missed session{plan.missedSessions !== 1 ? "s" : ""}) that a recovery session helps prevent a 10-15% supply dip.</div>
@@ -21523,7 +21525,7 @@ function PumpSchedulePlannerCard({ C, events, now, lastPump }) {
           <div style={{
             marginTop: 10, paddingTop: 8,
             borderTop: `1px dashed ${C.line}`,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 12.5, color: C.muted, lineHeight: 1.45,
           }}>
             <span style={{ color: C.ink, fontWeight: 600 }}>Estimated milk impact:</span>{" "}
@@ -21607,7 +21609,7 @@ function PumpGoalsCard({ C, events, now, mommyMaintenanceCal, setMommyMaintenanc
         <div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
             <span style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 48,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 48,
               fontWeight: 500, fontStyle: "italic", color: statusColor, lineHeight: 0.95,
             }}>
               {todayPumpOz.toFixed(1)}
@@ -21873,7 +21875,7 @@ function PumpTimeVsOzCard({ C, events, now }) {
               Peak
             </div>
             <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, marginTop: 2,
-              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic" }}>
               {peakBin ? `${fmtHr(peakBin.hour - 1)}–${fmtHr(peakBin.hour + 1)}` : "—"}
             </div>
             <div style={{ fontSize: 10, color: C.gold, fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
@@ -21885,7 +21887,7 @@ function PumpTimeVsOzCard({ C, events, now }) {
               Low
             </div>
             <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, marginTop: 2,
-              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic" }}>
               {lowBin ? `${fmtHr(lowBin.hour - 1)}–${fmtHr(lowBin.hour + 1)}` : "—"}
             </div>
             <div style={{ fontSize: 10, color: "#C18D7A", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>
@@ -22907,7 +22909,7 @@ function CaregiverWindowBanner({ C, events, addEvent, now, currentUser }) {
         <span style={{ fontSize: 18, lineHeight: 1, color: "rgba(184, 155, 122, 1)", fontWeight: 700 }}>◐</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 15, fontStyle: "italic",
             color: C.ink, lineHeight: 1.25,
           }}>Caregiver window planned · <strong style={{ fontStyle: "normal", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>{fmt(win.start)}{win.end ? `–${fmt(win.end)}` : ""}</strong></div>
@@ -22932,7 +22934,7 @@ function CaregiverWindowBanner({ C, events, addEvent, now, currentUser }) {
           border: "1.5px dashed rgba(123, 155, 110, 0.55)",
           borderRadius: 12, marginBottom: 12,
           cursor: "pointer", textAlign: "center",
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 14,
           color: "#5C7D55",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -23000,7 +23002,7 @@ function CaregiverWindowPlanner({ C, now, currentUser, onSave, onClose }) {
         overflowY: "auto",
       }}>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontStyle: "italic", fontWeight: 500,
           color: C.ink, marginBottom: 4,
         }}>Plan caregiver window</div>
@@ -25148,7 +25150,7 @@ function BulkScheduleModal({ C, tasks, currentUser, now, onClose, onSubmit }) {
   return (
     <ModalShell C={C} onClose={onClose} title="Schedule multiple tasks" placement="center">
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic", fontSize: 13.5, color: C.muted,
         lineHeight: 1.45, marginBottom: 12,
       }}>
@@ -25190,7 +25192,7 @@ function BulkScheduleModal({ C, tasks, currentUser, now, onClose, onSubmit }) {
       {filtered.length === 0 && (
         <div style={{
           padding: "30px 14px", textAlign: "center",
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13.5, color: C.muted,
         }}>
           Nothing in {scope === "all" ? "your backlog or today's pile" : scope === "backlog" ? "your backlog" : "today's unscheduled"}.
@@ -25230,7 +25232,7 @@ function BulkScheduleModal({ C, tasks, currentUser, now, onClose, onSubmit }) {
                 }}>{isSel ? "✓" : ""}</span>
                 <span style={{
                   flex: 1, minWidth: 0,
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 14, lineHeight: 1.35, fontWeight: 500,
                   color: C.ink, wordBreak: "break-word",
                 }}>{t.title}</span>
@@ -25391,14 +25393,14 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
           color: C.gold, fontWeight: 700,
         }}>PROPOSED SCHEDULE · REVIEW</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 19, fontWeight: 500, color: C.ink,
           marginTop: 4, marginBottom: 4, lineHeight: 1.3,
         }}>
           {preview.tasks.length} {preview.tasks.length === 1 ? "task" : "tasks"} — lock in or adjust
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12.5, color: C.muted,
           marginBottom: 14, lineHeight: 1.45,
         }}>
@@ -25424,7 +25426,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                     minWidth: 50, flexShrink: 0,
                   }}>{fmtTime(t.scheduledTime)}</span>
                   <span style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 15, color: C.ink, fontWeight: 500, flex: 1,
                   }}>{t.title}</span>
                   <span style={{
@@ -25478,7 +25480,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                 </div>
                 {preview.reasons && preview.reasons[t.id] && (
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 11.5, color: C.muted,
                     marginTop: 3, paddingLeft: 60, lineHeight: 1.4,
                   }}>
@@ -25508,7 +25510,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 14, color: C.ink, fontWeight: 500, flex: 1,
                   }}>{t.title}</span>
                   <span style={{
@@ -25539,7 +25541,7 @@ function PreviewBeforeCommitModal({ C, preview, onLockIn, onCancel, onCommandApp
                 </div>
                 {preview.reasons && preview.reasons[t.id] && (
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 11.5, color: C.muted,
                     marginTop: 3, lineHeight: 1.4,
                   }}>{preview.reasons[t.id]}</div>
@@ -25632,7 +25634,7 @@ function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
           }}
         />
         <span style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12, color: C.muted,
         }}>for</span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -25674,7 +25676,7 @@ function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
         gap: 8,
       }}>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12, color: C.muted,
         }}>
           Runs <span style={{
@@ -25761,7 +25763,7 @@ function TimeEditPopover({ C, task, onClose, onSave }) {
           color: C.gold, fontWeight: 700,
         }}>EDIT TIME</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 18, fontWeight: 500, color: C.ink,
           marginTop: 4, marginBottom: 16, lineHeight: 1.3,
         }}>{task.title}</div>
@@ -25826,7 +25828,7 @@ function TimeEditPopover({ C, task, onClose, onSave }) {
           padding: "12px 14px",
           background: `${C.gold}10`, borderRadius: 8,
           marginBottom: 18,
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 14, color: C.muted, fontStyle: "italic",
           textAlign: "center",
         }}>
@@ -26071,12 +26073,12 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
           color: C.gold, fontWeight: 700,
         }}>MORNING CHECK-IN</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, color: C.ink,
           marginTop: 4, lineHeight: 1.3,
         }}>{quickMode ? "How are you today?" : "Let's read the signal."}</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13, color: C.muted,
           marginTop: 4, marginBottom: 18, lineHeight: 1.5,
         }}>
@@ -26104,7 +26106,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
               ))}
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 14,
               color: quickRating > 0 ? C.ink : C.muted,
               textAlign: "center", minHeight: 22, marginBottom: 14,
@@ -26164,7 +26166,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                         marginBottom: 8, textTransform: "uppercase",
                       }}>Question {stepIdx + 1} of {QUESTIONS.length}</div>
                       <div style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 18, color: C.ink,
                         marginBottom: 14, lineHeight: 1.4,
                       }}>{currentQ.prompt}</div>
@@ -26188,7 +26190,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                                 color: C.ink,
                                 border: `1.5px solid ${selected ? C.mommy : C.line}`,
                                 borderRadius: 10,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 14.5, cursor: "pointer",
                                 lineHeight: 1.4,
                               }}>{opt.label}</button>
@@ -26215,7 +26217,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
 
                       {answeredCount > 0 && (
                         <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 14, color: C.ink, marginBottom: 6,
                         }}>
                           Your answers: <span style={{ fontWeight: 700, fontStyle: "italic" }}>{LABELS[inferredRating - 1]}</span>
@@ -26232,7 +26234,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                           }}>Behavioral check</div>
                           {behavioralSignals.map((sig, i) => (
                             <div key={i} style={{
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontSize: 13, color: C.ink,
                               marginBottom: 3, lineHeight: 1.4,
                             }}>
@@ -26245,7 +26247,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                           ))}
                           {behavioralRating && (
                             <div style={{
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontSize: 13, color: C.ink, marginTop: 6,
                             }}>
                               Behavior says: <span style={{ fontWeight: 700, fontStyle: "italic" }}>{LABELS[behavioralRating - 1]}</span>
@@ -26258,7 +26260,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                         <div style={{
                           marginTop: 10, paddingTop: 8,
                           borderTop: `1px dashed ${C.muted}55`,
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontStyle: "italic", fontSize: 12.5,
                           color: C.accent, lineHeight: 1.45,
                         }}>
@@ -26269,7 +26271,7 @@ function EnergyCheckInModal({ C, events, now, onClose, onSave }) {
                       <div style={{
                         marginTop: 10, paddingTop: 8,
                         borderTop: `1px dashed ${C.muted}55`,
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 12.5, color: C.muted, lineHeight: 1.45,
                       }}>
                         <span style={{ color: C.ink, fontWeight: 600 }}>What this means:</span>{" "}
@@ -26559,7 +26561,7 @@ function FocusQuizModal({ C, focusProfile, onClose, onSave, onClear }) {
               color: C.gold, fontWeight: 700,
             }}>FOCUS PROFILE · {step + 1} of {STEPS.length}</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 21, fontWeight: 500, color: C.ink,
               marginTop: 4, lineHeight: 1.3,
             }}>{current.title}</div>
@@ -26585,7 +26587,7 @@ function FocusQuizModal({ C, focusProfile, onClose, onSave, onClear }) {
         </div>
 
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13, color: C.muted,
           marginBottom: 16, lineHeight: 1.5,
         }}>{current.sub}</div>
@@ -26790,13 +26792,13 @@ function RoutineOverrideSheet({ C, routine, baseStart, baseDur, initialTime, ini
               Adjust routine · today only
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontWeight: 500, fontSize: 20,
               color: C.ink, lineHeight: 1.2,
             }}>{routine.title}</div>
             <div style={{
               marginTop: 4,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
               color: C.muted,
             }}>
@@ -26944,12 +26946,12 @@ function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
           color: C.daddy, fontWeight: 700,
         }}>Morning routine</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, color: C.ink,
           marginTop: 4, lineHeight: 1.3,
         }}>Steps to do with Solène</div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13, color: C.muted,
           marginTop: 4, marginBottom: 16, lineHeight: 1.5,
         }}>Shown in the 5:30–8:30am prompt as a memory aid. Update as Solène's routine evolves.</div>
@@ -26960,7 +26962,7 @@ function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
             background: `${C.line}11`,
             border: `1px dashed ${C.line}`,
             borderRadius: 8,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 13, color: C.muted,
             textAlign: "center", marginBottom: 12,
           }}>No steps yet. Add the first one below.</div>
@@ -26982,7 +26984,7 @@ function MorningStepsEditorModal({ C, initialSteps, onSave, onClose }) {
               style={{
                 flex: 1, padding: "8px 10px",
                 background: C.bg, border: `1px solid ${C.line}`,
-                borderRadius: 6, fontFamily: "'Cormorant Garamond', serif",
+                borderRadius: 6, fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontSize: 14, color: C.ink,
               }} />
             <button onClick={() => move(i, -1)} disabled={i === 0} style={{
@@ -27159,12 +27161,12 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
           marginBottom: 4,
         }}>Routines · defaults</div>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, margin: "0 0 4px",
           color: C.ink,
         }}>Edit your daily routines</h2>
         <p style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13.5,
           color: C.muted, margin: "0 0 16px", lineHeight: 1.5,
         }}>These are your defaults. Per-day tweaks still work — they layer on top.</p>
@@ -27175,7 +27177,7 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
             background: `${C.line}10`,
             border: `1px dashed ${C.line}`,
             borderRadius: 8,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 13, color: C.muted,
             marginBottom: 12,
           }}>No routines yet. Tap + Add routine below to start, or reset to load the defaults.</div>
@@ -27204,7 +27206,7 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
                   fontSize: 11, color: C.muted, minWidth: 48,
                 }}>{fmtT(r.time)}</span>
                 <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 15, color: C.ink, flex: 1,
                   textDecoration: r.disabled ? "line-through" : "none",
                 }}>{r.title || "(untitled)"}</span>
@@ -27238,7 +27240,7 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
                       style={{
                         width: "100%", padding: "8px 10px",
                         background: C.bg, border: `1px solid ${C.line}`,
-                        borderRadius: 6, fontFamily: "'Cormorant Garamond', serif",
+                        borderRadius: 6, fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 14, color: C.ink,
                       }} />
                   </label>
@@ -27289,7 +27291,7 @@ function RoutineLibraryEditor({ C, initialLibrary, defaults, onSave, onReset, on
                       <div style={{ marginBottom: 10 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 700 }}>Days</div>
-                          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", fontSize: 11, color: C.muted }}>
+                          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic", fontSize: 11, color: C.muted }}>
                             {everyDay ? "every day" : selected.length === 0 ? "(no days)" : ""}
                           </div>
                         </div>
@@ -27441,12 +27443,12 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
           marginBottom: 4,
         }}>Optimizer · sleep-protected</div>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, margin: "0 0 4px",
           color: C.ink,
         }}>If you woke at __ and slept by __</h2>
         <p style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13.5,
           color: C.muted, margin: "0 0 14px", lineHeight: 1.5,
         }}>
@@ -27469,7 +27471,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
               marginBottom: 2,
             }}>● Today's shape</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 15, color: C.ink, lineHeight: 1.4,
             }}>You're working with <span style={{ fontWeight: 700 }}>"{matchedShape.name}"</span> — {matchedShape.wakeLabel} → {matchedShape.bedLabel}.</div>
           </div>
@@ -27487,7 +27489,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
               marginBottom: 2,
             }}>○ Custom shape</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 14, color: C.muted, lineHeight: 1.4, fontStyle: "italic",
             }}>Today's wake/bed doesn't match any suggested shape. Pick one below to switch.</div>
           </div>
@@ -27499,7 +27501,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
             background: `${C.line}10`,
             border: `1px dashed ${C.line}`,
             borderRadius: 8,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic", fontSize: 13, color: C.muted,
           }}>
             No shapes satisfy your constraints right now. Check that your sleep floor is reasonable and your routines aren't taking the full day.
@@ -27525,13 +27527,13 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
                   fontWeight: 700,
                 }}>{isActive ? "● Today's shape" : (isRecommended ? "✦ Recommended" : "Alternative")}</div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 17, fontWeight: 500, color: C.ink,
                   flex: 1,
                 }}>{s.name}</div>
               </div>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontSize: 16, color: C.ink, marginBottom: 8,
               }}>
                 Wake{" "}
@@ -27567,7 +27569,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
                 </div>
               </div>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontSize: 12.5,
                 color: C.muted, marginTop: 8, lineHeight: 1.5,
               }}>{s.tradeoff}</div>
@@ -27592,7 +27594,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
         })}
 
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 11.5,
           color: C.muted, marginTop: 8, lineHeight: 1.5,
           padding: "10px 12px",
@@ -27772,12 +27774,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const [freedFillDrawerFilter, setFreedFillDrawerFilter] = useState(() => ({
     scheduled: true, unscheduled: true, backlog: false,
   }));
+  // v05.05bt450 — Per chat: 'should we have a third button that just
+  // lists all of the good candidates'. Optional filter on the FIND
+  // tab: when ON, only show candidates whose effort fits the slot.
+  // Default OFF so user sees the full list and just visually scans for
+  // the sage-railed fitters (which now stand out).
+  const [freedFillFitsOnly, setFreedFillFitsOnly] = useState(false);
   // v05.05bt439 — Per chat: 'i also need a way of selecting multiple
   // from the pile and deleting it instead of going one by one. also
   // need to delete duplicates'. Pile-manager modal: multi-select with
   // bulk delete + duplicate-detection mode that groups fuzzy matches.
   const [pileManagerOpen, setPileManagerOpen] = useState(false);
   const [pileSelectedIds, setPileSelectedIds] = useState(() => new Set());
+  // v05.05bt449 — Per chat: 'backlog is tedious to clean up...i should
+  // be able to select several right there and then and delete if needed'.
+  // Inline multi-select directly inside the backlog section header,
+  // separate from the Pile Manager modal flow. When ON, rows show
+  // checkboxes + a sticky bottom bar with Delete/Cancel.
+  const [backlogSelectMode, setBacklogSelectMode] = useState(false);
+  const [backlogSelectedIds, setBacklogSelectedIds] = useState(() => new Set());
   const [pileManagerMode, setPileManagerMode] = useState("all"); // "all" | "dupes"
   // v05.05bt440 — Pile drawers redesign (cleanup B from pile_drawers.html).
   // Tracks which row's kebab popout is open, mutually exclusive.
@@ -30948,7 +30963,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               style={{
                 width: "100%", padding: "12px 14px", border: `1px solid ${C.line}33`,
                 borderRadius: 10, fontSize: 14, background: C.paper, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 marginBottom: 10, resize: "vertical", lineHeight: 1.5,
               }}
@@ -31033,14 +31048,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               {nlDefaultFocus === "auto" && (
                 <div style={{
                   fontSize: 10, color: C.muted, fontStyle: "italic",
-                  marginTop: 6, fontFamily: "'Cormorant Garamond', serif",
+                  marginTop: 6, fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 }}>
                   Auto = inferred from task keywords (write/draft/code → deep · email/check → shallow)
                 </div>
               )}
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 12, color: C.muted, fontStyle: "italic",
               marginBottom: 12, lineHeight: 1.5,
             }}>
@@ -31085,7 +31100,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               ) : (
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 13, color: C.muted, fontStyle: "italic", marginBottom: 12,
                 }}>
                   Nothing parsed yet — try adding duration or task title.
@@ -31166,7 +31181,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
               }}>
                 <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 12, color: C.ink,
                 }}>
                   📋 Saved draft · <strong style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal", fontSize: 11 }}>{nlPending.length}</strong> task{nlPending.length !== 1 ? "s" : ""} waiting to review
@@ -31226,7 +31241,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               style={{
                 width: "100%", padding: "10px 12px", border: `1px solid ${C.line}33`,
                 borderRadius: 8, fontSize: 14, background: C.paper, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 marginBottom: 10,
               }}
@@ -31372,7 +31387,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   borderRadius: 8, padding: "10px 12px",
                   fontSize: 11, fontWeight: 500,
                   cursor: "pointer",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic",
                   whiteSpace: "nowrap",
                 }}
@@ -31388,7 +31403,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
                 style={{
                   background: "transparent", border: "none", padding: 0,
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 12,
                   color: C.mommy, cursor: "pointer",
                   borderBottom: `1px dotted ${C.mommy}`,
@@ -31441,7 +31456,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 : "rgba(193, 141, 122, 0.5)"}`,
             borderRadius: 10, padding: "11px 14px", marginBottom: 14,
             fontSize: 12.5, color: C.ink, lineHeight: 1.45,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontStyle: "italic",
             // v05.05bt159 — banner no longer auto-dismisses (user said
             // 'i wasnt able to see the reasoning for the analysis before
@@ -31598,7 +31613,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   Algorithm · {scheduleStatus.algorithm || "greedy regret-priority"}
                 </div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11.5, color: C.muted,
                   marginBottom: 10, lineHeight: 1.5,
                 }}>
@@ -31622,7 +31637,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       }}>{item.scheduled ? "✓" : "×"}</span>
                       <div>
                         <span style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 13, color: C.ink, fontWeight: 500,
                         }}>{item.title}</span>
                         {item.reason && (
@@ -31757,7 +31772,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   }}>
                     <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
                       <h1 style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontWeight: 500,
                         fontSize: 30, color: C.ink,
                         margin: 0, lineHeight: 1.05,
@@ -31925,7 +31940,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       fontSize: 10.5, color: C.muted,
                                       fontStyle: "italic",
                                       marginLeft: 26, marginTop: 1,
-                                      fontFamily: "'Cormorant Garamond', serif",
+                                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                     }}>{item.hint}</span>
                                   )}
                                 </button>
@@ -31940,7 +31955,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 12, minWidth: 0 }}>
                       <h1 style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontWeight: 500,
                         fontSize: 30, color: C.ink,
                         margin: 0, lineHeight: 1.05,
@@ -32117,7 +32132,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     fontSize: 10.5, color: C.muted,
                                     fontStyle: "italic",
                                     marginLeft: 26, marginTop: 1,
-                                    fontFamily: "'Cormorant Garamond', serif",
+                                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                   }}>{item.hint}</span>
                                 )}
                               </button>
@@ -32218,7 +32233,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       marginBottom: 6,
                     }}>Today's runway</div>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 13, fontStyle: "italic",
                       color: C.muted, lineHeight: 1.5,
                     }}>
@@ -32345,7 +32360,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>Today's runway</div>
                     {runwayCollapsed && (
                       <div style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontSize: 12.5,
                         color: C.muted, flex: 1, minWidth: 0,
                       }}>
@@ -32364,7 +32379,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   </button>
                   {!runwayCollapsed && (<>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontSize: 14, lineHeight: 1.55,
                     color: C.ink,
                   }}>
@@ -32420,7 +32435,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <div style={{
                     marginTop: 10, paddingTop: 8,
                     borderTop: `1px solid ${C.line}22`,
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 12.5,
                     color: C.ink, lineHeight: 1.5,
                   }}>
@@ -32489,7 +32504,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       color: C.accent,
                     }}>↻ {shifted.length} task{shifted.length === 1 ? "" : "s"} auto-shifted</div>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 13,
                       color: C.ink, marginTop: 2, lineHeight: 1.3,
                     }}>
@@ -32526,7 +32541,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   border: `1.5px dashed ${C.mommy}66`,
                   borderRadius: 10, marginBottom: 12,
                   cursor: "pointer", textAlign: "center",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 15,
                   color: C.mommy, fontWeight: 600,
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -32610,7 +32625,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       background: `${C.gold}10`,
                       border: `1px solid ${C.gold}55`,
                       borderRadius: 6,
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 11.5, color: C.ink, lineHeight: 1.45,
                     }}>
                       ✦ {partner} owes you <strong style={{ fontFamily: "'JetBrains Mono', monospace", fontStyle: "normal" }}>{balanceStr}</strong> — these trades essentially cash in owed time.
@@ -32666,7 +32681,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           cursor: isClickable ? "pointer" : "default",
                         }}>
                         <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 13.5, color: C.ink,
                           lineHeight: 1.5,
                         }}>
@@ -32701,7 +32716,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   );
                 })}
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11,
                   color: C.muted, marginTop: 6, lineHeight: 1.45,
                 }}>
@@ -32850,7 +32865,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.accent}33` }}>
                     {overlapWarnings.map((w, i) => (
                       <div key={i} style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 12.5, color: C.ink, lineHeight: 1.5,
                         marginBottom: i === overlapWarnings.length - 1 ? 0 : 4,
                       }}>
@@ -32866,7 +32881,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     ))}
                     <div style={{
                       marginTop: 8,
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 11.5, color: C.muted,
                     }}>
                       Tap a task above to edit time/duration. Re-analyze will reshuffle unpinned tasks around fixed ones.
@@ -32963,7 +32978,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     }}>
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{timeCreditBanner.freedMin}</span>{" "}
                     min back from{" "}
-                    <span style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic" }}>
+                    <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic" }}>
                       {timeCreditBanner.fromTitle}
                     </span>
                     <span style={{ color: C.muted, fontStyle: "italic" }}> — {timeCreditBanner.expanded ? "tap to collapse" : "tap for options"}.</span>
@@ -33033,7 +33048,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             background: `${C.gold}0a`,
                             border: `1px solid ${C.gold}33`,
                             borderRadius: 6, cursor: "pointer",
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             fontSize: 13, color: C.ink,
                           }}>
                           <span style={{ fontStyle: "italic" }}>{c.title}</span>{" "}
@@ -33068,7 +33083,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             background: `${C.mommy}10`,
                             border: `1px solid ${C.mommy}55`,
                             borderRadius: 6, cursor: "pointer",
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             fontSize: 13, color: C.ink,
                           }}>
                           Pull <span style={{ fontStyle: "italic" }}>{nextUpcoming.task.title}</span> to{" "}
@@ -34405,7 +34420,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 <div style={{
                                   marginTop: 3,
                                   padding: "4px 6px",
-                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                   fontStyle: "italic",
                                   fontSize: 10.5, lineHeight: 1.3,
                                   color: c,
@@ -34507,7 +34522,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 }}
                                 style={{
                                   flex: 1, minWidth: 0,
-                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                   fontSize: 15, fontWeight: 500,
                                   color: C.ink,
                                   border: `1.5px solid ${C.mommy}`,
@@ -34623,7 +34638,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 ? (e) => { e.stopPropagation(); setEditingRoutine(slot); }
                                 : undefined}
                             style={{
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             // v05.05bt305 — Per chat readability pass:
                             // bumped sizes 14→15 / 15→17 / 17→19. Bumped
                             // weight 400→500 for routines, 500→600 for
@@ -35074,7 +35089,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         background: C.bg,
                                         border: `1px solid ${C.sage}66`,
                                         padding: "4px 8px", borderRadius: 5,
-                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                         fontStyle: "italic", fontSize: 13.5,
                                         color: C.ink,
                                       }}
@@ -35091,7 +35106,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       flex: 1, minWidth: 0,
                                       background: "transparent", border: "none",
                                       padding: 0, textAlign: "left", cursor: "pointer",
-                                      fontFamily: "'Cormorant Garamond', serif",
+                                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                       fontSize: 13.5, color: C.ink,
                                       fontStyle: "italic",
                                     }}>{filledTask.title}</button>
@@ -35128,7 +35143,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     color: C.sage,
                                   }}>+ {freedMin}M FREED</span>
                                   <span style={{
-                                    fontFamily: "'Cormorant Garamond', serif",
+                                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                     fontStyle: "italic", fontSize: 12,
                                     color: C.muted, flex: 1, minWidth: 0,
                                   }}>{fmtTimeRange(freedStart, freedEnd)} · light tasks ok</span>
@@ -35289,7 +35304,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       placeholder="+ add concurrent (e.g. 'while gel running 25m')"
                                       style={{
                                         flex: 1, minWidth: 0,
-                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                         fontSize: 13, fontStyle: "italic",
                                         color: C.ink,
                                         border: `1px solid ${C.pump}55`,
@@ -35346,7 +35361,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 marginBottom: 5,
                               }}>WHY THIS SLOT</div>
                               <div style={{
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 11.5, lineHeight: 1.45,
                                 color: C.ink,
                               }}>
@@ -35453,7 +35468,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             return (
                               <div style={{ marginTop: 2 }}>
                                 <div style={{
-                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                   fontSize: 11.5, lineHeight: 1.35,
                                   color: C.ink,
                                 }}>
@@ -35466,7 +35481,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   <span style={{ color: C.muted, fontStyle: "italic" }}> · mixed shift — partial focus only</span>
                                 </div>
                                 <div style={{
-                                  fontFamily: "'Cormorant Garamond', serif",
+                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                   fontSize: 11.5, lineHeight: 1.45,
                                   color: C.ink, marginTop: 4, paddingLeft: 2,
                                 }}>
@@ -35530,7 +35545,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           return (
                             <div style={{ marginTop: 3 }}>
                               <div style={{
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 13, lineHeight: 1.35,
                                 color: C.ink,
                               }}>
@@ -35624,7 +35639,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                           border: `1px dashed ${C.mommy}55`,
                                           borderRadius: 6,
                                           width: "100%", cursor: "pointer",
-                                          fontFamily: "'Cormorant Garamond', serif",
+                                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                           fontStyle: "italic", fontSize: 12,
                                           color: C.mommy, textAlign: "left",
                                         }}>+ Add new task here</button>
@@ -35663,7 +35678,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       }}>✦ FITS · {candidates.length}</span>
                                       <span style={{
                                         flex: 1, color: C.ink,
-                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                         fontStyle: "italic",
                                         fontSize: 12,
                                       }}>{top.title}{candidates.length > 1 ? ` · +${candidates.length - 1} more` : ""}</span>
@@ -35758,7 +35773,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                             placeholder="search tasks..."
                                             style={{
                                               flex: 1, minWidth: 0,
-                                              fontFamily: "'Cormorant Garamond', serif",
+                                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                               fontSize: 13, fontStyle: "italic",
                                               padding: "4px 8px",
                                               background: C.bg, color: C.ink,
@@ -35904,7 +35919,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         style={{
                                           flex: 1, padding: "6px 8px",
                                           fontSize: 13,
-                                          fontFamily: "'Cormorant Garamond', serif",
+                                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                           background: C.paper,
                                           border: `1px solid ${C.mommy}55`,
                                           borderRadius: 5, color: C.ink,
@@ -35993,7 +36008,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                               background: `${C.gold}10`,
                                               border: `1px dashed ${C.gold}44`,
                                               borderRadius: 4,
-                                              fontFamily: "'Cormorant Garamond', serif",
+                                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                               fontStyle: "italic", fontSize: 11.5,
                                               color: C.ink, lineHeight: 1.4,
                                             }}>
@@ -36043,7 +36058,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                                 }}>R{c.regretScore}</span>
                                                 <span style={{
                                                   flex: 1, color: C.ink,
-                                                  fontFamily: "'Cormorant Garamond', serif",
+                                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                                   fontSize: 13,
                                                 }}>
                                                   {c.title}
@@ -36145,7 +36160,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                                   <span style={{ fontSize: 11, flexShrink: 0 }}>{flGlyph}</span>
                                                   <span style={{
                                                     flex: 1, color: C.ink,
-                                                    fontFamily: "'Cormorant Garamond', serif",
+                                                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                                     fontSize: 13, fontStyle: "italic",
                                                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                                                   }}>{m.title}</span>
@@ -36197,7 +36212,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                           }}>R{c.regretScore}</span>
                                           <span style={{
                                             flex: 1, color: C.ink,
-                                            fontFamily: "'Cormorant Garamond', serif",
+                                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                             fontSize: 13,
                                           }}>
                                             {c.title}
@@ -36220,7 +36235,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     {candidates.length > topCount && (
                                       <div style={{
                                         marginTop: 4,
-                                        fontFamily: "'Cormorant Garamond', serif",
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                         fontStyle: "italic", fontSize: 11, color: C.muted,
                                       }}>+ {candidates.length - topCount} more · use All Tasks to slot</div>
                                     )}
@@ -36829,7 +36844,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           gets the full leading width. */}
                       <span style={{
                         flex: 1, color: C.ink,
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
                         // v05.05bt424 — Option B from brainstorm:
                         // unscheduled-pile titles render italic so they
@@ -36882,7 +36897,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 background: C.bg, color: C.ink,
                                 border: `1px solid ${C.mommy}66`,
                                 borderRadius: 4,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 14.5, lineHeight: 1.35, fontWeight: 500,
                                 fontStyle: "italic",
                               }}
@@ -37599,7 +37614,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             style={{
                               background: "transparent", border: "none",
                               padding: 0,
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontStyle: "italic", fontSize: 12,
                               color: C.ink, cursor: "pointer",
                               borderBottom: `1px dotted ${C.line}66`,
@@ -37720,7 +37735,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         border: "none",
                         borderTop: `1px solid ${C.line}22`,
                         cursor: "pointer", textAlign: "left",
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontSize: 12.5,
                         color: C.mommy,
                         display: "flex", alignItems: "center", gap: 6,
@@ -37857,7 +37872,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               placeholder="title (e.g. 'wash hair' or 'wash hair 3pm')"
                               style={{
                                 flex: 1, minWidth: 0,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 14, fontStyle: "italic",
                                 color: C.ink,
                                 border: `1.5px solid ${C.mommy}55`,
@@ -37891,7 +37906,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 background: `${C.mommy}08`,
                                 border: `1px dashed ${C.mommy}55`,
                                 borderRadius: 6,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontStyle: "italic", fontSize: 12,
                                 color: C.mommy,
                                 cursor: "pointer",
@@ -37984,7 +37999,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               placeholder="title (lands in today's pile)"
                               style={{
                                 flex: 1, minWidth: 0,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 14, fontStyle: "italic",
                                 color: C.ink,
                                 border: `1.5px solid ${C.gold}55`,
@@ -38075,7 +38090,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               background: `${C.gold}08`,
                               border: `1px dashed ${C.gold}55`,
                               borderRadius: 6,
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontStyle: "italic", fontSize: 12,
                               color: C.gold,
                               cursor: "pointer",
@@ -38097,7 +38112,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             return (
                               <div style={{
                                 padding: "8px 5px",
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontStyle: "italic", fontSize: 11.5,
                                 color: C.muted,
                               }}>no tasks in {pileCategoryFilter.toLowerCase()}</div>
@@ -38182,6 +38197,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>▸</span>
                           </button>
                           {/* v05.05bt416 — per-section quick add */}
+                          {/* v05.05bt449 — inline multi-select toggle */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (backlogSelectMode) {
+                                setBacklogSelectMode(false);
+                                setBacklogSelectedIds(new Set());
+                              } else {
+                                setBacklogSelectMode(true);
+                                setBacklogExpanded(true);
+                              }
+                            }}
+                            title={backlogSelectMode ? "Cancel select mode" : "Select multiple to delete"}
+                            style={{
+                              padding: "3px 7px",
+                              background: backlogSelectMode ? `${C.accent}26` : `${C.muted}14`,
+                              border: `1px solid ${backlogSelectMode ? C.accent : `${C.muted}44`}`,
+                              borderRadius: 5,
+                              color: backlogSelectMode ? C.accent : C.muted, cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9.5, fontWeight: 800,
+                              letterSpacing: "0.06em",
+                              flexShrink: 0,
+                            }}>{backlogSelectMode ? `× CANCEL` : `☑ SELECT`}</button>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -38220,7 +38260,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               placeholder="brain dump (no date assigned)"
                               style={{
                                 flex: 1, minWidth: 0,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontSize: 14, fontStyle: "italic",
                                 color: C.ink,
                                 border: `1.5px solid ${C.muted}55`,
@@ -38254,7 +38294,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 background: `${C.line}10`,
                                 border: `1px dashed ${C.line}66`,
                                 borderRadius: 6,
-                                fontFamily: "'Cormorant Garamond', serif",
+                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                                 fontStyle: "italic", fontSize: 12,
                                 color: C.muted,
                                 cursor: "pointer",
@@ -38266,8 +38306,88 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           ) : (
                             <>
                                 {backlog.slice(0, 12).map(t => (
-                                  <TaskRow key={t.id} t={t} side="backlog" />
+                                  backlogSelectMode ? (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => {
+                                        setBacklogSelectedIds(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(t.id)) next.delete(t.id);
+                                          else next.add(t.id);
+                                          return next;
+                                        });
+                                      }}
+                                      style={{
+                                        display: "flex", alignItems: "center", gap: 8,
+                                        padding: "8px 10px",
+                                        marginBottom: 3,
+                                        background: backlogSelectedIds.has(t.id) ? `${C.accent}1f` : `${C.line}10`,
+                                        border: `1px solid ${backlogSelectedIds.has(t.id) ? C.accent : `${C.line}55`}`,
+                                        borderRadius: 7,
+                                        cursor: "pointer",
+                                        WebkitTapHighlightColor: "transparent",
+                                      }}>
+                                      <span style={{
+                                        width: 18, height: 18, borderRadius: 4,
+                                        border: `1.5px solid ${backlogSelectedIds.has(t.id) ? C.accent : C.muted}`,
+                                        background: backlogSelectedIds.has(t.id) ? C.accent : "transparent",
+                                        color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                                        fontSize: 12, fontWeight: 800, flexShrink: 0,
+                                      }}>{backlogSelectedIds.has(t.id) ? "✓" : ""}</span>
+                                      <span style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, color: C.sage, fontWeight: 700,
+                                        flexShrink: 0, minWidth: 24,
+                                      }}>{t.effortMin || 30}m</span>
+                                      <span style={{
+                                        flex: 1, fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                        fontSize: 13, color: C.ink, fontStyle: "italic",
+                                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                      }}>{t.title}</span>
+                                    </div>
+                                  ) : (
+                                    <TaskRow key={t.id} t={t} side="backlog" />
+                                  )
                                 ))}
+                                {/* v05.05bt449 — sticky delete bar inside the backlog card */}
+                                {backlogSelectMode && (
+                                  <div style={{
+                                    position: "sticky", bottom: 0,
+                                    display: "flex", alignItems: "center", gap: 8,
+                                    marginTop: 6, padding: "8px 8px",
+                                    background: C.paper,
+                                    border: `1px solid ${C.line}88`,
+                                    borderRadius: 7,
+                                  }}>
+                                    <span style={{
+                                      flex: 1, fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
+                                      color: backlogSelectedIds.size > 0 ? C.accent : C.muted,
+                                    }}>SELECTED · {backlogSelectedIds.size}</span>
+                                    <button
+                                      onClick={() => {
+                                        if (backlogSelectedIds.size === 0) return;
+                                        const n = backlogSelectedIds.size;
+                                        if (window.confirm(`Delete ${n} task${n === 1 ? "" : "s"} from backlog? This can't be undone.`)) {
+                                          const idsToDelete = backlogSelectedIds;
+                                          setTasks(prev => prev.filter(x => !idsToDelete.has(x.id)));
+                                          setBacklogSelectedIds(new Set());
+                                          setBacklogSelectMode(false);
+                                        }
+                                      }}
+                                      disabled={backlogSelectedIds.size === 0}
+                                      style={{
+                                        padding: "8px 14px",
+                                        background: backlogSelectedIds.size > 0 ? C.accent : `${C.line}22`,
+                                        color: backlogSelectedIds.size > 0 ? "#fff" : C.muted,
+                                        border: "none", borderRadius: 6,
+                                        cursor: backlogSelectedIds.size > 0 ? "pointer" : "default",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                                        boxShadow: backlogSelectedIds.size > 0 ? `0 0 0 2px ${C.accent}33` : "none",
+                                      }}>✕ DELETE{backlogSelectedIds.size > 0 ? ` ${backlogSelectedIds.size}` : ""}</button>
+                                  </div>
+                                )}
                               {backlog.length > 12 && (
                                 <button
                                   onClick={openAllTasksModal}
@@ -38300,7 +38420,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         background: "transparent",
                         border: "none", borderTop: `1px solid ${C.line}22`,
                         cursor: "pointer", textAlign: "center",
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontSize: 11.5,
                         color: C.gold,
                       }}>↗ All tasks across days · search · done history</button>
@@ -38329,7 +38449,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 paddingBottom: 10, marginBottom: 10,
               }}>
                 <span style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontWeight: 500,
                   fontSize: 20, color: C.ink,
                   letterSpacing: "-0.01em",
@@ -38380,7 +38500,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 16, fontWeight: 500,
                         color: C.ink, lineHeight: 1.3,
                         letterSpacing: "-0.005em",
@@ -38455,7 +38575,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             onClick={() => setShowUnscheduled(true)}
             style={{
               background: "transparent", border: "none", padding: "8px 0",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               // v05.05bt342 — Was C.muted italic 400 — visually thin on
               // dark plum. C.ink + weight 500 reads cleanly.
               fontStyle: "italic", fontSize: 12.5, fontWeight: 500,
@@ -38476,7 +38596,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               paddingBottom: 10, marginBottom: 10,
             }}>
               <span style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 fontSize: 20, color: C.ink,
                 letterSpacing: "-0.01em",
@@ -38494,7 +38614,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 onClick={() => setShowUnscheduled(false)}
                 style={{
                   background: "transparent", border: "none", padding: 0,
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 11,
                   color: C.muted, cursor: "pointer",
                   borderBottom: `1px dotted ${C.line}88`,
@@ -38550,7 +38670,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       cursor: "pointer", fontFamily: "inherit",
                     }}>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 16, fontWeight: 500,
                       color: C.ink, lineHeight: 1.3,
                       letterSpacing: "-0.005em",
@@ -38605,7 +38725,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     opacity: 0.55,
                   }}>
                     <span style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontSize: 15, fontStyle: "italic",
                       color: C.ink, textDecoration: "line-through", flex: 1,
                     }}>
@@ -38628,7 +38748,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         )}
 
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           // v05.05bt342 — Per chat: 'the font at the botom of the
           // landing page is STILL LOW contrast.' Italic Cormorant at
           // weight 400 (default) on dark plum reads as thin/dim even
@@ -38680,7 +38800,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               marginBottom: 8,
             }}>
               <h2 style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 fontSize: 20, color: C.ink, margin: 0,
               }}>Monday CSV</h2>
@@ -38694,7 +38814,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             <div style={{
               fontSize: 12, color: C.muted, marginBottom: 10,
               lineHeight: 1.5,
-              fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
             }}>
               Your phone blocked auto-copy. Tap "Select all", then copy and paste into Monday.
             </div>
@@ -38742,7 +38862,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   background: "transparent",
                   border: `1px solid ${C.line}55`,
                   borderRadius: 8, padding: "10px 14px",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 13,
                   color: C.muted, cursor: "pointer",
                 }}>Close</button>
@@ -38785,7 +38905,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               textTransform: "uppercase", marginBottom: 8,
             }}>⚠ Possible duplicate</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 17, color: C.ink, lineHeight: 1.4,
               marginBottom: 14,
             }}>
@@ -38800,7 +38920,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             }}>
               {duplicatePrompt.matches.slice(0, 3).map((m, i) => (
                 <div key={m.id} style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 15,
                   color: C.ink, lineHeight: 1.5,
                   marginTop: i === 0 ? 0 : 4,
@@ -38867,7 +38987,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   background: "transparent", color: C.muted,
                   border: "none",
                   padding: "8px 14px", cursor: "pointer",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 13,
                 }}>Cancel · let me edit the title</button>
             </div>
@@ -38974,7 +39094,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               fontWeight: 700, textTransform: "uppercase", marginBottom: 2,
             }}>{label}</div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 18, color: C.ink, fontWeight: 600,
               lineHeight: 1.1,
             }}>{value}</div>
@@ -39033,7 +39153,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 textTransform: "uppercase", marginBottom: 4,
               }}>✓ Day done</div>
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontSize: 22,
                 color: C.ink, marginBottom: 14,
               }}>{todayStr}</div>
@@ -39082,7 +39202,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         borderBottom: i === unfinishedAll.length - 1 ? "none" : `1px solid ${C.line}22`,
                       }}>
                         <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 14, color: C.ink, lineHeight: 1.3,
                           marginBottom: 5,
                         }}>
@@ -39128,7 +39248,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </>
               ) : (
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 14,
                   color: C.sage, marginBottom: 14, textAlign: "center",
                   padding: "12px 0",
@@ -39214,7 +39334,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   Brain Dump
                 </div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 14,
                   color: C.muted, lineHeight: 1.4,
                 }}>
@@ -39245,7 +39365,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 border: `1px solid ${C.mommy}38`,
                 borderRadius: 12,
                 fontSize: 15, background: C.paper, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontWeight: 500,
                 resize: "vertical", lineHeight: 1.5,
                 marginBottom: 12,
@@ -39274,7 +39394,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       {bulkAddOpen && (
         <ModalShell C={C} onClose={() => setBulkAddOpen(false)} title="Bulk add tasks">
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 12.5, fontStyle: "italic",
             color: C.muted, lineHeight: 1.45, marginBottom: 10,
           }}>
@@ -39295,7 +39415,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               borderRadius: 6,
               background: C.paper,
               color: C.ink,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 14, lineHeight: 1.5,
               resize: "vertical", minHeight: 160,
               outline: "none",
@@ -39470,7 +39590,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
         };
         const visibleCandidates = allCandidates.filter(t => {
           const cls = classify(t);
-          return freedFillDrawerFilter[cls];
+          if (!freedFillDrawerFilter[cls]) return false;
+          if (freedFillFitsOnly && !fits(t)) return false;
+          return true;
         });
         const hasBacklogHits = false; // pill replaces the old show-link
         const topMatch = allCandidates.find(t => fits(t)) || null;
@@ -39583,10 +39705,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 border: `2px solid ${C.sage}`,
                 boxShadow: `0 0 0 1px ${C.line}44, 0 24px 60px rgba(0,0,0,0.75), 0 0 0 6px rgba(0,0,0,0.4)`,
                 maxWidth: 340, width: "100%",
-                maxHeight: "75vh", overflowY: "auto",
+                // v05.05bt449 — Per chat: 'the window needs to stay in
+                // such a way i can always access the top and bottom of
+                // the popup'. Was a single-scroll outer (all content
+                // scrolled together, so eyebrow + tabs + CANCEL could
+                // hide). Now flex-column: outer is fixed height,
+                // header (eyebrow/context/tabs) stays pinned at top,
+                // body region scrolls, CANCEL pinned at bottom.
+                maxHeight: "75vh",
+                display: "flex", flexDirection: "column",
                 animation: "fitsPopIn 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
                 padding: "12px 14px 14px",
               }}>
+              <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
               {/* ───── EYEBROW ───── */}
               <div style={{
                 fontFamily: "'JetBrains Mono', monospace",
@@ -39597,7 +39728,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
 
               {/* Context line + inline best-fit */}
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontSize: 14, color: C.muted,
                 marginBottom: 4, lineHeight: 1.5,
               }}>
@@ -39631,7 +39762,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   background: `${C.sage}10`,
                   borderLeft: `2px solid ${C.sage}88`,
                   borderRadius: "0 6px 6px 0",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 12.5,
                   color: C.muted, lineHeight: 1.55,
                 }}>
@@ -39699,7 +39830,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       placeholder="title (e.g. 'reply to Sarah 15m')"
                       style={{
                         flex: 1, minWidth: 0,
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontSize: 14, fontStyle: "italic", color: C.ink,
                         border: `1px solid ${hasDup ? C.gold : `${C.line}55`}`,
                         borderRadius: 6, padding: "8px 11px",
@@ -39753,14 +39884,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             fontSize: 9, color: C.sage, fontWeight: 700, flexShrink: 0,
                           }}>{m.effortMin || 30}m</span>
                           <span style={{
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             fontSize: 13.5, color: C.ink, flex: 1, minWidth: 0,
                           }}>{m.title}</span>
                           {badgeFor(m)}
                         </button>
                       ))}
                       <div style={{
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontSize: 11.5, color: C.muted,
                         marginTop: 4, lineHeight: 1.4,
                       }}>
@@ -39791,7 +39922,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         border: `1px solid ${C.line}55`,
                         borderRadius: 7,
                         padding: "8px 11px 8px 32px",
-                        fontFamily: "'Cormorant Garamond', serif",
+                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         fontStyle: "italic", fontSize: 13.5, color: C.ink,
                       }}
                     />
@@ -39836,6 +39967,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         </button>
                       );
                     })}
+                      {/* v05.05bt450 — Best Fits Only toggle */}
+                      <button
+                        onClick={() => setFreedFillFitsOnly(v => !v)}
+                        style={{
+                          padding: "4px 9px",
+                          background: freedFillFitsOnly ? C.sage : "transparent",
+                          border: `1px solid ${freedFillFitsOnly ? C.sage : `${C.sage}66`}`,
+                          borderRadius: 99,
+                          cursor: "pointer",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 8.5, fontWeight: 800,
+                          letterSpacing: "0.04em",
+                          color: freedFillFitsOnly ? "#fff" : C.sage,
+                          boxShadow: freedFillFitsOnly ? `0 0 0 2px ${C.sage}33` : "none",
+                          marginLeft: "auto",
+                        }}>
+                        ★ FITS ONLY
+                      </button>
                   </div>
 
                   {/* v05.05bt441 — Internal scroll list (Option C from
@@ -39849,7 +39998,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   }}>
                     {visibleCandidates.length === 0 && !searchLower ? (
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 13, color: C.muted,
                       padding: "16px 4px", textAlign: "center",
                       border: `1px dashed ${C.line}66`, borderRadius: 8,
@@ -39858,12 +40007,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   ) : visibleCandidates.length === 0 && searchLower ? (
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif",
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                       fontStyle: "italic", fontSize: 12.5, color: C.muted,
                       padding: "10px 4px", textAlign: "center",
                     }}>No matches.</div>
                   ) : (
                     <div>
+                      {/* v05.05bt450 — Per chat: 'i dont think it is
+                          intuitive that the star means this can fit
+                          here nicely. shouldnt other candidates be
+                          highlighted'. Was: only the single topMatch
+                          got a sage tint + a star. Now: every fitting
+                          candidate gets a sage left rail; the topMatch
+                          additionally gets a prominent BEST FIT pill
+                          + brighter ring. Non-fitting tasks are clearly
+                          dimmed and pushed visually after the fitters. */}
                       {visibleCandidates.map((t, i) => {
                         const tFits = fits(t);
                         const isTop = t === topMatch;
@@ -39875,25 +40033,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             style={{
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
-                              padding: "9px 11px", marginBottom: 4,
-                              background: isTop ? `${C.sage}10` : "transparent",
-                              border: `1px solid ${isTop ? `${C.sage}77` : `${C.line}44`}`,
+                              padding: "9px 11px",
+                              marginBottom: 4,
+                              background: isTop ? `${C.sage}24` : tFits ? `${C.sage}0c` : "transparent",
+                              border: `1px solid ${isTop ? C.sage : tFits ? `${C.sage}55` : `${C.line}33`}`,
+                              borderLeft: tFits ? `4px solid ${C.sage}` : `1px solid ${C.line}33`,
                               borderRadius: 7,
                               cursor: tFits ? "pointer" : "not-allowed",
-                              opacity: tFits ? 1 : 0.55,
+                              opacity: tFits ? 1 : 0.45,
                               fontFamily: "inherit",
+                              boxShadow: isTop ? `0 0 0 1px ${C.sage}77` : "none",
                             }}>
                             {isTop && (
                               <span style={{
-                                color: C.sage, fontWeight: 800, fontSize: 13, flexShrink: 0,
-                              }}>★</span>
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 8.5, fontWeight: 800,
+                                letterSpacing: "0.10em",
+                                color: "#fff",
+                                background: C.sage,
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                flexShrink: 0,
+                              }}>★ BEST FIT</span>
                             )}
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 9.5, color: C.sage, fontWeight: 700, flexShrink: 0,
+                              fontSize: 9.5, color: tFits ? C.sage : C.muted, fontWeight: 700, flexShrink: 0,
                             }}>{t.effortMin || 30}m</span>
                             <span style={{
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontSize: 14, color: C.ink, flex: 1, minWidth: 0,
                             }}>{t.title}</span>
                             {tFits
@@ -39922,11 +40090,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   </div>
                 </>
               )}
+              </div>{/* /scroll body (bt449) */}
 
               <button
                 onClick={close}
                 style={{
-                  marginTop: 12, width: "100%",
+                  marginTop: 12,
+                  flexShrink: 0,
+                  width: "100%",
                   padding: "8px 10px",
                   background: "transparent",
                   border: `1px solid ${C.line}44`,
@@ -40081,7 +40252,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   marginBottom: 4,
                 }}>⚙ MANAGE TASKS · {totalShown}</div>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 14, color: C.muted, lineHeight: 1.4,
                 }}>
                   Tap to select. {pileManagerMode === "dupes"
@@ -40121,7 +40292,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <div style={{ flex: 1, overflowY: "auto", padding: "10px 16px" }}>
                 {groups.length === 0 ? (
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontSize: 14, color: C.muted,
                     padding: "30px 4px", textAlign: "center",
                     border: `1px dashed ${C.line}66`, borderRadius: 8,
@@ -40184,7 +40355,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               fontSize: 9.5, color: C.sage, fontWeight: 700, flexShrink: 0,
                             }}>{t.effortMin || 30}m</span>
                             <span style={{
-                              fontFamily: "'Cormorant Garamond', serif",
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                               fontSize: 14, color: C.ink, flex: 1, minWidth: 0,
                             }}>{t.title}</span>
                             {badgeFor(t)}
@@ -40368,7 +40539,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     Move task
                   </div>
                   <div style={{
-                    fontFamily: "'Cormorant Garamond', serif",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                     fontStyle: "italic", fontWeight: 500,
                     fontSize: 18, color: C.ink, lineHeight: 1.2,
                   }}>{movingTask.title}</div>
@@ -40382,7 +40553,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               </div>
               {destinations.length === 0 ? (
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", color: C.muted,
                   fontSize: 14, padding: "16px 0", textAlign: "center",
                 }}>
@@ -40439,7 +40610,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           fontSize: 14, color: C.ink, fontWeight: 500,
                           lineHeight: 1.3,
                         }}>
@@ -40830,7 +41001,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{
           fontSize: 10, color: C.muted,
-          fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontStyle: "italic",
         }}>or custom:</span>
         <input
           type="number" min={5} max={480} step={5}
@@ -40934,7 +41105,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
             const wasAuto = guess && guess.toUpperCase() === taskGroup;
             return wasAuto && (
               <div style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontSize: 11.5,
                 color: C.gold, lineHeight: 1.3,
                 marginBottom: 10, paddingLeft: 2,
@@ -40951,7 +41122,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
                 background: `${C.accent}10`,
                 border: `1px dashed ${C.accent}55`,
                 borderRadius: 6, padding: "6px 10px", marginBottom: 10,
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 fontStyle: "italic", fontSize: 11.5,
                 color: C.ink, lineHeight: 1.4,
               }}>
@@ -41067,7 +41238,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
       </div>
       {recurringRule && (
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 11.5,
           color: C.muted, marginBottom: 10, paddingLeft: 2,
           lineHeight: 1.4,
@@ -41159,7 +41330,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
             onClick={() => { onRemoveFromDay(task.id); onClose(); }}
             style={{
               background: "transparent", border: "none", padding: 0,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
               color: C.muted, cursor: "pointer",
               borderBottom: `1px dotted ${C.line}66`,
@@ -41181,7 +41352,7 @@ function EditTaskModal({ C, task, onClose, onSave, onDelete, onRemoveFromDay, on
             onClick={() => onShowReasoning(task.id)}
             style={{
               background: "transparent", border: "none", padding: 0,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 12,
               color: C.gold, cursor: "pointer",
               borderBottom: `1px dotted ${C.gold}66`,
@@ -41476,7 +41647,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
         borderRadius: 8, padding: "6px 10px",
         fontSize: 10, color: C.muted, lineHeight: 1.4,
         marginBottom: 8,
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic",
       }}>
         Time: <strong style={{ fontStyle: "normal" }}>11am, noon, 14:30</strong> · Dur: <strong style={{ fontStyle: "normal" }}>30m, 1h, auto</strong> · Focus: <strong style={{ fontStyle: "normal" }}>D / S / A</strong> · R: <strong style={{ color: "#A04848", fontStyle: "normal" }}>1–5</strong>
@@ -41550,7 +41721,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
         )}
         <div style={{
           marginLeft: "auto",
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 11, color: C.muted,
         }}>
           {pending.length} task{pending.length !== 1 ? "s" : ""}
@@ -41612,7 +41783,7 @@ function NlReviewModal({ C, pending, onChange, onCancel, onCommit }) {
                 border: `1px solid ${C.line}33`,
                 borderRadius: 4,
                 fontSize: 12.5, background: C.bg, color: C.ink,
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                 minWidth: 0, width: "100%",
               }}
               placeholder={`Task ${idx + 1}`}
@@ -41818,7 +41989,7 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
         </div>
         <span style={{
           flex: 1, textAlign: "right",
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 12.5,
           color: C.ink,
         }}>
@@ -42000,7 +42171,7 @@ function TodaySetupSheet({ C, now, isTomorrow, referenceDate, onClose, todaySetu
             <div style={{
               fontSize: 11, color: C.muted,
               marginTop: 8, fontStyle: "italic",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               lineHeight: 1.4,
             }}>
               ↳ Lights out by <strong style={{ fontStyle: "normal", color: C.ink }}>{bedStr}</strong> to hit your wake target. The bedtime routine will appear in today's timeline.
@@ -42795,7 +42966,7 @@ function TodaysPumpPlanCard({ C, events, now, pumpPlan, setPumpPlan }) {
             <div style={{ fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 600 }}>
               today
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontStyle: "italic", color: C.ink, marginTop: 2 }}>
+            <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontStyle: "italic", color: C.ink, marginTop: 2 }}>
               {doneSessions.length} <span style={{ color: C.muted }}>of {targetSessions} pumped</span>
             </div>
           </div>
@@ -43298,7 +43469,7 @@ function AnchorPumpEditor({ C, now, events, wakeEnd, todayKey, setPumpPlan }) {
       }}>↳ Anchor cadence to a session</div>
       <div style={{
         fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 10,
-        fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif",
+        fontStyle: "italic", fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
       }}>
         Set the start time of your next (or current) session — Little Ledger generates the rest forward at your chosen cadence.
       </div>
@@ -43499,12 +43670,12 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
         marginBottom: 4,
       }}>Pack for caregiver</div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 18, fontWeight: 500, color: C.ink,
         marginBottom: 8, lineHeight: 1.3,
       }}>How many oz to send</div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic", fontSize: 12.5, color: C.muted,
         marginBottom: 12, lineHeight: 1.5,
       }}>
@@ -43513,7 +43684,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
 
       {/* Duration picker */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, color: C.muted }}>For</span>
+        <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 13.5, color: C.muted }}>For</span>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {[2, 4, 6, 8, 10, 12].map(h => (
             <button key={h} onClick={() => onPickHours(h)} style={{
@@ -43529,7 +43700,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
         </div>
       </div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontStyle: "italic", fontSize: 11, color: C.muted,
         marginBottom: 14, marginLeft: 36, lineHeight: 1.4,
       }}>
@@ -43538,7 +43709,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
 
       {avgDailyOz === null ? (
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13, color: C.muted, lineHeight: 1.5,
         }}>
           Not enough feed data in the last 14 days to recommend an amount. Log a few more feeds and check back.
@@ -43553,13 +43724,13 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
             marginBottom: 12,
           }}>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 13, color: C.ink, lineHeight: 1.5,
             }}>
               Solène averages <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{avgDailyOz.toFixed(1)} oz/day</span> across {daysSampled} day{daysSampled === 1 ? "" : "s"} — about <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{ozPerAwakeHour ? ozPerAwakeHour.toFixed(1) : "—"} oz/awake-hour</span> ({awakeHoursPerDay.toFixed(1)}h awake/day).
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 16, color: C.ink, marginTop: 6, lineHeight: 1.4,
             }}>
               Send <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: viewerColor }}>~{recommendedOz} oz</span> for {hours}h{feedsInWindow !== null && (
@@ -43576,7 +43747,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
           }}>Suggested bags · prioritized by expiry</div>
           {picks.length === 0 ? (
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontStyle: "italic", fontSize: 13, color: C.muted,
             }}>Inventory is empty.</div>
           ) : (
@@ -43611,7 +43782,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
           )}
           {picks.length > 0 && (
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 12.5, color: shortBy > 0 ? C.accent : C.muted,
               fontStyle: "italic", lineHeight: 1.45,
               marginTop: 6,
@@ -43631,7 +43802,7 @@ function CaregiverPackCard({ C, inventory, events, now, viewerColor, handoffHour
               border: `1px solid ${C.accent}55`,
               borderRadius: 8,
               padding: "8px 12px", marginTop: 10,
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 12.5, color: C.ink, lineHeight: 1.4,
             }}>
               ⚠ Total inventory ({totalInventoryOz.toFixed(1)}oz) is below the recommended send. Plan an extra pump before drop-off.
@@ -43731,7 +43902,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>Last pump</div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, marginTop: 2 }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, marginTop: 2 }}>
                 {lastPump ? fmtTimeShort(new Date(lastPump.ts)) : "—"}
               </div>
               <div style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>
@@ -43740,7 +43911,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
             </div>
             <div>
               <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>Next due</div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, marginTop: 2, color: minsToNextPump < 0 ? C.accent : C.ink }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, marginTop: 2, color: minsToNextPump < 0 ? C.accent : C.ink }}>
                 {nextPumpAt ? fmtTimeShort(nextPumpAt) : "—"}
               </div>
               <div style={{ fontSize: 11, color: minsToNextPump < 0 ? C.accent : C.muted, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>
@@ -43870,12 +44041,12 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
                           <div style={{
                             fontSize: 10.5, color: C.muted,
                             fontStyle: "italic", marginTop: 2,
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                           }}>{p.hint}</div>
                         </div>
                         <div style={{ textAlign: "right" }}>
                           <div style={{
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             fontSize: 22, fontWeight: 600,
                             color: C.ink, lineHeight: 1.1,
                           }}>{totalOz.toFixed(1)}<span style={{ fontSize: 12, color: C.muted, marginLeft: 2 }}>oz</span></div>
@@ -43890,7 +44061,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
                         <div style={{
                           fontSize: 11.5, color: C.muted, fontStyle: "italic",
                           padding: "8px 0", textAlign: "center",
-                          fontFamily: "'Cormorant Garamond', serif",
+                          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                         }}>empty</div>
                       ) : (
                         <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
@@ -44030,7 +44201,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
                     <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                       Earlier half
                     </div>
-                    <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.muted }}>
+                    <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.muted }}>
                       {olderPumpAvg.toFixed(1)} oz
                     </div>
                   </div>
@@ -44039,7 +44210,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
                       Recent half
                     </div>
                     <div style={{
-                      fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
+                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500,
                       marginTop: 2, lineHeight: 1.1,
                       color: pumpTrend > 5 ? "#7B9B6E" : pumpTrend < -5 ? C.accent : C.ink,
                     }}>
@@ -44077,7 +44248,7 @@ function BigStat({ C, label, value, accent }) {
         {label}
       </div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500,
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500,
         color: accent ? C.accent : C.ink, marginTop: 2, lineHeight: 1.1,
       }}>
         {value}
@@ -44208,7 +44379,7 @@ function RoutineSection({ C, now, events, addEvent, lastBath, lastSkincare }) {
         <div style={{ background: C.paper, borderRadius: 12, padding: 16, border: `1px solid ${C.line}15` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>
                 {recommendedRoutine === "AM" ? "AM routine" : "PM routine"}
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
@@ -44262,7 +44433,7 @@ function RoutineSection({ C, now, events, addEvent, lastBath, lastSkincare }) {
               </div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
                 <span style={{ fontSize: 24 }}>{BATH_TYPES[lastBath.bathType]?.icon}</span>
-                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500 }}>
+                <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500 }}>
                   {BATH_TYPES[lastBath.bathType]?.label}
                 </span>
                 <span style={{ fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
@@ -44399,7 +44570,7 @@ function DiaperBagSection({ C, diaperBag, setDiaperBag }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Package size={28} color={empty.length > 0 ? C.accent : C.ink} style={{ opacity: 0.7 }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500 }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500 }}>
                 {empty.length === 0 && lowItems.length === 0 ? "Fully stocked"
                   : empty.length > 0 ? `${empty.length} item${empty.length > 1 ? "s" : ""} empty`
                   : `${lowItems.length} item${lowItems.length > 1 ? "s" : ""} low`}
@@ -44592,7 +44763,7 @@ function CentralLogButton({ C, mode, onClick, currentUser, isCadence }) {
       border: `4px solid ${C.panel}`,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
       cursor: "pointer",
-      fontFamily: "'Cormorant Garamond', serif",
+      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
       fontSize: 13, fontWeight: 600, letterSpacing: "0.1em",
       // v05.05bt43 — box-shadow now overridden by .log-glow keyframe, but
       // preserved as a fallback for browsers that don't render the
@@ -45063,7 +45234,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         ))}
       </div>
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 13.5, fontStyle: "italic", lineHeight: 1.45,
         color: C.muted,
       }}>
@@ -45078,7 +45249,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
           width: "100%", padding: "12px 14px",
           borderRadius: 8, border: `1px solid ${C.gold}66`,
           background: C.bg, color: C.ink,
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 15, lineHeight: 1.5,
           resize: "vertical",
           minHeight: planMode === "describe" ? 150 : 110,
@@ -45087,7 +45258,7 @@ function LogPickerSheet({ C, onClose, onPick, loggerType, onSubmit, lastFeed, la
         }}
       />
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 11.5, fontStyle: "italic", color: C.muted,
         lineHeight: 1.4,
       }}>
@@ -45620,7 +45791,7 @@ function PickerOption({ C, icon, label, sub, onClick, color }) {
         {icon}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, lineHeight: 1.1 }}>{label}</div>
+        <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 20, fontWeight: 500, lineHeight: 1.1 }}>{label}</div>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{sub}</div>
       </div>
       <ChevronRight size={18} color={C.muted} />
@@ -45785,7 +45956,7 @@ function ModalShell({ C, onClose, title, children, placement }) {
           paddingTop: isCenter ? 8 : 0,
         }}>
           <h2 style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: isCenter ? 22 : 26, fontWeight: 500, margin: 0, fontStyle: "italic",
             color: C.ink, // v05.05bt350 — adapt to palette (was inheriting black in Cadence)
           }}>
@@ -45865,7 +46036,7 @@ function SendTradeRequestModal({ C, window, partner, onClose, onSend }) {
           marginBottom: 4,
         }}>↔ Send trade request</div>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, margin: "0 0 12px",
           color: C.ink,
         }}>Ask {partner} for coverage?</h2>
@@ -45880,7 +46051,7 @@ function SendTradeRequestModal({ C, window, partner, onClose, onSend }) {
             fontSize: 11, color: C.ink, fontWeight: 600, marginBottom: 4,
           }}>{fmtT(startHr)} – {fmtT(endHr)} today</div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 14, color: C.ink, lineHeight: 1.5,
           }}>Unlocks <span style={{
             fontFamily: "'JetBrains Mono', monospace",
@@ -45888,7 +46059,7 @@ function SendTradeRequestModal({ C, window, partner, onClose, onSend }) {
           }}>{durLabel}</span> of deep focus for you.</div>
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontStyle: "italic", fontSize: 13,
           color: C.muted, marginBottom: 14, lineHeight: 1.5,
         }}>{partner} will see a request on next open and can choose to cover the shift, bank the time for later, or decline.</div>
@@ -45962,7 +46133,7 @@ function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
           marginBottom: 4,
         }}>↔ Trade request</div>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 22, fontWeight: 500, margin: "0 0 12px",
           color: C.ink, lineHeight: 1.25,
         }}>
@@ -45979,7 +46150,7 @@ function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
             fontSize: 12, color: C.ink, fontWeight: 600, marginBottom: 4,
           }}>{fmtT(request.startHr)} – {fmtT(request.endHr)} {dateLabel}</div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 14, color: C.ink, lineHeight: 1.5,
           }}>Would unlock <span style={{
             fontFamily: "'JetBrains Mono', monospace",
@@ -45987,7 +46158,7 @@ function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
           }}>{durLabel}</span> of deep focus for {request.from}.</div>
         </div>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
           fontSize: 12.5, color: C.muted, fontStyle: "italic",
           marginBottom: 12, lineHeight: 1.45,
         }}>How would you like to respond?</div>
@@ -45996,7 +46167,7 @@ function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
             padding: "14px 16px",
             background: partnerColor, color: "#fff",
             border: "none", borderRadius: 10,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 15, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
           }}>
@@ -46010,7 +46181,7 @@ function IncomingTradeRequestModal({ C, request, onResolve, partnerColor }) {
             background: "transparent", color: C.ink,
             border: `1.5px solid ${C.gold}`,
             borderRadius: 10,
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 15, fontWeight: 500,
             cursor: "pointer", textAlign: "left",
           }}>
@@ -46395,7 +46566,7 @@ function FeedForm({ C, lastFeed, onSubmit, onCancel, liveInventory }) {
                         }}>{locBadge}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
-                            fontFamily: "'Cormorant Garamond', serif",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                             fontSize: 17, fontWeight: 600, color: C.ink, lineHeight: 1.15,
                           }}>
                             {b.oz.toFixed(1)} oz
@@ -46643,7 +46814,7 @@ function BreastfeedForm({ C, onSubmit, activeTimer, setActiveTimer }) {
           Total session
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: C.mommy, lineHeight: 1 }}>
+          <span style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 32, fontWeight: 500, color: C.mommy, lineHeight: 1 }}>
             {Math.floor((leftSec + rightSec) / 60)}:{pad((leftSec + rightSec) % 60)}
           </span>
           <span style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
@@ -47424,7 +47595,7 @@ function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
         padding: 20, textAlign: "center",
       }}>
         <div style={{
-          fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontStyle: "italic",
+          fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontStyle: "italic",
           color: C.muted,
         }}>
           Not enough data yet for a 14-day trend.
@@ -47452,7 +47623,7 @@ function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
       }}>
         <div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 18, fontWeight: 600, color: C.ink, lineHeight: 1.1,
           }}>
             Daily intake — 14-day trend
@@ -47467,7 +47638,7 @@ function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
               median
             </div>
             <div style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
               fontSize: 22, fontWeight: 600, color: C.ink, lineHeight: 1,
             }}>
               {stats.median.toFixed(1)}<span style={{ fontSize: 11, color: C.muted, marginLeft: 3 }}>oz</span>
@@ -47630,7 +47801,7 @@ function DailyIntakeTrendChart({ C, events, now, ageNorms }) {
           fontSize: 12, color: C.ink, marginTop: 4,
           display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
         }}>
-          <strong style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 15, fontStyle: "italic" }}>
+          <strong style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 15, fontStyle: "italic" }}>
             {selectedDay.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
           </strong>
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: C.accent }}>
@@ -48052,7 +48223,7 @@ ${noteSection}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
             <FileText size={22} color={C.accent} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, lineHeight: 1.2 }}>
+              <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, lineHeight: 1.2 }}>
                 Generate a structured summary
               </div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
@@ -48289,7 +48460,7 @@ function SleepWakeChart({ C, events, now, currentUser }) {
             Sleep / wake trace
           </div>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
             fontSize: 13, fontStyle: "italic", color: C.muted,
             marginTop: 2,
           }}>
@@ -49313,7 +49484,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
               {/* Zone 2: Value + status badge — the headline */}
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                 <div style={{
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontSize: 30, fontWeight: 500, lineHeight: 1,
                   color: C.ink,
                 }}>
@@ -50350,7 +50521,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                 <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                   Typical bedtime
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
                   {fmtTime(stats.medBedtime)}
                 </div>
                 {driftLabel && (
@@ -50363,7 +50534,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                 <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                   Typical wake
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 24, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
                   {fmtTime(stats.medWake)}
                 </div>
                 {stretchLabel && (
@@ -50389,7 +50560,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                 <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                   median stretch
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
                   {fmtDuration(stats.medianSleep)}
                 </div>
               </div>
@@ -50397,7 +50568,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                 <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                   stretches logged
                 </div>
-                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
+                <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 18, fontWeight: 500, color: C.ink, lineHeight: 1.2, marginTop: 2 }}>
                   {stats.sleepCount}
                 </div>
               </div>
@@ -50494,7 +50665,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                       <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                         median nap
                       </div>
-                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                      <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
                         {fmtMins(ns.medianMin)}
                       </div>
                       <div style={{ fontSize: 9, color: tMed.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
@@ -50508,7 +50679,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                       <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                         naps / day
                       </div>
-                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                      <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
                         {ns.perDay.toFixed(1)}
                       </div>
                       <div style={{ fontSize: 9, color: tNaps.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
@@ -50522,7 +50693,7 @@ function AnalyticsSection({ C, events, now, currentUser }) {
                       <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
                         daytime sleep
                       </div>
-                      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+                      <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
                         {fmtMins(ns.totalMinPerDay)}
                       </div>
                       <div style={{ fontSize: 9, color: tTotal.color, marginTop: 3, fontWeight: 600, letterSpacing: "0.04em" }}>
@@ -50715,7 +50886,7 @@ function AnalyticsCell({ C, label, value, sub }) {
       <div style={{ fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: C.muted, fontWeight: 500 }}>
         {label}
       </div>
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
+      <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 26, fontWeight: 500, marginTop: 2, lineHeight: 1.1, color: C.ink }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>{sub}</div>}
@@ -50757,7 +50928,7 @@ function NextApptCard({ C, appt, now, onRemove }) {
           <Stethoscope size={22} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, lineHeight: 1.1 }}>
+          <div style={{ fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 22, fontWeight: 500, lineHeight: 1.1 }}>
             {appt.title || "Pediatrician visit"}
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -51219,7 +51390,7 @@ function BigNumberPicker({ C, value, onChange, step = 1, presets = [], unit = ""
             onChange={e => emit(e.target.value)}
             step={step} inputMode="decimal"
             style={{
-              fontFamily: "'Cormorant Garamond', serif", fontSize: 40, fontWeight: 500,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif", fontSize: 40, fontWeight: 500,
               border: "none", background: "transparent", color: C.ink,
               width: "100%", textAlign: "center", outline: "none",
             }}
