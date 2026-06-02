@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt452";
+const APP_VERSION = "2026.05.05bt453a";
 const APP_BUILD_NOTES = [
-  "THREE BUGS FROM CHAT.\\n\\n(1) COOKING CHOICE NOW STICKS. Per chat: 'my cooking choice does not stick. every time i open up the calendar again then it shows i am cooking even if i put not cooking today'. Found the root cause: todaySetup was the ONLY piece of App state without an autosave useEffect. Every other state slice (events, inventory, meetings, tasks, parentAway, timeBank, etc.) has a paired effect that writes to disk on change. todaySetup hydrates on boot from local + cloud sync but writes never persisted locally. Toggle cooking off → in-memory update → reload → disk still has the default → cookingToday reverts to true. Added the missing autosave effect right after parentAway's. Workout, wake time, sleep hours, and routine overrides will all now also persist (they share the same todaySetup blob).\\n\\n(2) FIND TAB CLASSIFY ALIGNED WITH PILE. Per chat: 'in the fits search - i still see alot of tasks that i dont see in backlog so dont know where that is coming from'. Bug: the classify function used inside the Fits/FILL dialog (and Pile Manager) labeled tasks as 'backlog' only if t.drawer was true. But the actual Backlog pile section filters by !scheduledTime && !scheduledDate. Tasks without scheduledDate would show as UNSCHEDULED in Find but appear in BACKLOG in the pile — same task, two labels, confusing. Fixed in both classify call sites: backlog now means (t.drawer || !t.scheduledDate).\\n\\n(3) PASSIVE TOGGLE IN NEW TAB. Per chat: 'when adding new task under the fits dialog - should also be able to choose if it is passive'. Was inferred from the title via parseOneNlTask (parser detects 'wash dishes' etc as passive). Now there's an explicit checkbox-style toggle: ☑ PASSIVE TASK · 'frees time for other work'. Renders right under the title input in the NEW tab, teal/pump tint when on. Threaded through to addAndPick: the new task's isPassive becomes (freedFillNewIsPassive || parsed.isPassive || undefined) — explicit user choice wins over parser inference. Toggle resets on dialog close.\\n\\nBuild verified clean via esbuild.",
+  "HOTFIX: bt453 INLINE FORM WASN'T VISIBLE. Per chat: 'what am i supposed to be seeing? i dont see it'. Diagnosis: the inline edit form was rendering inside the row's title-block container which has display:-webkit-box + WebkitLineClamp:2 + overflow:hidden (those styles were added in bt322 to keep long task titles clamped to 2 lines with ellipsis). When I dropped the inline edit form inside that container, it got CLIPPED to a 2-line text box — the form was rendering but invisible past line 2.\\n\\nFIX (two changes):\\n  (1) Title-block container styles are now CONDITIONAL: when inlineFreeEditKey matches the slot, the container uses display:block + overflow:visible + WebkitLineClamp:unset so the form is fully visible. Otherwise the original line-clamp behavior applies (for normal task titles).\\n  (2) Row gridTemplateColumns now collapses the regret column ('54px 1fr auto' → '54px 1fr') when in edit mode, so the form has ~30-50px more horizontal room.\\n\\nThe row's clickable area, state plumbing, and form internals from bt453 were correct — the form was just being hidden behind the clipping rules. Should be unmissable now: tap any future free block on the timeline and a teal-tinted form expands in place with title + time + duration + passive + ADD.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt453a", summary: "Hotfix to bt453. The inline edit form rendered but was clipped by the title-block's bt322 line-clamp styles (display:-webkit-box + WebkitLineClamp:2 + overflow:hidden) — only the first 2 lines were visible. Made the title-block styles conditional: when in edit mode, use display:block + overflow:visible. Also collapsed the regret column from '54px 1fr auto' to '54px 1fr' in edit mode for more horizontal room. Form is now fully visible. Build verified clean via esbuild." },
+  { version: "2026.05.05bt453", summary: "Inline edit on empty slots. Tapping an empty/free block expands it in place with title + start time + duration + passive toggle + ADD button — instead of opening the Fits/FILL modal. Duration defaults to the LARGEST fitting option (no more wont-fit on the first try). Teal-tinted (per user pref over sage). ⋯ FIND link still routes to Fits/FILL for picking existing tasks. Organic splitting: adding a 30m task into a 2h block leaves a fresh 1h30m free block below it which can also be inline-edited. Build verified clean via esbuild." },
   { version: "2026.05.05bt452", summary: "Three bugfixes. (1) Cooking choice now persists — todaySetup was the only App state slice without an autosave useEffect; added one matching the pattern used by every other slice. Toggle was updating memory but never writing to disk. (2) Fits/FILL classify now matches the pile's backlog filter (was using t.drawer only; now also !scheduledDate). Tasks were appearing as UNSCHEDULED in Find but BACKLOG in the pile. (3) NEW tab in Fits/FILL gets an explicit PASSIVE TASK toggle (was inferred from title only). Build verified clean via esbuild." },
   { version: "2026.05.05bt451", summary: "Two fixes. (1) Free blocks no longer render during active pump sessions (the 1-1:30p '+ Open' overlapping pump 1-2p in the screenshot). New dropFreeBlocksOverPumps post-pass in dayTimeline useMemo filters out any free block whose range overlaps a pump_reminder. (2) Inline-add panels now visually obvious — was plain padding-4 div with no bg, now has gold tint + 4px gold left rail + drop shadow + 220ms slide-in animation (new @keyframes ll-slide-in). Bumped to mockup: multi-concurrent slotted tasks per pump host, and inline time/duration editing on empty slots. Build verified clean via esbuild." },
   { version: "2026.05.05bt450", summary: "Best-fit candidates pop visibly in the FIND tab. All fitting candidates get a 4px sage left rail + faint sage tint. Top match gets an explicit '★ BEST FIT' filled-sage pill (was a tiny ★ that wasn't intuitive). Non-fitters render at 0.45 opacity, no rail, dimmed border. New right-aligned '★ FITS ONLY' filter pill (default off) — when on, list collapses to only fitting tasks. Pending: full inline edit on empty slots (no modal for time entry) — needs focused build + a quick mockup. Build verified clean via esbuild." },
@@ -28639,6 +28641,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // which section opened it: scheduled → auto-slot (bt409 logic),
   // today → drawer:false + scheduledDate=today, backlog → drawer:true.
   const [inlineSectionAdd, setInlineSectionAdd] = useState(null);
+  // v05.05bt453 — Per chat: 'when i click on the time for empty slots,
+  // I want to have the same thing happen as filled slots where i can
+  // edit the time and duration right there and then. because sometimes
+  // when trying to find and fill because the default is 30 minutes, it
+  // may say "wont fit" or "too long" and wont allow me to select it'.
+  // Tap an empty free block → expands in place with title + time +
+  // duration + passive controls. ADD creates a task and slots it in.
+  // No more popping the Fits/FILL modal for the basic case (it's still
+  // accessible via the ⋯ MORE OPTIONS link).
+  const [inlineFreeEditKey, setInlineFreeEditKey] = useState(null);
+  const [inlineFreeTitle, setInlineFreeTitle] = useState("");
+  const [inlineFreeStartTime, setInlineFreeStartTime] = useState("");
+  const [inlineFreeDuration, setInlineFreeDuration] = useState(30);
+  const [inlineFreeIsPassive, setInlineFreeIsPassive] = useState(false);
   // v05.05bt425 — Per chat: 'today's runway should have the option of
   // being collapsed as well'. Defaults to expanded so first-time users
   // see the forecast; persists choice via localStorage.
@@ -28750,7 +28766,58 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       });
     }
   };
+
+  // v05.05bt453 — Helpers for inline-edit on empty (free) slots.
+  // openInlineFreeEdit: when user taps a free row, set state defaults
+  // from the slot (start time, largest fitting duration, etc).
+  // commitInlineFreeEdit: parse title, create the task with the chosen
+  // time/duration/passive, push to tasks. closeInlineFreeEdit: clear.
+  const FREE_EDIT_DURATIONS = [15, 30, 45, 60];
+  const largestFittingDuration = (slotMin) => {
+    let best = 15;
+    for (const d of FREE_EDIT_DURATIONS) {
+      if (d <= slotMin) best = d;
+    }
+    return best;
+  };
+  const openInlineFreeEdit = (slot) => {
+    const key = slot.start.getTime();
+    const hh = String(slot.start.getHours()).padStart(2, "0");
+    const mm = String(slot.start.getMinutes()).padStart(2, "0");
+    setInlineFreeEditKey(key);
+    setInlineFreeTitle("");
+    setInlineFreeStartTime(`${hh}:${mm}`);
+    setInlineFreeDuration(largestFittingDuration(slot.durationMin || 30));
+    setInlineFreeIsPassive(false);
+  };
+  const closeInlineFreeEdit = () => {
+    setInlineFreeEditKey(null);
+    setInlineFreeTitle("");
+    setInlineFreeStartTime("");
+    setInlineFreeDuration(30);
+    setInlineFreeIsPassive(false);
+  };
+  const commitInlineFreeEdit = () => {
+    const title = (inlineFreeTitle || "").trim();
+    if (!title) return;
+    const parsed = parseOneNlTask(title);
+    const newTask = {
+      id: `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      title: parsed.title || title,
+      effortMin: inlineFreeDuration,
+      regretScore: typeof parsed.regretScore === "number" ? parsed.regretScore : 3,
+      focusLevel: parsed.focusLevel || "shallow",
+      ownerName: currentUser,
+      createdAt: new Date().toISOString(),
+      scheduledTime: inlineFreeStartTime,
+      scheduledDate: new Date().toISOString().slice(0, 10),
+      isPassive: inlineFreeIsPassive || parsed.isPassive || undefined,
+    };
+    setTasks(prev => [...prev, newTask]);
+    closeInlineFreeEdit();
+  };
   const [forTodayExpanded, setForTodayExpanded] = useState(false);
+
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
   // kinda long so have the ability to filter as well by the
   // different categories.' Same chip pattern as fits picker.
@@ -33967,7 +34034,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       onTouchEnd={isTask && !slot.completedAt ? handleSwipeEnd : undefined}
                       style={{
                       display: "grid",
-                      gridTemplateColumns: "54px 1fr auto",
+                      // v05.05bt453 — When inline-editing a free slot,
+                      // collapse the regret column so the form has
+                      // more room to lay out its controls.
+                      gridTemplateColumns: (isFree && inlineFreeEditKey === slot.start.getTime())
+                        ? "54px 1fr"
+                        : "54px 1fr auto",
                       gap: productMode === "solo" ? 8 : 10,
                       // v05.05bt403 — Per chat: 'feeding baby shows up
                       // as a new task but it is confusing because it
@@ -34138,21 +34210,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       pointerEvents: isBeingDragged ? "none" : "auto",
                     }}
                     onClick={isFree && !isPast && !draggingId ? () => {
-                      // v05.05bt168 — Tapping a free/open block now opens
-                      // the free-write input as default per chat. The
-                      // block's time + duration are remembered for when
-                      // the user submits (NL-parsed tasks fall back to
-                      // this slot if no explicit time is given). The
-                      // structured form stays accessible via the
-                      // 'detailed entry instead' link inside the NL UI.
-                      // v05.05bt226 — Past free blocks are excluded
-                      // from the tap handler (time has passed).
-                      const hh = String(slot.start.getHours()).padStart(2, "0");
-                      const mm = String(slot.start.getMinutes()).padStart(2, "0");
-                      setDraftScheduledTime(`${hh}:${mm}`);
-                      setDraftEffort(Math.min(120, Math.max(15, Math.round(slot.durationMin / 15) * 15)));
-                      setShowNlInput(true);
-                      setShowAddForm(false);
+                      // v05.05bt168 → bt453 — Per chat: 'when i click
+                      // on the time for empty slots, I want to have
+                      // the same thing happen as filled slots where i
+                      // can edit the time and duration right there'.
+                      // Was: opened the NL input dialog. Now: expands
+                      // inline directly on the free row with title +
+                      // time + duration + passive controls. Modal-less.
+                      // The Fits/FILL dialog is still reachable via the
+                      // ⋯ MORE OPTIONS link inside the panel.
+                      openInlineFreeEdit(slot);
                     } : (swipedTaskId && swipedTaskId !== slot.id ? () => dismissSwipe() : undefined)}>
                       {/* Time column — v05.05bt146: range + duration.
                           v05.05bt179a: dot moved inline-left next to
@@ -34722,10 +34789,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             // to wrap up to 2 lines then ellipsis on
                             // anything longer. Routine + bedtime stay
                             // single-line (they're always short).
-                            display: "-webkit-box",
-                            WebkitBoxOrient: "vertical",
-                            WebkitLineClamp: (isRoutine || slot.id === "bedtime") ? 1 : 2,
-                            overflow: "hidden",
+                            // v05.05bt453 — Per chat: 'i dont see it'.
+                            // The line-clamp + overflow:hidden was
+                            // clipping the inline edit form (introduced
+                            // bt453) to a 2-line text box. When the
+                            // inline form is active, override these
+                            // to normal block layout so the form is
+                            // fully visible.
+                            ...(isFree && inlineFreeEditKey === slot.start.getTime() ? {
+                              display: "block",
+                              overflow: "visible",
+                              WebkitLineClamp: "unset",
+                              WebkitBoxOrient: "horizontal",
+                            } : {
+                              display: "-webkit-box",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: (isRoutine || slot.id === "bedtime") ? 1 : 2,
+                              overflow: "hidden",
+                            }),
                             wordBreak: "break-word",
                           }}
                           title={(isTask && !slot.completedAt) ? slot.title || "Tap to edit name" : isRoutine ? "Tap to adjust today" : null}>
@@ -34734,6 +34815,180 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 <span style={{ color: C.muted, fontWeight: 500, fontStyle: "italic" }}>
                                   ✕ Closed · passed
                                 </span>
+                              ) : (inlineFreeEditKey === slot.start.getTime() ? (
+                                // v05.05bt453 — Inline edit form for empty slots
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    width: "100%",
+                                    background: `${C.pump}14`,
+                                    border: `1px solid ${C.pump}77`,
+                                    borderLeft: `4px solid ${C.pump}`,
+                                    borderRadius: 8,
+                                    padding: "10px 12px",
+                                    boxShadow: `0 4px 14px rgba(0,0,0,0.3)`,
+                                    animation: "ll-slide-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                                  }}>
+                                  {/* Title input */}
+                                  <input
+                                    type="text"
+                                    value={inlineFreeTitle}
+                                    onChange={(e) => setInlineFreeTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") commitInlineFreeEdit();
+                                      if (e.key === "Escape") closeInlineFreeEdit();
+                                    }}
+                                    ref={(el) => {
+                                      if (!el || el.dataset.focused === "1") return;
+                                      el.dataset.focused = "1";
+                                      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                                    }}
+                                    placeholder="title (e.g. 'reply to Sarah')"
+                                    style={{
+                                      width: "100%", boxSizing: "border-box",
+                                      padding: "8px 11px",
+                                      background: "rgba(0,0,0,0.3)",
+                                      border: `1px solid ${C.line}66`,
+                                      borderRadius: 6,
+                                      color: C.ink,
+                                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                      fontSize: 14, fontStyle: "italic",
+                                      outline: "none",
+                                      marginBottom: 8,
+                                    }}
+                                  />
+                                  {/* Start time + duration row */}
+                                  <div style={{
+                                    display: "flex", gap: 8, alignItems: "center",
+                                    marginBottom: 8, flexWrap: "wrap",
+                                  }}>
+                                    <span style={{
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 8.5, fontWeight: 700,
+                                      letterSpacing: "0.08em", color: C.muted,
+                                    }}>START</span>
+                                    <input
+                                      type="time"
+                                      value={inlineFreeStartTime}
+                                      onChange={(e) => setInlineFreeStartTime(e.target.value)}
+                                      style={{
+                                        padding: "5px 7px",
+                                        background: "rgba(0,0,0,0.3)",
+                                        border: `1px solid ${C.line}66`,
+                                        borderRadius: 5,
+                                        color: C.ink,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 11,
+                                        outline: "none",
+                                      }}
+                                    />
+                                    <span style={{
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 8.5, fontWeight: 700,
+                                      letterSpacing: "0.08em", color: C.muted,
+                                      marginLeft: 4,
+                                    }}>DUR</span>
+                                    <div style={{
+                                      display: "flex", gap: 2,
+                                      padding: 2,
+                                      background: "rgba(0,0,0,0.3)",
+                                      borderRadius: 5,
+                                    }}>
+                                      {FREE_EDIT_DURATIONS.map(d => {
+                                        const fits = d <= (slot.durationMin || 30);
+                                        const on = inlineFreeDuration === d;
+                                        return (
+                                          <button
+                                            key={d}
+                                            onClick={() => setInlineFreeDuration(d)}
+                                            disabled={!fits}
+                                            style={{
+                                              padding: "4px 8px",
+                                              background: on ? C.pump : "transparent",
+                                              color: on ? "#fff" : (fits ? C.muted : `${C.muted}55`),
+                                              border: "none",
+                                              borderRadius: 4,
+                                              cursor: fits ? "pointer" : "not-allowed",
+                                              fontFamily: "'JetBrains Mono', monospace",
+                                              fontSize: 9.5, fontWeight: 700,
+                                              textDecoration: fits ? "none" : "line-through",
+                                            }}>{d}</button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  {/* Bottom row: passive + more + add */}
+                                  <div style={{
+                                    display: "flex", gap: 6, alignItems: "center",
+                                  }}>
+                                    <button
+                                      onClick={() => setInlineFreeIsPassive(v => !v)}
+                                      style={{
+                                        display: "flex", alignItems: "center", gap: 5,
+                                        padding: "5px 8px",
+                                        background: inlineFreeIsPassive ? `${C.pump}26` : "transparent",
+                                        border: `1px solid ${inlineFreeIsPassive ? C.pump : `${C.line}55`}`,
+                                        borderRadius: 5,
+                                        color: inlineFreeIsPassive ? C.pump : C.muted,
+                                        cursor: "pointer",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 8.5, fontWeight: 700,
+                                        letterSpacing: "0.05em",
+                                      }}>{inlineFreeIsPassive ? "☑" : "☐"} PASSIVE</button>
+                                    <button
+                                      onClick={() => {
+                                        // Open Fits/FILL dialog for more options
+                                        const slotKey = `slot:${slot.start.toISOString()}`;
+                                        closeInlineFreeEdit();
+                                        setFreedFillTab("find");
+                                        setFreedFillPickerFor({
+                                          kind: "fits",
+                                          slotKey,
+                                          slotMin: slot.durationMin || 30,
+                                          slotStart: slot.start.toISOString(),
+                                          contextLabel: "FREE BLOCK",
+                                        });
+                                      }}
+                                      style={{
+                                        padding: "5px 8px",
+                                        background: "transparent",
+                                        border: `1px solid ${C.line}55`,
+                                        borderRadius: 5,
+                                        color: C.muted,
+                                        cursor: "pointer",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 8.5, fontWeight: 700,
+                                        letterSpacing: "0.05em",
+                                      }}>⋯ FIND</button>
+                                    <button
+                                      onClick={closeInlineFreeEdit}
+                                      style={{
+                                        padding: "5px 8px",
+                                        background: "transparent",
+                                        border: `1px solid ${C.line}55`,
+                                        borderRadius: 5,
+                                        color: C.muted,
+                                        cursor: "pointer",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 11, fontWeight: 700,
+                                        lineHeight: 1,
+                                      }}>×</button>
+                                    <button
+                                      onClick={commitInlineFreeEdit}
+                                      disabled={!inlineFreeTitle.trim()}
+                                      style={{
+                                        marginLeft: "auto",
+                                        padding: "6px 12px",
+                                        background: inlineFreeTitle.trim() ? C.pump : `${C.line}22`,
+                                        color: inlineFreeTitle.trim() ? "#fff" : C.muted,
+                                        border: "none", borderRadius: 5,
+                                        cursor: inlineFreeTitle.trim() ? "pointer" : "default",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                                        boxShadow: inlineFreeTitle.trim() ? `0 0 0 2px ${C.pump}33` : "none",
+                                      }}>ADD</button>
+                                  </div>
+                                </div>
                               ) : (
                                 <>
                                   <span style={{ color: C.gold, fontWeight: 500 }}>
@@ -34794,6 +35049,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     );
                                   })()}
                                 </>
+                              )
                               )
                             ) : slot.title}
                             {/* v05.05bt312 — Wearable pump unification.
