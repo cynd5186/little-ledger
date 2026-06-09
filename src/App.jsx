@@ -15,12 +15,15 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt453a";
+const APP_VERSION = "2026.05.05bt455";
 const APP_BUILD_NOTES = [
-  "HOTFIX: bt453 INLINE FORM WASN'T VISIBLE. Per chat: 'what am i supposed to be seeing? i dont see it'. Diagnosis: the inline edit form was rendering inside the row's title-block container which has display:-webkit-box + WebkitLineClamp:2 + overflow:hidden (those styles were added in bt322 to keep long task titles clamped to 2 lines with ellipsis). When I dropped the inline edit form inside that container, it got CLIPPED to a 2-line text box — the form was rendering but invisible past line 2.\\n\\nFIX (two changes):\\n  (1) Title-block container styles are now CONDITIONAL: when inlineFreeEditKey matches the slot, the container uses display:block + overflow:visible + WebkitLineClamp:unset so the form is fully visible. Otherwise the original line-clamp behavior applies (for normal task titles).\\n  (2) Row gridTemplateColumns now collapses the regret column ('54px 1fr auto' → '54px 1fr') when in edit mode, so the form has ~30-50px more horizontal room.\\n\\nThe row's clickable area, state plumbing, and form internals from bt453 were correct — the form was just being hidden behind the clipping rules. Should be unmissable now: tap any future free block on the timeline and a teal-tinted form expands in place with title + time + duration + passive + ADD.\\n\\nBuild verified clean via esbuild.",
+  "VISUAL CONSISTENCY ACROSS MODES. Per chat: 'under non-cadence mode, the graphics do not match - for example, the tasks and rail bars are not consistent with cadence'.\\n\\nROOT CAUSE: bt447's rounded-card + clipped-rail treatment was gated on productMode === 'solo' (Cadence only). Non-Cadence modes (Mommy view dawn/day, Daddy view dusk/night) kept the old flat-architectural look:\\n  • Outer container had no borderRadius/overflow/marginBottom → rows touched each other with no separation, and the rail extended past the (right-only) rounded corners.\\n  • Inner card used '0 4px 4px 0' borderRadius (only the right two corners rounded).\\n  • Free block bottom border was dashed in non-solo, solid in solo.\\n\\nFIX:\\n  (1) Outer row container: borderRadius:10 + overflow:hidden + marginBottom:6 now applied unconditionally across all modes. Rail clips to rounded shape, rows have visible space between, cards read as separate tiles.\\n  (2) Inner card borderRadius: was 'solo' ? 10 : '0 4px 4px 0' — now 10px all-corners across modes.\\n  (3) Bottom border: was dashed for free blocks in non-solo only — now solid across modes. The free block's gold left rail + gold '+ Open' text already signal openness; the dashed bottom was redundant.\\n\\nMode-specific tunings KEPT:\\n  • Border alphas + colors (mode-specific tones — solo uses gold hairlines, non-solo uses owner-tinted borders at 33% alpha) — those were intentional contrast choices.\\n  • Row background tints (owner-color at low alpha, transparent → paper-line fallback) — already mode-agnostic via C palette.\\n  • Rail colors (mommy/daddy/joint/sage) — palette-driven, adapts automatically.\\n\\nNet effect: the rounded-card aesthetic from bt446/447 is now consistent regardless of which view (Cadence, Mommy mode, Daddy mode, dusk/night) you're in. Build verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt455", summary: "Visual consistency across modes. bt447's rounded-card + clipped-rail treatment was gated on Cadence (solo) mode only; non-Cadence modes kept the flat-architectural look with rows touching and rails extending past the (right-only) rounded corners. Unified: outer borderRadius:10 + overflow:hidden + marginBottom:6 now applied across all modes. Inner borderRadius unified to 10. Free block bottom border unified to solid (was dashed in non-solo, redundant with the gold rail + gold + Open text). Mode-specific border alphas + bg tints stayed since they're intentional contrast tunings. Build verified clean via esbuild." },
+  { version: "2026.05.05bt454", summary: "Auto-rollover for past-dated uncompleted tasks + 'moved from' badge. Was: tasks with scheduledDate in the past matched no pile filter (today-scheduled wants scheduledDate===today, today-unscheduled wants scheduledDate===today, backlog wants no scheduledDate) — they sat invisible. Now: new useEffect runs on every tasks/now change; any uncompleted task with scheduledDate < today gets scheduledDate→today + scheduledTime→null + rolledOverFrom→original date. Lands in the today-unscheduled pile with a gold '↩ yesterday' / '↩ 3d ago' pill so user knows it was carried forward. Idempotent (next render the filter doesn't match). Build verified clean via esbuild." },
   { version: "2026.05.05bt453a", summary: "Hotfix to bt453. The inline edit form rendered but was clipped by the title-block's bt322 line-clamp styles (display:-webkit-box + WebkitLineClamp:2 + overflow:hidden) — only the first 2 lines were visible. Made the title-block styles conditional: when in edit mode, use display:block + overflow:visible. Also collapsed the regret column from '54px 1fr auto' to '54px 1fr' in edit mode for more horizontal room. Form is now fully visible. Build verified clean via esbuild." },
+  { version: "2026.05.05bt453", summary: "Inline edit on empty slots. Tapping an empty/free block expands it in place with title + start time + duration + passive toggle + ADD button — instead of opening the Fits/FILL modal. Duration defaults to the LARGEST fitting option (no more wont-fit on the first try). Teal-tinted (per user pref over sage). ⋯ FIND link still routes to Fits/FILL for picking existing tasks. Organic splitting: adding a 30m task into a 2h block leaves a fresh 1h30m free block below it which can also be inline-edited. Build verified clean via esbuild." },
   { version: "2026.05.05bt453", summary: "Inline edit on empty slots. Tapping an empty/free block expands it in place with title + start time + duration + passive toggle + ADD button — instead of opening the Fits/FILL modal. Duration defaults to the LARGEST fitting option (no more wont-fit on the first try). Teal-tinted (per user pref over sage). ⋯ FIND link still routes to Fits/FILL for picking existing tasks. Organic splitting: adding a 30m task into a 2h block leaves a fresh 1h30m free block below it which can also be inline-edited. Build verified clean via esbuild." },
   { version: "2026.05.05bt452", summary: "Three bugfixes. (1) Cooking choice now persists — todaySetup was the only App state slice without an autosave useEffect; added one matching the pattern used by every other slice. Toggle was updating memory but never writing to disk. (2) Fits/FILL classify now matches the pile's backlog filter (was using t.drawer only; now also !scheduledDate). Tasks were appearing as UNSCHEDULED in Find but BACKLOG in the pile. (3) NEW tab in Fits/FILL gets an explicit PASSIVE TASK toggle (was inferred from title only). Build verified clean via esbuild." },
   { version: "2026.05.05bt451", summary: "Two fixes. (1) Free blocks no longer render during active pump sessions (the 1-1:30p '+ Open' overlapping pump 1-2p in the screenshot). New dropFreeBlocksOverPumps post-pass in dayTimeline useMemo filters out any free block whose range overlaps a pump_reminder. (2) Inline-add panels now visually obvious — was plain padding-4 div with no bg, now has gold tint + 4px gold left rail + drop shadow + 220ms slide-in animation (new @keyframes ll-slide-in). Bumped to mockup: multi-concurrent slotted tasks per pump host, and inline time/duration editing on empty slots. Build verified clean via esbuild." },
@@ -3082,6 +3085,41 @@ function SoleneHandoffInner() {
       window.removeEventListener("focus", onFocus);
     };
   }, [timeTravelOffset]);
+
+  // v05.05bt454 — Per chat: 'All tasks across days if not completed
+  // should show up in backlog or unscheduled... when the day is over
+  // then the items unchecked needs to end back up under the today pile
+  // with a badge that it has been moved to the next day'. Was: tasks
+  // with a PAST scheduledDate that weren't completed sat in no pile —
+  // they didn't match the today filter (date !== today), didn't match
+  // backlog (scheduledDate was set), and weren't on the timeline (the
+  // day they were scheduled for is gone). Result: invisible orphans.
+  // Now: on every now/tasks change, any uncompleted task whose
+  // scheduledDate is in the past gets moved forward: scheduledDate ->
+  // today, scheduledTime -> null (the time has passed; force user to
+  // re-pick), rolledOverFrom -> original date (used by row render to
+  // show a 'moved from X' badge so the user knows it was carried over).
+  // Idempotent: once moved, scheduledDate === today, won't re-trigger.
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+    const todayKey = new Date(Date.now() + timeTravelOffset).toISOString().slice(0, 10);
+    const toRoll = tasks.filter(t =>
+      !t.completedAt &&
+      t.scheduledDate &&
+      t.scheduledDate < todayKey
+    );
+    if (toRoll.length === 0) return;
+    const rollIds = new Set(toRoll.map(t => t.id));
+    setTasks(prev => prev.map(t => {
+      if (!rollIds.has(t.id)) return t;
+      return {
+        ...t,
+        scheduledDate: todayKey,
+        scheduledTime: null,
+        rolledOverFrom: t.scheduledDate,
+      };
+    }));
+  }, [tasks, now, timeTravelOffset]);
 
   // v05.05bt447 — Per chat: 'i see alot of straight up duplicates -
   // those should be removed completely by the app without having to
@@ -33962,20 +34000,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       key={`${slot.kind}-${i}-${slot.start.getTime()}`}
                       style={{
                         position: "relative",
-                        // v05.05bt447 — Per chat: 'how come the bottom
-                        // half of the cards do not have the rounded
-                        // corners — is it because of the rails'. Yes.
+                        // v05.05bt447 → bt455 — Per chat: 'under non-
+                        // cadence mode, the graphics do not match - for
+                        // example, the tasks and rail bars are not
+                        // consistent with cadence'. Was gated on solo
+                        // (Cadence) mode only — non-solo got flat
+                        // rectangular rows that touched each other and
+                        // didn't clip the rail. Now applied across all
+                        // modes so the rounded-card look is consistent.
                         // The rail is a sibling div with position:abs
                         // left:0 top:0 bottom:0 — without overflow on
                         // the OUTER container it visually extends past
-                        // the card's rounded corners. Adding matching
+                        // the card's rounded corners. Matching
                         // borderRadius + overflow on the outer clips
                         // the rail to the rounded shape.
-                        ...(productMode === "solo" ? {
-                          borderRadius: 10,
-                          overflow: "hidden",
-                          marginBottom: 6,
-                        } : {}),
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        marginBottom: 6,
                       }}
                     >
                       {/* v05.05bt144 — swipe-to-delete underlay */}
@@ -34127,7 +34168,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         : owner === "joint" ? C.gold + "33"
                         : C.line + "1a"
                       }`,
-                      borderBottom: `1px ${isFree ? (productMode === "solo" ? "solid" : "dashed") : "solid"} ${
+                      borderBottom: `1px solid ${
                         productMode === "solo"
                           // v05.05bt328/335 — Mommy: soft champagne
                           // hairline (subtle, blends into bloom).
@@ -34146,7 +34187,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       // borderRadius moved to OUTER (where overflow
                       // clips the rail). Inner keeps a matching radius
                       // for any non-solo mode rendering.
-                      borderRadius: productMode === "solo" ? 10 : "0 4px 4px 0",
+                      // v05.05bt455 — Was solo-only; non-solo got
+                      // '0 4px 4px 0' (only right corners). Now consistent
+                      // 10px all-corners across modes since outer now
+                      // clips uniformly.
+                      borderRadius: 10,
                       // v05.05bt334/335/336 — ACTIVE NOW treatment.
                       // Glow color tracks the OWNER of the current
                       // slot — Mommy-owned uses C.mommy (rose in both
@@ -37284,6 +37329,39 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             {t.title}
                           </span>
                         )}
+                        {/* v05.05bt454 — Per chat: 'when the day is over
+                            then the items unchecked needs to end back up
+                            under the today pile with a badge that it has
+                            been moved to the next day'. Renders when the
+                            auto-rollover useEffect carried this task
+                            forward from a past day. */}
+                        {t.rolledOverFrom && !t.completedAt && (() => {
+                          const [y, mo, d] = t.rolledOverFrom.split("-").map(Number);
+                          const orig = new Date(y, mo - 1, d);
+                          const todayMidnight = new Date();
+                          todayMidnight.setHours(0, 0, 0, 0);
+                          const daysAgo = Math.round((todayMidnight.getTime() - orig.getTime()) / 86400000);
+                          const label = daysAgo === 1 ? "yesterday"
+                            : daysAgo <= 6 ? `${daysAgo}d ago`
+                            : orig.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                          return (
+                            <span
+                              title={`Carried over from ${orig.toLocaleDateString()} — uncompleted on its scheduled day`}
+                              style={{
+                                marginLeft: 6,
+                                padding: "1px 6px",
+                                background: `${C.gold}1f`,
+                                border: `1px solid ${C.gold}66`,
+                                borderRadius: 11,
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 8.5, fontWeight: 800,
+                                letterSpacing: "0.08em",
+                                color: C.gold,
+                                whiteSpace: "nowrap",
+                                verticalAlign: 2,
+                              }}>↩ {label}</span>
+                          );
+                        })()}
                         {/* v05.05bt417 — Hard due-date tag. Coral pill
                             with the day-of-week and date abbrev so it
                             sticks out as a deliverable. Rendered right
