@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt455";
+const APP_VERSION = "2026.05.05bt456";
 const APP_BUILD_NOTES = [
-  "VISUAL CONSISTENCY ACROSS MODES. Per chat: 'under non-cadence mode, the graphics do not match - for example, the tasks and rail bars are not consistent with cadence'.\\n\\nROOT CAUSE: bt447's rounded-card + clipped-rail treatment was gated on productMode === 'solo' (Cadence only). Non-Cadence modes (Mommy view dawn/day, Daddy view dusk/night) kept the old flat-architectural look:\\n  • Outer container had no borderRadius/overflow/marginBottom → rows touched each other with no separation, and the rail extended past the (right-only) rounded corners.\\n  • Inner card used '0 4px 4px 0' borderRadius (only the right two corners rounded).\\n  • Free block bottom border was dashed in non-solo, solid in solo.\\n\\nFIX:\\n  (1) Outer row container: borderRadius:10 + overflow:hidden + marginBottom:6 now applied unconditionally across all modes. Rail clips to rounded shape, rows have visible space between, cards read as separate tiles.\\n  (2) Inner card borderRadius: was 'solo' ? 10 : '0 4px 4px 0' — now 10px all-corners across modes.\\n  (3) Bottom border: was dashed for free blocks in non-solo only — now solid across modes. The free block's gold left rail + gold '+ Open' text already signal openness; the dashed bottom was redundant.\\n\\nMode-specific tunings KEPT:\\n  • Border alphas + colors (mode-specific tones — solo uses gold hairlines, non-solo uses owner-tinted borders at 33% alpha) — those were intentional contrast choices.\\n  • Row background tints (owner-color at low alpha, transparent → paper-line fallback) — already mode-agnostic via C palette.\\n  • Rail colors (mommy/daddy/joint/sage) — palette-driven, adapts automatically.\\n\\nNet effect: the rounded-card aesthetic from bt446/447 is now consistent regardless of which view (Cadence, Mommy mode, Daddy mode, dusk/night) you're in. Build verified clean via esbuild.",
+  "SOLO-PARENT MODE + COMPLETED HISTORY EXPORT + DB BLOAT ANSWER.\\n\\n(1) SOLO-PARENT MODE. Per chat: 'if a parent is away and handoff is paused and not under caregiver mode, then need to rely heavily on predictions for baby wake, feed and play because it is all on one parent. the rails should be adjusted accordingly as well since it is for one person'.\\n\\nNew derived flag `isSoloParentMode` at TodayTaskPlanCard scope. True when ALL of:\\n  • parentAway is set (someone is on a trip)\\n  • The trip window is currently active (from <= now AND now <= until)\\n  • The away parent is NOT the current user (I'm the one home alone)\\n  • There's no active caregiver window (no one else covering)\\n\\nWhen true, effectiveActiveShifts now drops the away parent's shifts entirely:\\n  return { ...base, [parentAway.parent]: [] };\\n\\nThis means the rail computation sees only the home parent as on-duty → the entire timeline's rail renders in the home parent's color (mommy/daddy) instead of a split rail showing a schedule that doesn't apply. Predicted naps + feeds + pump windows continue to surface (they were already wired in via availableBlocks for this case).\\n\\n(2) EXPORT COMPLETED HISTORY (CSV) + ARCHIVE. Per chat: 'would keeping the done history bloat the database? i would actually just want to export it and store it in my monday.com database'.\\n\\nTwo new menu items in the ⋯ overflow menu (under 'Display & export'):\\n  • 📊 Export completed history · CSV — generates a Monday-compatible CSV with 10 columns: Task, Owner, Completed Date, Completed Time, Scheduled Date, Scheduled Time, Effort (min), Focus Mode, Regret Score, Passive. ALL-TIME (every completed task ever, not just today). Sorted newest-first. Copies to clipboard or falls back to the textarea modal if the browser blocks auto-copy. Status banner reports how many tasks were copied.\\n  • 🗄 Archive old completed (>14d) — purges completed tasks older than 14 days from local storage. Confirmation prompt warns to export first since it's not undoable. The 14-day window keeps recent done items visible (you can still see what you finished this week) while preventing the long-term bloat.\\n\\nWORKFLOW: tap the CSV export → paste into Monday.com (or any spreadsheet) → tap archive → done items >14d gone from local storage, recent ones remain. Repeat weekly.\\n\\n(3) BLOAT ANSWER: completed tasks are stored in the same tasks array as everything else. Each task is small (~200-300 bytes), so 1000 done tasks ≈ 250KB — totally fine for localStorage (5MB limit per origin) and not a meaningful perf cost for a few hundred tasks. The reason to archive is mostly UI noise (the all-tasks view gets long) and cloud-sync bandwidth (if syncing the full tasks blob to Firestore). For your use case (export to Monday weekly + archive locally), the new tools should keep the app fast and the Monday board comprehensive.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt456", summary: "Solo-parent mode + completed history export. (1) New isSoloParentMode flag: true when trip is active + I'm not the one away + no caregiver covering. Drops the away parent's shifts from effectiveActiveShifts so the rail renders in one color (home parent's) instead of a split rail of an inapplicable schedule. Predicted naps/feeds/pumps still surface. (2) New ⋯ menu item '📊 Export completed history · CSV' — generates a 10-column Monday-compatible CSV of all-time completed tasks, sorted newest first. (3) New '🗄 Archive old completed (>14d)' — purges old done tasks from local storage with a confirmation prompt. Workflow: export to Monday weekly → archive locally → app stays fast, Monday stays comprehensive. Build verified clean via esbuild." },
   { version: "2026.05.05bt455", summary: "Visual consistency across modes. bt447's rounded-card + clipped-rail treatment was gated on Cadence (solo) mode only; non-Cadence modes kept the flat-architectural look with rows touching and rails extending past the (right-only) rounded corners. Unified: outer borderRadius:10 + overflow:hidden + marginBottom:6 now applied across all modes. Inner borderRadius unified to 10. Free block bottom border unified to solid (was dashed in non-solo, redundant with the gold rail + gold + Open text). Mode-specific border alphas + bg tints stayed since they're intentional contrast tunings. Build verified clean via esbuild." },
   { version: "2026.05.05bt454", summary: "Auto-rollover for past-dated uncompleted tasks + 'moved from' badge. Was: tasks with scheduledDate in the past matched no pile filter (today-scheduled wants scheduledDate===today, today-unscheduled wants scheduledDate===today, backlog wants no scheduledDate) — they sat invisible. Now: new useEffect runs on every tasks/now change; any uncompleted task with scheduledDate < today gets scheduledDate→today + scheduledTime→null + rolledOverFrom→original date. Lands in the today-unscheduled pile with a gold '↩ yesterday' / '↩ 3d ago' pill so user knows it was carried forward. Idempotent (next render the filter doesn't match). Build verified clean via esbuild." },
   { version: "2026.05.05bt453a", summary: "Hotfix to bt453. The inline edit form rendered but was clipped by the title-block's bt322 line-clamp styles (display:-webkit-box + WebkitLineClamp:2 + overflow:hidden) — only the first 2 lines were visible. Made the title-block styles conditional: when in edit mode, use display:block + overflow:visible. Also collapsed the regret column from '54px 1fr auto' to '54px 1fr' in edit mode for more horizontal room. Form is now fully visible. Build verified clean via esbuild." },
@@ -28067,9 +28068,36 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // a tomorrow meeting at 11:30, shift adjustment showed in Shifts tab,
   // but the tomorrow scheduler still showed Daddy on duty during 11:30
   // because it was reading today's shift data.
-  const effectiveActiveShifts = isTomorrow
-    ? (tomorrowProjection?.projected || activeShifts)
-    : activeShifts;
+  // v05.05bt456 — Per chat: 'if a parent is away and handoff is paused
+  // and not under caregiver mode, then need to rely heavily on
+  // predictions... the rails should be adjusted accordingly as well
+  // since it is for one person'. When the OTHER parent is away on a
+  // trip AND there is no active caregiver window, the home parent is
+  // solo 24/7 for the duration of the trip. Strip the away parent's
+  // shift entries out of effectiveActiveShifts so the rail computation
+  // sees only the home parent as on-duty — produces a single-color
+  // rail across the whole timeline instead of a split rail showing a
+  // schedule that doesn't apply.
+  const isSoloParentMode = (() => {
+    if (!parentAway || !parentAway.parent) return false;
+    const from = parentAway.from ? new Date(parentAway.from) : null;
+    const until = parentAway.until ? new Date(parentAway.until) : null;
+    const tripActive = (!from || from <= now) && (!until || until >= now);
+    if (!tripActive) return false;
+    if (parentAway.parent === currentUser) return false; // I'm the one away
+    const cgWin = (typeof getActiveOrUpcomingCaregiverWindow === "function")
+      ? getActiveOrUpcomingCaregiverWindow(events, now) : null;
+    if (cgWin && cgWin.state === "active") return false; // caregiver covering
+    return true;
+  })();
+  const effectiveActiveShifts = (() => {
+    const base = isTomorrow
+      ? (tomorrowProjection?.projected || activeShifts)
+      : activeShifts;
+    if (!isSoloParentMode || !parentAway?.parent) return base;
+    // Drop the away parent's shifts — home parent is sole.
+    return { ...base, [parentAway.parent]: [] };
+  })();
   // v05.05bt128 — Open-block picker: which block (start ms) has its
   // 'pick other' picker expanded. null = no picker open.
   const [pickerForBlock, setPickerForBlock] = useState(null);
@@ -30852,6 +30880,105 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     }
   };
 
+  // v05.05bt456 — Per chat: 'would keeping the done history bloat the
+  // database? i would actually just want to export it and store it in
+  // my monday.com database'. Rich CSV export of ALL completed tasks
+  // (across all dates) for import into Monday.com or any spreadsheet.
+  // 10-column format compatible with the existing Monday board fields.
+  // Does NOT delete — user reviews the CSV, imports to Monday, then can
+  // optionally purge via the new "Archive old completed" action.
+  const exportCompletedHistoryCsv = () => {
+    const esc = (v) => {
+      if (v == null) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const headers = [
+      "Task", "Owner", "Completed Date", "Completed Time",
+      "Scheduled Date", "Scheduled Time", "Effort (min)",
+      "Focus Mode", "Regret Score", "Passive",
+    ];
+    const rows = [headers.join(",")];
+    const completed = (tasks || []).filter(t => t.completedAt);
+    // Sort: newest completed first (so most recent work is at top).
+    completed.sort((a, b) => {
+      const at = new Date(a.completedAt).getTime();
+      const bt = new Date(b.completedAt).getTime();
+      return bt - at;
+    });
+    for (const t of completed) {
+      const cAt = t.completedAt ? new Date(t.completedAt) : null;
+      const completedDate = cAt ? cAt.toISOString().slice(0, 10) : "";
+      const completedTime = cAt
+        ? `${String(cAt.getHours()).padStart(2,"0")}:${String(cAt.getMinutes()).padStart(2,"0")}`
+        : "";
+      const focusLabel = t.focusLevel === "deep" ? "Deep Focus"
+        : t.focusLevel === "shallow" ? "Light Focus"
+        : "—";
+      rows.push([
+        esc(t.title || ""),
+        esc(t.ownerName || ""),
+        esc(completedDate),
+        esc(completedTime),
+        esc(t.scheduledDate || ""),
+        esc(t.scheduledTime || ""),
+        esc(t.effortMin || ""),
+        esc(focusLabel),
+        esc(t.regretScore == null ? "" : t.regretScore),
+        esc(t.isPassive ? "Yes" : ""),
+      ].join(","));
+    }
+    const csv = rows.join("\n");
+
+    if (completed.length === 0) {
+      setCopyStatus("No completed tasks to export");
+      setTimeout(() => setCopyStatus(null), 2500);
+      return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(csv).then(() => {
+        setCopyStatus(`${completed.length} completed task${completed.length === 1 ? "" : "s"} copied as CSV`);
+        setTimeout(() => setCopyStatus(null), 3000);
+      }).catch(() => {
+        setMondayCsvFallback(csv);
+      });
+    } else {
+      setMondayCsvFallback(csv);
+    }
+  };
+
+  // v05.05bt456 — Per chat: bloat concern with done history. Purges
+  // completed tasks older than N days from local storage (preserves
+  // recent done items so the user can see what they finished). User
+  // should exportCompletedHistoryCsv first to keep a permanent record
+  // in Monday.com. Confirmation prompt before purging.
+  const archiveOldCompleted = () => {
+    const CUTOFF_DAYS = 14;
+    const cutoff = Date.now() - (CUTOFF_DAYS * 24 * 60 * 60 * 1000);
+    const toPurge = (tasks || []).filter(t => {
+      if (!t.completedAt) return false;
+      const ct = new Date(t.completedAt).getTime();
+      return Number.isFinite(ct) && ct < cutoff;
+    });
+    if (toPurge.length === 0) {
+      setCopyStatus("Nothing to archive (no completed > 14d old)");
+      setTimeout(() => setCopyStatus(null), 2500);
+      return;
+    }
+    const ok = window.confirm(
+      `Archive ${toPurge.length} completed task${toPurge.length === 1 ? "" : "s"} older than ${CUTOFF_DAYS} days?\n\nMake sure you exported them first (Export completed history) — this can't be undone.`
+    );
+    if (!ok) return;
+    const purgeIds = new Set(toPurge.map(t => t.id));
+    setTasks(prev => prev.filter(t => !purgeIds.has(t.id)));
+    setCopyStatus(`Archived ${toPurge.length} task${toPurge.length === 1 ? "" : "s"}`);
+    setTimeout(() => setCopyStatus(null), 3000);
+  };
+
   // v05.05bt114 — copy the day plan as plain text for paste into OneNote
   const copyDayPlan = () => {
     const fmt = d => fmtTimeShort(d);
@@ -32026,6 +32153,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                               { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
                               { icon: "✓", label: "Export finished tasks · for Monday", onClick: () => { exportFinishedTasks(); setShowActionsMenu(false); }, hint: "Today only, plain bullet list" },
+                              { icon: "📊", label: "Export completed history · CSV", onClick: () => { exportCompletedHistoryCsv(); setShowActionsMenu(false); }, hint: "All-time done tasks · Monday-compatible columns" },
+                              { icon: "🗄", label: "Archive old completed (>14d)", onClick: () => { archiveOldCompleted(); setShowActionsMenu(false); }, hint: "Purges local storage · export first" },
                               { section: "Cadence mode" },
                               { icon: productMode === "family" ? "●" : "○",
                                 label: "Off · default Little Ledger",
@@ -32215,6 +32344,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             { icon: schedulerDarkMode ? "☀" : "☾", label: schedulerDarkMode ? "Light mode" : "Dark mode", onClick: () => { setSchedulerDarkMode(!schedulerDarkMode); setShowActionsMenu(false); } },
                             { icon: "↗", label: "Export to Monday.com", onClick: () => { exportMondayCsv(); setShowActionsMenu(false); } },
                               { icon: "✓", label: "Export finished tasks · for Monday", onClick: () => { exportFinishedTasks(); setShowActionsMenu(false); }, hint: "Today only, plain bullet list" },
+                            { icon: "📊", label: "Export completed history · CSV", onClick: () => { exportCompletedHistoryCsv(); setShowActionsMenu(false); }, hint: "All-time done tasks · Monday-compatible columns" },
+                            { icon: "🗄", label: "Archive old completed (>14d)", onClick: () => { archiveOldCompleted(); setShowActionsMenu(false); }, hint: "Purges local storage · export first" },
                             { section: "Cadence mode" },
                             // v05.05bt323/329 — Cadence is purely an
                             // aesthetic mode (no feature hiding). User
