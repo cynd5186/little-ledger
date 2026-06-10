@@ -15,11 +15,24 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt459";
+const APP_VERSION = "2026.05.05bt470";
 const APP_BUILD_NOTES = [
-  "INLINE EXPAND-TO-EDIT (Pattern B · ½ of B+C). Per chat: 'a whole dialog popping up is disruptive to me. What I love about my mondaycom setup to task manage is the ability to edit INLINE'. You confirmed Pattern B + Pattern C. This is half of it.\\n\\nWHAT CHANGED:\\nThe EditTaskModal popup no longer opens when you tap ✏ Edit in any kebab menu. Instead, the task row EXPANDS in place to show an inline editable form. Three trigger sites all rewired to openExpandedEdit():\\n  • TaskRow kebab popout → ✏ Edit button (pile sections: scheduled/today/backlog)\\n  • Timeline row's ⋯ button (next to ↺)\\n  • Pile Manager modal's '✏ Edit details' button\\n  • Quick-action card's 'Edit details' button\\n\\nTHE INLINE FORM (per your preference: top 3 always visible, MORE toggle for the rest):\\n  • TITLE — italic Newsreader input, auto-focus, Enter saves, Escape closes.\\n  • START — HTML time input, pre-filled with current scheduledTime.\\n  • DUR — 15/30/45/60/90 segmented buttons.\\n  • ▾ MORE button (collapsed by default) — taps reveal:\\n    – FOCUS · — / LIGHT / DEEP (3-button toggle, colored per focus tone)\\n    – REGRET · 1–5 stars (tap to set level)\\n    – OWNER · Mommy / Daddy (color-pilled)\\n    – PASSIVE · ☐ / ☑ toggle (teal pump tint when on)\\n  • Bottom row: 🗑 DELETE (with window.confirm) · CANCEL (close without saving) · DONE (gold, commits all changes)\\n\\nVISUAL: gold-tinted box (#e0c896 at 10% alpha) with 4px gold left rail + drop shadow + 220ms slide-in animation. Stops click propagation so taps inside don't fire the row's own onClick.\\n\\nGOLD CHROME (NOT SAGE): per your earlier color-semantics ask, sage is reserved for caregiver, mauve for Mommy, blue for Daddy. The expand form uses gold — matches the bt453 inline-empty-slot editor and free-block aesthetic.\\n\\nWHAT'S NEXT (bt460): Pattern C — new 'Tasks' tab next to Schedule, Monday-style spreadsheet view with: ☐ / Title / Time / Dur / Focus / Owner / Status columns. Every cell tappable inline. Bulk select. Column filters.\\n\\nNOTE: the EditTaskModal still exists in the codebase — it's just not reachable from the main flows anymore. Keeping it around in case any odd path still needs it. Will fully remove in bt461 cleanup after we confirm the inline edit handles everything you need.\\n\\nBuild verified clean via esbuild.",
+  "VERSION DISPLAY ADDED TO ⋯ MENU FOR DEBUGGING DEPLOY ISSUES. Per chat: 'still showing the old UI' after bt469 deploy. Almost certainly a PWA cache issue on iOS — but to make it diagnosable, the ⋯ menu's first row now displays 'BUILD · v{APP_VERSION}' in gold uppercase mono caps (same styling as the section dividers). So opening ⋯ instantly tells you what bundle is loaded.\\n\\nTROUBLESHOOTING IF YOU STILL SEE OLD UI AFTER DEPLOY:\\n  1. Confirm the Vercel deploy succeeded (https://vercel.com → your project → Deployments tab; should show the bt470 commit as 'Ready'). Vercel sometimes takes 30-90s after git push.\\n  2. iOS PWA cache is aggressive. Steps to force:\\n     a) Open the live URL (little-ledger-123.vercel.app) in Safari (NOT the PWA)\\n     b) Long-press the reload icon in the address bar → tap 'Reload Without Content Blockers' (forces network fetch)\\n     c) Close Safari fully (swipe away in app switcher)\\n     d) Now reopen the PWA from your home screen\\n  3. Nuclear option: delete the PWA from your home screen, re-add via Safari Share → 'Add to Home Screen'. Old service worker gets evicted.\\n  4. Tap ⋯ in the task plan card — the first row should read 'BUILD · v2026.05.05bt470'. If it shows anything older, the bundle didn't update. If it DOES show bt470 but the UI still looks old, that's a real code bug and I want to see screenshots.\\n\\nNO OTHER CHANGES — just the version display. All bt468 + bt469 fixes are intact: routine title tap inline edit, compact ADD A TASK link, gated Heads-up, trimmed DRIFT, per-row + chip insertion, sophisticated mauve, right-aligned + and ×, DEEP/LIGHT tag on empty slots, dominant-rail-colored freed strip, etc.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt470", summary: "Added version display to first row of ⋯ menu ('BUILD · v{APP_VERSION}') for debugging stale-bundle issues. Tap ⋯ → top row shows what bundle is loaded. No other changes; all bt468 + bt469 fixes intact. Build verified clean via esbuild." },
+  { version: "2026.05.05bt469", summary: "Per-row insertion. Small '+' chip between consecutive task/routine rows in the timeline; tap to call insertTaskAfterSlot at the row above's end time + open inline expand-edit. Quiet at rest (10px hairline gap, small gold pill at 60% opacity) so it doesn't clutter. Three insertion modes now: tap empty slot to fill, tap inter-row + to insert between, or use bottom +INSERT TASK to append. Also: confirmed bt468 changes shipped properly (user's screenshot was pre-deploy). Build verified clean via esbuild." },
+  { version: "2026.05.05bt468", summary: "(1) Routine title tap → inline expand-edit (was opening RoutineOverrideSheet modal; bt460 only fixed the kebab path). (2) Top clutter trimmed: 'Add a task to today' button shrunk from giant italic Cormorant block to compact single-line mono 'ADD A TASK' link; TRADE IDEAS' 'Heads-up...' footer properly gated on tradePanelExpanded (was rendering unconditionally); DRIFT card text trimmed (removed redundant 'Schedule mismatched reality.' sub-phrase). (3) Confirmed +INSERT TASK at bottom of timeline (bt460) covers row-insertion. Build verified clean via esbuild." },
+  { version: "2026.05.05bt467", summary: "(1) + and × chips moved to the RIGHT edge of empty rows (flex justifyContent:flex-end on the title block when free-not-editing). (2) Mommy color reverted from rosy-pink #B5688B back to sophisticated plum-mauve #947590; dusk/night back to #B59CB3. Differentiation from daddy preserved by daddy's saturated blue #3D6FAB. (3) ACTIVE NOW glow ownerColor now uses dominant railSegment owner instead of slot.owner (which was falling through to mommy for pump/passive rows). Daddy-shift pump now shows blue glow + blue chrome end-to-end. Build verified clean via esbuild." },
+  { version: "2026.05.05bt466", summary: "Freed-strip color inherits dominant rail (Daddy→blue, Mommy→mauve, caregiver→sage, joint→gold) instead of hardcoded sage; applies to dashed empty state AND tinted filled state + FILL button. + and × on free blocks restyled as soft pill chips (26×22 rounded, borderless): + with gold-tint bg, × with ink-tint bg — clearly tappable without hard edges. DEEP/LIGHT tier badge now shows on empty slots too (removed !isFree gate from bt433), so you can see at a glance what kind of work fits before filling; verbose why-text still opt-in. Build verified clean via esbuild." },
+  { version: "2026.05.05bt465", summary: "Borderless × on free-block dismiss (3rd attempt at this button — the bt321 'hide this open slot' × next to the + was the actual offender; previous turns fixed × buttons in OTHER places). Mommy/Daddy rail colors pushed apart in hue/saturation across all four palettes so the warm-vs-cool distinction reads at a glance. Day/dawn: mommy gray-mauve → rosy mauve (B5688B); daddy medium-blue → deeper saturated blue (3D6FAB). Dusk/night: mommy → warmer/rosier (D085A3); daddy → cooler/bluer (7796C2). Build verified clean via esbuild." },
+  { version: "2026.05.05bt464", summary: "Four asks shipped. (1) Pile filters (UNSCHEDULED/SCHEDULED/BACKLOG) restored INLINE inside the empty-slot editor + ★ BEST-FIT indicator surfacing the algorithm's pick at the top. (2) bt459 expand-edit gets an 'OR REPLACE WITH' section so filled tasks can be swapped inline with anything from the pile. (3) 🗑 DELETE button in bt459 is now borderless. (4) Prominent 28×28 × close at top-right of both editors; redundant bottom CANCEL/× removed. Outer borders softened to ink15. Build verified clean via esbuild." },
+  { version: "2026.05.05bt463a", summary: "Hotfix bt463 render crash. 'timeTravelOffset is not defined' was thrown when opening the inline editor on an empty slot — bt463 made pile-search render unconditionally, and the new render path referenced a variable that's App-scoped (not a TodayTaskPlanCard prop). 6 in-component uses swapped to the existing `now` prop. No functional changes vs bt463. Build verified clean via esbuild." },
+  { version: "2026.05.05bt463", summary: "Inline editor aesthetic overhaul. (1) Input bgs swapped from rgba(0,0,0,0.3) to palette-aware C.ink06 — kills the 90s gray-on-cream look. (2) Borders softened to ink15 (8%). (3) Accents: teal C.pump → gold C.gold throughout (matches free-block aesthetic). (4) ADD button gold fill instead of teal. (5) PASSIVE toggle uses subtle ink tint, not saturated teal. (6) × cancel/delete button is now borderless icon (per ask). (7) PILE ALWAYS VISIBLE — was gated on 2+ typed chars, now shows all 6 pile tasks immediately when editor opens, filters as you type. Build verified clean via esbuild." },
+  { version: "2026.05.05bt462", summary: "Actual changes. (1) '+ Open' text on empty rows replaced with a quiet thin '+' character (no word). (2) Free-block sub-line (focus tier + segment breakdown + careLabel + reasoning) hidden entirely — gated with `false &&`. The algorithm runs but the explanation doesn't render. (3) All three remaining Fits/FILL dialog entry points rewired to use new insertTaskAtTime helper which creates a task + opens inline expand-edit. The dialog still exists in code but has no entry points. Build verified clean via esbuild." },
+  { version: "2026.05.05bt461", summary: "Inline pile search on empty slots + Fits/FILL dialog no longer the primary path + popup styling stripped from bt453 inline editor. (1) Inline editor now surfaces matching backlog tasks as you type in the title field (substring match on unscheduled tasks, up to 5 shown). Tap a match → assigns that task to this slot. Tap ADD / Enter → creates new. (2) ⋯ FIND button removed (replaced by inline search). (3) Stripped teal tint + rail + shadow + animation from the inline editor — now flat in row. Still pending: reducing verbose explanations elsewhere (free-block reasoning sub-lines, etc). Build verified clean via esbuild." },
+  { version: "2026.05.05bt460", summary: "Insert row + routines move inline. (1) '+ INSERT TASK' button at the bottom of the timeline creates a draft task after the last slot and opens inline expand-edit on it (insertTaskAfterSlot helper). (2) Routine ⋯ button now opens inline expand-edit instead of the RoutineOverrideSheet modal. The form adapts: eyebrow 'ROUTINE · MOVE FOR TODAY', no title input (routine name fixed), only START + DUR fields, ↺ RESET button to drop today's override. Commit writes to todaySetup.routineOverrides[routineId]. Net: atypical day handling without modals — bump AM routine to 9:00, push bedtime to 22:30, etc, all inline. Build verified clean via esbuild." },
+  { version: "2026.05.05bt459b", summary: "Hotfix to bt459. Removed gold tint bg + 4px gold rail + drop shadow + slide-in animation from the inline expand-to-edit form. Now transparent bg + subtle line border + no shadow + no animation. Should read as 'row just got taller' instead of 'card popped up.' If still wrong, next step is Pattern A (true cell-tap inline — each cell transforms in place, row stays the same shape). Build verified clean via esbuild." },
   { version: "2026.05.05bt459", summary: "Inline expand-to-edit (Pattern B, half of B+C). Tap ✏ Edit on any task (kebab in TaskRow, ⋯ on timeline row, Edit details in Pile Manager or quick-action) → row EXPANDS inline with editable form instead of opening EditTaskModal. Top 3 fields always visible (title input + start time + duration segmented 15/30/45/60/90); ▾ MORE toggle reveals focus/regret/owner/passive. Gold chrome (sage was conflating with caregiver semantics). 🗑 DELETE + CANCEL + DONE buttons. Modal still in codebase but unreachable from main flows. Next: bt460 Pattern C sheet view. Build verified clean via esbuild." },
   { version: "2026.05.05bt458", summary: "One panel, gold chrome, no tabs. The Fits/FILL dialog is restructured per user feedback: (1) Tab switcher (+ NEW / FIND) removed — single unified panel. (2) Title input drives both ADD path and pile filter (dual purpose). (3) All sage/green chrome in the dialog recolored to gold (sage was conflating with caregiver semantics). (4) FITS scoring stripped from candidate rows — no ★ FITS ONLY toggle, no ★ BEST FIT pill, no sage left rail on fitters. All rows render neutral. (5) Non-fitters now tappable (TOO LONG coral pill stays as info; conflict resolution moves to schedule layer). Pile Manager border also recolored gold. Build verified clean via esbuild." },
   { version: "2026.05.05bt457", summary: "Fits/FILL dialog readability + palette-aware modal bg + simpler-picker mockup. (1) Added modalSurface field to every palette so the dialog bg adapts: cream in day/dawn, warm-dark in dusk/night, purple-tinted dark in cadence, slate-tinted in cadenceDaddy, deeper purple in cadenceDusk. Was hardcoded #322c39 (purple-grey clashed with non-Cadence themes). (2) Eyebrow color ink + sage accent dot (was sage text, low-contrast green-on-purple). Font weight 700→800. (3) CANCEL button now ink text + paper bg + 88α border (was muted on transparent — barely visible). (4) Mockup deliverable simpler_picker.html proposing to kill tabs + FITS scoring entirely. Build verified clean via esbuild." },
@@ -268,7 +281,7 @@ const APP_CHANGELOG = [
   { version: "2026.05.05bt64", summary: "FeedForm bottle picker collapsed from two modes (simple/mix) into one unified picker. mixMode state and the SegControl-style toggle dashed at the bottom are gone. selectSingleBottle helper retired. Every bottle card renders identically: 30px round RT/Fr/Fz badge, Cormorant 17px oz headline + bottle label, mono caption with pumped time, and a three-segment inline stepper [−][N.N][+] on the right (36×36 buttons, big tap targets). The leftmost portion of the card is itself a button: tapping the card body when used==0 calls a smart-fill that takes min(b.oz, targetBmOz - allocated) from that bottle — i.e., the simple-mode shortcut for 'use this bottle to top up to target.' Once a bottle has any allocation, the body tap is a no-op (avoids accidental fills); user adjusts via stepper. Running total bar above the bottle list always shows allocated/target with a status word ('tap a bottle' / 'X short' / '✓ matched' / 'X over'). Skip-inventory option preserved at bottom. Net effect: '1oz from bottle A and 2oz from bottle B' is two tap-twice gestures instead of mode-toggle + stepper hunting." },
   { version: "2026.05.05bt63", summary: "Shared bottle attribution between Today's rhythm and Journal. New module-scope feedBottleSuffix(ev) helper sitting next to fmtTimeShort: returns '' if no fromBottles, ' · Bottle X' if single bottle has bottleLabel, ' · bottle from H:MMa/p' if single bottle has pumpedAt only, ' · bottle' fallback, ' · N bottles' for multi. TimelineEvent's feed label now appends feedBottleSuffix(ev) so the rhythm table on the Now page shows the same bottle reference the journal does. LogView's inline bottle-attribution function (added in bt58) replaced with a single call to the same helper — both surfaces now share one source of truth for how feed → bottle is attributed in text. Side benefit: 18 lines of duplicated attribution logic in LogView collapsed to 2 lines." },
   { version: "2026.05.05bt62", summary: "Three coordinated changes. (1) Sunday routine — joint bath time. SUNDAY_ROUTINE.babyComponents.bath gets a `joint: ['Mommy', 'Daddy']` field. allBlocks build now propagates this through to a `joint`/`actors`/`isJoint` on the timeline block. TimeRow renders an inline JOINT chip (mauve→slate gradient, white text) and a 'Mommy + Daddy together' detail line. (2) Routine filter — new actorFilter state on SundayRoutineCard with chips All/Solène/Mommy/Daddy at top. allBlocks.filter uses (b.actors || [b.actor]).includes(actorFilter), so joint blocks show in BOTH parents' filtered views. Replaces the old static color-legend strip. (3) Bottle picker UX unification. UseBottleModal's use mode rewritten to match FeedForm's bt58 simple-mode card pattern verbatim: Cormorant 17px oz headline + Mono caption + 30px round badge + isSelected check icon. Dropped the standalone 'How much oz' field — replaced with inline 'partial? [60px input] oz' centered below the primary log button (only appears when a card is selected). Dropped the SegControl mode toggle at the top — manage mode + 'not in list' moved to small italic underlined text links at the bottom, only one row tall. Modal title shortened from 'Use a bottle from fridge' to 'Fridge bottles'. (4) LOG button glow keyframe boosted: at peak the box-shadow is 0 10px 36px + 0 0 36px 6px + 0 0 0 8px (was 0 8px 28px + 0 0 22px 2px), scale at peak is 1.05 (was 1.025), cycle is 2.2s (was 2.6s)." },
-  { version: "2026.05.05bt61", summary: "Active-commitment banner (InMeetingBanner) clears at the precise end time of the meeting, instead of waiting up to 15s for the next setNow tick. New useEffect after myActiveCommitment useMemo schedules a one-shot setTimeout at endMs - now.getTime() + 200ms; on fire it calls setNow(new Date(Date.now() + timeTravelOffset)), forcing the useMemo to recompute and find no active commitment, which causes the banner to unmount. Effect deps are [id, end, timeTravelOffset] — re-runs only when the active commitment changes or time-travel offset shifts. Cleanup clears the timeout on unmount/dep-change so we don't accumulate stale fires. Most visible when redeeming time-bank credit (label starts with 'Time bank:'); also benefits any red/yellow commitment where the user wants the 'You're back' transition to feel snappy." },
+  { version: "2026.05.05bt61", summary: "Active-commitment banner (InMeetingBanner) clears at the precise end time of the meeting, instead of waiting up to 15s for the next setNow tick. New useEffect after myActiveCommitment useMemo schedules a one-shot setTimeout at endMs - now.getTime() + 200ms; on fire it calls setNow(now), forcing the useMemo to recompute and find no active commitment, which causes the banner to unmount. Effect deps are [id, end, timeTravelOffset] — re-runs only when the active commitment changes or time-travel offset shifts. Cleanup clears the timeout on unmount/dep-change so we don't accumulate stale fires. Most visible when redeeming time-bank credit (label starts with 'Time bank:'); also benefits any red/yellow commitment where the user wants the 'You're back' transition to feel snappy." },
   { version: "2026.05.05bt59", summary: "PumpGoalsCard rewritten for quick-and-fun visual hierarchy after user feedback that bt57 was 'a lot of words instead of something quick and easy and fun.' SVG milk bottle (110×240) with clipPath-bounded liquid rect that animates y/height on oz changes via cubic-bezier transition. Three reference lines inside the bottle: low (typical-low, dotted muted), high (typical-high, dotted muted), and TARGET (dashed gold when not hit, solid green with floating ✓ and animated sparkle dots when hit). Liquid surface ripple line at the fill level. Cap rendered as black rect on top of bottle outline. Big italic 56px Cormorant oz number adjacent to bottle, color-coded by status zone (muted → gold → green → gold-above), with status emoji (🍼 < low, 💪 in-progress, 🎉 at-target, 🚀 above-target) and short status text. Flame icon line below for cal-burned. 7-day section reduced to single-row colored dots (green if at low-range, muted otherwise) with today highlighted via mauve outline ring. Eat-to-lose section is two rows with 18px JetBrains Mono numbers in green/accent depending on whether they cross the 1500 cal floor. Maintenance editable as a small bottom-row inline field. Removed: the 'honest note' paragraph, the per-line breakdown table, the mid-card analytics dashboard. Net effect: card is significantly shorter, all the decision-relevant info still present, but the time-to-glance is a fraction." },
   { version: "2026.05.05bt58", summary: "Two related improvements to feed logging. (1) FeedForm bottle-picker simplified. New `mixMode` state (default false) gates between SIMPLE and MIX modes. Simple mode renders bottles as tappable cards (Cormorant 17px headline showing oz + label, JetBrains Mono detail showing pump time + expiry, sized for thumb taps). Tap a bottle → calls new selectSingleBottle helper which sets that bottle as primary and auto-overflows to remaining bottles in default oldest-first order to meet target. Selected bottles get a check icon and a 'using X oz · Y oz remains' line. The original per-bottle stepper UI is preserved verbatim under mix mode, accessed via a subtle dashed-border toggle at the bottom. Status banners (need more / overshoot) appear inline in simple mode rather than as a constant header bar. (2) Feed events now carry a fromBottles array — denormalized snapshot of which bottle(s) were consumed at log-time, with each entry recording oz/pumpedAt/location/bottleLabel. Snapshot is captured at all three deduct sites: multi-bottle Logger allocation, single-bottle Logger, and Now-page picker (UseBottleModal onUse). The journal LogView feed-row renderer now appends the bottle reference: 'Bottle [label]' if the bottle had a label, 'bottle from [time]' if not, '[N] bottles' if multi. Snapshot survives bottle deletion so the journal reference stays accurate forever." },
   { version: "2026.05.05bt57", summary: "PumpGoalsCard ('Pump & snatch back'). Module-scope DAILY_MILK_TARGETS lookup table by months postpartum (0-12+) with target/low/high oz per day, synthesized from KellyMom (research-cited 25 oz avg 1-6 mo, 19-30 oz range), Medela, NICHD/AAP guidance, and exclusive-pumper sources (NestedBean, BabySleepSite recommending 25-35 oz/day for pumpers). New top-level useState for `mommyMaintenanceCal` (default 2000, range-validated 1200-4000, persisted to localStorage outside solene:* keyspace at ll:mommyMaintenanceCal so a Reset doesn't clear the body-personal number). Card replaces previous 'Mommy's burn today' tile on the Milk/InventoryView. Three sections: TODAY (big oz number + horizontal progress bar with thresholds 60/90/110% gating accent/gold/green/gold colors, range markers, status chip showing oz-to-go or oz-above-target), WEEKLY (7 thin bars per day with peak-relative heights, days-at-target count, weekly avg burn cal), DEFICIT PLANNER (maintenance row inline-editable with dashed button → number input + Enter/blur commit, lactation burn shown as +N cal/day, lactating maintenance computed = maintenance + today's burn, target intake for 1 lb/wk and 2 lb/wk losses each compared against 1500 cal/day supply floor with ✓/⚠ chips). Honest-note footer flags NICHD/AAP conservative 1-2 lb per MONTH guidance with sources cited. Wires through InventoryView from App level." },
@@ -1948,13 +1961,20 @@ const PALETTES = {
   // toward gold). Dark modes pick a slightly-warmer-than-paper tone so
   // the panel still reads as a distinct elevated surface.
   day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16", modalSurface: "#FCF7EB",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           // v05.05bt467 — Per chat: 'we were working with a MAUVE pallet
+           // that was more sophisticated than pink'. bt465 had pushed
+           // mommy to #B5688B (rosy/pink) to differentiate from daddy
+           // — went too far. Reverting toward the original sophisticated
+           // plum-mauve. The differentiation work happens on daddy's
+           // side (stays saturated blue) — mommy stays sophisticated.
+           mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16", modalSurface: "#FCF7EB",
-           mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5", modalSurface: "#3a3138",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           // bt467 — same revert for dusk/night.
+           mommy: "#B59CB3", daddy: "#7796C2", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5", modalSurface: "#3a3138",
-           mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+           mommy: "#B59CB3", daddy: "#7796C2", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   // v05.05bt338/340 — Cadence palettes. Per chat (bt340): user picked
   // mockup D · Champagne Blush — softer, more romantic, candlelit.
   // Primary moves from #B7848C dusty rose → #D4A0A0 champagne blush.
@@ -3060,13 +3080,13 @@ function SoleneHandoffInner() {
   }, [bundleHash]);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date(Date.now() + timeTravelOffset)), 15000);
+    const t = setInterval(() => setNow(now), 15000);
     return () => clearInterval(t);
   }, [timeTravelOffset]);
   // When the offset changes, snap `now` immediately so the UI reflects the
   // change without waiting for the next 15s tick.
   useEffect(() => {
-    setNow(new Date(Date.now() + timeTravelOffset));
+    setNow(now);
   }, [timeTravelOffset]);
   // v05.05bt444 — Per chat: 'sometimes i have issues with the current
   // time not refreshing unless i get out of the app and open it again'.
@@ -3078,10 +3098,10 @@ function SoleneHandoffInner() {
   useEffect(() => {
     const refreshNow = () => {
       if (document.visibilityState === "visible") {
-        setNow(new Date(Date.now() + timeTravelOffset));
+        setNow(now);
       }
     };
-    const onFocus = () => setNow(new Date(Date.now() + timeTravelOffset));
+    const onFocus = () => setNow(now);
     document.addEventListener("visibilitychange", refreshNow);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -3106,7 +3126,7 @@ function SoleneHandoffInner() {
   // Idempotent: once moved, scheduledDate === today, won't re-trigger.
   useEffect(() => {
     if (!tasks || tasks.length === 0) return;
-    const todayKey = new Date(Date.now() + timeTravelOffset).toISOString().slice(0, 10);
+    const todayKey = now.toISOString().slice(0, 10);
     const toRoll = tasks.filter(t =>
       !t.completedAt &&
       t.scheduledDate &&
@@ -5854,7 +5874,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     const remainingMs = endMs - now.getTime();
     if (remainingMs <= 0) return;
     const t = setTimeout(() => {
-      setNow(new Date(Date.now() + timeTravelOffset));
+      setNow(now);
     }, remainingMs + 200);
     return () => clearTimeout(t);
   }, [myActiveCommitment?.id, myActiveCommitment?.end, timeTravelOffset]);
@@ -28724,6 +28744,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const [inlineFreeStartTime, setInlineFreeStartTime] = useState("");
   const [inlineFreeDuration, setInlineFreeDuration] = useState(30);
   const [inlineFreeIsPassive, setInlineFreeIsPassive] = useState(false);
+  // v05.05bt464 — Per chat: 'recall the search from the old fits dialog
+  // where we could look into the different piles of unscheduled,
+  // scheduled or backlog and an algorithm suggestion - we need to
+  // replicate that'. State for the 3-section filter pills + the
+  // best-fit indicator.
+  const [inlineFreePileFilter, setInlineFreePileFilter] = useState({
+    unscheduled: true,
+    scheduled: false,
+    backlog: true,
+  });
   // v05.05bt459 — Per chat: 'a whole dialog popping up is disruptive
   // to me. What I love about my mondaycom setup to task manage is the
   // ability to edit INLINE'. Pattern B (confirmed): tap row → expands
@@ -28900,7 +28930,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // back to setTasks; close discards. The form mutates expandedDraft
   // locally so the user sees changes immediately without re-renders
   // bouncing through tasks.
+  // v05.05bt460 — Extended to also handle routines (writes to
+  // todaySetup.routineOverrides) so AM/PM routine + bedtime can be
+  // moved inline when the day is atypical.
   const openExpandedEdit = (t) => {
+    // Routine detection: kind="routine" OR has routineId-shaped id.
+    const isRoutine = t.kind === "routine" || (t.id && typeof t.id === "string" && t.id.startsWith("rt-"));
+    if (isRoutine) {
+      // Routines render via getRoutineSlotsForToday; time + duration
+      // come from the slot. Save target: routineOverrides[t.id].
+      const startDate = t.start instanceof Date ? t.start : new Date(t.start);
+      const hh = String(startDate.getHours()).padStart(2, "0");
+      const mm = String(startDate.getMinutes()).padStart(2, "0");
+      setExpandedEditTaskId(t.id);
+      setExpandedDraft({
+        isRoutine: true,
+        routineId: t.id,
+        title: t.title || "",
+        scheduledTime: `${hh}:${mm}`,
+        effortMin: t.durationMin || 30,
+      });
+      setExpandedShowMore(false);
+      return;
+    }
     setExpandedEditTaskId(t.id);
     setExpandedDraft({
       title: t.title || "",
@@ -28920,6 +28972,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   };
   const commitExpandedEdit = () => {
     if (!expandedEditTaskId || !expandedDraft) return closeExpandedEdit();
+    // v05.05bt460 — Routine commit path: write to routineOverrides.
+    if (expandedDraft.isRoutine) {
+      const rid = expandedDraft.routineId;
+      const time = expandedDraft.scheduledTime || null;
+      const dur = expandedDraft.effortMin || 30;
+      const todayKey = now.toISOString().slice(0, 10);
+      setTodaySetup(prev => {
+        const base = prev && prev.date === todayKey ? prev : { date: todayKey };
+        const overrides = { ...(base.routineOverrides || {}) };
+        overrides[rid] = { time, durationMin: dur };
+        return { ...base, date: todayKey, routineOverrides: overrides };
+      });
+      closeExpandedEdit();
+      return;
+    }
     setTasks(prev => prev.map(t => {
       if (t.id !== expandedEditTaskId) return t;
       return {
@@ -28936,6 +29003,88 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     closeExpandedEdit();
   };
   const updateDraft = (patch) => setExpandedDraft(d => ({ ...(d || {}), ...patch }));
+
+  // v05.05bt462 — Per chat: 'i still see the fits dialog'. Direct
+  // insertion at a specific time. Used by all sites that used to call
+  // setFreedFillPickerFor (suggestions panel, freed-time strips on
+  // passive tasks). Same flow as bt460 — creates task + opens inline
+  // expand-edit; the bt461 pile search inside the inline editor lets
+  // the user choose existing or create new.
+  const insertTaskAtTime = (timeMs, durationMin = 30) => {
+    const startDate = new Date(timeMs);
+    const hh = String(startDate.getHours()).padStart(2, "0");
+    const mm = String(startDate.getMinutes()).padStart(2, "0");
+    const todayKey = now.toISOString().slice(0, 10);
+    const newTask = {
+      id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: "",
+      scheduledDate: todayKey,
+      scheduledTime: `${hh}:${mm}`,
+      effortMin: durationMin,
+      ownerName: currentUser,
+      createdAt: new Date().toISOString(),
+    };
+    setTasks(prev => [...prev, newTask]);
+    setTimeout(() => {
+      setExpandedEditTaskId(newTask.id);
+      setExpandedDraft({
+        title: "",
+        scheduledTime: `${hh}:${mm}`,
+        effortMin: durationMin,
+        focusLevel: null,
+        regretScore: 3,
+        ownerName: currentUser,
+        isPassive: false,
+      });
+      setExpandedShowMore(false);
+    }, 50);
+  };
+
+  // v05.05bt460 — Per chat: 'i need an insert row'. Creates a new
+  // draft task with start time computed from a reference slot, adds
+  // it to tasks, and opens the inline expand-edit so the user can
+  // type the title + adjust time/duration. Reference slot can be any
+  // timeline row; the new task lands right after it.
+  const insertTaskAfterSlot = (slot) => {
+    let startMs;
+    if (slot && slot.end instanceof Date) {
+      startMs = slot.end.getTime();
+    } else if (slot && slot.start instanceof Date) {
+      const dur = (slot.durationMin || 30) * 60000;
+      startMs = slot.start.getTime() + dur;
+    } else {
+      startMs = now.getTime();
+    }
+    const startDate = new Date(startMs);
+    const hh = String(startDate.getHours()).padStart(2, "0");
+    const mm = String(startDate.getMinutes()).padStart(2, "0");
+    const todayKey = now.toISOString().slice(0, 10);
+    const newTask = {
+      id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: "",
+      scheduledDate: todayKey,
+      scheduledTime: `${hh}:${mm}`,
+      effortMin: 30,
+      ownerName: currentUser,
+      createdAt: new Date().toISOString(),
+    };
+    setTasks(prev => [...prev, newTask]);
+    // Open expand-edit on the new task. Microtask delay so setTasks
+    // applies before the edit form references the new ID.
+    setTimeout(() => {
+      setExpandedEditTaskId(newTask.id);
+      setExpandedDraft({
+        title: "",
+        scheduledTime: `${hh}:${mm}`,
+        effortMin: 30,
+        focusLevel: null,
+        regretScore: 3,
+        ownerName: currentUser,
+        isPassive: false,
+      });
+      setExpandedShowMore(false);
+    }, 50);
+  };
 
   const [forTodayExpanded, setForTodayExpanded] = useState(false);
 
@@ -32191,6 +32340,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             maxHeight: "70vh", overflowY: "auto",
                           }}>
                             {[
+                              { section: `Build · v${APP_VERSION}` },
                               { section: "Day" },
                               { icon: "✓", label: "Wrap up day · summary + rollover", onClick: () => { setShowEndOfDayReview(true); setShowActionsMenu(false); }, hint: "End-of-day stats + decide what carries to tomorrow" },
                               { section: "Today's plan" },
@@ -32874,19 +33024,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               <button
                 onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
                 style={{
+                  // v05.05bt468 — Per chat: 'this top part of the task
+                  // plan is too...too much'. Was a giant italic
+                  // Cormorant 15px button with 10/14 padding + dashed
+                  // mauve border + 12px margin. Shrunk to a compact
+                  // single-line link — same affordance, way less
+                  // visual weight.
                   width: "100%",
-                  padding: "10px 14px",
-                  background: `${C.mommy}10`,
-                  border: `1.5px dashed ${C.mommy}66`,
-                  borderRadius: 10, marginBottom: 12,
+                  padding: "6px 12px",
+                  background: "transparent",
+                  border: `1px dashed ${C.muted}55`,
+                  borderRadius: 8, marginBottom: 10,
                   cursor: "pointer", textAlign: "center",
-                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 15,
-                  color: C.mommy, fontWeight: 600,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                  color: C.muted,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 }}>
-                <span style={{ fontSize: 17, lineHeight: 1, fontWeight: 700, fontFamily: "'Inter', sans-serif", fontStyle: "normal" }}>+</span>
-                Add a task to today
+                <span style={{ fontSize: 13, lineHeight: 1, color: C.mommy }}>+</span>
+                ADD A TASK
               </button>
             )}
             {/* v05.05bt211 — Trade suggestions. Surfaces 1-2 windows
@@ -33054,13 +33210,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   );
                 })}
-                <div style={{
-                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                  fontStyle: "italic", fontSize: 11,
-                  color: C.muted, marginTop: 6, lineHeight: 1.45,
-                }}>
-                  Heads-up — Daddy is off-duty in these windows and they overlap your peak. Worth asking.
-                </div>
+                {tradePanelExpanded && (
+                  <div style={{
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 11,
+                    color: C.muted, marginTop: 6, lineHeight: 1.45,
+                  }}>
+                    Heads-up — Daddy is off-duty in these windows and they overlap your peak. Worth asking.
+                  </div>
+                )}
               </div>
             )}
             {/* v05.05bt274 — R5 unscheduled banner. Per chat: 'R5s
@@ -33459,8 +33617,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 }}>↳ DRIFT</div>
                 <div style={{ flex: 1, fontSize: 12.5, color: C.ink, lineHeight: 1.4 }}>
                   <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{driftStatus.count}</span>{" "}
-                  {driftStatus.count === 1 ? "task is" : "tasks are"} running behind.{" "}
-                  <span style={{ color: C.muted, fontStyle: "italic" }}>Schedule mismatched reality.</span>
+                  {driftStatus.count === 1 ? "task is" : "tasks are"} running behind.
                 </div>
                 <button
                   onClick={() => { reanalyze(); }}
@@ -34387,9 +34544,22 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       // tracks VIEWER: Mommy mode = candlelit bloom,
                       // Daddy mode = tactical lock (no bloom).
                       ...(productMode === "solo" && !isPast && slot.start <= now && now < slot.end ? (() => {
-                        const ownerColor = owner === "Daddy" ? C.daddy
-                          : owner === "joint" ? C.gold
-                          : C.mommy;
+                        // v05.05bt467 — Per chat: pump session (in
+                        // Daddy's shift) was showing pink because
+                        // slot.owner doesn't reflect the actual shift
+                        // owner for pump/passive rows — `owner` was
+                        // falling through to C.mommy. Use the dominant
+                        // rail segment's owner instead (same approach
+                        // as bt466 freed strip).
+                        const domSeg = (railSegments || []).reduce(
+                          (best, s) => (!best || s.pct > best.pct ? s : best),
+                          null
+                        );
+                        const domOwner = domSeg ? domSeg.owner : owner;
+                        const ownerColor = domOwner === "Daddy" ? C.daddy
+                          : domOwner === "joint" ? C.gold
+                          : domOwner === "Mommy" ? C.mommy
+                          : C.muted;
                         if (currentUser === "Daddy") {
                           return {
                             boxShadow: `inset 0 0 0 2px ${ownerColor}, 0 0 0 1px ${ownerColor}88`,
@@ -34475,7 +34645,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               return (e) => { e.stopPropagation(); setInlineTimeEdit(slot.id); };
                             }
                             if (isRoutine) {
-                              return (e) => { e.stopPropagation(); setEditingRoutine(slot); };
+                              // v05.05bt460 — was setEditingRoutine
+                              // (modal). Now inline expand-edit so
+                              // AM/PM routine + bedtime can be moved
+                              // without a popup.
+                              return (e) => { e.stopPropagation(); openExpandedEdit(slot); };
                             }
                             if (isPumpReminder) {
                               return (e) => { e.stopPropagation(); setInlineTimeEdit(slot.id); };
@@ -34706,7 +34880,18 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             — that's where the badge actually adds info,
                             since task/routine rows show the title in
                             the middle, not the focus. */}
-                        {!isPast && !isFree && (() => {
+                        {/* v05.05bt466 — Per chat: 'even if it is not
+                            filled, we still need the tag of deep or
+                            shallow work that can fit in these slots so
+                            that we can choose the right one'. Removed
+                            !isFree gate. The DEEP/LIGHT pill now shows
+                            on empty slots too, so you can see at a
+                            glance what kind of work fits there before
+                            tapping to fill. Tap toggles the why text
+                            same as filled tasks (bt462 had hidden the
+                            verbose explanation by default — that stays
+                            true; the why only appears on tap). */}
+                        {!isPast && (() => {
                           const tier = (blockFocus || "").toLowerCase();
                           if (tier !== "deep" && tier !== "shallow") return null;
                           const isDeep = tier === "deep";
@@ -34984,7 +35169,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             onClick={(isTask && !slot.completedAt)
                               ? (e) => { e.stopPropagation(); setInlineTitleEdit(slot.id); }
                               : isRoutine
-                                ? (e) => { e.stopPropagation(); setEditingRoutine(slot); }
+                                ? (e) => {
+                                  // v05.05bt468 — Per chat: 'adjusting
+                                  // the routine tasks is too hard with
+                                  // a modal popup - i need to be able
+                                  // to edit it the same way i edit
+                                  // everything else'. Was opening
+                                  // RoutineOverrideSheet modal. Now
+                                  // opens the inline bt459 expand-edit
+                                  // which detects routines via
+                                  // t.kind === 'routine' or id
+                                  // starting with 'rt-' and renders
+                                  // the routine-specific form.
+                                  e.stopPropagation();
+                                  openExpandedEdit(slot);
+                                }
                                 : undefined}
                             style={{
                             fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
@@ -35035,6 +35234,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               overflow: "visible",
                               WebkitLineClamp: "unset",
                               WebkitBoxOrient: "horizontal",
+                            } : (isFree && !isPast) ? {
+                              // v05.05bt467 — Per chat: 'should these
+                              // X and + be at the end of of the card
+                              // more towards the right? like where we
+                              // put your other little icons?'. For
+                              // free rows, the title block becomes
+                              // flex-end aligned so the + and × chips
+                              // naturally land at the right edge of
+                              // the title area (next to where kebab
+                              // icons sit on filled rows).
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              overflow: "visible",
+                              gap: 6,
                             } : {
                               display: "-webkit-box",
                               WebkitBoxOrient: "vertical",
@@ -35050,19 +35264,43 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   ✕ Closed · passed
                                 </span>
                               ) : (inlineFreeEditKey === slot.start.getTime() ? (
-                                // v05.05bt453 — Inline edit form for empty slots
+                                // v05.05bt453 → bt461 — Inline edit
+                                // form for empty slots. Per chat: the
+                                // visual prominence (teal tint + 4px
+                                // rail + drop shadow + slide-in) makes
+                                // this read as a popup-in-row instead
+                                // of an in-place edit. Stripped all of
+                                // that. Now it just sits in the row.
                                 <div
                                   onClick={(e) => e.stopPropagation()}
                                   style={{
                                     width: "100%",
-                                    background: `${C.pump}14`,
-                                    border: `1px solid ${C.pump}77`,
-                                    borderLeft: `4px solid ${C.pump}`,
-                                    borderRadius: 8,
-                                    padding: "10px 12px",
-                                    boxShadow: `0 4px 14px rgba(0,0,0,0.3)`,
-                                    animation: "ll-slide-in 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                                    background: "transparent",
+                                    border: `1px solid ${C.ink}15`,
+                                    borderRadius: 10,
+                                    padding: "12px 14px",
+                                    position: "relative",
                                   }}>
+                                  {/* v05.05bt464 — Per chat: 'how do
+                                      you get out of this screen if you
+                                      accidentally clicked on the wrong
+                                      task'. Prominent × in top-right
+                                      so the escape route is obvious. */}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); closeInlineFreeEdit(); }}
+                                    title="Close (no changes saved)"
+                                    style={{
+                                      position: "absolute",
+                                      top: 6, right: 8,
+                                      width: 28, height: 28,
+                                      padding: 0,
+                                      background: "transparent",
+                                      border: "none",
+                                      color: C.muted,
+                                      cursor: "pointer",
+                                      fontSize: 22, lineHeight: 1, fontWeight: 300,
+                                      opacity: 0.55,
+                                    }}>×</button>
                                   {/* Title input */}
                                   <input
                                     type="text"
@@ -35077,20 +35315,203 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       el.dataset.focused = "1";
                                       try { el.focus({ preventScroll: true }); } catch { el.focus(); }
                                     }}
-                                    placeholder="title (e.g. 'reply to Sarah')"
+                                    placeholder="+ add new or search your pile…"
                                     style={{
                                       width: "100%", boxSizing: "border-box",
                                       padding: "8px 11px",
-                                      background: "rgba(0,0,0,0.3)",
-                                      border: `1px solid ${C.line}66`,
-                                      borderRadius: 6,
+                                      // v05.05bt463 — Per chat (screenshot):
+                                      // 'why do the boxes look like it is
+                                      // from the 90s?'. Was rgba(0,0,0,0.3)
+                                      // (hardcoded dark) — on cream that
+                                      // read as a grey 1995 input. Now
+                                      // palette-aware: C.paper at low alpha
+                                      // in dark modes, transparent in light.
+                                      background: `${C.ink}06`,
+                                      border: `1px solid ${C.ink}15`,
+                                      borderRadius: 8,
                                       color: C.ink,
                                       fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                                      fontSize: 14, fontStyle: "italic",
+                                      fontSize: 15, fontStyle: "italic",
                                       outline: "none",
                                       marginBottom: 8,
                                     }}
                                   />
+                                  {/* v05.05bt461 — Per chat: 'as soon
+                                      as i start typing it searches for
+                                      things in the backlog and then i
+                                      can click on something that can
+                                      help me fit that block'. Inline
+                                      match list. Renders only when the
+                                      user has typed at least 2 chars
+                                      AND there's at least one match
+                                      in the unscheduled pile. Tap a
+                                      match → assigns that existing
+                                      task to this slot (sets
+                                      scheduledTime + scheduledDate,
+                                      clears drawer flag). */}
+                                  {(() => {
+                                    // v05.05bt464 — Filterable pile
+                                    // with 3 sections (UNSCHEDULED /
+                                    // ↻ SCHEDULED / BACKLOG) + best-fit
+                                    // ★ indicator on the task that
+                                    // matches the slot's duration best.
+                                    const q = (inlineFreeTitle || "").trim().toLowerCase();
+                                    const slotMin = slot.durationMin || 30;
+                                    // Classify each task by which pile it belongs to.
+                                    const pileOf = (t) => {
+                                      if (t.drawer || !t.scheduledDate) return "backlog";
+                                      if (t.scheduledTime) return "scheduled";
+                                      return "unscheduled";
+                                    };
+                                    const allPile = (myTasks || []).filter(t =>
+                                      !t.completedAt && t.id !== slot.id
+                                    );
+                                    // Counts by pile (for the filter pills).
+                                    const counts = { unscheduled: 0, scheduled: 0, backlog: 0 };
+                                    allPile.forEach(t => { counts[pileOf(t)]++; });
+                                    // Apply filter + text search.
+                                    let filtered = allPile.filter(t => inlineFreePileFilter[pileOf(t)]);
+                                    if (q.length > 0) {
+                                      filtered = filtered.filter(t => t.title && t.title.toLowerCase().includes(q));
+                                    }
+                                    // Best-fit scoring: the task whose
+                                    // effortMin is closest to slotMin
+                                    // WITHOUT exceeding it gets ★. If
+                                    // multiple tie, highest regret wins.
+                                    let bestFitId = null;
+                                    let bestFitScore = -Infinity;
+                                    filtered.forEach(t => {
+                                      const eff = t.effortMin || 30;
+                                      if (eff > slotMin) return; // doesn't fit
+                                      const closeness = -(slotMin - eff); // closer to 0 = better
+                                      const score = closeness * 10 + (t.regretScore || 3);
+                                      if (score > bestFitScore) { bestFitScore = score; bestFitId = t.id; }
+                                    });
+                                    // Sort: best-fit first, then by
+                                    // regret desc, then by effort desc.
+                                    filtered.sort((a, b) => {
+                                      if (a.id === bestFitId) return -1;
+                                      if (b.id === bestFitId) return 1;
+                                      const ra = a.regretScore || 3;
+                                      const rb = b.regretScore || 3;
+                                      if (rb !== ra) return rb - ra;
+                                      return (b.effortMin || 30) - (a.effortMin || 30);
+                                    });
+                                    const visible = filtered.slice(0, 6);
+                                    if (allPile.length === 0) return null;
+                                    const todayKey = now.toISOString().slice(0, 10);
+                                    const useExisting = (task) => {
+                                      const hh = String(slot.start.getHours()).padStart(2, "0");
+                                      const mm = String(slot.start.getMinutes()).padStart(2, "0");
+                                      setTasks(prev => prev.map(t =>
+                                        t.id === task.id
+                                          ? { ...t, scheduledTime: `${hh}:${mm}`, scheduledDate: todayKey, drawer: false }
+                                          : t
+                                      ));
+                                      closeInlineFreeEdit();
+                                    };
+                                    const togglePile = (k) => setInlineFreePileFilter(prev => ({ ...prev, [k]: !prev[k] }));
+                                    return (
+                                      <div style={{ marginBottom: 10 }}>
+                                        {/* Section filter pills */}
+                                        <div style={{
+                                          display: "flex", gap: 4, flexWrap: "wrap",
+                                          marginBottom: 6,
+                                        }}>
+                                          {[
+                                            { k: "unscheduled", label: "UNSCHEDULED", c: C.ink },
+                                            { k: "scheduled", label: "↻ SCHEDULED", c: C.gold },
+                                            { k: "backlog", label: "BACKLOG", c: C.nap },
+                                          ].map(p => {
+                                            const on = !!inlineFreePileFilter[p.k];
+                                            return (
+                                              <button
+                                                key={p.k}
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); togglePile(p.k); }}
+                                                style={{
+                                                  padding: "3px 8px",
+                                                  background: on ? `${p.c}1f` : "transparent",
+                                                  border: `1px solid ${on ? p.c : `${C.ink}15`}`,
+                                                  borderRadius: 99,
+                                                  cursor: "pointer",
+                                                  fontFamily: "'JetBrains Mono', monospace",
+                                                  fontSize: 8, fontWeight: on ? 800 : 700,
+                                                  letterSpacing: "0.04em",
+                                                  color: on ? p.c : C.muted,
+                                                  opacity: on ? 1 : 0.7,
+                                                }}>{p.label} <span style={{ opacity: 0.8, marginLeft: 2 }}>{counts[p.k]}</span></button>
+                                            );
+                                          })}
+                                        </div>
+                                        <div style={{
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                          fontSize: 8.5, color: C.muted,
+                                          fontWeight: 700, letterSpacing: "0.10em",
+                                          marginBottom: 6,
+                                        }}>
+                                          {q.length > 0
+                                            ? `${filtered.length} match${filtered.length === 1 ? "" : "es"} · TAP TO USE`
+                                            : `${filtered.length} task${filtered.length === 1 ? "" : "s"} · TAP TO USE`}
+                                          {bestFitId && <span style={{ color: C.gold, marginLeft: 6 }}>· ★ = best fit</span>}
+                                        </div>
+                                        {visible.length === 0 ? (
+                                          <div style={{
+                                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                            fontStyle: "italic", fontSize: 12,
+                                            color: C.muted, padding: "4px 2px",
+                                          }}>nothing matches — keep typing to add new, or toggle a filter on</div>
+                                        ) : visible.map(m => {
+                                          const isBest = m.id === bestFitId;
+                                          const eff = m.effortMin || 30;
+                                          const fits = eff <= slotMin;
+                                          const mPile = pileOf(m);
+                                          return (
+                                            <button
+                                              key={m.id}
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); useExisting(m); }}
+                                              style={{
+                                                display: "flex", alignItems: "center", gap: 8,
+                                                width: "100%", textAlign: "left",
+                                                padding: "7px 10px",
+                                                marginBottom: 3,
+                                                background: isBest ? `${C.gold}14` : `${C.ink}05`,
+                                                border: `1px solid ${isBest ? `${C.gold}66` : `${C.ink}10`}`,
+                                                borderRadius: 6,
+                                                cursor: "pointer",
+                                                fontFamily: "inherit",
+                                                opacity: fits ? 1 : 0.55,
+                                              }}>
+                                              {isBest && (
+                                                <span style={{
+                                                  fontFamily: "'JetBrains Mono', monospace",
+                                                  fontSize: 7.5, fontWeight: 800,
+                                                  letterSpacing: "0.10em",
+                                                  color: C.bg, background: C.gold,
+                                                  padding: "2px 5px", borderRadius: 3,
+                                                  flexShrink: 0,
+                                                }}>★ BEST</span>
+                                              )}
+                                              <span style={{
+                                                fontFamily: "'JetBrains Mono', monospace",
+                                                fontSize: 9, color: C.gold,
+                                                fontWeight: 700, flexShrink: 0,
+                                              }}>{eff}m</span>
+                                              <span style={{
+                                                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                                fontSize: 13, color: C.ink,
+                                              flex: 1, minWidth: 0,
+                                              whiteSpace: "nowrap",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                            }}>{m.title}</span>
+                                          </button>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
                                   {/* Start time + duration row */}
                                   <div style={{
                                     display: "flex", gap: 8, alignItems: "center",
@@ -35106,10 +35527,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       value={inlineFreeStartTime}
                                       onChange={(e) => setInlineFreeStartTime(e.target.value)}
                                       style={{
-                                        padding: "5px 7px",
-                                        background: "rgba(0,0,0,0.3)",
-                                        border: `1px solid ${C.line}66`,
-                                        borderRadius: 5,
+                                        padding: "5px 8px",
+                                        background: `${C.ink}06`,
+                                        border: `1px solid ${C.ink}15`,
+                                        borderRadius: 6,
                                         color: C.ink,
                                         fontFamily: "'JetBrains Mono', monospace",
                                         fontSize: 11,
@@ -35125,8 +35546,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     <div style={{
                                       display: "flex", gap: 2,
                                       padding: 2,
-                                      background: "rgba(0,0,0,0.3)",
-                                      borderRadius: 5,
+                                      background: `${C.ink}06`,
+                                      borderRadius: 6,
                                     }}>
                                       {FREE_EDIT_DURATIONS.map(d => {
                                         const fits = d <= (slot.durationMin || 30);
@@ -35138,8 +35559,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                             disabled={!fits}
                                             style={{
                                               padding: "4px 8px",
-                                              background: on ? C.pump : "transparent",
-                                              color: on ? "#fff" : (fits ? C.muted : `${C.muted}55`),
+                                              // v05.05bt463 — was C.pump
+                                              // (teal) — clashed with warm
+                                              // cream palette. Gold matches
+                                              // the free-block aesthetic.
+                                              background: on ? C.gold : "transparent",
+                                              color: on ? C.bg : (fits ? C.muted : `${C.muted}55`),
                                               border: "none",
                                               borderRadius: 4,
                                               cursor: fits ? "pointer" : "not-allowed",
@@ -35159,75 +35584,63 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       onClick={() => setInlineFreeIsPassive(v => !v)}
                                       style={{
                                         display: "flex", alignItems: "center", gap: 5,
-                                        padding: "5px 8px",
-                                        background: inlineFreeIsPassive ? `${C.pump}26` : "transparent",
-                                        border: `1px solid ${inlineFreeIsPassive ? C.pump : `${C.line}55`}`,
-                                        borderRadius: 5,
-                                        color: inlineFreeIsPassive ? C.pump : C.muted,
+                                        padding: "5px 9px",
+                                        // v05.05bt463 — was teal pump on
+                                        // cream — clashy. Now subtle ink
+                                        // tint when on, transparent when
+                                        // off. Border kept very soft.
+                                        background: inlineFreeIsPassive ? `${C.ink}10` : "transparent",
+                                        border: `1px solid ${C.ink}${inlineFreeIsPassive ? "33" : "15"}`,
+                                        borderRadius: 6,
+                                        color: inlineFreeIsPassive ? C.ink : C.muted,
                                         cursor: "pointer",
                                         fontFamily: "'JetBrains Mono', monospace",
                                         fontSize: 8.5, fontWeight: 700,
                                         letterSpacing: "0.05em",
                                       }}>{inlineFreeIsPassive ? "☑" : "☐"} PASSIVE</button>
-                                    <button
-                                      onClick={() => {
-                                        // Open Fits/FILL dialog for more options
-                                        const slotKey = `slot:${slot.start.toISOString()}`;
-                                        closeInlineFreeEdit();
-                                        setFreedFillTab("find");
-                                        setFreedFillPickerFor({
-                                          kind: "fits",
-                                          slotKey,
-                                          slotMin: slot.durationMin || 30,
-                                          slotStart: slot.start.toISOString(),
-                                          contextLabel: "FREE BLOCK",
-                                        });
-                                      }}
-                                      style={{
-                                        padding: "5px 8px",
-                                        background: "transparent",
-                                        border: `1px solid ${C.line}55`,
-                                        borderRadius: 5,
-                                        color: C.muted,
-                                        cursor: "pointer",
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: 8.5, fontWeight: 700,
-                                        letterSpacing: "0.05em",
-                                      }}>⋯ FIND</button>
-                                    <button
-                                      onClick={closeInlineFreeEdit}
-                                      style={{
-                                        padding: "5px 8px",
-                                        background: "transparent",
-                                        border: `1px solid ${C.line}55`,
-                                        borderRadius: 5,
-                                        color: C.muted,
-                                        cursor: "pointer",
-                                        fontFamily: "'JetBrains Mono', monospace",
-                                        fontSize: 11, fontWeight: 700,
-                                        lineHeight: 1,
-                                      }}>×</button>
+                                    {/* v05.05bt464 — Bottom × removed.
+                                        Top-right close × handles it
+                                        prominently. */}
                                     <button
                                       onClick={commitInlineFreeEdit}
                                       disabled={!inlineFreeTitle.trim()}
                                       style={{
                                         marginLeft: "auto",
-                                        padding: "6px 12px",
-                                        background: inlineFreeTitle.trim() ? C.pump : `${C.line}22`,
-                                        color: inlineFreeTitle.trim() ? "#fff" : C.muted,
-                                        border: "none", borderRadius: 5,
+                                        padding: "6px 14px",
+                                        // v05.05bt463 — was teal pump.
+                                        // Gold for the cream palette,
+                                        // matches free-block aesthetic.
+                                        background: inlineFreeTitle.trim() ? C.gold : "transparent",
+                                        color: inlineFreeTitle.trim() ? C.bg : `${C.muted}88`,
+                                        border: inlineFreeTitle.trim() ? "none" : `1px solid ${C.ink}15`,
+                                        borderRadius: 6,
                                         cursor: inlineFreeTitle.trim() ? "pointer" : "default",
                                         fontFamily: "'JetBrains Mono', monospace",
                                         fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
-                                        boxShadow: inlineFreeTitle.trim() ? `0 0 0 2px ${C.pump}33` : "none",
                                       }}>ADD</button>
                                   </div>
                                 </div>
                               ) : (
                                 <>
-                                  <span style={{ color: C.gold, fontWeight: 500 }}>
-                                    + Open
-                                  </span>
+                                  <span style={{
+                                    // v05.05bt466 — Per chat: 'the +
+                                    // and the × are good it is
+                                    // borderless but needs to pop out
+                                    // more so we know we can add a
+                                    // task or delete the task'.
+                                    // Borderless but with a soft
+                                    // gold-tinted pill background so
+                                    // it reads as 'tap target' without
+                                    // being a hard-edged button.
+                                    display: "inline-flex",
+                                    alignItems: "center", justifyContent: "center",
+                                    width: 26, height: 22,
+                                    background: `${C.gold}1f`,
+                                    color: C.gold, fontWeight: 600,
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 16, letterSpacing: 0,
+                                    borderRadius: 11,
+                                  }}>+</span>
                                   {/* v05.05bt321 — Per chat: 'should
                                       be able to cancel out of open
                                       tap fill if doesnt make sense to
@@ -35245,14 +35658,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     }}
                                     title="Hide this open slot"
                                     style={{
+                                      // v05.05bt466 — Match the + pill
+                                      // styling: borderless soft chip
+                                      // so the dismiss action reads as
+                                      // tappable. Subtle ink tint vs
+                                      // the gold on + so the two are
+                                      // visually distinct (add vs
+                                      // remove).
                                       marginLeft: 10,
-                                      width: 22, height: 22,
+                                      width: 26, height: 22,
                                       padding: 0,
-                                      background: "transparent",
-                                      border: `1px solid ${C.line}55`,
-                                      borderRadius: 4,
+                                      background: `${C.ink}10`,
+                                      border: "none",
+                                      borderRadius: 11,
                                       color: C.muted, cursor: "pointer",
-                                      fontSize: 13, lineHeight: 1, fontWeight: 600,
+                                      fontSize: 14, lineHeight: 1, fontWeight: 400,
                                       display: "inline-flex",
                                       alignItems: "center", justifyContent: "center",
                                       verticalAlign: "middle",
@@ -35566,6 +35986,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           // Freed window start = slot.start + handleMin
                           const freedStart = new Date(slot.start.getTime() + handleMin * 60000);
                           const freedEnd = slot.end;
+                          // v05.05bt466 — Per chat: 'the border of the
+                          // active window needs to match the rails and
+                          // the fill in should match the color code of
+                          // the most prominent rail'. Pick the segment
+                          // with the largest pct as the dominant owner
+                          // and use railColorFor() on it. If sage (i.e.
+                          // caregiver) overlaps, the rail is already
+                          // sage from railColorFor; that's fine.
+                          const dominantSeg = (railSegments || []).reduce(
+                            (best, s) => (!best || s.pct > best.pct ? s : best),
+                            null
+                          );
+                          const stripColor = dominantSeg
+                            ? railColorFor(dominantSeg.owner)
+                            : C.sage;
                           const filledTask = (tasks || []).find(t => t.slottedIntoFreedTimeOf === slot.id && !t.completedAt);
                           return (
                             <div style={{ marginTop: 6 }}>
@@ -35573,13 +36008,13 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 <div style={{
                                   display: "flex", alignItems: "center", gap: 8,
                                   padding: "5px 9px",
-                                  background: `${C.sage}26`,
-                                  borderLeft: `3px solid ${C.sage}`,
+                                  background: `${stripColor}26`,
+                                  borderLeft: `3px solid ${stripColor}`,
                                   borderRadius: "0 6px 6px 0",
                                 }}>
                                   <span style={{
                                     fontFamily: "'JetBrains Mono', monospace",
-                                    fontSize: 9.5, color: C.sage, fontWeight: 700,
+                                    fontSize: 9.5, color: stripColor, fontWeight: 700,
                                   }}>{fmtTimeRange(freedStart, freedEnd)}</span>
                                   {/* v05.05bt433 — Per chat: 'once you
                                       fill a concurrent task under pump,
@@ -35671,14 +36106,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 <div style={{
                                   display: "flex", alignItems: "center", gap: 8,
                                   padding: "5px 9px",
-                                  background: `${C.sage}1a`,
-                                  border: `1px dashed ${C.sage}80`,
+                                  background: `${stripColor}1a`,
+                                  border: `1px dashed ${stripColor}80`,
                                   borderRadius: 6,
                                 }}>
                                   <span style={{
                                     fontFamily: "'JetBrains Mono', monospace",
                                     fontSize: 9, fontWeight: 800, letterSpacing: "0.10em",
-                                    color: C.sage,
+                                    color: stripColor,
                                   }}>+ {freedMin}M FREED</span>
                                   <span style={{
                                     fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
@@ -35689,31 +36124,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setFreedFillPickerFor({
-                                        kind: "fill",
-                                        hostId: slot.id,
-                                        freedMin, slotMin: freedMin,
-                                        freedStart: freedStart.toISOString(),
-                                        slotStart: freedStart.toISOString(),
-                                        contextLabel: isPumpReminder ? "FREED · DURING PUMP" : "FREED · LIGHT TASKS OK",
-                                      });
+                                      insertTaskAtTime(freedStart.getTime(), freedMin);
                                     }}
-                                    title="Fill with a light task from your pile"
+                                    title="Add a task at this freed time"
                                     style={{
                                       fontFamily: "'JetBrains Mono', monospace",
-                                      // v05.05bt432 → bt441 — Per chat:
-                                      // 'the fill button i cannot read
-                                      // when i can fill in a concurrent
-                                      // task'. Bumped fontSize 10→11,
-                                      // padding 5/12→7/14, made text
-                                      // more visible. Background is
-                                      // brighter sage with no halo
-                                      // (which was washing out the
-                                      // letters).
                                       fontSize: 11, fontWeight: 800, letterSpacing: "0.10em",
                                       color: "#fff",
-                                      background: C.sage,
-                                      border: `1px solid ${C.sage}`,
+                                      background: stripColor,
+                                      border: `1px solid ${stripColor}`,
                                       borderRadius: 6, padding: "7px 14px",
                                       cursor: "pointer",
                                     }}>+ FILL</button>
@@ -35949,7 +36368,20 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             passed"; this completes the treatment by
                             also dropping the verbose reasoning that
                             only makes sense for forward-looking slots. */}
-                        {isFree && !isPast && (() => {
+                        {/* v05.05bt462 — Per chat: 'right now this is
+                            giving me a lot of anxiety...i want the
+                            algorithm to work but be in the background
+                            with the explanations being something i can
+                            choose to see but not forced to'. The full
+                            free-block sub-line (focus tier + segment
+                            breakdown + careLabel + reasoning) was
+                            rendering by default. Hidden entirely. The
+                            algorithm STILL runs and scores blocks; you
+                            just don't see the explanation anymore. If
+                            we add an opt-in reveal later (e.g. tap a
+                            small "?" on the row), wrap this block in
+                            that conditional. */}
+                        {false && isFree && !isPast && (() => {
                           // v05.05bt227 — Per chat: mixed-duty blocks
                           // should show "for how long daddy has her
                           // and then when I have her", and the focus
@@ -36162,14 +36594,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setFreedFillTab("new");
-                                          setFreedFillPickerFor({
-                                            kind: "fits",
-                                            slotKey,
-                                            slotMin: slot.durationMin || 30,
-                                            slotStart: slot.start.toISOString(),
-                                            contextLabel: "FREE BLOCK",
-                                          });
+                                          // v05.05bt462 — was setFreedFillPickerFor.
+                                          // Now inline insert at slot time.
+                                          insertTaskAtTime(slot.start.getTime(), slot.durationMin || 30);
                                         }}
                                         style={{
                                           marginTop: 8, padding: "6px 10px",
@@ -36187,17 +36614,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        // v05.05bt434 — Open unified
-                                        // Fits/FILL dialog (kind:'fits')
-                                        // on FIND tab. Was setFitsPickerSlotKey.
-                                        setFreedFillTab("find");
-                                        setFreedFillPickerFor({
-                                          kind: "fits",
-                                          slotKey,
-                                          slotMin: slot.durationMin || 30,
-                                          slotStart: slot.start.toISOString(),
-                                          contextLabel: "FREE BLOCK",
-                                        });
+                                        // v05.05bt462 — was setFreedFillPickerFor
+                                        // (FIND tab). Now inline insert.
+                                        // bt461's inline search in the
+                                        // editor surfaces pile matches as
+                                        // you type, same effect, no dialog.
+                                        insertTaskAtTime(slot.start.getTime(), slot.durationMin || 30);
                                       }}
                                       style={{
                                         marginTop: 8, padding: "6px 10px",
@@ -37034,6 +37456,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                     </div>
                   );
+                  // v05.05bt469 — Per chat: 'can we add the ability
+                  // to insert rows?'. Tiny "+" between rows lets you
+                  // insert a task at the end-time of the row above
+                  // (right between two filled tasks). Only renders
+                  // for task/routine rows that aren't the last in
+                  // the timeline, aren't past, and aren't free (free
+                  // rows already are tap-to-fill). The chip is super
+                  // quiet at rest (4px tall hairline + a small +)
+                  // so it doesn't clutter the timeline; tap fires
+                  // insertTaskAfterSlot at the slot's end time.
+                  if ((isTask || isRoutine) && !isPast && !isFree && !slot.completedAt) {
+                    rows.push(
+                      <div
+                        key={`insert-after-${slot.id}-${i}`}
+                        style={{
+                          position: "relative",
+                          height: 10,
+                          margin: "-2px 0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          insertTaskAfterSlot(slot);
+                        }}
+                        title="Insert a task here">
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center", justifyContent: "center",
+                          width: 18, height: 14,
+                          background: `${C.gold}1a`,
+                          color: C.gold, fontWeight: 700,
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, lineHeight: 1,
+                          borderRadius: 8,
+                          opacity: 0.6,
+                        }}>+</span>
+                      </div>
+                    );
+                  }
+
                   // v05.05bt190 — Inline edit panel attached directly
                   // below the row being edited. Replaces the bottom-
                   // sheet TimeEditPopover per chat ('edit the time
@@ -37125,6 +37590,34 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 if (!nowLineInserted && !isTomorrow && dayTimeline.length > 0) {
                   renderNowLine("tail");
                 }
+                // v05.05bt460 — Per chat: 'i need an insert row'.
+                // Bottom "+ INSERT TASK" button. Creates a draft task
+                // at the end of the day's last scheduled slot (or
+                // current time if none) and opens inline expand-edit.
+                rows.push(
+                  <button
+                    key="insert-task-bottom"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Find last slot to anchor insert time after it.
+                      const lastSlot = [...dayTimeline].reverse().find(s => s.kind === "task" || s.kind === "routine");
+                      insertTaskAfterSlot(lastSlot);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      gap: 6,
+                      width: "100%", padding: "10px 12px",
+                      marginTop: 8,
+                      background: "transparent",
+                      border: `1px dashed ${C.gold}77`,
+                      borderRadius: 8,
+                      color: C.gold,
+                      cursor: "pointer",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 10, fontWeight: 800,
+                      letterSpacing: "0.12em",
+                    }}>+ INSERT TASK</button>
+                );
                 return rows;
               })()}
             </div>
@@ -37326,15 +37819,45 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         width: "100%",
-                        background: `${C2.gold}10`,
-                        border: `1px solid ${C2.gold}88`,
-                        borderLeft: `4px solid ${C2.gold}`,
+                        // v05.05bt463/bt464 — softened to match the
+                        // bt463 inline empty-slot editor aesthetic.
+                        background: "transparent",
+                        border: `1px solid ${C2.ink}15`,
                         borderRadius: 10,
                         padding: "12px 14px",
                         marginBottom: 6,
-                        boxShadow: `0 4px 14px rgba(0,0,0,0.3)`,
-                        animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                        position: "relative",
                       }}>
+                      {/* v05.05bt464 — Prominent × close, top-right. */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); closeExpandedEdit(); }}
+                        title="Close (no changes saved)"
+                        style={{
+                          position: "absolute",
+                          top: 6, right: 8,
+                          width: 28, height: 28,
+                          padding: 0,
+                          background: "transparent",
+                          border: "none",
+                          color: C2.muted,
+                          cursor: "pointer",
+                          fontSize: 22, lineHeight: 1, fontWeight: 300,
+                          opacity: 0.55,
+                        }}>×</button>
+                      {/* v05.05bt460 — For routines, show a label
+                          instead of a title input since routines have
+                          fixed names. Only time + duration are
+                          editable (writes to routineOverrides). */}
+                      {d.isRoutine ? (
+                        <div style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9.5, fontWeight: 800,
+                          letterSpacing: "0.12em",
+                          color: C2.muted, textTransform: "uppercase",
+                          marginBottom: 10,
+                        }}>↻ ROUTINE · MOVE FOR TODAY</div>
+                      ) : (
+                      <>
                       {/* Title row */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                         <input
@@ -37364,6 +37887,90 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }}
                         />
                       </div>
+                      {/* v05.05bt464 — Per chat: 'once it is filled,
+                          clicking on the task should allow inline
+                          editing of the task name or replacing it with
+                          something else'. Pile search inside the edit
+                          form lets you replace the current task with
+                          any other from your pile. Same logic as the
+                          empty-slot editor. */}
+                      {(() => {
+                        const q = (d.title || "").trim().toLowerCase();
+                        const allPile = (myTasks || []).filter(x =>
+                          !x.completedAt && x.id !== t.id
+                        );
+                        if (allPile.length === 0 || q.length === 0) return null;
+                        const matches = allPile.filter(x =>
+                          x.title && x.title.toLowerCase().includes(q) &&
+                          x.title.toLowerCase() !== q
+                        ).slice(0, 4);
+                        if (matches.length === 0) return null;
+                        const useExisting = (task) => {
+                          // Replace current task's title + effort with the picked one.
+                          // Mark the old one as drafted-replaced (move scheduledTime to picked).
+                          setTasks(prev => {
+                            const next = prev.map(x => x);
+                            const oldIdx = next.findIndex(x => x.id === t.id);
+                            const pickedIdx = next.findIndex(x => x.id === task.id);
+                            if (oldIdx < 0 || pickedIdx < 0) return prev;
+                            // Move scheduledTime/scheduledDate from old to picked.
+                            const oldTask = next[oldIdx];
+                            next[pickedIdx] = {
+                              ...next[pickedIdx],
+                              scheduledTime: oldTask.scheduledTime,
+                              scheduledDate: oldTask.scheduledDate,
+                              drawer: false,
+                            };
+                            // Old becomes unscheduled.
+                            next[oldIdx] = { ...oldTask, scheduledTime: null };
+                            return next;
+                          });
+                          closeExpandedEdit();
+                        };
+                        return (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8.5, color: C2.muted,
+                              fontWeight: 700, letterSpacing: "0.10em",
+                              marginBottom: 6,
+                            }}>OR REPLACE WITH ({matches.length})</div>
+                            {matches.map(m => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); useExisting(m); }}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 8,
+                                  width: "100%", textAlign: "left",
+                                  padding: "6px 9px",
+                                  marginBottom: 3,
+                                  background: `${C2.ink}05`,
+                                  border: `1px solid ${C2.ink}10`,
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}>
+                                <span style={{
+                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontSize: 9, color: C2.gold,
+                                  fontWeight: 700, flexShrink: 0,
+                                }}>{m.effortMin || 30}m</span>
+                                <span style={{
+                                  fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                  fontSize: 13, color: C2.ink,
+                                  flex: 1, minWidth: 0,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}>{m.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      </>
+                      )}
                       {/* START + DURATION row */}
                       <div style={{
                         display: "flex", gap: 8, alignItems: "center",
@@ -37418,7 +38025,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           ))}
                         </div>
                       </div>
-                      {/* MORE toggle */}
+                      {/* MORE toggle (skipped for routines — only time + duration matter) */}
+                      {!d.isRoutine && (
+                      <>
                       <button
                         onClick={() => setExpandedShowMore(v => !v)}
                         style={{
@@ -37552,8 +38161,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           </div>
                         </div>
                       )}
+                      </>
+                      )}
                       {/* Actions row */}
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {!d.isRoutine && (
                         <button
                           onClick={() => {
                             if (window.confirm(`Delete "${t.title}"? This can't be undone.`)) {
@@ -37562,27 +38174,47 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }
                           }}
                           style={{
-                            padding: "6px 10px",
+                            // v05.05bt464 — Per chat: 'you also never
+                            // fixed the square around the delete task
+                            // button'. Borderless now. Just text.
+                            padding: "6px 8px",
                             background: "transparent",
-                            border: `1px solid ${C2.accent}66`,
-                            borderRadius: 5,
+                            border: "none",
                             color: C2.accent,
                             cursor: "pointer",
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                            opacity: 0.85,
                           }}>🗑 DELETE</button>
-                        <button
-                          onClick={closeExpandedEdit}
-                          style={{
-                            padding: "6px 10px",
-                            background: "transparent",
-                            border: `1px solid ${C2.line}55`,
-                            borderRadius: 5,
-                            color: C2.muted,
-                            cursor: "pointer",
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                          }}>CANCEL</button>
+                        )}
+                        {d.isRoutine && (
+                          <button
+                            onClick={() => {
+                              // v05.05bt460 — Reset routine override:
+                              // drop the override so the routine
+                              // falls back to its library default.
+                              const todayKey = now.toISOString().slice(0, 10);
+                              setTodaySetup(prev => {
+                                if (!prev || prev.date !== todayKey) return prev;
+                                const overrides = { ...(prev.routineOverrides || {}) };
+                                delete overrides[d.routineId];
+                                return { ...prev, routineOverrides: overrides };
+                              });
+                              closeExpandedEdit();
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              background: "transparent",
+                              border: `1px solid ${C2.line}55`,
+                              borderRadius: 5,
+                              color: C2.muted,
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                            }}>↺ RESET</button>
+                        )}
+                        {/* v05.05bt464 — Redundant CANCEL removed; the
+                            top-right × close handles escape now. */}
                         <button
                           onClick={commitExpandedEdit}
                           style={{
