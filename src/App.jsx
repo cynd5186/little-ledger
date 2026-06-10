@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt456";
+const APP_VERSION = "2026.05.05bt459";
 const APP_BUILD_NOTES = [
-  "SOLO-PARENT MODE + COMPLETED HISTORY EXPORT + DB BLOAT ANSWER.\\n\\n(1) SOLO-PARENT MODE. Per chat: 'if a parent is away and handoff is paused and not under caregiver mode, then need to rely heavily on predictions for baby wake, feed and play because it is all on one parent. the rails should be adjusted accordingly as well since it is for one person'.\\n\\nNew derived flag `isSoloParentMode` at TodayTaskPlanCard scope. True when ALL of:\\n  • parentAway is set (someone is on a trip)\\n  • The trip window is currently active (from <= now AND now <= until)\\n  • The away parent is NOT the current user (I'm the one home alone)\\n  • There's no active caregiver window (no one else covering)\\n\\nWhen true, effectiveActiveShifts now drops the away parent's shifts entirely:\\n  return { ...base, [parentAway.parent]: [] };\\n\\nThis means the rail computation sees only the home parent as on-duty → the entire timeline's rail renders in the home parent's color (mommy/daddy) instead of a split rail showing a schedule that doesn't apply. Predicted naps + feeds + pump windows continue to surface (they were already wired in via availableBlocks for this case).\\n\\n(2) EXPORT COMPLETED HISTORY (CSV) + ARCHIVE. Per chat: 'would keeping the done history bloat the database? i would actually just want to export it and store it in my monday.com database'.\\n\\nTwo new menu items in the ⋯ overflow menu (under 'Display & export'):\\n  • 📊 Export completed history · CSV — generates a Monday-compatible CSV with 10 columns: Task, Owner, Completed Date, Completed Time, Scheduled Date, Scheduled Time, Effort (min), Focus Mode, Regret Score, Passive. ALL-TIME (every completed task ever, not just today). Sorted newest-first. Copies to clipboard or falls back to the textarea modal if the browser blocks auto-copy. Status banner reports how many tasks were copied.\\n  • 🗄 Archive old completed (>14d) — purges completed tasks older than 14 days from local storage. Confirmation prompt warns to export first since it's not undoable. The 14-day window keeps recent done items visible (you can still see what you finished this week) while preventing the long-term bloat.\\n\\nWORKFLOW: tap the CSV export → paste into Monday.com (or any spreadsheet) → tap archive → done items >14d gone from local storage, recent ones remain. Repeat weekly.\\n\\n(3) BLOAT ANSWER: completed tasks are stored in the same tasks array as everything else. Each task is small (~200-300 bytes), so 1000 done tasks ≈ 250KB — totally fine for localStorage (5MB limit per origin) and not a meaningful perf cost for a few hundred tasks. The reason to archive is mostly UI noise (the all-tasks view gets long) and cloud-sync bandwidth (if syncing the full tasks blob to Firestore). For your use case (export to Monday weekly + archive locally), the new tools should keep the app fast and the Monday board comprehensive.\\n\\nBuild verified clean via esbuild.",
+  "INLINE EXPAND-TO-EDIT (Pattern B · ½ of B+C). Per chat: 'a whole dialog popping up is disruptive to me. What I love about my mondaycom setup to task manage is the ability to edit INLINE'. You confirmed Pattern B + Pattern C. This is half of it.\\n\\nWHAT CHANGED:\\nThe EditTaskModal popup no longer opens when you tap ✏ Edit in any kebab menu. Instead, the task row EXPANDS in place to show an inline editable form. Three trigger sites all rewired to openExpandedEdit():\\n  • TaskRow kebab popout → ✏ Edit button (pile sections: scheduled/today/backlog)\\n  • Timeline row's ⋯ button (next to ↺)\\n  • Pile Manager modal's '✏ Edit details' button\\n  • Quick-action card's 'Edit details' button\\n\\nTHE INLINE FORM (per your preference: top 3 always visible, MORE toggle for the rest):\\n  • TITLE — italic Newsreader input, auto-focus, Enter saves, Escape closes.\\n  • START — HTML time input, pre-filled with current scheduledTime.\\n  • DUR — 15/30/45/60/90 segmented buttons.\\n  • ▾ MORE button (collapsed by default) — taps reveal:\\n    – FOCUS · — / LIGHT / DEEP (3-button toggle, colored per focus tone)\\n    – REGRET · 1–5 stars (tap to set level)\\n    – OWNER · Mommy / Daddy (color-pilled)\\n    – PASSIVE · ☐ / ☑ toggle (teal pump tint when on)\\n  • Bottom row: 🗑 DELETE (with window.confirm) · CANCEL (close without saving) · DONE (gold, commits all changes)\\n\\nVISUAL: gold-tinted box (#e0c896 at 10% alpha) with 4px gold left rail + drop shadow + 220ms slide-in animation. Stops click propagation so taps inside don't fire the row's own onClick.\\n\\nGOLD CHROME (NOT SAGE): per your earlier color-semantics ask, sage is reserved for caregiver, mauve for Mommy, blue for Daddy. The expand form uses gold — matches the bt453 inline-empty-slot editor and free-block aesthetic.\\n\\nWHAT'S NEXT (bt460): Pattern C — new 'Tasks' tab next to Schedule, Monday-style spreadsheet view with: ☐ / Title / Time / Dur / Focus / Owner / Status columns. Every cell tappable inline. Bulk select. Column filters.\\n\\nNOTE: the EditTaskModal still exists in the codebase — it's just not reachable from the main flows anymore. Keeping it around in case any odd path still needs it. Will fully remove in bt461 cleanup after we confirm the inline edit handles everything you need.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt459", summary: "Inline expand-to-edit (Pattern B, half of B+C). Tap ✏ Edit on any task (kebab in TaskRow, ⋯ on timeline row, Edit details in Pile Manager or quick-action) → row EXPANDS inline with editable form instead of opening EditTaskModal. Top 3 fields always visible (title input + start time + duration segmented 15/30/45/60/90); ▾ MORE toggle reveals focus/regret/owner/passive. Gold chrome (sage was conflating with caregiver semantics). 🗑 DELETE + CANCEL + DONE buttons. Modal still in codebase but unreachable from main flows. Next: bt460 Pattern C sheet view. Build verified clean via esbuild." },
+  { version: "2026.05.05bt458", summary: "One panel, gold chrome, no tabs. The Fits/FILL dialog is restructured per user feedback: (1) Tab switcher (+ NEW / FIND) removed — single unified panel. (2) Title input drives both ADD path and pile filter (dual purpose). (3) All sage/green chrome in the dialog recolored to gold (sage was conflating with caregiver semantics). (4) FITS scoring stripped from candidate rows — no ★ FITS ONLY toggle, no ★ BEST FIT pill, no sage left rail on fitters. All rows render neutral. (5) Non-fitters now tappable (TOO LONG coral pill stays as info; conflict resolution moves to schedule layer). Pile Manager border also recolored gold. Build verified clean via esbuild." },
+  { version: "2026.05.05bt457", summary: "Fits/FILL dialog readability + palette-aware modal bg + simpler-picker mockup. (1) Added modalSurface field to every palette so the dialog bg adapts: cream in day/dawn, warm-dark in dusk/night, purple-tinted dark in cadence, slate-tinted in cadenceDaddy, deeper purple in cadenceDusk. Was hardcoded #322c39 (purple-grey clashed with non-Cadence themes). (2) Eyebrow color ink + sage accent dot (was sage text, low-contrast green-on-purple). Font weight 700→800. (3) CANCEL button now ink text + paper bg + 88α border (was muted on transparent — barely visible). (4) Mockup deliverable simpler_picker.html proposing to kill tabs + FITS scoring entirely. Build verified clean via esbuild." },
   { version: "2026.05.05bt456", summary: "Solo-parent mode + completed history export. (1) New isSoloParentMode flag: true when trip is active + I'm not the one away + no caregiver covering. Drops the away parent's shifts from effectiveActiveShifts so the rail renders in one color (home parent's) instead of a split rail of an inapplicable schedule. Predicted naps/feeds/pumps still surface. (2) New ⋯ menu item '📊 Export completed history · CSV' — generates a 10-column Monday-compatible CSV of all-time completed tasks, sorted newest first. (3) New '🗄 Archive old completed (>14d)' — purges old done tasks from local storage with a confirmation prompt. Workflow: export to Monday weekly → archive locally → app stays fast, Monday stays comprehensive. Build verified clean via esbuild." },
   { version: "2026.05.05bt455", summary: "Visual consistency across modes. bt447's rounded-card + clipped-rail treatment was gated on Cadence (solo) mode only; non-Cadence modes kept the flat-architectural look with rows touching and rails extending past the (right-only) rounded corners. Unified: outer borderRadius:10 + overflow:hidden + marginBottom:6 now applied across all modes. Inner borderRadius unified to 10. Free block bottom border unified to solid (was dashed in non-solo, redundant with the gold rail + gold + Open text). Mode-specific border alphas + bg tints stayed since they're intentional contrast tunings. Build verified clean via esbuild." },
   { version: "2026.05.05bt454", summary: "Auto-rollover for past-dated uncompleted tasks + 'moved from' badge. Was: tasks with scheduledDate in the past matched no pile filter (today-scheduled wants scheduledDate===today, today-unscheduled wants scheduledDate===today, backlog wants no scheduledDate) — they sat invisible. Now: new useEffect runs on every tasks/now change; any uncompleted task with scheduledDate < today gets scheduledDate→today + scheduledTime→null + rolledOverFrom→original date. Lands in the today-unscheduled pile with a gold '↩ yesterday' / '↩ 3d ago' pill so user knows it was carried forward. Idempotent (next render the filter doesn't match). Build verified clean via esbuild." },
@@ -1944,13 +1947,13 @@ const PALETTES = {
   // breaking the warm-cream family. Day picks #F0E8D2 (a quiet step
   // toward gold). Dark modes pick a slightly-warmer-than-paper tone so
   // the panel still reads as a distinct elevated surface.
-  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+  day:   { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16", modalSurface: "#FCF7EB",
            mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16",
+  dawn:  { bg: "#F5EEE3", ink: "#1F1B16", paper: "#FCF7EB", panel: "#F0E8D2", accent: "#B85C2E", soft: "#E8D7BC", muted: "#7C6F5E", line: "#1F1B16", modalSurface: "#FCF7EB",
            mommy: "#9C7B96", daddy: "#6286B0", gold: "#C49A3A", sage: "#6B8B5C", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5",
+  dusk:  { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5", modalSurface: "#3a3138",
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5",
+  night: { bg: "#1F1A22", ink: "#EFE5D5", paper: "#2A2329", panel: "#322A2F", accent: "#D88A5C", soft: "#322932", muted: "#B4A594", line: "#D9CDB5", modalSurface: "#3a3138",
            mommy: "#BFA0BC", daddy: "#8FA8C4", gold: "#E0B057", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   // v05.05bt338/340 — Cadence palettes. Per chat (bt340): user picked
   // mockup D · Champagne Blush — softer, more romantic, candlelit.
@@ -1982,11 +1985,11 @@ const PALETTES = {
   // Paper texture + gradient outer ring layered on via global CSS
   // and App-wrapper insertion (see FontImports + App render).
   // Daddy variant uses slate-blue base for parallel symmetry.
-  cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#C8B5DA", line: "#C6B0DB",
+  cadence:       { bg: "#070510", ink: "#F5F1EA", paper: "#0E0A14", panel: "#0E0A14", accent: "#C6B0DB", soft: "#15101C", muted: "#C8B5DA", line: "#C6B0DB", modalSurface: "#1f1530",
                    mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#BCC8DC", line: "#8B9BBC",
+  cadenceDaddy:  { bg: "#0A1018", ink: "#E8E8E8", paper: "#131C28", panel: "#131C28", accent: "#8B9BBC", soft: "#161C25", muted: "#BCC8DC", line: "#8B9BBC", modalSurface: "#1f2a3a",
                    mommy: "#A88299", daddy: "#8B9BBC", gold: "#D8B894", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#C8B5DA", line: "#C6B0DB",
+  cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#C8B5DA", line: "#C6B0DB", modalSurface: "#1a1228",
                    mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
 };
 
@@ -28721,6 +28724,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const [inlineFreeStartTime, setInlineFreeStartTime] = useState("");
   const [inlineFreeDuration, setInlineFreeDuration] = useState(30);
   const [inlineFreeIsPassive, setInlineFreeIsPassive] = useState(false);
+  // v05.05bt459 — Per chat: 'a whole dialog popping up is disruptive
+  // to me. What I love about my mondaycom setup to task manage is the
+  // ability to edit INLINE'. Pattern B (confirmed): tap row → expands
+  // in place to show editable cells. Top 3 fields always visible
+  // (title + time + duration); 'MORE…' toggle reveals focus / regret
+  // / owner / passive. Replaces the EditTaskModal flow.
+  const [expandedEditTaskId, setExpandedEditTaskId] = useState(null);
+  const [expandedDraft, setExpandedDraft] = useState(null); // {title, scheduledTime, effortMin, focusLevel, regretScore, ownerName, isPassive}
+  const [expandedShowMore, setExpandedShowMore] = useState(false);
   // v05.05bt425 — Per chat: 'today's runway should have the option of
   // being collapsed as well'. Defaults to expanded so first-time users
   // see the forecast; persists choice via localStorage.
@@ -28882,6 +28894,49 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     setTasks(prev => [...prev, newTask]);
     closeInlineFreeEdit();
   };
+
+  // v05.05bt459 — Expanded-edit helpers. openExpandedEdit seeds the
+  // draft from the current task; commitExpandedEdit pushes the draft
+  // back to setTasks; close discards. The form mutates expandedDraft
+  // locally so the user sees changes immediately without re-renders
+  // bouncing through tasks.
+  const openExpandedEdit = (t) => {
+    setExpandedEditTaskId(t.id);
+    setExpandedDraft({
+      title: t.title || "",
+      scheduledTime: t.scheduledTime || "",
+      effortMin: t.effortMin || 30,
+      focusLevel: t.focusLevel || null, // null / "deep" / "shallow"
+      regretScore: typeof t.regretScore === "number" ? t.regretScore : 3,
+      ownerName: t.ownerName || currentUser,
+      isPassive: !!t.isPassive,
+    });
+    setExpandedShowMore(false);
+  };
+  const closeExpandedEdit = () => {
+    setExpandedEditTaskId(null);
+    setExpandedDraft(null);
+    setExpandedShowMore(false);
+  };
+  const commitExpandedEdit = () => {
+    if (!expandedEditTaskId || !expandedDraft) return closeExpandedEdit();
+    setTasks(prev => prev.map(t => {
+      if (t.id !== expandedEditTaskId) return t;
+      return {
+        ...t,
+        title: (expandedDraft.title || "").trim() || t.title,
+        scheduledTime: expandedDraft.scheduledTime || null,
+        effortMin: expandedDraft.effortMin || 30,
+        focusLevel: expandedDraft.focusLevel || undefined,
+        regretScore: expandedDraft.regretScore,
+        ownerName: expandedDraft.ownerName,
+        isPassive: expandedDraft.isPassive || undefined,
+      };
+    }));
+    closeExpandedEdit();
+  };
+  const updateDraft = (patch) => setExpandedDraft(d => ({ ...(d || {}), ...patch }));
+
   const [forTodayExpanded, setForTodayExpanded] = useState(false);
 
   // v05.05bt356 — Per chat: 'in the task pile, the list can get
@@ -34872,9 +34927,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setInlineTitleEdit(null);
-                                  setEditingTask(slot);
+                                  // v05.05bt459 — was setEditingTask(slot)
+                                  // which opened the modal. Now opens
+                                  // inline expand-to-edit per Pattern B.
+                                  openExpandedEdit(slot);
                                 }}
-                                title="Edit all task fields"
+                                title="Edit task inline"
                                 style={{
                                   padding: "5px 8px",
                                   background: "transparent",
@@ -37254,6 +37312,295 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       ? "backlog"
                       : "other"; // future-dated tasks aren't a current bucket
                 const isQuickOpen = pileQuickActionId === t.id;
+
+                // v05.05bt459 — INLINE EXPAND-TO-EDIT (Pattern B).
+                // When this task is the one being edited, replace the
+                // whole row with the editable form. Top 3 fields
+                // (title + time + duration) always visible; "MORE…"
+                // toggle exposes focus / regret / owner / passive.
+                if (expandedEditTaskId === t.id && expandedDraft) {
+                  const d = expandedDraft;
+                  const C2 = C; // alias for readability
+                  return (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        width: "100%",
+                        background: `${C2.gold}10`,
+                        border: `1px solid ${C2.gold}88`,
+                        borderLeft: `4px solid ${C2.gold}`,
+                        borderRadius: 10,
+                        padding: "12px 14px",
+                        marginBottom: 6,
+                        boxShadow: `0 4px 14px rgba(0,0,0,0.3)`,
+                        animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+                      }}>
+                      {/* Title row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <input
+                          type="text"
+                          value={d.title}
+                          onChange={(e) => updateDraft({ title: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitExpandedEdit();
+                            if (e.key === "Escape") closeExpandedEdit();
+                          }}
+                          ref={(el) => {
+                            if (!el || el.dataset.focused === "1") return;
+                            el.dataset.focused = "1";
+                            try { el.focus({ preventScroll: true }); } catch { el.focus(); }
+                          }}
+                          placeholder="task title"
+                          style={{
+                            flex: 1, minWidth: 0,
+                            padding: "8px 11px",
+                            background: "rgba(0,0,0,0.3)",
+                            border: `1px solid ${C2.line}55`,
+                            borderRadius: 6,
+                            color: C2.ink,
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                            fontSize: 14, fontStyle: "italic",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      {/* START + DURATION row */}
+                      <div style={{
+                        display: "flex", gap: 8, alignItems: "center",
+                        marginBottom: 8, flexWrap: "wrap",
+                      }}>
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 8.5, fontWeight: 700,
+                          letterSpacing: "0.08em", color: C2.muted,
+                        }}>START</span>
+                        <input
+                          type="time"
+                          value={d.scheduledTime || ""}
+                          onChange={(e) => updateDraft({ scheduledTime: e.target.value })}
+                          style={{
+                            padding: "5px 7px",
+                            background: "rgba(0,0,0,0.3)",
+                            border: `1px solid ${C2.line}55`,
+                            borderRadius: 5,
+                            color: C2.ink,
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 11,
+                            outline: "none",
+                          }}
+                        />
+                        <span style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 8.5, fontWeight: 700,
+                          letterSpacing: "0.08em", color: C2.muted,
+                          marginLeft: 4,
+                        }}>DUR</span>
+                        <div style={{
+                          display: "flex", gap: 2,
+                          padding: 2,
+                          background: "rgba(0,0,0,0.3)",
+                          borderRadius: 5,
+                        }}>
+                          {[15, 30, 45, 60, 90].map(dur => (
+                            <button
+                              key={dur}
+                              onClick={() => updateDraft({ effortMin: dur })}
+                              style={{
+                                padding: "4px 8px",
+                                background: d.effortMin === dur ? C2.gold : "transparent",
+                                color: d.effortMin === dur ? C2.bg : C2.muted,
+                                border: "none",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 9.5, fontWeight: 700,
+                              }}>{dur}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* MORE toggle */}
+                      <button
+                        onClick={() => setExpandedShowMore(v => !v)}
+                        style={{
+                          width: "100%", padding: "6px 8px",
+                          background: "transparent",
+                          border: `1px dashed ${C2.line}88`,
+                          borderRadius: 5,
+                          color: C2.muted,
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+                          cursor: "pointer",
+                          marginBottom: 8,
+                        }}>
+                        {expandedShowMore ? "▴ LESS" : "▾ MORE · FOCUS / REGRET / OWNER / PASSIVE"}
+                      </button>
+                      {/* MORE panel */}
+                      {expandedShowMore && (
+                        <div style={{
+                          padding: "8px 10px",
+                          background: "rgba(0,0,0,0.20)",
+                          border: `1px solid ${C2.line}33`,
+                          borderRadius: 6,
+                          marginBottom: 8,
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 8,
+                        }}>
+                          {/* FOCUS */}
+                          <div>
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8, color: C2.muted, fontWeight: 700,
+                              letterSpacing: "0.10em", marginBottom: 4,
+                            }}>FOCUS</div>
+                            <div style={{ display: "flex", gap: 2 }}>
+                              {[
+                                { k: null, l: "—" },
+                                { k: "shallow", l: "LIGHT" },
+                                { k: "deep", l: "DEEP" },
+                              ].map(opt => (
+                                <button
+                                  key={opt.l}
+                                  onClick={() => updateDraft({ focusLevel: opt.k })}
+                                  style={{
+                                    flex: 1, padding: "4px 6px",
+                                    background: d.focusLevel === opt.k
+                                      ? (opt.k === "deep" ? "#B85040" : opt.k === "shallow" ? "#7B9B6E" : C2.muted)
+                                      : "transparent",
+                                    color: d.focusLevel === opt.k ? "#fff" : C2.muted,
+                                    border: `1px solid ${d.focusLevel === opt.k
+                                      ? (opt.k === "deep" ? "#B85040" : opt.k === "shallow" ? "#7B9B6E" : C2.muted)
+                                      : `${C2.line}44`}`,
+                                    borderRadius: 4,
+                                    cursor: "pointer",
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 8.5, fontWeight: 700,
+                                  }}>{opt.l}</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* REGRET */}
+                          <div>
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8, color: C2.muted, fontWeight: 700,
+                              letterSpacing: "0.10em", marginBottom: 4,
+                            }}>REGRET</div>
+                            <div style={{ display: "flex", gap: 1 }}>
+                              {[1, 2, 3, 4, 5].map(n => (
+                                <button
+                                  key={n}
+                                  onClick={() => updateDraft({ regretScore: n })}
+                                  style={{
+                                    background: "transparent", border: "none",
+                                    padding: "2px 3px", cursor: "pointer",
+                                    color: n <= (d.regretScore || 0) ? C2.gold : `${C2.muted}66`,
+                                    fontSize: 14, lineHeight: 1,
+                                  }}>★</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* OWNER */}
+                          <div>
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8, color: C2.muted, fontWeight: 700,
+                              letterSpacing: "0.10em", marginBottom: 4,
+                            }}>OWNER</div>
+                            <div style={{ display: "flex", gap: 2 }}>
+                              {["Mommy", "Daddy"].map(name => (
+                                <button
+                                  key={name}
+                                  onClick={() => updateDraft({ ownerName: name })}
+                                  style={{
+                                    flex: 1, padding: "4px 6px",
+                                    background: d.ownerName === name
+                                      ? (name === "Mommy" ? C2.mommy : C2.daddy)
+                                      : "transparent",
+                                    color: d.ownerName === name ? "#fff" : C2.muted,
+                                    border: `1px solid ${d.ownerName === name
+                                      ? (name === "Mommy" ? C2.mommy : C2.daddy)
+                                      : `${C2.line}44`}`,
+                                    borderRadius: 4,
+                                    cursor: "pointer",
+                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontSize: 8.5, fontWeight: 700,
+                                  }}>{name}</button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* PASSIVE */}
+                          <div>
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8, color: C2.muted, fontWeight: 700,
+                              letterSpacing: "0.10em", marginBottom: 4,
+                            }}>PASSIVE</div>
+                            <button
+                              onClick={() => updateDraft({ isPassive: !d.isPassive })}
+                              style={{
+                                width: "100%", padding: "4px 6px",
+                                background: d.isPassive ? `${C2.pump}26` : "transparent",
+                                border: `1px solid ${d.isPassive ? C2.pump : `${C2.line}44`}`,
+                                borderRadius: 4,
+                                color: d.isPassive ? C2.pump : C2.muted,
+                                cursor: "pointer",
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: 8.5, fontWeight: 700,
+                                letterSpacing: "0.05em",
+                              }}>{d.isPassive ? "☑ PASSIVE" : "☐ ACTIVE"}</button>
+                          </div>
+                        </div>
+                      )}
+                      {/* Actions row */}
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Delete "${t.title}"? This can't be undone.`)) {
+                              setTasks(prev => prev.filter(x => x.id !== t.id));
+                              closeExpandedEdit();
+                            }
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            background: "transparent",
+                            border: `1px solid ${C2.accent}66`,
+                            borderRadius: 5,
+                            color: C2.accent,
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                          }}>🗑 DELETE</button>
+                        <button
+                          onClick={closeExpandedEdit}
+                          style={{
+                            padding: "6px 10px",
+                            background: "transparent",
+                            border: `1px solid ${C2.line}55`,
+                            borderRadius: 5,
+                            color: C2.muted,
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                          }}>CANCEL</button>
+                        <button
+                          onClick={commitExpandedEdit}
+                          style={{
+                            marginLeft: "auto",
+                            padding: "6px 14px",
+                            background: C2.gold,
+                            color: C2.bg,
+                            border: "none", borderRadius: 5,
+                            cursor: "pointer",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                            boxShadow: `0 0 0 2px ${C2.gold}33`,
+                          }}>DONE</button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <React.Fragment>
                   <div style={{
@@ -37424,10 +37771,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setInlineTitleEdit(null);
-                                setEditingTask(t);
+                                // v05.05bt459 — was setEditingTask(t)
+                                // which opened the modal. Now opens
+                                // inline expand-to-edit per Pattern B.
+                                openExpandedEdit(t);
+                                setPileKebabOpenId(null);
+                                setPileQuickActionId(null);
                               }}
-                              title="Edit all task fields"
-                              aria-label="Open edit modal"
+                              title="Edit task inline"
+                              aria-label="Edit task inline"
                               style={{
                                 padding: "3px 7px",
                                 background: "transparent",
@@ -37946,7 +38298,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             onPointerUp={(e) => {
                               e.stopPropagation();
                               if (e.preventDefault) e.preventDefault();
-                              setEditingTask(t);
+                              // v05.05bt459 — was setEditingTask(t).
+                              // Now expand-to-edit inline.
+                              openExpandedEdit(t);
                               setPileKebabOpenId(null);
                             }}
                             onClick={(e) => { e.stopPropagation(); }}
@@ -38122,7 +38476,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             onClick={(e) => {
                               e.stopPropagation();
                               setPileQuickActionId(null);
-                              setEditingTask(t);
+                              // v05.05bt459 — inline expand-to-edit.
+                              openExpandedEdit(t);
                             }}
                             style={{
                               background: "transparent", border: "none",
@@ -40223,9 +40578,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 // bg (#1c1820). Now a custom lighter shade for modals,
                 // double-border (solid sage + outer line halo), and
                 // stronger box-shadow.
-                background: "#322c39",
+                // v05.05bt458 — Border was sage but sage is reserved
+                // for caregiver semantics. Swapped to gold (consistent
+                // with free-block + "+ Open" gold treatment).
+                background: C.modalSurface,
                 borderRadius: 12,
-                border: `2px solid ${C.sage}`,
+                border: `2px solid ${C.gold}`,
                 boxShadow: `0 0 0 1px ${C.line}44, 0 24px 60px rgba(0,0,0,0.75), 0 0 0 6px rgba(0,0,0,0.4)`,
                 maxWidth: 340, width: "100%",
                 // v05.05bt449 — Per chat: 'the window needs to stay in
@@ -40244,10 +40602,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               {/* ───── EYEBROW ───── */}
               <div style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9.5, letterSpacing: "0.18em",
-                color: C.sage, fontWeight: 700, textTransform: "uppercase",
+                fontSize: 10, letterSpacing: "0.18em",
+                // v05.05bt457 — Per chat (screenshot): 'IN cadence mode
+                // then it is hard to read'. Eyebrow was C.sage on the
+                // modal bg — green-on-purple gave low contrast. Now ink
+                // (cream/bright) for the actual text + sage accent dot.
+                color: C.ink, fontWeight: 800, textTransform: "uppercase",
                 marginBottom: 4,
-              }}>+ {Math.round(slotMin)}M {contextLabel}</div>
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <span style={{
+                  display: "inline-block", width: 7, height: 7,
+                  borderRadius: 99, background: C.gold,
+                  boxShadow: `0 0 0 2px ${C.gold}33`,
+                  flexShrink: 0,
+                }}/>
+                <span>+ {Math.round(slotMin)}M {contextLabel}</span>
+              </div>
 
               {/* Context line + inline best-fit */}
               <div style={{
@@ -40262,15 +40633,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     marginLeft: 6, paddingLeft: 8,
                     borderLeft: `1px solid ${C.line}44`,
                   }}>
-                    <span style={{ color: C.sage, fontWeight: 800, marginRight: 3 }}>★</span>
+                    <span style={{ color: C.gold, fontWeight: 800, marginRight: 3 }}>★</span>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setFreedFillShowWhy(v => !v); }}
                       style={{
                         background: "transparent", border: "none", padding: 0,
-                        color: C.sage, fontStyle: "normal", fontWeight: 600,
+                        color: C.gold, fontStyle: "normal", fontWeight: 600,
                         fontSize: 13,
-                        borderBottom: `1px dotted ${C.sage}88`,
+                        borderBottom: `1px dotted ${C.gold}88`,
                         cursor: "pointer",
                         fontFamily: "inherit",
                       }}>{topMatch.title} · {topMatch.effortMin || 30}m</button>
@@ -40282,8 +40653,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 <div style={{
                   marginTop: 4, marginBottom: 8,
                   padding: "7px 11px",
-                  background: `${C.sage}10`,
-                  borderLeft: `2px solid ${C.sage}88`,
+                  background: `${C.gold}10`,
+                  borderLeft: `2px solid ${C.gold}88`,
                   borderRadius: "0 6px 6px 0",
                   fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
                   fontStyle: "italic", fontSize: 12.5,
@@ -40308,49 +40679,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 </div>
               )}
 
-              {/* ───── TABS ───── */}
-              <div style={{
-                display: "flex", gap: 4, margin: "12px 0 12px",
-                padding: 3, background: `${C.line}14`, borderRadius: 10,
-              }}>
-                {[
-                  { key: "new", label: "+ NEW" },
-                  { key: "find", label: "FIND", count: visibleCandidates.length },
-                ].map(t => {
-                  const active = freedFillTab === t.key;
-                  return (
-                    <button
-                      key={t.key}
-                      onClick={() => setFreedFillTab(t.key)}
-                      style={{
-                        flex: 1, padding: "8px 10px",
-                        background: active ? C.paper : "transparent",
-                        border: "none", borderRadius: 7,
-                        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.3)" : "none",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em",
-                        color: active ? C.ink : C.muted,
-                        cursor: "pointer",
-                      }}>
-                      {t.label}
-                      {typeof t.count === "number" && (
-                        <span style={{ color: C.sage, marginLeft: 4, opacity: 0.85 }}>{t.count}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* ───── NEW TAB ───── */}
-              {freedFillTab === "new" && (
-                <>
-                  <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {/* v05.05bt458 — Per chat: 'is the fits really necessary.
+                  isnt it enough to have something where we can add
+                  directly there and can see what else is in the pile?...
+                  default to new tab instead of find tab and just have
+                  the search or new add box such that it does both -
+                  adds a new task if not there or finds one similar. and
+                  if that is the case, then is that just one tab?'. YES,
+                  one tab. Tabs gone. The title input drives BOTH paths:
+                  (a) ADD creates a new task with that title, (b) typing
+                  filters the pile list below so you can pick existing.
+                  bt452's dup-detection still surfaces fuzzy matches as
+                  'similar to existing'. Single panel. */}
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8, marginTop: 12 }}>
                     <input
                       type="text"
                       value={newTitle}
-                      onChange={(e) => setFreedFillNewTitle(e.target.value)}
+                      onChange={(e) => {
+                        // v05.05bt458 — dual-purpose input: title for
+                        // ADD path AND search filter for pile list.
+                        setFreedFillNewTitle(e.target.value);
+                        setFreedFillSearch(e.target.value);
+                      }}
                       onKeyDown={(e) => { if (e.key === "Enter" && !hasDup) addAndPick(); }}
-                      placeholder="title (e.g. 'reply to Sarah 15m')"
+                      placeholder="+ add or search pile…"
                       style={{
                         flex: 1, minWidth: 0,
                         fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
@@ -40365,7 +40718,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       disabled={!newTrim}
                       style={{
                         padding: "7px 14px",
-                        background: hasDup ? "transparent" : (newTrim ? C.sage : `${C.line}22`),
+                        // v05.05bt458 — was sage. Sage reserved for
+                        // caregiver. Gold ties to free-block aesthetic.
+                        background: hasDup ? "transparent" : (newTrim ? C.gold : `${C.line}22`),
                         color: hasDup ? C.gold : (newTrim ? "#fff" : C.muted),
                         border: hasDup ? `1px solid ${C.gold}` : "none",
                         borderRadius: 6,
@@ -40435,7 +40790,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           }}>
                           <span style={{
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: 9, color: C.sage, fontWeight: 700, flexShrink: 0,
+                            fontSize: 9, color: C.gold, fontWeight: 700, flexShrink: 0,
                           }}>{m.effortMin || 30}m</span>
                           <span style={{
                             fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
@@ -40453,34 +40808,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                     </div>
                   )}
-                </>
-              )}
 
-              {/* ───── FIND TAB ───── */}
-              {freedFillTab === "find" && (
-                <>
-                  <div style={{ position: "relative", marginBottom: 10 }}>
-                    <span style={{
-                      position: "absolute", left: 11, top: "50%",
-                      transform: "translateY(-50%)",
-                      color: C.muted, fontSize: 13,
-                    }}>🔍</span>
-                    <input
-                      type="text"
-                      value={search}
-                      onChange={(e) => setFreedFillSearch(e.target.value)}
-                      placeholder="search across all your tasks..."
-                      style={{
-                        width: "100%",
-                        background: "transparent",
-                        border: `1px solid ${C.line}55`,
-                        borderRadius: 7,
-                        padding: "8px 11px 8px 32px",
-                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                        fontStyle: "italic", fontSize: 13.5, color: C.ink,
-                      }}
-                    />
-                  </div>
+                  {/* v05.05bt458 — Title input above drives the filter
+                      below. No separate search input. */}
 
                   {/* v05.05bt441 → bt443 — Drawer filter pills (multi-
                       select). Per chat: 'when select unsheculed under
@@ -40493,6 +40823,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       text, slight shadow halo when active. */}
                   <div style={{
                     display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap",
+                    marginTop: 6,
                   }}>
                     {[
                       { key: "unscheduled", label: "UNSCHEDULED", color: C.ink, count: drawerCounts.unscheduled },
@@ -40521,24 +40852,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         </button>
                       );
                     })}
-                      {/* v05.05bt450 — Best Fits Only toggle */}
-                      <button
-                        onClick={() => setFreedFillFitsOnly(v => !v)}
-                        style={{
-                          padding: "4px 9px",
-                          background: freedFillFitsOnly ? C.sage : "transparent",
-                          border: `1px solid ${freedFillFitsOnly ? C.sage : `${C.sage}66`}`,
-                          borderRadius: 99,
-                          cursor: "pointer",
-                          fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 8.5, fontWeight: 800,
-                          letterSpacing: "0.04em",
-                          color: freedFillFitsOnly ? "#fff" : C.sage,
-                          boxShadow: freedFillFitsOnly ? `0 0 0 2px ${C.sage}33` : "none",
-                          marginLeft: "auto",
-                        }}>
-                        ★ FITS ONLY
-                      </button>
                   </div>
 
                   {/* v05.05bt441 — Internal scroll list (Option C from
@@ -40585,34 +40898,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             onClick={() => pick(t.id)}
                             disabled={!tFits}
                             style={{
+                              // v05.05bt458 — Per chat: sage was for
+                              // caregiver. Don't conflate. Neutral row
+                              // chrome (paper bg + line border). Non-
+                              // fitters dim but are tappable since the
+                              // schedule will warn at conflict-resolution
+                              // time, not at pick time.
                               display: "flex", alignItems: "center", gap: 8,
                               width: "100%", textAlign: "left",
                               padding: "9px 11px",
                               marginBottom: 4,
-                              background: isTop ? `${C.sage}24` : tFits ? `${C.sage}0c` : "transparent",
-                              border: `1px solid ${isTop ? C.sage : tFits ? `${C.sage}55` : `${C.line}33`}`,
-                              borderLeft: tFits ? `4px solid ${C.sage}` : `1px solid ${C.line}33`,
+                              background: `${C.line}10`,
+                              border: `1px solid ${C.line}55`,
                               borderRadius: 7,
-                              cursor: tFits ? "pointer" : "not-allowed",
-                              opacity: tFits ? 1 : 0.45,
+                              cursor: "pointer",
+                              opacity: tFits ? 1 : 0.6,
                               fontFamily: "inherit",
-                              boxShadow: isTop ? `0 0 0 1px ${C.sage}77` : "none",
                             }}>
-                            {isTop && (
-                              <span style={{
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: 8.5, fontWeight: 800,
-                                letterSpacing: "0.10em",
-                                color: "#fff",
-                                background: C.sage,
-                                padding: "2px 6px",
-                                borderRadius: 4,
-                                flexShrink: 0,
-                              }}>★ BEST FIT</span>
-                            )}
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 9.5, color: tFits ? C.sage : C.muted, fontWeight: 700, flexShrink: 0,
+                              fontSize: 9.5, color: C.gold, fontWeight: 700, flexShrink: 0,
                             }}>{t.effortMin || 30}m</span>
                             <span style={{
                               fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
@@ -40643,7 +40948,6 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     SHOWING {visibleCandidates.length} OF {allCandidates.length} · SCROLL FOR MORE
                   </div>
                 </>
-              )}
               </div>{/* /scroll body (bt449) */}
 
               <button
@@ -40652,13 +40956,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   marginTop: 12,
                   flexShrink: 0,
                   width: "100%",
-                  padding: "8px 10px",
-                  background: "transparent",
-                  border: `1px solid ${C.line}44`,
+                  padding: "10px 10px",
+                  // v05.05bt457 — Per chat: CANCEL was barely visible —
+                  // muted text on transparent + 44alpha border. Now
+                  // solid line border + ink color + small bg tint.
+                  background: `${C.line}10`,
+                  border: `1px solid ${C.line}88`,
                   borderRadius: 7,
-                  color: C.muted, cursor: "pointer",
+                  color: C.ink, cursor: "pointer",
                   fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                  fontSize: 10.5, fontWeight: 800, letterSpacing: "0.10em",
                 }}>CANCEL</button>
             </div>
           </div>
@@ -40792,9 +41099,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 // v05.05bt442 → bt447 — Same elevation treatment as
                 // the Fits/FILL dialog: lighter modal bg (#322c39),
                 // solid sage border, layered box-shadow with line halo.
-                background: "#322c39",
+                background: C.modalSurface,
                 borderRadius: 14,
-                border: `2px solid ${C.sage}`,
+                border: `2px solid ${C.gold}`,
                 boxShadow: `0 0 0 1px ${C.line}44, 0 24px 60px rgba(0,0,0,0.75), 0 0 0 6px rgba(0,0,0,0.4)`,
                 maxWidth: 460, width: "100%",
                 maxHeight: "82vh", display: "flex", flexDirection: "column",
