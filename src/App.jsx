@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt470";
+const APP_VERSION = "2026.05.05bt472";
 const APP_BUILD_NOTES = [
-  "VERSION DISPLAY ADDED TO ⋯ MENU FOR DEBUGGING DEPLOY ISSUES. Per chat: 'still showing the old UI' after bt469 deploy. Almost certainly a PWA cache issue on iOS — but to make it diagnosable, the ⋯ menu's first row now displays 'BUILD · v{APP_VERSION}' in gold uppercase mono caps (same styling as the section dividers). So opening ⋯ instantly tells you what bundle is loaded.\\n\\nTROUBLESHOOTING IF YOU STILL SEE OLD UI AFTER DEPLOY:\\n  1. Confirm the Vercel deploy succeeded (https://vercel.com → your project → Deployments tab; should show the bt470 commit as 'Ready'). Vercel sometimes takes 30-90s after git push.\\n  2. iOS PWA cache is aggressive. Steps to force:\\n     a) Open the live URL (little-ledger-123.vercel.app) in Safari (NOT the PWA)\\n     b) Long-press the reload icon in the address bar → tap 'Reload Without Content Blockers' (forces network fetch)\\n     c) Close Safari fully (swipe away in app switcher)\\n     d) Now reopen the PWA from your home screen\\n  3. Nuclear option: delete the PWA from your home screen, re-add via Safari Share → 'Add to Home Screen'. Old service worker gets evicted.\\n  4. Tap ⋯ in the task plan card — the first row should read 'BUILD · v2026.05.05bt470'. If it shows anything older, the bundle didn't update. If it DOES show bt470 but the UI still looks old, that's a real code bug and I want to see screenshots.\\n\\nNO OTHER CHANGES — just the version display. All bt468 + bt469 fixes are intact: routine title tap inline edit, compact ADD A TASK link, gated Heads-up, trimmed DRIFT, per-row + chip insertion, sophisticated mauve, right-aligned + and ×, DEEP/LIGHT tag on empty slots, dominant-rail-colored freed strip, etc.\\n\\nBuild verified clean via esbuild.",
+  "PILE ADD IS NOW INLINE · NO MORE POPUP CARD. Per chat: 'for the task pile, when i add it...again it needs to be easy - it is disruptive how a little thing pops up'.\\n\\nDIAGNOSIS: two separate add paths both ended in popup feel.\\n\\n(a) The PER-SECTION '+ add' buttons (bt416) opened an inline input that LOOKED like a popup: gold tint bg + 4px gold left rail + drop shadow + slide-in animation. Same lesson as bt459b: those visual cues read as 'card popped up,' not 'row appeared.' All three section adds (Scheduled / Today / Backlog) had identical popup styling.\\n\\n(b) The TOP-OF-CARD '+ ADD A TASK' link opened a separate NL-input form CARD below the runway (showNlInput state). Even though it wasn't a modal, it slid in as a new card that felt like a popup card — same disruption.\\n\\nFIX (a): all three section inline inputs stripped of gold tint + rail + shadow + animation. Now: transparent bg, subtle ink15 hairline border, no shadow, no animation. Reads as 'row grew.'\\n\\nFIX (b): the top '+ ADD A TASK' link no longer opens the NL form. Now it (1) expands the Today pile section if collapsed, (2) activates that section's inline '+ add' input, (3) smooth-scrolls to it. Net: tap '+ ADD A TASK' → input appears inline at the top of the Today pile, no popup card. Type, enter, task added. Same single inline flow that the per-section + add gives, just routed from the top.\\n\\nThe NL form (showNlInput) still exists in code but no UI path opens it anymore. If you ever want freeform multi-task parsing back, we can wire a quieter trigger; for now the inline-per-section flow is the only add path.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt472", summary: "Pile add is fully inline now. (a) Per-section + add inline input (bt416) stripped of popup styling — was gold tint + 4px rail + drop shadow + slide-in animation, now transparent bg + subtle hairline + no shadow + no animation. (b) Top '+ ADD A TASK' link no longer opens the NL form popup card; it expands the Today pile + activates that section's inline + add + scrolls to it. Single inline flow for all add paths. Build verified clean via esbuild." },
+  { version: "2026.05.05bt471", summary: "Per-row + insert chip is much quieter (just a muted glyph at 28% opacity, no bg/border/pill) and renders after more rows (gate broadened from task/routine-only to any !isPast && !isFree — meetings, pumps, feeds, completed all get a '+' after them now). Build verified clean via esbuild." },
   { version: "2026.05.05bt470", summary: "Added version display to first row of ⋯ menu ('BUILD · v{APP_VERSION}') for debugging stale-bundle issues. Tap ⋯ → top row shows what bundle is loaded. No other changes; all bt468 + bt469 fixes intact. Build verified clean via esbuild." },
   { version: "2026.05.05bt469", summary: "Per-row insertion. Small '+' chip between consecutive task/routine rows in the timeline; tap to call insertTaskAfterSlot at the row above's end time + open inline expand-edit. Quiet at rest (10px hairline gap, small gold pill at 60% opacity) so it doesn't clutter. Three insertion modes now: tap empty slot to fill, tap inter-row + to insert between, or use bottom +INSERT TASK to append. Also: confirmed bt468 changes shipped properly (user's screenshot was pre-deploy). Build verified clean via esbuild." },
   { version: "2026.05.05bt468", summary: "(1) Routine title tap → inline expand-edit (was opening RoutineOverrideSheet modal; bt460 only fixed the kebab path). (2) Top clutter trimmed: 'Add a task to today' button shrunk from giant italic Cormorant block to compact single-line mono 'ADD A TASK' link; TRADE IDEAS' 'Heads-up...' footer properly gated on tradePanelExpanded (was rendering unconditionally); DRIFT card text trimmed (removed redundant 'Schedule mismatched reality.' sub-phrase). (3) Confirmed +INSERT TASK at bottom of timeline (bt460) covers row-insertion. Build verified clean via esbuild." },
@@ -33022,7 +33024,27 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             {/* v05.05bt316/350/351 — Add-task pill, now BELOW runway. */}
             {currentUser === "Mommy" && !isTomorrow && !(productMode === "solo") && (
               <button
-                onClick={() => { setShowNlInput(true); setShowAddForm(false); }}
+                onClick={() => {
+                  // v05.05bt472 — Per chat: 'for the task pile, when
+                  // i add it...again it needs to be easy - it is
+                  // disruptive how a little thing pops up'. Was
+                  // setShowNlInput(true) which opens the NL form
+                  // popup card. Now: expand the today pile + activate
+                  // its inline + add input + scroll there. Adding
+                  // becomes a single inline flow (type, enter, done) —
+                  // no separate popup card.
+                  setTaskPileExpanded(true);
+                  setInlineSectionAdd("today");
+                  setInlineSectionAddDraft("");
+                  setShowAddForm(false);
+                  setShowNlInput(false);
+                  setTimeout(() => {
+                    const el = document.querySelector('[data-pile-section="today"]');
+                    if (el) {
+                      try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
+                    }
+                  }, 80);
+                }}
                 style={{
                   // v05.05bt468 — Per chat: 'this top part of the task
                   // plan is too...too much'. Was a giant italic
@@ -37456,24 +37478,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                     </div>
                   );
-                  // v05.05bt469 — Per chat: 'can we add the ability
-                  // to insert rows?'. Tiny "+" between rows lets you
-                  // insert a task at the end-time of the row above
-                  // (right between two filled tasks). Only renders
-                  // for task/routine rows that aren't the last in
-                  // the timeline, aren't past, and aren't free (free
-                  // rows already are tap-to-fill). The chip is super
-                  // quiet at rest (4px tall hairline + a small +)
-                  // so it doesn't clutter the timeline; tap fires
-                  // insertTaskAfterSlot at the slot's end time.
-                  if ((isTask || isRoutine) && !isPast && !isFree && !slot.completedAt) {
+                  // v05.05bt469 → bt471 — Per chat: 'the little
+                  // insert + button i feel should be less prominent
+                  // non? also there are some rows that dont have it'.
+                  // (1) Quieter: dropped the gold tint pill bg, now
+                  // just a tiny "+" character at low opacity that
+                  // reveals slightly more on touch (no bg, no border,
+                  // just the glyph). (2) Wider gate: was only after
+                  // task/routine rows; now renders after ANY non-free,
+                  // non-past row (meetings, pumps, feeds all get the
+                  // "+"). Free blocks still skip since they're already
+                  // tap-to-fill — adding a "+" after a free block
+                  // would be visually redundant.
+                  if (!isPast && !isFree) {
                     rows.push(
                       <div
                         key={`insert-after-${slot.id}-${i}`}
                         style={{
                           position: "relative",
-                          height: 10,
-                          margin: "-2px 0",
+                          height: 8,
+                          margin: "-1px 0",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -37485,15 +37509,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         }}
                         title="Insert a task here">
                         <span style={{
-                          display: "inline-flex",
-                          alignItems: "center", justifyContent: "center",
-                          width: 18, height: 14,
-                          background: `${C.gold}1a`,
-                          color: C.gold, fontWeight: 700,
+                          color: C.muted,
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 11, lineHeight: 1,
-                          borderRadius: 8,
-                          opacity: 0.6,
+                          fontSize: 10, lineHeight: 1, fontWeight: 400,
+                          opacity: 0.28,
                         }}>+</span>
                       </div>
                     );
@@ -39355,7 +39374,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "scheduled" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39482,7 +39501,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "today" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39743,7 +39762,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "backlog" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: `${C.gold}1a`, border: `1px solid ${C.gold}77`, borderLeft: `4px solid ${C.gold}`, borderRadius: 8, animation: "ll-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both", boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
+                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
