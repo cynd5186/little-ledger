@@ -15,11 +15,24 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt472";
+const APP_VERSION = "2026.05.05bt484";
 const APP_BUILD_NOTES = [
-  "PILE ADD IS NOW INLINE · NO MORE POPUP CARD. Per chat: 'for the task pile, when i add it...again it needs to be easy - it is disruptive how a little thing pops up'.\\n\\nDIAGNOSIS: two separate add paths both ended in popup feel.\\n\\n(a) The PER-SECTION '+ add' buttons (bt416) opened an inline input that LOOKED like a popup: gold tint bg + 4px gold left rail + drop shadow + slide-in animation. Same lesson as bt459b: those visual cues read as 'card popped up,' not 'row appeared.' All three section adds (Scheduled / Today / Backlog) had identical popup styling.\\n\\n(b) The TOP-OF-CARD '+ ADD A TASK' link opened a separate NL-input form CARD below the runway (showNlInput state). Even though it wasn't a modal, it slid in as a new card that felt like a popup card — same disruption.\\n\\nFIX (a): all three section inline inputs stripped of gold tint + rail + shadow + animation. Now: transparent bg, subtle ink15 hairline border, no shadow, no animation. Reads as 'row grew.'\\n\\nFIX (b): the top '+ ADD A TASK' link no longer opens the NL form. Now it (1) expands the Today pile section if collapsed, (2) activates that section's inline '+ add' input, (3) smooth-scrolls to it. Net: tap '+ ADD A TASK' → input appears inline at the top of the Today pile, no popup card. Type, enter, task added. Same single inline flow that the per-section + add gives, just routed from the top.\\n\\nThe NL form (showNlInput) still exists in code but no UI path opens it anymore. If you ever want freeform multi-task parsing back, we can wire a quieter trigger; for now the inline-per-section flow is the only add path.\\n\\nBuild verified clean via esbuild.",
+  "PERFORMANCE / LAG FIX — CRITICAL NOW-TICK BUG. Per chat: there is also an issue with things being slightly laggy and having to close and open to refresh.\\n\\nROOT CAUSE FOUND. The 15-second clock tick was passing the STALE closure-captured `now` reference back into setNow: setInterval(() => setNow(now), 15000). React bails out (no re-render) when setState is called with a value identical to the current one — and setNow(now) is the textbook case of that. So the clock literally never advanced from a tick. The only reason the UI ever updated when idle was that OTHER state changes (cloud sync, events being added, etc.) triggered re-renders which re-computed everything downstream and incidentally re-read Date(). When the app sat still, nothing updated until you backgrounded + foregrounded it — at which point the bt444 visibility listener fired, ALSO using setNow(now) (which I just fixed), but happening to land at a moment where some other state had drifted enough that React did re-render.\\n\\nFIX. All four setNow() call sites in the now-management effects now pass `new Date(Date.now() + timeTravelOffset)` — a fresh Date instance each time, with time-travel offset preserved. React detects the new reference and re-renders. The 15s interval, the offset-change snap, the visibility listener, and the focus listener are all fixed. Net: the now-line advances live, ACTIVE NOW glow shifts as the slot boundary crosses, countdowns count, freshness flags expire, and the inline now-line marker (bt476) slides smoothly down the active row in real time.\\n\\nSECONDARY FIX. The bt482 window-caregiver-flag effect was writing window.__llCaregiverActive on every events/now change — meaning every 15s when the now tick fires, the effect ran and wrote even though the boolean value was unchanged. Added a value comparison before the write. Saves a tiny bit of work and matches sane React practice.\\n\\nWHY THIS WAS THE LAG. With the clock frozen, every interaction that DID trigger a re-render (tapping a task, opening a modal, dragging) had to do MORE work than usual because the timestamps inside derived state were stale. The visible symptom: laggy interactions because the first render of any UI panel re-computed everything from a wrong-time baseline, then immediately needed to update.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt484", summary: "Performance / lag fix. CRITICAL: the 15s now-tick was setNow(now) — passing the stale closure reference back. React bails out on identical-value setState. Clock literally never advanced from a tick; only OTHER state changes incidentally re-rendered. Fixed all four setNow sites to use `new Date(Date.now() + timeTravelOffset)`. Plus: window-caregiver-flag effect now compares before writing instead of writing every 15s. Build verified clean via esbuild." },
+  { version: "2026.05.05bt483", summary: "JSX bug + UX sweep. (1) Critical fix: stray )} text inside pump card from a bt475 fragment-wrap leftover. (2) Top + ADD A TASK button removed per redundancy. (3) Insert chips hover-only via new .ll-insert-chip class (opacity 0.18 → 0.85 on hover; 0.22 on touch). (4) Brain Dump section now ALWAYS renders with an inline + add input at the top (type + Enter saves, no modal). Bulk paste and other-drawer inline patterns deferred to next build. Build verified clean via esbuild." },
+  { version: "2026.05.05bt482", summary: "Auto-Caregiver on weekdays + notifications snoozed under Caregiver. (1) New useEffect auto-creates a caregiver_window 6:00 AM - 6:30 PM on Mon-Fri when none exists and not WFH/dismissed. Tagged _autoCreated for safe teardown. Two App-level helpers exposed: dismissTodayAutoCaregiver + toggleWfhWeekday. (2) playNotificationSound now bails when window.__llCaregiverActive is true. New App-level useEffect sets the flag based on getActiveOrUpcomingCaregiverWindow(events, now). Build verified clean via esbuild." },
+  { version: "2026.05.05bt481", summary: "Two bottle-storage fixes. (1) Freezer empty bug: was missing the Empty freezer button entirely in InventoryView (only RT and Fridge had it) AND the bt101 cloud-resurrection protection window was 5 min, allowing slow syncs to revert empties. Fixed: added the button + extended window to 60 min. (2) RT-expiry auto-delete: now shows a big modal when an RT bottle crosses to expired with 4 options (Use now / → Fridge / → Freezer / Discard) + Decide later. Queue dequeues one at a time. Build verified clean via esbuild." },
+  { version: "2026.05.05bt480", summary: "Exports for Monday.com workflow. New 📤 EXPORT toggle next to filter chips in AllTasksView. Inline panel with scope (TODAY / THIS WEEK / ALL SHOWN) + 3 format buttons (CSV Monday-style / Markdown table / Plain text), each copies to clipboard. CSV columns: Title, Status, Date, Time, Effort, Focus, Group, Regret. Toast confirms with task count. Build verified clean via esbuild." },
+  { version: "2026.05.05bt479", summary: "Category header contrast fix in AllTasksView. Root cause: bt445 hardcoded #faf2e2 (cream) for dark-mode but in day/dawn the bg IS cream → invisible labels. Switched to palette-aware C.ink. Both label text and disclosure ▾ glyph updated. Build verified clean via esbuild." },
+  { version: "2026.05.05bt478", summary: "Routines draggable like tasks. Two bugs blocking it. (1) ⋮⋮ grip gated on isTask only — widened to (isTask || isRoutine). (2) endDrag routine detection used startsWith(\"rt-\") which doesn't match real routine ids (bedtime, mommy-pm, am-routine). Replaced with new draggingKindRef set in handleDragStart when long-press fires. Cleared in all cleanup paths. Routine drops on free blocks write to routineOverrides[id]={time}. Build verified clean via esbuild." },
+  { version: "2026.05.05bt477", summary: "Insert rows everywhere. Was: chip gated on !isPast && !isFree → no insert at top of timeline, no insert after free blocks. Now: (1) TOP chip pushed BEFORE the first non-past row (new topInsertRendered flag in forEach), anchors at slot.start. (2) AFTER-row gate widened to just !isPast — free blocks now get a chip too (lands at the free block's end time). Bottom +INSERT TASK button unchanged as catch-all for append. Build verified clean via esbuild." },
+  { version: "2026.05.05bt476", summary: "Now-line accurate mid-card. Was: separate row pushed before/after the active slot — for a 10-11am task at 10:30, the line rendered at 10:00 or 11:00 boundary, never at 10:30. Fix: when slot contains now (isNowBlock), inject an absolute-positioned line WITHIN the row at top:`${pct}%` where pct = (now - slot.start) / (slot.end - slot.start) * 100. Includes NOW {time} pill aligned via translateY(-50%). Color tracks dominant rail-segment owner. Standalone now-line suppressed when activeNowIdx >= 0. Build verified clean via esbuild." },
+  { version: "2026.05.05bt475", summary: "Round-two mega build: 6 more landed. (17) Passive-fill extra rows bug fixed — insertTaskAtTime now accepts hostId so freed-strip FILL stamps slottedIntoFreedTimeOf. (5) Gift-from-Daddy semantic — isTimeBankRedemption now matches '🎁 Gift from' label too, so gifts no longer render as blocking meetings; recipient can schedule + focus elevates via existing partner-on-duty branch. (4) Bedtime cascade — resolveRoutineOverlaps compresses instead of giving up on >45min overlaps; computeLightsOut now reads routineOverrides.bedtime as a source. (15) Snoozable wake check — new wake_check_snoozed event, ⌛ snooze 20m button. (18) Bulk edit beyond delete in sheet view: ✓ DONE, ⇋ FOCUS, R+, R−, tfoot column totals (count, effort sum, DEEP count). Also restored insert-row affordance: thin hairlines + gold '+ insert' label at opacity 0.55 instead of 28% bare glyph. Build verified clean via esbuild." },
+  { version: "2026.05.05bt474a", summary: "Hotfix to bt474. undoOnce/redoOnce/canUndo/canRedo/undoTick were declared at App scope but the TodayTaskPlanCard mount lives inside ShiftsView. Result: ReferenceError on render at ShiftsView line 19260. Fix: extend ShiftsView signature to accept the five undo props + App-level <ShiftsView> mount now passes them through. ShiftsView's inner TodayTaskPlanCard mount uses local prop refs (canUndo / canRedo) instead of trying to read the App-scope refs. Build verified clean via esbuild." },
+  { version: "2026.05.05bt474", summary: "Mega build: 8 big builds shipped. (1) Sheet view in AllTasksView with sortable headers + bulk-select + bulk-actions bar. (2) Universal undo snapshot stack (20 deep) with ⌘Z + ⋯ menu items. (6) Multi-concurrent tasks per pump host: .find→.filter, stacked rows, ADD ANOTHER button. (7) Smart routine NL: 'AM routine to 9am' / 'skip bedtime' parsed as routine overrides via detectRoutineIntent. (8) ↶ NOT PASSIVE link on freed strips to correct auto-detect false positives. (10) All Tasks DONE default 30d→14d + 🗄 ALL ARCHIVED toggle. (11) Routine drag: gate widened from task-only; endDrag routes routine drops to routineOverrides. (12) Brain dump auto-expands the destination pile section so items don't land silently + originatedFrom:'brain-dump' flag. Build verified clean via esbuild." },
+  { version: "2026.05.05bt473", summary: "Two fixes from a long list. (1) Routine inline edit actually works now — bt468 had routed to openExpandedEdit which only renders inside TaskRow (pile section), but timeline routines don't use TaskRow. Switched to setInlineTimeEdit which renders InlineTimeEditPanel directly in the timeline loop. Added isRoutine branch that writes to todaySetup.routineOverrides instead of tasks. (2) Click-outside-to-close on all inline editors. New useEffect on document pointerdown detects taps outside [data-inline-editor] containers and closes any open editor (expand-edit, empty-slot, time-edit, title-edit, section-add). Deferred to next turns: brain-dump backlog bug, passive-fill row duplication, bedtime overlap, passive-detect correction affordance, slider placement, daddy-gift semantics. Build verified clean via esbuild." },
   { version: "2026.05.05bt472", summary: "Pile add is fully inline now. (a) Per-section + add inline input (bt416) stripped of popup styling — was gold tint + 4px rail + drop shadow + slide-in animation, now transparent bg + subtle hairline + no shadow + no animation. (b) Top '+ ADD A TASK' link no longer opens the NL form popup card; it expands the Today pile + activates that section's inline + add + scrolls to it. Single inline flow for all add paths. Build verified clean via esbuild." },
   { version: "2026.05.05bt471", summary: "Per-row + insert chip is much quieter (just a muted glyph at 28% opacity, no bg/border/pill) and renders after more rows (gate broadened from task/routine-only to any !isPast && !isFree — meetings, pumps, feeds, completed all get a '+' after them now). Build verified clean via esbuild." },
   { version: "2026.05.05bt470", summary: "Added version display to first row of ⋯ menu ('BUILD · v{APP_VERSION}') for debugging stale-bundle issues. Tap ⋯ → top row shows what bundle is loaded. No other changes; all bt468 + bt469 fixes intact. Build verified clean via esbuild." },
@@ -1825,6 +1838,12 @@ function _playTone(freq, durationMs, opts = {}) {
 }
 function playNotificationSound(type) {
   if (!_soundEnabled()) return;
+  // v05.05bt482 — Per chat: 'when under caregiver all notifications
+  // should be snoozed'. Module-level window flag set by App when a
+  // caregiver_window is active. Skips the sound entirely so the
+  // caregiver isn't startled and the parent isn't bombarded by
+  // chimes while off-duty.
+  if (typeof window !== "undefined" && window.__llCaregiverActive) return;
   if (type === "wake") {
     _playTone(880, 160, { gain: 0.05, type: "sine" });
     _playTone(660, 200, { gain: 0.05, type: "sine", startOffset: 140 });
@@ -2868,6 +2887,13 @@ function SoleneHandoffInner() {
   // (1=tomorrow fine, 5=cannot push) which performs better than
   // urgent/important for emotionally-charged decisions.
   const [tasks, setTasks] = useState([]);
+  // v05.05bt475 — Build #2: UNIVERSAL UNDO. Snapshot-based undo for
+  // tasks + todaySetup. Captures up to 20 prior states; Undo pops
+  // the most recent and restores it. Used by ⋯ menu + keyboard ⌘Z.
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+  const undoRestoringRef = useRef(false);
+  const [undoTick, setUndoTick] = useState(0); // forces re-render of Undo button enabled-state
   // v05.05bt106 — parent-out-of-town context. Shape:
   //   { parent: "Mommy"|"Daddy", from: ISO, until: ISO|null, reason?: string }
   // Purpose: pure context for the task planner so off-duty blocks aren't
@@ -3081,29 +3107,42 @@ function SoleneHandoffInner() {
     };
   }, [bundleHash]);
 
+  // v05.05bt484 — Per chat: 'there is also an issue with things
+  // being slightly laggy and having to close and open to refresh'.
+  // CRITICAL: the interval was `setInterval(() => setNow(now), 15000)`
+  // passing the STALE captured `now` from closure. React bails out
+  // when setState is called with the SAME value (Object.is equality)
+  // — which is exactly what happens when you set state to a closure-
+  // captured reference. The clock never advanced. The only reason it
+  // ever appeared to work was that OTHER state changes (events,
+  // tasks, cloud sync) caused re-renders which re-computed everything
+  // downstream. When the app sat idle, nothing updated until you
+  // backgrounded + foregrounded it (visibility listener triggered).
+  // FIX: pass a fresh Date instance each tick. The offset support
+  // means we add timeTravelOffset to Date.now() so time-travel still
+  // works.
   useEffect(() => {
-    const t = setInterval(() => setNow(now), 15000);
+    const t = setInterval(() => setNow(new Date(Date.now() + timeTravelOffset)), 15000);
     return () => clearInterval(t);
   }, [timeTravelOffset]);
   // When the offset changes, snap `now` immediately so the UI reflects the
   // change without waiting for the next 15s tick.
   useEffect(() => {
-    setNow(now);
+    setNow(new Date(Date.now() + timeTravelOffset));
   }, [timeTravelOffset]);
-  // v05.05bt444 — Per chat: 'sometimes i have issues with the current
-  // time not refreshing unless i get out of the app and open it again'.
-  // Root cause: iOS Safari (and PWAs) throttle/pause setInterval when
-  // the app is backgrounded or the screen is locked, so the 15s ticker
-  // above doesn't fire reliably. Add a visibilitychange + focus listener
-  // that snaps `now` to current time whenever the app becomes active
-  // again. Belt-and-suspenders: both events fire on iOS reactivation.
+  // v05.05bt444 → bt484 — iOS Safari (and PWAs) throttle/pause
+  // setInterval when the app is backgrounded or the screen is
+  // locked. Visibility + focus listeners snap `now` to current time
+  // whenever the app becomes active again. Belt-and-suspenders:
+  // both events fire on iOS reactivation. bt484 fixes the inner
+  // call to use new Date() instead of the stale closure variable.
   useEffect(() => {
     const refreshNow = () => {
       if (document.visibilityState === "visible") {
-        setNow(now);
+        setNow(new Date(Date.now() + timeTravelOffset));
       }
     };
-    const onFocus = () => setNow(now);
+    const onFocus = () => setNow(new Date(Date.now() + timeTravelOffset));
     document.addEventListener("visibilitychange", refreshNow);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -3146,6 +3185,61 @@ function SoleneHandoffInner() {
       };
     }));
   }, [tasks, now, timeTravelOffset]);
+
+  // v05.05bt475 — Build #2: UNIVERSAL UNDO snapshot tracker. Pushes
+  // the previous state of tasks + todaySetup onto undoStackRef when
+  // either changes, unless we're currently restoring (would create a
+  // ping-pong). Cap stack at 20 snapshots.
+  const prevSnapshotRef = useRef({ tasks: [], todaySetup: null });
+  useEffect(() => {
+    if (undoRestoringRef.current) {
+      undoRestoringRef.current = false;
+      prevSnapshotRef.current = { tasks, todaySetup };
+      return;
+    }
+    const prev = prevSnapshotRef.current;
+    // Skip the very first run (no previous to push).
+    if (prev.tasks !== undefined && (prev.tasks !== tasks || prev.todaySetup !== todaySetup)) {
+      undoStackRef.current.push(prev);
+      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
+      // Pushing a new state invalidates the redo stack.
+      redoStackRef.current = [];
+      setUndoTick(t => t + 1);
+    }
+    prevSnapshotRef.current = { tasks, todaySetup };
+  }, [tasks, todaySetup]);
+
+  const undoOnce = () => {
+    if (undoStackRef.current.length === 0) return;
+    const snap = undoStackRef.current.pop();
+    redoStackRef.current.push({ tasks, todaySetup });
+    undoRestoringRef.current = true;
+    setTasks(snap.tasks);
+    setTodaySetup(snap.todaySetup);
+    setUndoTick(t => t + 1);
+  };
+  const redoOnce = () => {
+    if (redoStackRef.current.length === 0) return;
+    const snap = redoStackRef.current.pop();
+    undoStackRef.current.push({ tasks, todaySetup });
+    undoRestoringRef.current = true;
+    setTasks(snap.tasks);
+    setTodaySetup(snap.todaySetup);
+    setUndoTick(t => t + 1);
+  };
+
+  // Keyboard shortcut: ⌘Z / Ctrl+Z = undo; ⌘⇧Z / Ctrl+Shift+Z = redo.
+  useEffect(() => {
+    const handler = (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) redoOnce(); else undoOnce();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [tasks, todaySetup]);
 
   // v05.05bt447 — Per chat: 'i see alot of straight up duplicates -
   // those should be removed completely by the app without having to
@@ -3462,7 +3556,7 @@ function SoleneHandoffInner() {
       const incoming = rawIncoming.filter(b => {
         if (!b || !b.id) return true;
         const drainedAt = recentlyDrainedBottleIdsRef.current.get(b.id);
-        if (drainedAt && (Date.now() - drainedAt) < 5 * 60 * 1000) {
+        if (drainedAt && (Date.now() - drainedAt) < 60 * 60 * 1000) {
           console.warn(`[cloud-poll] rejecting recently-drained bottle id=${b.id} (drained ${((Date.now() - drainedAt) / 1000).toFixed(0)}s ago)`);
           return false;
         }
@@ -3517,7 +3611,7 @@ function SoleneHandoffInner() {
         }
         const recent = autoEndedTakeoverRef.current;
         if (recent && recent.startedAt === v.startedAt
-            && (Date.now() - recent.clearedAt) < 5 * 60 * 1000) {
+            && (Date.now() - recent.clearedAt) < 60 * 60 * 1000) {
           console.warn(`[cloud-sync] rejecting recently-cleared takeover (cleared ${((Date.now() - recent.clearedAt) / 1000).toFixed(0)}s ago)`);
           return;
         }
@@ -3643,8 +3737,11 @@ function SoleneHandoffInner() {
       }
     }
     inventoryPrevRef.current = inventory;
-    // Expire entries older than 5 min
-    const cutoff = Date.now() - 5 * 60 * 1000;
+    // v05.05bt481 — was 5 min; extended to 60 min so manual empties
+    // (especially "Empty freezer" which user does once and walks
+    // away) stay protected from cloud-sync resurrection even if the
+    // cloud snapshot stays stale longer.
+    const cutoff = Date.now() - 60 * 60 * 1000;
     for (const [id, at] of recentlyDrainedBottleIdsRef.current) {
       if (at < cutoff) recentlyDrainedBottleIdsRef.current.delete(id);
     }
@@ -4391,6 +4488,133 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     return { ...i, location: "freezer", frozenAt: new Date() };
   }));
   const removeInventory = (id) => setInventory(prev => prev.filter(i => i.id !== id));
+
+  // v05.05bt482 — Per chat: 'for weekdays, can you just automatically
+  // set to caregiver from 6a-6:30p and have an option to cancel out
+  // of it in case i pick her up early or i am WFH'. Auto-create a
+  // caregiver_window event covering 6:00 AM to 6:30 PM on weekdays
+  // (Mon-Fri) when none already exists. The user can dismiss for
+  // today via dismissTodayAutoCaregiver — stored in
+  // todaySetup.autoCaregiverDismissed[YYYY-MM-DD]. WFH = persistent
+  // weekday-pattern toggle stored in todaySetup.wfhWeekdays (boolean
+  // per weekday number 0-6; 1=Mon, etc.). Default: all 5 weekdays
+  // auto-caregiver ON, all WFH OFF.
+  useEffect(() => {
+    if (currentUser !== "Mommy") return; // Auto only for primary parent
+    const dow = now.getDay(); // 0=Sun, 1=Mon, ... 6=Sat
+    if (dow === 0 || dow === 6) return; // skip weekends
+    const todayKey = now.toISOString().slice(0, 10);
+    // Check WFH per-weekday opt-out
+    const wfhWeekdays = todaySetup?.wfhWeekdays || {};
+    if (wfhWeekdays[dow]) return;
+    // Check today-specific dismissal
+    const dismissed = (todaySetup?.autoCaregiverDismissed || {})[todayKey];
+    if (dismissed) return;
+    // Check if a caregiver_window already exists covering 6:00-18:30 today
+    const dayStart = new Date(now); dayStart.setHours(6, 0, 0, 0);
+    const dayEnd = new Date(now); dayEnd.setHours(18, 30, 0, 0);
+    const existing = (events || []).find(e => {
+      if (e.type !== "caregiver_window") return false;
+      if (e._patchOf) return false;
+      const est = new Date(e.ts).getTime();
+      const een = e.endTs ? new Date(e.endTs).getTime() : null;
+      if (!een) return false;
+      // Existing window covers most of the 6-18:30 range if it starts ≤ 8a and ends ≥ 5p
+      const eight = new Date(now); eight.setHours(8, 0, 0, 0);
+      const fivep = new Date(now); fivep.setHours(17, 0, 0, 0);
+      return est <= eight.getTime() && een >= fivep.getTime();
+    });
+    if (existing) return;
+    // Create the auto window
+    addEvent({
+      type: "caregiver_window",
+      ts: dayStart.toISOString(),
+      endTs: dayEnd.toISOString(),
+      ownerName: currentUser,
+      _autoCreated: true,
+    });
+  }, [now.toDateString(), currentUser, events, todaySetup]);
+
+  const dismissTodayAutoCaregiver = () => {
+    const todayKey = now.toISOString().slice(0, 10);
+    setTodaySetup(prev => ({
+      ...(prev || {}),
+      date: todayKey,
+      autoCaregiverDismissed: {
+        ...((prev || {}).autoCaregiverDismissed || {}),
+        [todayKey]: true,
+      },
+    }));
+    // Also tear down the auto-created window for today (TAKE BACK NOW).
+    const todayStr = now.toISOString().slice(0, 10);
+    setEvents(prev => prev.filter(e => {
+      if (e.type !== "caregiver_window") return true;
+      if (!e._autoCreated) return true;
+      const est = new Date(e.ts).toISOString().slice(0, 10);
+      return est !== todayStr;
+    }));
+  };
+
+  const toggleWfhWeekday = (dow) => {
+    setTodaySetup(prev => ({
+      ...(prev || {}),
+      wfhWeekdays: {
+        ...((prev || {}).wfhWeekdays || {}),
+        [dow]: !((prev || {}).wfhWeekdays || {})[dow],
+      },
+    }));
+  };
+
+  // v05.05bt482 → bt484 — Per chat: 'when under caregiver all
+  // notifications should be snoozed'. Set a module-level window flag
+  // so playNotificationSound (defined outside the App component)
+  // can skip without needing React context. Only writes when the
+  // boolean actually changes — was setting on every events/now
+  // change which fired every 15s on the now-tick and was a small
+  // contributor to perceived lag.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cgWin = getActiveOrUpcomingCaregiverWindow(events, now);
+    const cgActive = !!(cgWin && cgWin.state === "active");
+    if (window.__llCaregiverActive !== cgActive) {
+      window.__llCaregiverActive = cgActive;
+    }
+    return () => { if (typeof window !== "undefined") window.__llCaregiverActive = false; };
+  }, [events, now]);
+
+  // v05.05bt481 — Per chat: 'when a bottle has expired at RT, it
+  // gets automatically deleted with no prompt. I think there should
+  // be a pop up notification that is big to either use or move to
+  // fridge or freezer'. Detect the moment an RT bottle crosses from
+  // valid → expired and queue it for the prompt. Ref tracks bottle
+  // ids previously seen as RT-valid; useEffect diffs against current
+  // liveInventory and pushes newly-expired RT bottles into a queue.
+  const previouslyRtValidRef = useRef(new Set());
+  const [rtExpiryQueue, setRtExpiryQueue] = useState([]); // [{id, oz, pumpedAt, ageHrs}, ...]
+  useEffect(() => {
+    const currentRtIds = new Set();
+    const newlyExpiredRt = [];
+    for (const item of liveInventory) {
+      if (item.location !== "rt") continue;
+      if (!item.expired) {
+        currentRtIds.add(item.id);
+      } else if (previouslyRtValidRef.current.has(item.id)) {
+        // Was valid last render, expired this render → new transition.
+        newlyExpiredRt.push({
+          id: item.id, oz: item.oz, pumpedAt: item.pumpedAt, ageHrs: item.ageHrs,
+        });
+      }
+    }
+    previouslyRtValidRef.current = currentRtIds;
+    if (newlyExpiredRt.length > 0) {
+      setRtExpiryQueue(prev => {
+        // Dedupe by id in case the same bottle gets queued twice.
+        const seen = new Set(prev.map(b => b.id));
+        const additions = newlyExpiredRt.filter(b => !seen.has(b.id));
+        return additions.length > 0 ? [...prev, ...additions] : prev;
+      });
+    }
+  }, [liveInventory]);
 
   // Bulk import: atomically add many events at once, plus generate inventory
   // entries for any pump events that have oz. This is the bulk-paste handler;
@@ -7002,6 +7226,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setShowSleepDownPicker(true);
           }}
           onConfirmAwake={() => addEvent({ type: "wake_confirmed", silent: true })}
+          onSnoozeWakeCheck={() => addEvent({ type: "wake_check_snoozed", silent: true })}
           onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }}
           onSkipBath={() => addEvent({ type: "bath_skipped", silent: true })}
           onSnoozeBath={() => addEvent({
@@ -7201,6 +7426,10 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             events={events} addEvent={addEvent}
             tasks={tasks} setTasks={setTasks}
             parentAway={parentAway} setParentAway={setParentAway}
+            undoOnce={undoOnce} redoOnce={redoOnce}
+            canUndo={undoStackRef.current.length > 0}
+            canRedo={redoStackRef.current.length > 0}
+            undoTick={undoTick}
             pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
             nextPumpAt={nextPumpAt} lastPump={lastPump}
             activePump={activePump}
@@ -7550,6 +7779,123 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           onClose={() => setRedeemingGift(null)}
         />
       )}
+
+      {/* v05.05bt481 — RT-EXPIRY PROMPT. Big modal that surfaces when
+          a bottle crosses from valid → expired AT RT. User picks:
+          Use now / → fridge / → freezer / Discard. No auto-delete.
+          Queue dequeues one bottle at a time so each gets a dialog. */}
+      {rtExpiryQueue.length > 0 && (() => {
+        const b = rtExpiryQueue[0];
+        const dismiss = () => setRtExpiryQueue(prev => prev.slice(1));
+        const pumpedTime = b.pumpedAt ? new Date(b.pumpedAt) : null;
+        const fmtPumpedTime = pumpedTime ? (() => {
+          const h = pumpedTime.getHours();
+          const m = pumpedTime.getMinutes();
+          const ap = h < 12 ? "AM" : "PM";
+          const h12 = ((h + 11) % 12) + 1;
+          return `${h12}:${String(m).padStart(2, "0")} ${ap}`;
+        })() : "—";
+        return (
+          <div style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 200,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }}>
+            <div style={{
+              maxWidth: 380, width: "100%",
+              background: C.paper, border: `2px solid ${C.accent}`,
+              borderRadius: 14, padding: "20px 22px",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+            }}>
+              <div style={{ fontSize: 32, textAlign: "center", marginBottom: 4 }}>⚠️</div>
+              <h2 style={{
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                fontStyle: "italic", fontWeight: 500, fontSize: 22,
+                color: C.ink, margin: 0, marginBottom: 6, textAlign: "center",
+                lineHeight: 1.15,
+              }}>Bottle past safe RT window</h2>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, color: C.muted, letterSpacing: "0.05em",
+                textAlign: "center", marginBottom: 14,
+              }}>
+                {b.oz} OZ · PUMPED {fmtPumpedTime} · {Math.round(b.ageHrs)}H AGO
+              </div>
+              <div style={{
+                fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                fontSize: 13.5, color: C.ink, lineHeight: 1.45,
+                marginBottom: 16, textAlign: "center",
+              }}>
+                What would you like to do with it? Won't auto-delete — your choice.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <button onClick={() => {
+                  // Use now — let user log a feed.
+                  setLoggerType("feed");
+                  setShowLogger(true);
+                  dismiss();
+                }} style={{
+                  background: C.sage, color: "#fff", border: "none",
+                  padding: "10px 12px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>Use now</button>
+                <button onClick={() => {
+                  moveToFridge(b.id);
+                  dismiss();
+                }} style={{
+                  background: "transparent", color: C.daddy,
+                  border: `1.5px solid ${C.daddy}`,
+                  padding: "10px 12px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>→ Fridge</button>
+                <button onClick={() => {
+                  moveToFreezer(b.id);
+                  dismiss();
+                }} style={{
+                  background: "transparent", color: "#5C7D55",
+                  border: `1.5px solid #5C7D55`,
+                  padding: "10px 12px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>→ Freezer</button>
+                <button onClick={() => {
+                  if (window.confirm(`Discard this ${b.oz}oz bottle? This can't be undone.`)) {
+                    removeInventory(b.id);
+                    dismiss();
+                  }
+                }} style={{
+                  background: "transparent", color: C.accent,
+                  border: `1.5px solid ${C.accent}`,
+                  padding: "10px 12px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit",
+                }}>Discard</button>
+              </div>
+              <button onClick={dismiss} style={{
+                marginTop: 10, width: "100%",
+                background: "transparent", color: C.muted,
+                border: "none", padding: "6px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9.5, fontWeight: 700, letterSpacing: "0.10em",
+                cursor: "pointer", textTransform: "uppercase", opacity: 0.7,
+              }}>Decide later</button>
+              {rtExpiryQueue.length > 1 && (
+                <div style={{
+                  marginTop: 4, textAlign: "center",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, color: C.muted, letterSpacing: "0.10em",
+                }}>
+                  {rtExpiryQueue.length - 1} more bottle{rtExpiryQueue.length === 2 ? "" : "s"} waiting
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* On-site / ETA modals at App level — triggered from NowView's
           on-site control or from anywhere else that needs to start/update
@@ -10768,6 +11114,17 @@ function FontImports() {
       .log-glow { animation: log-glow 2.2s ease-in-out infinite; }
       .nl-now-pill-pulse { animation: nl-now-pill-pulse 2.4s ease-in-out infinite; }
       .nl-now-line-pulse { animation: nl-now-line-pulse 2.4s ease-in-out infinite; }
+      /* v05.05bt483 — Per chat (with Monday.com as reference):
+         insert chip should only show on hover rather than always
+         cluttering the UI. Mobile/touch (no hover support) keeps a
+         faint baseline so the affordance is still discoverable. */
+      .ll-insert-chip { opacity: 0.18; transition: opacity 0.15s ease; }
+      .ll-insert-chip:hover { opacity: 0.85; }
+      @media (hover: none) {
+        /* On touch devices: stay quiet but tappable. The hairline +
+           tiny + glyph remain at very low opacity. */
+        .ll-insert-chip { opacity: 0.22; }
+      }
     `}</style>
   );
 }
@@ -11061,7 +11418,7 @@ function InMeetingBanner({ C, commitment, now, onEndEarly }) {
 // Per user direction: appears at the scheduled time (no early warning),
 // gets more visually urgent as the grace period nears, either parent can
 // confirm, and attribution is shown so the partner knows who tapped.
-function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPump, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
+function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, diaperUrgentH, lastSleep, lastWake, lastWakeConfirmed, events, addEvent, setEventsRaw, now, totalSafeOz, rtSafeOz, fridgeOz, feedsRunway, onsite, handoffNote, onAckNote, onOpenNoteEditor, onOpenArchive, archiveCount, onLogSleepDown, onConfirmAwake, onSnoozeWakeCheck, onOpenBathLog, onSkipBath, onSnoozeBath, morningRoutineSteps, setMorningRoutineSteps, onMarkMorningDone, onSnoozeMorning, onMarkThawing, onSnoozeThaw, handoffHours, currentUser, rtItems, fridgeItems, freezerItems, nextPumpAt, lastPump, lastPumpedItem, todayCalories, activePump, onStartPump, onEndActivePump, takeover, onStartTakeover, onEndTakeover, onPickBottle, onQuickUseBottle, onEditBottle, onDiscardBottle, activeCoveringCommitment, myActiveCommitment, onEndCommitmentEarly, onQuickLog, handoffPaused, tripParent, tripUntil, onOpenCaregiverPlanner }) {
   // Use threaded thresholds if provided; fall back to legacy constants
   // (defensive — keeps the card usable if any caller forgets to pass them).
   const WARN_H = diaperWarnH != null ? diaperWarnH : DIAPER_WARN_HOURS;
@@ -11142,6 +11499,14 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     // event, or where cloud sync is mid-flight. The banner is a check-in,
     // not a critical alert; bias to dismissing rather than persisting.
     const oneHourAgo = new Date(now.getTime() - 60 * 60000);
+    // v05.05bt475 — Build #15: snoozable wake check. A "wake_check_snoozed"
+    // event suppresses the prompt for 20 min from the snooze ts.
+    const twentyMinAgo = new Date(now.getTime() - 20 * 60000);
+    const recentSnooze = events.find(e =>
+      e.type === "wake_check_snoozed" &&
+      new Date(e.ts) >= twentyMinAgo
+    );
+    if (recentSnooze) return null;
     const recentWakeOrSleep = events.find(e =>
       (e.type === "wake_confirmed" || e.type === "sleep_down") &&
       new Date(e.ts) >= oneHourAgo
@@ -11684,6 +12049,21 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
               <Sun size={12} /> Still awake
             </button>
           </div>
+          {/* v05.05bt475 — Build #15: snooze button. Suppresses the
+              prompt for 20 min so the caregiver isn't badgered while
+              hands are full. Logs a wake_check_snoozed event. */}
+          {onSnoozeWakeCheck && (
+            <button onClick={onSnoozeWakeCheck} style={{
+              marginTop: 6, width: "100%",
+              background: "transparent", color: C.muted,
+              border: "none", padding: "5px",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+              cursor: "pointer", textTransform: "uppercase", opacity: 0.7,
+            }}>
+              ⌛ snooze 20m
+            </button>
+          )}
         </div>
       )}
 
@@ -17880,6 +18260,9 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
   // Each user-facing group (LIMS · 35 / GRANT · 1 / etc.) is
   // collapsible; collapsed state persisted in-session.
   const [viewMode, setViewMode] = useState("category");
+  // v05.05bt474 — Sheet view (#1 Pattern C). Sort + bulk-select state.
+  const [sheetSort, setSheetSort] = useState({ col: "regret", dir: "desc" });
+  const [sheetSelected, setSheetSelected] = useState(() => new Set());
   // v05.05bt351 — Per chat: 'now instead of a long list we have
   // categories and can filter by regret score and deep work.' Two
   // filter chips at the top of the category view: high-regret-only
@@ -18040,9 +18423,20 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
   const mergeArmTimerRef = useRef(null);
   const userTint = currentUser === "Mommy" ? C.mommy : C.daddy;
 
+  // v05.05bt474 — Build #10: All Tasks across days scope. Default
+  // shows last 14 days of completed + everything not completed.
+  // Toggle in the filter row reveals all archived completed items.
+  const [showAllArchived, setShowAllArchived] = useState(false);
+  // v05.05bt480 — Per chat: 'why can\'t we have exports for the end
+  // of the day of the week instead so i can store it in my monday
+  // board'. Export panel state. Scope: today / this-week / all-shown.
+  // Generates CSV (Monday-style import), Markdown table, or plain list.
+  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [exportScope, setExportScope] = useState("today"); // today | week | all
+  const [exportToast, setExportToast] = useState(null);
   const today = new Date(now); today.setHours(0,0,0,0);
   const dayMs = 24 * 60 * 60 * 1000;
-  const last30 = today.getTime() - 30 * dayMs;
+  const scopeCutoff = showAllArchived ? -Infinity : (today.getTime() - 14 * dayMs);
 
   // Status derivation per task
   const enrich = (t) => {
@@ -18058,7 +18452,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
     .filter(t => {
       if (t._status === "done" && t.completedAt) {
         const ts = new Date(t.completedAt).getTime();
-        if (ts < last30) return false;
+        if (ts < scopeCutoff) return false;
       }
       return true;
     });
@@ -18380,6 +18774,32 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         }} title="Show only deep-focus tasks">
           🧠 deep {deepOnly ? "✓" : ""}
         </button>
+        {/* v05.05bt474 — Build #10: scope toggle for All Tasks. Off
+            (default) = last 14 days of completed. On = no cutoff. */}
+        <button onClick={() => setShowAllArchived(v => !v)} style={{
+          background: showAllArchived ? `${C.gold}22` : "transparent",
+          color: showAllArchived ? C.gold : C.muted,
+          border: `1px solid ${showAllArchived ? C.gold + "66" : C.line + "33"}`,
+          borderRadius: 6, padding: "3px 9px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+          cursor: "pointer", textTransform: "uppercase",
+        }} title="Toggle: show all archived completed (default: last 14 days)">
+          🗄 all archived {showAllArchived ? "✓" : ""}
+        </button>
+        {/* v05.05bt480 — Export trigger. Opens an inline panel below
+            with scope + format options. */}
+        <button onClick={() => setShowExportPanel(v => !v)} style={{
+          background: showExportPanel ? `${C.mommy}22` : "transparent",
+          color: showExportPanel ? C.mommy : C.muted,
+          border: `1px solid ${showExportPanel ? C.mommy + "66" : C.line + "33"}`,
+          borderRadius: 6, padding: "3px 9px",
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+          cursor: "pointer", textTransform: "uppercase",
+        }} title="Export tasks for pasting into Monday.com or other tools">
+          📤 export
+        </button>
         {(regretHighOnly || deepOnly) && (
           <button onClick={() => { setRegretHighOnly(false); setDeepOnly(false); }} style={{
             marginLeft: 2, background: "transparent",
@@ -18426,6 +18846,18 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
             fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
             cursor: "pointer", textTransform: "uppercase",
           }}>Status</button>
+          {/* v05.05bt474 — Per chat #1 Pattern C: Monday-style Sheet
+              view. Third toggle option renders a flat, sortable
+              grid below in place of category/status groupings. */}
+          <button onClick={() => setViewMode("sheet")} style={{
+            background: viewMode === "sheet" ? `${userTint}22` : "transparent",
+            color: viewMode === "sheet" ? userTint : C.muted,
+            border: `1px solid ${viewMode === "sheet" ? userTint + "55" : C.line + "33"}`,
+            borderRadius: 6, padding: "3px 9px",
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, fontWeight: 700, letterSpacing: "0.10em",
+            cursor: "pointer", textTransform: "uppercase",
+          }}>Sheet</button>
           {useCategoryGroups && expandedGroups.size > 0 && (
             <button onClick={() => setExpandedGroups(new Set())} style={{
               marginLeft: "auto",
@@ -18467,8 +18899,443 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
         </div>
       )}
 
+      {/* v05.05bt480 — EXPORT PANEL. Renders inline below the filter
+          row when showExportPanel is true. Scope toggles + format
+          buttons that copy to clipboard. */}
+      {showExportPanel && (() => {
+        // Build the scope set based on exportScope.
+        const todayKey = now.toISOString().slice(0, 10);
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const scopeFilter = (t) => {
+          if (exportScope === "today") {
+            // Today = scheduledDate today OR completedAt today
+            if (t.scheduledDate === todayKey) return true;
+            if (t.completedAt && new Date(t.completedAt).toISOString().slice(0, 10) === todayKey) return true;
+            return false;
+          }
+          if (exportScope === "week") {
+            // Last 7 days: completedAt OR scheduledDate within range
+            if (t.completedAt && new Date(t.completedAt) >= oneWeekAgo) return true;
+            if (t.scheduledDate && t.scheduledDate >= oneWeekAgo.toISOString().slice(0, 10)) return true;
+            return false;
+          }
+          return true; // all-shown = use current filtered set
+        };
+        const exportTasks = (exportScope === "all" ? filtered : all.filter(scopeFilter));
+        const escCsv = (s) => {
+          const str = String(s ?? "").replace(/"/g, '""');
+          return /[",\n]/.test(str) ? `"${str}"` : str;
+        };
+        const fmtTimeAmPm = (hhmm) => {
+          if (!hhmm) return "";
+          const [h, m] = hhmm.split(":").map(Number);
+          if (!isFinite(h)) return "";
+          const ap = h < 12 ? "AM" : "PM";
+          const h12 = ((h + 11) % 12) + 1;
+          return m === 0 ? `${h12}:00 ${ap}` : `${h12}:${String(m).padStart(2, "0")} ${ap}`;
+        };
+        const focusLabel = (t) => normalizeFocus(t.focusLevel) === "deep" ? "Deep" : "Light";
+        const statusLabel = (t) => {
+          if (t.completedAt) return "Done";
+          if (t.scheduledTime) return "Scheduled";
+          if (t.scheduledDate) return "Today";
+          return "Backlog";
+        };
+        const buildCsv = () => {
+          const header = ["Title", "Status", "Date", "Time", "Effort (min)", "Focus", "Group", "Regret"];
+          const rows = exportTasks.map(t => [
+            t.title || "",
+            statusLabel(t),
+            t.completedAt ? new Date(t.completedAt).toISOString().slice(0, 10) : (t.scheduledDate || ""),
+            fmtTimeAmPm(t.scheduledTime),
+            t.effortMin || "",
+            focusLabel(t),
+            t.taskGroup || inferTaskGroup(t.title) || "",
+            t.regretScore != null ? `R${t.regretScore}` : "",
+          ]);
+          return [header, ...rows].map(r => r.map(escCsv).join(",")).join("\n");
+        };
+        const buildMarkdown = () => {
+          const header = "| Title | Status | Date | Time | Effort | Focus | Group | R |";
+          const sep = "|---|---|---|---|---|---|---|---|";
+          const rows = exportTasks.map(t =>
+            `| ${(t.title || "").replace(/\|/g, "\\|")} | ${statusLabel(t)} | ${t.completedAt ? new Date(t.completedAt).toISOString().slice(0, 10) : (t.scheduledDate || "—")} | ${fmtTimeAmPm(t.scheduledTime) || "—"} | ${t.effortMin || "—"} | ${focusLabel(t)} | ${(t.taskGroup || inferTaskGroup(t.title) || "—").replace(/\|/g, "\\|")} | ${t.regretScore != null ? "R" + t.regretScore : "—"} |`
+          );
+          return [header, sep, ...rows].join("\n");
+        };
+        const buildPlain = () => {
+          return exportTasks.map(t => {
+            const status = statusLabel(t);
+            const meta = [
+              t.scheduledDate || (t.completedAt ? new Date(t.completedAt).toISOString().slice(0, 10) : null),
+              fmtTimeAmPm(t.scheduledTime) || null,
+              t.effortMin ? `${t.effortMin}m` : null,
+              focusLabel(t),
+              t.taskGroup || inferTaskGroup(t.title) || null,
+            ].filter(Boolean).join(" · ");
+            const prefix = t.completedAt ? "[✓]" : "[ ]";
+            return `${prefix} ${t.title} — ${status}${meta ? " (" + meta + ")" : ""}`;
+          }).join("\n");
+        };
+        const copyToClipboard = async (text, label) => {
+          try {
+            await navigator.clipboard.writeText(text);
+            setExportToast(`Copied ${label} · ${exportTasks.length} task${exportTasks.length === 1 ? "" : "s"}`);
+            setTimeout(() => setExportToast(null), 2500);
+          } catch (err) {
+            setExportToast("Copy failed — try long-pressing");
+            setTimeout(() => setExportToast(null), 2500);
+          }
+        };
+        return (
+          <div style={{
+            margin: "8px 4px 14px",
+            padding: 12,
+            background: `${C.mommy}0a`,
+            border: `1px solid ${C.mommy}44`,
+            borderRadius: 8,
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 9, letterSpacing: "0.14em",
+              textTransform: "uppercase", color: C.muted,
+              marginBottom: 8, fontWeight: 700,
+            }}>
+              Export · {exportTasks.length} task{exportTasks.length === 1 ? "" : "s"} in scope
+            </div>
+            {/* Scope toggle */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+              {[
+                { key: "today", label: "TODAY" },
+                { key: "week", label: "THIS WEEK" },
+                { key: "all", label: "ALL SHOWN" },
+              ].map(opt => (
+                <button key={opt.key} onClick={() => setExportScope(opt.key)} style={{
+                  background: exportScope === opt.key ? `${C.mommy}22` : "transparent",
+                  color: exportScope === opt.key ? C.mommy : C.muted,
+                  border: `1px solid ${exportScope === opt.key ? C.mommy + "66" : C.line + "33"}`,
+                  borderRadius: 5, padding: "4px 9px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                  cursor: "pointer",
+                }}>{opt.label}</button>
+              ))}
+            </div>
+            {/* Format buttons */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button onClick={() => copyToClipboard(buildCsv(), "CSV")} style={{
+                background: C.mommy, color: "#fff", border: "none",
+                borderRadius: 6, padding: "7px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                cursor: "pointer", flex: 1, minWidth: 140,
+              }}>📋 COPY CSV (Monday)</button>
+              <button onClick={() => copyToClipboard(buildMarkdown(), "Markdown")} style={{
+                background: "transparent", color: C.ink,
+                border: `1px solid ${C.line}55`,
+                borderRadius: 6, padding: "7px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                cursor: "pointer", flex: 1, minWidth: 120,
+              }}>📋 MARKDOWN</button>
+              <button onClick={() => copyToClipboard(buildPlain(), "plain text")} style={{
+                background: "transparent", color: C.ink,
+                border: `1px solid ${C.line}55`,
+                borderRadius: 6, padding: "7px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.08em",
+                cursor: "pointer", flex: 1, minWidth: 100,
+              }}>📋 PLAIN</button>
+            </div>
+            <div style={{
+              marginTop: 8,
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+              fontStyle: "italic", fontSize: 11.5, color: C.muted,
+            }}>
+              CSV pastes cleanly into Monday.com (File → Import items → CSV).
+              Markdown works for Notion / Obsidian. Plain text for notes / Slack.
+            </div>
+            {exportToast && (
+              <div style={{
+                marginTop: 8, padding: "6px 10px",
+                background: `${C.sage}22`, border: `1px solid ${C.sage}66`,
+                borderRadius: 5,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, color: C.sage, fontWeight: 700, letterSpacing: "0.05em",
+              }}>✓ {exportToast}</div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* v05.05bt474 — SHEET VIEW (#1 Pattern C). Flat sortable
+          grid with bulk selection. Renders when viewMode==='sheet'.
+          Falls through to the legacy groups render otherwise. */}
+      {viewMode === "sheet" && filtered.length > 0 && (() => {
+        const sorted = [...filtered].sort((a, b) => {
+          const dir = sheetSort.dir === "asc" ? 1 : -1;
+          const col = sheetSort.col;
+          if (col === "regret") return dir * (((a.regretScore || 0) - (b.regretScore || 0)));
+          if (col === "title") return dir * ((a.title || "").localeCompare(b.title || ""));
+          if (col === "day") return dir * ((a.scheduledDate || "9999").localeCompare(b.scheduledDate || "9999"));
+          if (col === "time") return dir * ((a.scheduledTime || "99:99").localeCompare(b.scheduledTime || "99:99"));
+          if (col === "effort") return dir * (((a.effortMin || 0) - (b.effortMin || 0)));
+          if (col === "focus") {
+            const af = normalizeFocus(a.focusLevel) === "deep" ? 0 : 1;
+            const bf = normalizeFocus(b.focusLevel) === "deep" ? 0 : 1;
+            return dir * (af - bf);
+          }
+          if (col === "group") return dir * ((a.taskGroup || inferTaskGroup(a.title) || "ZZ").localeCompare(b.taskGroup || inferTaskGroup(b.title) || "ZZ"));
+          if (col === "status") return dir * ((a._status || "").localeCompare(b._status || ""));
+          return 0;
+        });
+        const toggleSort = (col) => setSheetSort(prev =>
+          prev.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "desc" }
+        );
+        const toggleRow = (id) => setSheetSelected(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          return next;
+        });
+        const allSelected = sorted.length > 0 && sorted.every(t => sheetSelected.has(t.id));
+        const toggleAll = () => setSheetSelected(allSelected ? new Set() : new Set(sorted.map(t => t.id)));
+        const SortHdr = ({ col, label, w }) => (
+          <button
+            onClick={() => toggleSort(col)}
+            style={{
+              width: w, padding: "6px 4px",
+              background: "transparent", border: "none",
+              textAlign: "left", cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 8.5, fontWeight: 800, letterSpacing: "0.10em",
+              color: sheetSort.col === col ? C.ink : C.muted,
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+            }}>
+            {label}{sheetSort.col === col ? (sheetSort.dir === "asc" ? " ↑" : " ↓") : ""}
+          </button>
+        );
+        const fmtTime = (hhmm) => {
+          if (!hhmm) return "—";
+          const [h, m] = hhmm.split(":").map(Number);
+          if (!isFinite(h)) return "—";
+          const ap = h < 12 ? "a" : "p";
+          const h12 = ((h + 11) % 12) + 1;
+          return m === 0 ? `${h12}${ap}` : `${h12}:${String(m).padStart(2, "0")}${ap}`;
+        };
+        const fmtDay = (iso) => {
+          if (!iso) return "—";
+          const d = new Date(iso + "T00:00");
+          return `${d.getMonth() + 1}/${d.getDate()}`;
+        };
+        return (
+          <>
+            <div style={{
+              overflowX: "auto",
+              border: `1px solid ${C.line}33`,
+              borderRadius: 8,
+              marginBottom: sheetSelected.size > 0 ? 60 : 14,
+            }}>
+              <table style={{
+                width: "100%", minWidth: 720,
+                borderCollapse: "collapse",
+                fontFamily: "inherit",
+              }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.line}33`, background: `${C.ink}05` }}>
+                    <th style={{ width: 32, padding: "6px 8px", textAlign: "left" }}>
+                      <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                    </th>
+                    <th style={{ padding: 0 }}><SortHdr col="regret" label="R" w={36} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="title" label="Title" w={220} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="day" label="Day" w={56} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="time" label="Time" w={56} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="effort" label="Eff" w={50} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="focus" label="Focus" w={64} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="group" label="Group" w={100} /></th>
+                    <th style={{ padding: 0 }}><SortHdr col="status" label="Status" w={86} /></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((t) => {
+                    const sel = sheetSelected.has(t.id);
+                    const focus = normalizeFocus(t.focusLevel);
+                    const group = t.taskGroup || inferTaskGroup(t.title) || "—";
+                    return (
+                      <tr key={t.id} style={{
+                        borderBottom: `1px solid ${C.line}1a`,
+                        background: sel ? `${C.gold}10` : "transparent",
+                      }}>
+                        <td style={{ padding: "6px 8px" }}>
+                          <input type="checkbox" checked={sel} onChange={() => toggleRow(t.id)} />
+                        </td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: regretColor((t.regretScore || 0), C) }}>
+                          R{t.regretScore || 0}
+                        </td>
+                        <td
+                          onClick={() => onEditTask && onEditTask(t)}
+                          style={{
+                            padding: "6px 4px",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                            fontSize: 13, color: C.ink,
+                            cursor: onEditTask ? "pointer" : "default",
+                            textDecoration: t.completedAt ? "line-through" : "none",
+                            opacity: t.completedAt ? 0.6 : 1,
+                          }}>
+                          {t.title}
+                        </td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>{fmtDay(t.scheduledDate)}</td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>{fmtTime(t.scheduledTime)}</td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted }}>{t.effortMin || "—"}</td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: focus === "deep" ? "#9B5C7E" : "#7B9B6E", fontWeight: 700 }}>
+                          {focus === "deep" ? "DEEP" : "LIGHT"}
+                        </td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.05em" }}>{String(group).toUpperCase().slice(0, 12)}</td>
+                        <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase" }}>{t._status || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {/* v05.05bt475 — Build #18: column totals row. Sums
+                    effortMin across all sorted rows + counts. */}
+                <tfoot>
+                  <tr style={{ borderTop: `2px solid ${C.line}55`, background: `${C.ink}06` }}>
+                    <td style={{ padding: "6px 8px" }}></td>
+                    <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: C.muted, fontWeight: 700 }}>Σ</td>
+                    <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.ink, fontWeight: 700 }}>
+                      {sorted.length} task{sorted.length === 1 ? "" : "s"}
+                    </td>
+                    <td></td>
+                    <td></td>
+                    <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.ink, fontWeight: 700 }}>
+                      {(() => {
+                        const total = sorted.reduce((s, x) => s + (x.effortMin || 0), 0);
+                        return total < 60 ? `${total}m` : (total % 60 === 0 ? `${total / 60}h` : `${Math.floor(total / 60)}h${total % 60}m`);
+                      })()}
+                    </td>
+                    <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: FOCUS_COLOR.deep, fontWeight: 700 }}>
+                      {sorted.filter(x => normalizeFocus(x.focusLevel) === "deep").length} DEEP
+                    </td>
+                    <td></td>
+                    <td style={{ padding: "6px 4px", fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: C.muted, fontWeight: 700 }}>
+                      {sheetSelected.size > 0 ? `${sheetSelected.size} ✓` : ""}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {/* Bulk action bar */}
+            {sheetSelected.size > 0 && (
+              <div style={{
+                position: "fixed", bottom: 16, left: 16, right: 16,
+                background: C.paper, border: `2px solid ${C.gold}`,
+                borderRadius: 10, padding: "10px 14px",
+                display: "flex", alignItems: "center", gap: 12,
+                zIndex: 80, boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
+              }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: C.ink }}>
+                  {sheetSelected.size} selected
+                </span>
+                <button onClick={() => {
+                  if (window.confirm(`Delete ${sheetSelected.size} tasks? This can't be undone.`)) {
+                    setTasks(prev => prev.filter(x => !sheetSelected.has(x.id)));
+                    setSheetSelected(new Set());
+                  }
+                }} style={{
+                  marginLeft: "auto", padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.accent}66`,
+                  borderRadius: 5, color: C.accent, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>🗑 DELETE</button>
+                <button onClick={() => {
+                  const today = now.toISOString().slice(0, 10);
+                  setTasks(prev => prev.map(x => sheetSelected.has(x.id) ? { ...x, scheduledDate: today, scheduledTime: null, drawer: false } : x));
+                  setSheetSelected(new Set());
+                }} style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.mommy}66`,
+                  borderRadius: 5, color: C.mommy, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>→ TODAY</button>
+                <button onClick={() => {
+                  setTasks(prev => prev.map(x => sheetSelected.has(x.id) ? { ...x, scheduledTime: null, scheduledDate: null, drawer: true } : x));
+                  setSheetSelected(new Set());
+                }} style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.muted}66`,
+                  borderRadius: 5, color: C.muted, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>↘ BACKLOG</button>
+                {/* v05.05bt475 — Build #18: bulk edit beyond delete.
+                    Mark done, toggle focus deep/light, bump regret
+                    score up/down. Each closes selection after. */}
+                <button onClick={() => {
+                  const ts = new Date().toISOString();
+                  setTasks(prev => prev.map(x => sheetSelected.has(x.id) && !x.completedAt ? { ...x, completedAt: ts } : x));
+                  setSheetSelected(new Set());
+                }} style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.sage}66`,
+                  borderRadius: 5, color: C.sage, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>✓ DONE</button>
+                <button onClick={() => {
+                  setTasks(prev => prev.map(x => {
+                    if (!sheetSelected.has(x.id)) return x;
+                    const cur = normalizeFocus(x.focusLevel);
+                    return { ...x, focusLevel: cur === "deep" ? "shallow" : "deep" };
+                  }));
+                }} title="Toggle deep / light" style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${FOCUS_COLOR.deep}66`,
+                  borderRadius: 5, color: FOCUS_COLOR.deep, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>⇋ FOCUS</button>
+                <button onClick={() => {
+                  setTasks(prev => prev.map(x => {
+                    if (!sheetSelected.has(x.id)) return x;
+                    const cur = x.regretScore == null ? 3 : x.regretScore;
+                    return { ...x, regretScore: Math.min(5, cur + 1) };
+                  }));
+                }} title="Bump regret +1 (cap 5)" style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.gold}66`,
+                  borderRadius: 5, color: C.gold, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>R+</button>
+                <button onClick={() => {
+                  setTasks(prev => prev.map(x => {
+                    if (!sheetSelected.has(x.id)) return x;
+                    const cur = x.regretScore == null ? 3 : x.regretScore;
+                    return { ...x, regretScore: Math.max(0, cur - 1) };
+                  }));
+                }} title="Drop regret -1 (floor 0)" style={{
+                  padding: "5px 10px",
+                  background: "transparent", border: `1px solid ${C.muted}66`,
+                  borderRadius: 5, color: C.muted, cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                }}>R−</button>
+                <button onClick={() => setSheetSelected(new Set())} style={{
+                  padding: "5px 8px",
+                  background: "transparent", border: "none",
+                  color: C.muted, cursor: "pointer",
+                  fontSize: 16, lineHeight: 1, fontWeight: 300, opacity: 0.7,
+                }}>×</button>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
       {/* Groups */}
-      {(() => {
+      {viewMode !== "sheet" && (() => {
         // v05.05bt357 — Compute canonical visible-order array for
         // moveGroup so swaps reflect what the user sees, regardless
         // of which entries are in the saved order vs not.
@@ -18500,12 +19367,14 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                   background: "transparent", border: "none",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase",
-                  // v05.05bt445 — Per chat: contrast pass. Was
-                  // color: g.color (faded pastel against dark bg).
-                  // Now ink-bright cream so the name actually reads;
-                  // group color moves to a 8px dot to the left of
-                  // the label for at-a-glance pattern matching.
-                  fontWeight: 700, color: "#faf2e2",
+                  // v05.05bt445 → bt479 — Per chat: 'i have an issue
+                  // with seeing this'. bt445 hardcoded color to
+                  // #faf2e2 (cream) for dark-mode contrast. But in
+                  // day/dawn mode the background IS cream → cream on
+                  // cream = invisible. Switched to palette-aware
+                  // C.ink so it adapts: ink on cream is high
+                  // contrast; cream on dusk-bg is also high contrast.
+                  fontWeight: 700, color: C.ink,
                   padding: 0,
                   display: "flex", alignItems: "center", gap: 8,
                   cursor: "pointer", textAlign: "left",
@@ -18513,7 +19382,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
                 }}>
                 <span style={{
                   display: "inline-block",
-                  width: 10, fontSize: 11, color: "#faf2e2", opacity: 0.6,
+                  width: 10, fontSize: 11, color: C.ink, opacity: 0.6,
                   transform: !isGroupOpen(g.key) ? "rotate(-90deg)" : "rotate(0deg)",
                   transition: "transform 0.15s",
                   flexShrink: 0,
@@ -18806,7 +19675,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -18972,6 +19841,9 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
           events={events} addEvent={addEvent} now={now}
           currentUser={currentUser}
           parentAway={parentAway}
+          undoOnce={undoOnce} redoOnce={redoOnce}
+          canUndo={canUndo} canRedo={canRedo}
+          undoTick={undoTick}
           pumpPlan={pumpPlan} setPumpPlan={setPumpPlan}
           nextPumpAt={nextPumpAt} lastPump={lastPump} activePump={activePump}
           takeover={takeover}
@@ -23575,25 +24447,40 @@ function applyBedtimeCascade(routines, lightsOutDate, today) {
 // at 30 min so we don't drag a routine into the next major block.
 function resolveRoutineOverlaps(routines) {
   if (routines.length < 2) return routines;
-  // Don't mutate; build a new list.
+  // v05.05bt475 — Build #4: bedtime cascade resolution improvements.
+  // Was: if overlap > 30 min, give up entirely (left as collision in
+  // the UI). Now: walks pairs and ALWAYS closes the overlap by either
+  // shifting the later routine forward OR compressing its duration
+  // (down to a 15 min minimum). This ensures the timeline never
+  // renders overlapping routine rows after bedtime adjustments.
   const sorted = [...routines].sort((a, b) => a.start - b.start);
   const out = [];
   let prevEnd = null;
   for (const r of sorted) {
     let { start, end, durationMin } = r;
+    const dur = durationMin || ((end - start) / 60000);
     if (prevEnd && start < prevEnd) {
       const overlapMin = (prevEnd - start) / 60000;
-      if (overlapMin <= 30) {
-        // Shift this routine forward to start at prevEnd.
+      if (overlapMin <= 45) {
+        // Shift forward to butt up against prev. Cap shift at 45 min
+        // (vs old 30 min) to handle bigger bedtime moves.
         const newStart = new Date(prevEnd);
-        const dur = durationMin || ((end - start) / 60000);
         const newEnd = new Date(newStart.getTime() + dur * 60000);
         out.push({ ...r, start: newStart, end: newEnd, durationMin: dur, overridden: true });
         prevEnd = newEnd;
         continue;
       }
-      // Overlap > 30 min — leave as-is and let the timeline render the
-      // collision visually; user can manually fix.
+      // Overlap > 45 min — instead of giving up, compress this
+      // routine's duration to the minimum needed to fit AFTER prev,
+      // down to a floor of 15 min. If even compressed it still won't
+      // fit before its original end, just align start with prevEnd
+      // and keep original end (compressed duration).
+      const compressedDur = Math.max(15, (end - prevEnd) / 60000);
+      const newStart = new Date(prevEnd);
+      const newEnd = new Date(newStart.getTime() + compressedDur * 60000);
+      out.push({ ...r, start: newStart, end: newEnd, durationMin: compressedDur, overridden: true, _compressed: true });
+      prevEnd = newEnd;
+      continue;
     }
     out.push(r);
     prevEnd = end;
@@ -23604,7 +24491,19 @@ function resolveRoutineOverlaps(routines) {
 // Compute lights-out Date from a wakeTime ("HH:MM") + sleepHrs number.
 // Returns Date on today's calendar day, or null if wakeTime not set
 // or the resulting bedtime falls outside reasonable evening hours.
-function computeLightsOut(wakeTime, sleepHrs, today) {
+function computeLightsOut(wakeTime, sleepHrs, today, routineOverrides) {
+  // v05.05bt475 — Build #4: if user has overridden the bedtime
+  // routine (via the inline routine editor or NL "bedtime to 10pm"),
+  // use THAT as the lights-out anchor instead of the wake-time-derived
+  // calculation. The override is the user's explicit signal.
+  if (routineOverrides && routineOverrides.bedtime && routineOverrides.bedtime.time) {
+    const [bh, bm] = routineOverrides.bedtime.time.split(":").map(Number);
+    if (isFinite(bh) && bh >= 17 && bh <= 23) {
+      const d = new Date(today);
+      d.setHours(bh, bm || 0, 0, 0);
+      return d;
+    }
+  }
   if (!wakeTime) return null;
   const [wh, wm] = wakeTime.split(":").map(Number);
   const wakeMins = wh * 60 + (wm || 0);
@@ -23630,7 +24529,26 @@ function computeLightsOut(wakeTime, sleepHrs, today) {
 function isTimeBankRedemption(meeting) {
   if (!meeting) return false;
   const label = (meeting.label || meeting.title || "").toLowerCase();
-  return label.startsWith("time bank:");
+  // v05.05bt475 — Build #5: gift-from-partner semantic. RedeemGiftModal
+  // creates meetings labeled "🎁 Gift from {giver} · {reason}" — these
+  // weren't matched by the original "time bank:" prefix check, so they
+  // rendered as RED blocking meetings on the recipient's timeline
+  // (preventing scheduling). Now: either prefix counts as a gift/
+  // redemption. The filter sites that skip these meetings let the
+  // recipient schedule tasks during the gift window, and the projection
+  // auto-swap still assigns the giver to cover (so the rail shows the
+  // partner's color → effectiveBlockProfile classifies as deep +
+  // uninterrupted automatically).
+  return label.startsWith("time bank:") || label.startsWith("🎁 gift from") || label.startsWith("🎁gift from");
+}
+
+// v05.05bt475 — Build #5: helper to detect gift-from-partner specifically
+// (vs general time-bank redemption). Used to surface a visible "✦ GIFT
+// TIME" tag on the freed window so the user knows WHY this slot opened up.
+function isGiftFromPartner(meeting) {
+  if (!meeting) return false;
+  const label = (meeting.label || meeting.title || "").toLowerCase();
+  return label.startsWith("🎁 gift from") || label.startsWith("🎁gift from");
 }
 
 // v05.05bt160 — Next-day planning support.
@@ -24240,6 +25158,66 @@ function findSimilarTitles(newTitle, existing) {
     if (union > 0 && intersect / union >= 0.5) matches.push(t);
   }
   return matches;
+}
+
+// v05.05bt474 — Build #7: SMART ROUTINE NL DETECTION. Recognizes
+// natural-language commands targeting routines:
+//   "AM routine bumped to 9"        → shift AM routine to 9:00
+//   "AM routine at 9am"             → same
+//   "bedtime to 10:30pm"            → shift bedtime
+//   "skip bedtime tonight"          → skip-today op
+//   "PM routine 8:30pm"             → shift PM routine
+// Returns null when no routine intent detected (falls through to
+// the regular task parser). When detected, returns:
+//   { routineKey, op: 'shift'|'skip', time?: 'HH:MM', durationMin? }
+// routineKey is matched case-insensitively against common labels.
+function detectRoutineIntent(text) {
+  if (!text || !text.trim()) return null;
+  const t = text.trim().toLowerCase();
+  // Routine keywords + their canonical override keys. The keys must
+  // match what the routine library uses for ids.
+  const routinePatterns = [
+    { rx: /\b(am\s+routine|morning\s+routine|am\s+caretaking|morning\s+caretaking)\b/i, key: "am-routine" },
+    { rx: /\b(pm\s+routine|evening\s+routine|pm\s+caretaking|evening\s+caretaking)\b/i, key: "pm-routine" },
+    { rx: /\b(bedtime|put\s+(?:solène|sole|baby)\s+down)\b/i, key: "bedtime" },
+    { rx: /\b(lunch\s+break|noon\s+break|midday)\b/i, key: "lunch" },
+    { rx: /\b(dinner|dinner\s+break)\b/i, key: "dinner" },
+  ];
+  let match = null;
+  for (const p of routinePatterns) {
+    if (p.rx.test(t)) { match = p; break; }
+  }
+  if (!match) return null;
+  // Skip command
+  if (/\b(skip|no|cancel|drop)\b.*\b(today|tonight|this\s+morning|this\s+evening|tomorrow)?\b/i.test(t) &&
+      /\b(skip|no\s+routine|cancel|drop)\b/i.test(t)) {
+    return { routineKey: match.key, op: "skip" };
+  }
+  // Time extraction — reuse the same patterns as parseOneNlTask
+  // (am/pm + optional :MM)
+  let time = null;
+  const timeRx = /\b(?:at\s+|to\s+|bumped\s+to\s+|moved\s+to\s+|shift(?:ed)?\s+to\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?\b/i;
+  const timeMatch = t.match(timeRx);
+  if (timeMatch) {
+    let hh = parseInt(timeMatch[1], 10);
+    const mm = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    const ap = (timeMatch[3] || "").toLowerCase();
+    if (ap.startsWith("p") && hh < 12) hh += 12;
+    else if (ap.startsWith("a") && hh === 12) hh = 0;
+    if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      time = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    }
+  }
+  // Duration extraction (optional)
+  let durationMin = null;
+  const durRx = /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b|(\d+)\s*(?:minutes?|mins?|m)\b/i;
+  const durMatch = t.match(durRx);
+  if (durMatch) {
+    if (durMatch[1]) durationMin = Math.round(parseFloat(durMatch[1]) * 60);
+    else if (durMatch[2]) durationMin = parseInt(durMatch[2], 10);
+  }
+  if (!time && !durationMin) return null; // no actionable change
+  return { routineKey: match.key, op: "shift", time, durationMin };
 }
 
 function parseNaturalLanguageTasks(text) {
@@ -25695,6 +26673,7 @@ function InlineTimeEditPanel({ C, task, onSave, onCancel }) {
 
   return (
     <div
+      data-inline-editor="time-edit"
       onClick={(e) => e.stopPropagation()}
       style={{
         margin: "3px 0 6px 0",
@@ -27706,7 +28685,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
@@ -28151,6 +29130,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const dragStartPosRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const draggingIdRef = useRef(null);
+  // v05.05bt478 — Track what KIND we're dragging (task vs routine)
+  // so endDrag can route the drop to the right state store. Was:
+  // detecting routine via `id.startsWith("rt-")` which was wrong
+  // since routine ids in actual data are like "bedtime",
+  // "mommy-pm", "am-routine" — no prefix.
+  const draggingKindRef = useRef(null);
 
   const flashMoved = (id) => {
     setRecentlyMovedIds(prev => {
@@ -28232,6 +29217,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
           cancelLongPress();
           setDraggingId(null);
           draggingIdRef.current = null;
+          draggingKindRef.current = null;
           setDragOffset({ x: 0, y: 0 });
           setDropTargetKey(null);
           return;
@@ -28240,6 +29226,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       if (drop.kind === "free") {
         const hh = String(drop.start.getHours()).padStart(2, "0");
         const mm = String(drop.start.getMinutes()).padStart(2, "0");
+        // v05.05bt474 → bt478 — routine drop path. Was checking
+        // (moveId || "").startsWith("rt-") which doesn't match
+        // actual routine ids ("bedtime", "mommy-pm", "am-routine").
+        // Now uses draggingKindRef set by handleDragStart.
+        const isRoutineDrag = draggingKindRef.current === "routine";
+        if (isRoutineDrag) {
+          const routineKey = (moveId || "").replace(/^rt-/, "");
+          const todayKey = now.toISOString().slice(0, 10);
+          setTodaySetup(prev => {
+            const nextOverrides = { ...(prev?.routineOverrides || {}) };
+            const existing = nextOverrides[routineKey] || {};
+            nextOverrides[routineKey] = { ...existing, time: `${hh}:${mm}` };
+            return { ...(prev || {}), date: todayKey, routineOverrides: nextOverrides };
+          });
+          flashMoved(moveId);
+          cancelLongPress();
+          setDraggingId(null);
+          draggingIdRef.current = null;
+          draggingKindRef.current = null;
+          setDragOffset({ x: 0, y: 0 });
+          setDropTargetKey(null);
+          return;
+        }
         moveTaskToTime(moveId, `${hh}:${mm}`);
         flashMoved(moveId);
       } else if (drop.kind === "task" && drop.id !== moveId) {
@@ -28260,6 +29269,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     cancelLongPress();
     setDraggingId(null);
     draggingIdRef.current = null;
+    draggingKindRef.current = null;
     setDragOffset({ x: 0, y: 0 });
     setDropTargetKey(null);
   };
@@ -28277,19 +29287,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   };
 
   const handleDragStart = (e, slot) => {
-    if (slot.kind !== "task" || slot.completedAt) return;
+    // v05.05bt474 — Build #11: routines draggable too. Was task-only;
+    // now also accepts routine rows. Drop handler routes routines to
+    // routineOverrides instead of task.scheduledTime.
+    const isRoutineSlot = slot.kind === "routine" || (slot.id || "").startsWith("rt-");
+    if (slot.kind !== "task" && !isRoutineSlot) return;
+    if (slot.completedAt) return;
     const p = getPointerCoords(e);
     if (!p) return;
     dragStartPosRef.current = p;
     cancelLongPress();
-    // v05.05bt147 — Drag now activates from a dedicated GRIP HANDLE only
-    // (the ⋮⋮ icon in the right column), not from the whole row. Since
-    // grabbing the grip is already an intentional action, the long-press
-    // window comes back down 800→300ms — fast enough to feel responsive,
-    // long enough to distinguish from a tap on the grip itself.
     longPressTimerRef.current = setTimeout(() => {
       setDraggingId(slot.id);
       draggingIdRef.current = slot.id;
+      // v05.05bt478 — Track kind so endDrag routes correctly.
+      draggingKindRef.current = isRoutineSlot ? "routine" : "task";
       if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
     }, 300);
   };
@@ -28423,7 +29435,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     try { swept = localStorage.getItem(eodSweptKey) === "1"; } catch {}
     if (swept) return;
     const referenceMidnight = new Date(now); referenceMidnight.setHours(0,0,0,0);
-    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, referenceMidnight);
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, referenceMidnight, todaySetup?.routineOverrides);
     if (!lightsOut) return;
     if (now.getTime() < lightsOut.getTime()) return;
     // Past lights-out → sweep
@@ -28784,6 +29796,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   const commitInlineSectionAdd = (section) => {
     const text = (inlineSectionAddDraft || "").trim();
     if (!text) return;
+    // v05.05bt474 — Build #7: smart routine NL. Detect routine intent
+    // BEFORE the task parser runs. If user typed "AM routine to 9am"
+    // we apply a routine override instead of creating a task.
+    const routineIntent = detectRoutineIntent(text);
+    if (routineIntent) {
+      const todayKey = now.toISOString().slice(0, 10);
+      setTodaySetup(prev => {
+        const nextOverrides = { ...(prev?.routineOverrides || {}) };
+        if (routineIntent.op === "skip") {
+          nextOverrides[routineIntent.routineKey] = { skipped: true };
+        } else {
+          const existing = nextOverrides[routineIntent.routineKey] || {};
+          nextOverrides[routineIntent.routineKey] = {
+            ...existing,
+            ...(routineIntent.time ? { time: routineIntent.time } : {}),
+            ...(routineIntent.durationMin ? { durationMin: routineIntent.durationMin } : {}),
+            skipped: false,
+          };
+        }
+        return { ...(prev || {}), date: todayKey, routineOverrides: nextOverrides };
+      });
+      setInlineSectionAddDraft("");
+      setInlineSectionAdd(null);
+      return;
+    }
     // v05.05bt430 — Per chat: 'evrytime i add something to the
     // scheduled for today, i dont like how my screen moves alot and
     // loses my place.' When a new task lands (especially a scheduled
@@ -28972,6 +30009,35 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     setExpandedDraft(null);
     setExpandedShowMore(false);
   };
+  // v05.05bt473 — Per chat: 'when i click off of a task, the edit
+  // box should auto go away'. Effect listens for taps on the
+  // document and closes any open inline editor if the tap was
+  // outside its container. Editor containers stop propagation via
+  // their own onClick={(e) => e.stopPropagation()} so taps inside
+  // never reach the document listener.
+  useEffect(() => {
+    if (!expandedEditTaskId && inlineFreeEditKey === null && inlineTimeEdit === null && inlineTitleEdit === null && inlineSectionAdd === null) return;
+    const handler = (ev) => {
+      // Heuristic: if the click target is inside ANY [data-inline-editor]
+      // we ignore. Editors set stopPropagation themselves; this is the
+      // fallback. We just close everything on outside tap.
+      const t = ev.target;
+      if (!t || !t.closest) return;
+      // Don't close if tapping a button/input inside an editor (the
+      // editor's own internal handlers already stopped propagation;
+      // any leak means the tap was on chrome that didn't stop).
+      if (t.closest("[data-inline-editor]")) return;
+      closeExpandedEdit();
+      setInlineFreeEditKey(null);
+      setInlineTimeEdit(null);
+      setInlineTitleEdit(null);
+      setInlineSectionAdd(null);
+    };
+    // Listen on pointerdown so we fire before clicks/focuses on
+    // other elements that would shift state weirdly.
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [expandedEditTaskId, inlineFreeEditKey, inlineTimeEdit, inlineTitleEdit, inlineSectionAdd]);
   const commitExpandedEdit = () => {
     if (!expandedEditTaskId || !expandedDraft) return closeExpandedEdit();
     // v05.05bt460 — Routine commit path: write to routineOverrides.
@@ -29012,7 +30078,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // passive tasks). Same flow as bt460 — creates task + opens inline
   // expand-edit; the bt461 pile search inside the inline editor lets
   // the user choose existing or create new.
-  const insertTaskAtTime = (timeMs, durationMin = 30) => {
+  const insertTaskAtTime = (timeMs, durationMin = 30, hostId = null) => {
     const startDate = new Date(timeMs);
     const hh = String(startDate.getHours()).padStart(2, "0");
     const mm = String(startDate.getMinutes()).padStart(2, "0");
@@ -29025,6 +30091,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       effortMin: durationMin,
       ownerName: currentUser,
       createdAt: new Date().toISOString(),
+      // v05.05bt475 — Build #17 fix. When called from a passive
+      // task's freed-strip FILL button, host id is passed so the new
+      // task is STAMPED as slotted INTO the host (not a parallel
+      // scheduled row). Without this stamp, the freed-strip Empty
+      // state stayed (rendering FREED/+light tasks ok/FILL again)
+      // AND a brand-new scheduled row appeared in the timeline at
+      // the same time — the "extra rows" bug.
+      ...(hostId ? { slottedIntoFreedTimeOf: hostId } : {}),
     };
     setTasks(prev => [...prev, newTask]);
     setTimeout(() => {
@@ -29344,10 +30418,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       sequenceId: p.sequenceId,
       sequenceIndex: p.sequenceIndex,
       sequenceTotal: p.sequenceTotal,
+      // v05.05bt474 — Build #12: brain dump → backlog pipeline.
+      // Tag so we can diagnose where these items end up.
+      originatedFrom: "brain-dump",
     }));
     setTasks(prev => [...prev, ...newItems]);
     setBrainDumpText("");
     setShowBrainDump(false);
+    // v05.05bt474 — Build #12: auto-expand the pile sections so user
+    // SEES the new items land. Was: items added silently; if backlog
+    // section was collapsed (default per bt416), user couldn't tell
+    // anything happened. Now: expand whichever section the items
+    // landed in. Any task without scheduledTime AND without
+    // scheduledDate goes to backlog; otherwise unscheduled-for-today.
+    const anyBacklog = newItems.some(t => !t.scheduledTime && !t.scheduledDate);
+    const anyToday = newItems.some(t => !t.scheduledTime && t.scheduledDate);
+    const anyScheduled = newItems.some(t => !!t.scheduledTime);
+    if (anyBacklog) setBacklogExpanded(true);
+    if (anyToday) setTaskPileExpanded(true);
+    if (anyScheduled) setScheduledExpanded(true);
   };
   const promoteFromDrawer = (taskId, opts = {}) => {
     setTasks(prev => prev.map(t =>
@@ -29527,7 +30616,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // v05.05bt159 — Bedtime cascade.
     // v05.05bt160 — Bedtime settings (wakeTime, sleepHrs) are persistent
     // across days, so they apply to tomorrow's view too.
-    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today);
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today, todaySetup?.routineOverrides);
     routines = applyBedtimeCascade(routines, lightsOut, today);
     // v05.05bt163 — Nudge overlapping routines so the timeline doesn't
     // show a 7:30-8:15 walk colliding with an 8:00 PM routine. Small
@@ -30478,7 +31567,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     // v05.05bt159 — Apply bedtime cascade so the scheduler sees the
     // adjusted PM stack (no last-pump, shutdown+mommy-pm shifted to
     // end at lights-out) and treats lights-out itself as occupied.
-    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today);
+    const lightsOut = computeLightsOut(todaySetup?.wakeTime, todaySetup?.sleepHrs, today, todaySetup?.routineOverrides);
     const cascaded = resolveRoutineOverlaps(applyBedtimeCascade(routines, lightsOut, today));
     const bedtimeRoutines = [];
     if (lightsOut) {
@@ -32344,6 +33433,8 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             {[
                               { section: `Build · v${APP_VERSION}` },
                               { section: "Day" },
+                              { icon: "↶", label: `Undo${undoTick !== undefined ? "" : ""}`, onClick: () => { undoOnce && undoOnce(); setShowActionsMenu(false); }, disabled: !canUndo },
+                              { icon: "↷", label: "Redo", onClick: () => { redoOnce && redoOnce(); setShowActionsMenu(false); }, disabled: !canRedo },
                               { icon: "✓", label: "Wrap up day · summary + rollover", onClick: () => { setShowEndOfDayReview(true); setShowActionsMenu(false); }, hint: "End-of-day stats + decide what carries to tomorrow" },
                               { section: "Today's plan" },
                               { icon: "⚙", label: "Today's setup · wake / sleep / mode", onClick: () => { setShowSetup(true); setShowActionsMenu(false); } },
@@ -33022,51 +34113,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               );
             })()}
             {/* v05.05bt316/350/351 — Add-task pill, now BELOW runway. */}
-            {currentUser === "Mommy" && !isTomorrow && !(productMode === "solo") && (
-              <button
-                onClick={() => {
-                  // v05.05bt472 — Per chat: 'for the task pile, when
-                  // i add it...again it needs to be easy - it is
-                  // disruptive how a little thing pops up'. Was
-                  // setShowNlInput(true) which opens the NL form
-                  // popup card. Now: expand the today pile + activate
-                  // its inline + add input + scroll there. Adding
-                  // becomes a single inline flow (type, enter, done) —
-                  // no separate popup card.
-                  setTaskPileExpanded(true);
-                  setInlineSectionAdd("today");
-                  setInlineSectionAddDraft("");
-                  setShowAddForm(false);
-                  setShowNlInput(false);
-                  setTimeout(() => {
-                    const el = document.querySelector('[data-pile-section="today"]');
-                    if (el) {
-                      try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
-                    }
-                  }, 80);
-                }}
-                style={{
-                  // v05.05bt468 — Per chat: 'this top part of the task
-                  // plan is too...too much'. Was a giant italic
-                  // Cormorant 15px button with 10/14 padding + dashed
-                  // mauve border + 12px margin. Shrunk to a compact
-                  // single-line link — same affordance, way less
-                  // visual weight.
-                  width: "100%",
-                  padding: "6px 12px",
-                  background: "transparent",
-                  border: `1px dashed ${C.muted}55`,
-                  borderRadius: 8, marginBottom: 10,
-                  cursor: "pointer", textAlign: "center",
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-                  color: C.muted,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                }}>
-                <span style={{ fontSize: 13, lineHeight: 1, color: C.mommy }}>+</span>
-                ADD A TASK
-              </button>
-            )}
+            {/* v05.05bt483 — Per chat: 'remove the "add a task" at
+                the tope...too redundant'. Removed entirely — the
+                + insert chips between rows + the per-section + add
+                inputs in the pile cover all insertion paths. */}
             {/* v05.05bt211 — Trade suggestions. Surfaces 1-2 windows
                 where Daddy could take baby duty and unlock significant
                 deep focus for the user. Informational for v1 — tap
@@ -33977,7 +35027,62 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   );
                 };
+                // v05.05bt477 — Track whether the TOP-OF-TIMELINE
+                // insert chip has been rendered. Fires once, before
+                // the first non-past row.
+                let topInsertRendered = false;
                 dayTimeline.forEach((slot, i) => {
+                  // v05.05bt477 — Per chat: 'i should be able to
+                  // insert rows anywhere, shouldnt i?'. Push a TOP
+                  // insert chip BEFORE the first non-past row so the
+                  // user can insert at the very start of the day
+                  // (or remaining day). Anchors at slot.start.
+                  const _isPastCheckForTopInsert = slot.end && slot.end.getTime() <= now.getTime();
+                  if (!topInsertRendered && !_isPastCheckForTopInsert) {
+                    topInsertRendered = true;
+                    rows.push(
+                      <div
+                        key={`insert-top-${i}`}
+                        className="ll-insert-chip"
+                        style={{
+                          position: "relative",
+                          height: 14,
+                          margin: "-1px 0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Insert at slot.start time so the new task
+                          // lands at the very top of the remaining day.
+                          insertTaskAtTime(slot.start.getTime(), 30);
+                        }}
+                        title="Insert a task at the top of the day">
+                        <div style={{ flex: 1, height: 1, background: `${C.line}55`, opacity: 0.55 }} />
+                        <span style={{
+                          color: C.gold,
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 10, lineHeight: 1, fontWeight: 700,
+                          opacity: 0.55,
+                          padding: "0 6px",
+                          letterSpacing: "0.05em",
+                        }}>+ insert</span>
+                        <div style={{ flex: 1, height: 1, background: `${C.line}55`, opacity: 0.55 }} />
+                      </div>
+                    );
+                  }
+                  // v05.05bt476 — Per chat fix: when an active-now slot
+                  // exists, the row itself renders an inline absolute-
+                  // positioned now-line at the precise fractional
+                  // position. Mark the standalone now-line as already
+                  // inserted so the AFTER-row trigger below doesn't
+                  // also fire (would result in two now-lines).
+                  if (!nowLineInserted && !isTomorrow && activeNowIdx >= 0) {
+                    nowLineInserted = true;
+                  }
                   // v05.05bt377 — Fire NOW as soon as we pass the
                   // anchor, even if the anchor slot itself got
                   // filtered out by a later early-return. Sits at
@@ -34384,6 +35489,72 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         marginBottom: 6,
                       }}
                     >
+                      {/* v05.05bt476 — Per chat: 'the slider time in
+                          the scheduler is never correct - even if it
+                          falls MID card i want it to be accurately
+                          positioned'. When this row is the active-now
+                          slot, inject an absolute-positioned line at
+                          the EXACT fractional position within the row.
+                          Was: now-line was a SEPARATE row pushed
+                          before/after the active slot — so for a 1h
+                          task running 10-11, the now-line at 10:30
+                          rendered at either the 10:00 or 11:00 mark,
+                          never at 10:30 mid-card. Now: marker lives
+                          INSIDE the active row at top:50% (or whatever
+                          fraction matches). Standalone now-line is
+                          suppressed for this slot below (see
+                          renderNowLine skip). */}
+                      {isNowBlock && (() => {
+                        const totalMs = slot.end.getTime() - slot.start.getTime();
+                        if (totalMs <= 0) return null;
+                        const elapsed = now.getTime() - slot.start.getTime();
+                        const pct = Math.max(0, Math.min(100, (elapsed / totalMs) * 100));
+                        const domSeg = (railSegments || []).reduce(
+                          (best, s) => (!best || s.pct > best.pct ? s : best),
+                          null
+                        );
+                        const domOwner = domSeg ? domSeg.owner : owner;
+                        const ownerColor = domOwner === "Daddy" ? C.daddy
+                          : domOwner === "joint" ? C.gold
+                          : domOwner === "Mommy" ? C.mommy
+                          : C.gold;
+                        const nowFmt = (() => {
+                          const h = now.getHours(), m = now.getMinutes();
+                          const h12 = ((h + 11) % 12) + 1;
+                          return `${h12}:${String(m).padStart(2, "0")}${h < 12 ? "a" : "p"}`;
+                        })();
+                        return (
+                          <>
+                            <div style={{
+                              position: "absolute",
+                              top: `${pct}%`, left: 0, right: 0,
+                              height: 0,
+                              borderTop: `2px solid ${ownerColor}`,
+                              zIndex: 12,
+                              pointerEvents: "none",
+                              boxShadow: `0 0 8px ${ownerColor}55`,
+                            }} />
+                            <div style={{
+                              position: "absolute",
+                              top: `${pct}%`, right: 6,
+                              transform: "translateY(-50%)",
+                              background: ownerColor,
+                              color: "#fff",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 8.5, fontWeight: 800,
+                              letterSpacing: "0.10em",
+                              padding: "2px 6px",
+                              borderRadius: 3,
+                              zIndex: 13,
+                              pointerEvents: "none",
+                              whiteSpace: "nowrap",
+                              boxShadow: `0 1px 3px ${ownerColor}66`,
+                            }}>
+                              NOW {nowFmt}
+                            </div>
+                          </>
+                        );
+                      })()}
                       {/* v05.05bt144 — swipe-to-delete underlay */}
                       {isTask && !slot.completedAt && swipedTaskId === slot.id && (
                         <div style={{
@@ -35192,19 +36363,23 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               ? (e) => { e.stopPropagation(); setInlineTitleEdit(slot.id); }
                               : isRoutine
                                 ? (e) => {
-                                  // v05.05bt468 — Per chat: 'adjusting
-                                  // the routine tasks is too hard with
-                                  // a modal popup - i need to be able
-                                  // to edit it the same way i edit
-                                  // everything else'. Was opening
-                                  // RoutineOverrideSheet modal. Now
-                                  // opens the inline bt459 expand-edit
-                                  // which detects routines via
-                                  // t.kind === 'routine' or id
-                                  // starting with 'rt-' and renders
-                                  // the routine-specific form.
+                                  // v05.05bt468 → bt473 — Per chat
+                                  // (3rd mention): 'i still cannot
+                                  // edit the routine tasks!'.
+                                  // openExpandedEdit relies on the
+                                  // bt459 form which only renders
+                                  // inside TaskRow (pile section).
+                                  // Timeline routines don't use
+                                  // TaskRow, so the form never
+                                  // appeared. Switched to
+                                  // setInlineTimeEdit which renders
+                                  // an inline panel directly in the
+                                  // timeline loop — same place the
+                                  // task time editor uses. The
+                                  // panel's onSave is routed to
+                                  // routineOverrides for routines.
                                   e.stopPropagation();
-                                  openExpandedEdit(slot);
+                                  setInlineTimeEdit(slot.id);
                                 }
                                 : undefined}
                             style={{
@@ -35294,6 +36469,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 // of an in-place edit. Stripped all of
                                 // that. Now it just sits in the row.
                                 <div
+                                  data-inline-editor="empty-slot"
                                   onClick={(e) => e.stopPropagation()}
                                   style={{
                                     width: "100%",
@@ -36023,108 +37199,102 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           const stripColor = dominantSeg
                             ? railColorFor(dominantSeg.owner)
                             : C.sage;
-                          const filledTask = (tasks || []).find(t => t.slottedIntoFreedTimeOf === slot.id && !t.completedAt);
+                          const filledTasks = (tasks || []).filter(t => t.slottedIntoFreedTimeOf === slot.id && !t.completedAt);
+                          const usedMin = filledTasks.reduce((sum, t) => sum + (t.effortMin || 0), 0);
+                          const remainMin = Math.max(0, freedMin - usedMin);
                           return (
                             <div style={{ marginTop: 6 }}>
-                              {filledTask ? (
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: 8,
-                                  padding: "5px 9px",
-                                  background: `${stripColor}26`,
-                                  borderLeft: `3px solid ${stripColor}`,
-                                  borderRadius: "0 6px 6px 0",
-                                }}>
-                                  <span style={{
-                                    fontFamily: "'JetBrains Mono', monospace",
-                                    fontSize: 9.5, color: stripColor, fontWeight: 700,
-                                  }}>{fmtTimeRange(freedStart, freedEnd)}</span>
-                                  {/* v05.05bt433 — Per chat: 'once you
-                                      fill a concurrent task under pump,
-                                      then you cannot edit it.' The
-                                      filled task title is now a button
-                                      that opens EditTaskModal so user
-                                      can change title / effort / focus
-                                      / unschedule. × on the right still
-                                      un-slots without deleting. */}
-                                  {/* v05.05bt433 → bt441 — Per chat:
-                                      'when editing that task title i
-                                      just want to edit then and there
-                                      without having a big dialog box
-                                      that is clunky to fill'. Tap →
-                                      converts the title to an inline
-                                      editable input (instead of
-                                      opening EditTaskModal). Enter or
-                                      blur saves; Escape cancels. */}
-                                  {renamingFilledTaskId === filledTask.id ? (
-                                    <input
-                                      type="text"
-                                      defaultValue={filledTask.title}
-                                      autoFocus
-                                      onClick={(e) => e.stopPropagation()}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                          const next = e.currentTarget.value.trim();
-                                          if (next) {
-                                            setTasks(prev => prev.map(t => t.id === filledTask.id ? { ...t, title: next } : t));
-                                          }
-                                          setRenamingFilledTaskId(null);
-                                        } else if (e.key === "Escape") {
-                                          setRenamingFilledTaskId(null);
-                                        }
-                                      }}
-                                      onBlur={(e) => {
-                                        const next = e.currentTarget.value.trim();
-                                        if (next && next !== filledTask.title) {
-                                          setTasks(prev => prev.map(t => t.id === filledTask.id ? { ...t, title: next } : t));
-                                        }
-                                        setRenamingFilledTaskId(null);
+                              {filledTasks.length > 0 ? (
+                                <>
+                                  {/* v05.05bt476 — Build #6: multi-concurrent.
+                                      Was .find() returning one; now .filter()
+                                      returning all and stacking rows. Each
+                                      filled task gets its own row within the
+                                      strip. After the list, a smaller +
+                                      ADD ANOTHER button shows if room remains. */}
+                                  {filledTasks.map((filledTask, fti) => (
+                                    <div key={filledTask.id} style={{
+                                      display: "flex", alignItems: "center", gap: 8,
+                                      padding: "5px 9px",
+                                      background: `${stripColor}26`,
+                                      borderLeft: `3px solid ${stripColor}`,
+                                      borderRadius: "0 6px 6px 0",
+                                      marginBottom: fti < filledTasks.length - 1 ? 3 : 0,
+                                    }}>
+                                      <span style={{
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9.5, color: stripColor, fontWeight: 700,
+                                        flexShrink: 0,
+                                      }}>{filledTask.effortMin || 0}m</span>
+                                      <span style={{
+                                        flex: 1, minWidth: 0,
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                        fontSize: 13, color: C.ink,
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}>{filledTask.title}</span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // Unfill this task — keep it as unscheduled.
+                                          setTasks(prev => prev.map(x => x.id === filledTask.id ? { ...x, slottedIntoFreedTimeOf: null, scheduledTime: null } : x));
+                                        }}
+                                        title="Remove from this freed time"
+                                        style={{
+                                          padding: "3px 8px",
+                                          background: "transparent", border: "none",
+                                          color: C.muted, cursor: "pointer",
+                                          fontSize: 14, lineHeight: 1, opacity: 0.6,
+                                        }}>×</button>
+                                    </div>
+                                  ))}
+                                  {remainMin >= 5 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Add another concurrent task. Start time is freedStart;
+                                        // duration defaults to remaining minutes (capped at 30).
+                                        const dur = Math.min(remainMin, 30);
+                                        const newTask = {
+                                          id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                                          title: "",
+                                          scheduledDate: now.toISOString().slice(0, 10),
+                                          scheduledTime: `${String(freedStart.getHours()).padStart(2, "0")}:${String(freedStart.getMinutes()).padStart(2, "0")}`,
+                                          effortMin: dur,
+                                          ownerName: currentUser,
+                                          slottedIntoFreedTimeOf: slot.id,
+                                          createdAt: new Date().toISOString(),
+                                        };
+                                        setTasks(prev => [...prev, newTask]);
+                                        setTimeout(() => {
+                                          setExpandedEditTaskId(newTask.id);
+                                          setExpandedDraft({
+                                            title: "",
+                                            scheduledTime: newTask.scheduledTime,
+                                            effortMin: dur,
+                                            focusLevel: null, regretScore: 3,
+                                            ownerName: currentUser, isPassive: false,
+                                          });
+                                        }, 50);
                                       }}
                                       style={{
-                                        flex: 1, minWidth: 0,
-                                        background: C.bg,
-                                        border: `1px solid ${C.sage}66`,
-                                        padding: "4px 8px", borderRadius: 5,
-                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                                        fontStyle: "italic", fontSize: 13.5,
-                                        color: C.ink,
-                                      }}
-                                    />
-                                  ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setRenamingFilledTaskId(filledTask.id);
-                                    }}
-                                    title="Tap to rename · × on the right unfills"
-                                    style={{
-                                      flex: 1, minWidth: 0,
-                                      background: "transparent", border: "none",
-                                      padding: 0, textAlign: "left", cursor: "pointer",
-                                      fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                                      fontSize: 13.5, color: C.ink,
-                                      fontStyle: "italic",
-                                    }}>{filledTask.title}</button>
+                                        display: "block", marginTop: 4,
+                                        padding: "3px 8px",
+                                        background: "transparent",
+                                        border: `1px dashed ${stripColor}66`,
+                                        borderRadius: 5,
+                                        color: stripColor, opacity: 0.85,
+                                        cursor: "pointer",
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                                      }}>+ ADD ANOTHER ({remainMin}m left)</button>
                                   )}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTasks(prev => prev.map(t =>
-                                        t.id === filledTask.id
-                                          ? { ...t, slottedIntoFreedTimeOf: null, scheduledTime: null, scheduledDate: null }
-                                          : t
-                                      ));
-                                    }}
-                                    title="Remove from freed time"
-                                    style={{
-                                      width: 18, height: 18, padding: 0,
-                                      background: "transparent", border: "none",
-                                      color: C.muted, cursor: "pointer",
-                                      fontSize: 13, lineHeight: 1, opacity: 0.55,
-                                    }}>×</button>
-                                </div>
+                                </>
                               ) : (
+                                <>
                                 <div style={{
                                   display: "flex", alignItems: "center", gap: 8,
                                   padding: "5px 9px",
@@ -36146,7 +37316,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      insertTaskAtTime(freedStart.getTime(), freedMin);
+                                      // v05.05bt475 #17 fix — stamp
+                                      // slottedIntoFreedTimeOf so the
+                                      // new task slots INTO the strip,
+                                      // not as a parallel row.
+                                      insertTaskAtTime(freedStart.getTime(), freedMin, slot.id);
                                     }}
                                     title="Add a task at this freed time"
                                     style={{
@@ -36159,6 +37333,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                       cursor: "pointer",
                                     }}>+ FILL</button>
                                 </div>
+                                {isTask && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTasks(prev => prev.map(x =>
+                                        x.id === slot.id
+                                          ? { ...x, isPassive: false, handleTimeMin: undefined }
+                                          : x
+                                      ));
+                                    }}
+                                    title="This task isn't passive — hide the freed strip"
+                                    style={{
+                                      display: "block", marginTop: 3, marginLeft: "auto",
+                                      padding: "2px 6px",
+                                      background: "transparent", border: "none",
+                                      color: C.muted, cursor: "pointer",
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      fontSize: 8, fontWeight: 700, letterSpacing: "0.08em",
+                                      opacity: 0.65,
+                                    }}>↶ NOT PASSIVE</button>
+                                )}
+                                </>
                               )}
                             </div>
                           );
@@ -37439,14 +38636,14 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             many icons on the right side.' The task title
                             itself is already clickable (bt140) and opens
                             EditTaskModal. The redundant pencil dropped. */}
-                        {isTask && !slot.completedAt && (
+                        {(isTask || isRoutine) && !slot.completedAt && (
                           <div
                             onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
                             onTouchMove={draggingIdRef.current ? handleDragMove : undefined}
                             onTouchEnd={handleDragEnd}
                             onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
                             title="Hold and drag to move"
-                            aria-label="Drag to move task"
+                            aria-label="Drag to move task or routine"
                             style={{
                               // v05.05bt318 → bt401 — Per chat: 'the move
                               // button on the far right - is there any
@@ -37479,28 +38676,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     </div>
                   );
                   // v05.05bt469 → bt471 — Per chat: 'the little
-                  // insert + button i feel should be less prominent
-                  // non? also there are some rows that dont have it'.
-                  // (1) Quieter: dropped the gold tint pill bg, now
-                  // just a tiny "+" character at low opacity that
-                  // reveals slightly more on touch (no bg, no border,
-                  // just the glyph). (2) Wider gate: was only after
-                  // task/routine rows; now renders after ANY non-free,
-                  // non-past row (meetings, pumps, feeds all get the
-                  // "+"). Free blocks still skip since they're already
-                  // tap-to-fill — adding a "+" after a free block
-                  // would be visually redundant.
-                  if (!isPast && !isFree) {
+                  // v05.05bt469 → bt471 → bt475 → bt477 — Per chat:
+                  // 'i should be able to insert rows anywhere,
+                  // shouldnt i?'. Was: chip only rendered after
+                  // non-past + non-free rows, so you couldn't
+                  // insert after a free block or before the first
+                  // row. Widened: now renders after ANY non-past
+                  // row including free rows. Plus a TOP-OF-TIMELINE
+                  // chip is rendered separately above the first
+                  // non-past row (see the firstFutureRowInserted
+                  // logic before this loop body).
+                  if (!isPast) {
                     rows.push(
                       <div
                         key={`insert-after-${slot.id}-${i}`}
+                        className="ll-insert-chip"
                         style={{
                           position: "relative",
-                          height: 8,
+                          height: 14,
                           margin: "-1px 0",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
+                          gap: 8,
                           cursor: "pointer",
                         }}
                         onClick={(e) => {
@@ -37508,12 +38706,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           insertTaskAfterSlot(slot);
                         }}
                         title="Insert a task here">
+                        {/* v05.05bt475 — Build "missing insert rows":
+                            bt471 dropped the chip to a barely-visible
+                            glyph at 28% opacity. Re-added a thin
+                            hairline rule on each side that meets a
+                            small + chip in the middle, so the
+                            insertion affordance is discoverable but
+                            still quiet. Opacity 0.45 at rest. */}
+                        <div style={{
+                          flex: 1, height: 1,
+                          background: `${C.line}55`,
+                          opacity: 0.55,
+                        }} />
                         <span style={{
-                          color: C.muted,
+                          color: C.gold,
                           fontFamily: "'JetBrains Mono', monospace",
-                          fontSize: 10, lineHeight: 1, fontWeight: 400,
-                          opacity: 0.28,
-                        }}>+</span>
+                          fontSize: 10, lineHeight: 1, fontWeight: 700,
+                          opacity: 0.55,
+                          padding: "0 6px",
+                          letterSpacing: "0.05em",
+                        }}>+ insert</span>
+                        <div style={{
+                          flex: 1, height: 1,
+                          background: `${C.line}55`,
+                          opacity: 0.55,
+                        }} />
                       </div>
                     );
                   }
@@ -37532,6 +38749,40 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         onCancel={() => setInlineTimeEdit(null)}
                         onSave={(patch) => {
                           setTasks(prev => prev.map(x => x.id === slot.id ? { ...x, ...patch } : x));
+                          setInlineTimeEdit(null);
+                        }}
+                      />
+                    );
+                  } else if (isRoutine && inlineTimeEdit === slot.id) {
+                    // v05.05bt473 — Routine inline time/duration edit.
+                    // Writes to todaySetup.routineOverrides instead of
+                    // tasks. The routine id strips the 'rt-' prefix if
+                    // present to match the library key.
+                    const routineKey = (slot.id || "").replace(/^rt-/, "");
+                    rows.push(
+                      <InlineTimeEditPanel
+                        key={`edit-${slot.id}`}
+                        C={C}
+                        task={{
+                          ...slot,
+                          scheduledTime: `${String(slot.start.getHours()).padStart(2, "0")}:${String(slot.start.getMinutes()).padStart(2, "0")}`,
+                          effortMin: slot.durationMin || 30,
+                        }}
+                        onCancel={() => setInlineTimeEdit(null)}
+                        onSave={(patch) => {
+                          const todayKey = now.toISOString().slice(0, 10);
+                          setTodaySetup(prev => {
+                            const nextOverrides = { ...(prev?.routineOverrides || {}) };
+                            nextOverrides[routineKey] = {
+                              time: patch.scheduledTime,
+                              durationMin: patch.effortMin,
+                            };
+                            return {
+                              ...(prev || {}),
+                              date: todayKey,
+                              routineOverrides: nextOverrides,
+                            };
+                          });
                           setInlineTimeEdit(null);
                         }}
                       />
@@ -37835,6 +39086,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   const C2 = C; // alias for readability
                   return (
                     <div
+                      data-inline-editor="expand-edit"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         width: "100%",
@@ -39374,7 +40626,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "scheduled" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39501,7 +40753,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "today" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39762,7 +41014,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "backlog" && (
-                          <div style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -39954,14 +41206,21 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
             separately from the regular task pile. Each shows a coral
             "review?" dot when stale (>3 days). User can promote
             (schedule / unscheduled), mark done, or delete. */}
-        {drawerItems.length > 0 && (() => {
+        {(() => {
+          // v05.05bt483 — Per chat: 'brain dump needs to be able to
+          // brain dump right there and then instead of another
+          // dialog box'. Section ALWAYS renders so the inline + add
+          // input is accessible even when no items exist. The
+          // showBrainDump modal still works as a fallback but the
+          // ⋯ menu items now route to scrolling here + activating
+          // the input.
           const STALE_DAYS = 3;
           const stale = drawerItems.filter(t => {
             const age = (now - new Date(t.createdAt)) / (1000 * 60 * 60 * 24);
             return age >= STALE_DAYS;
           });
           return (
-            <div style={{ marginBottom: 18, marginTop: 8 }}>
+            <div data-pile-section="brain-dump" style={{ marginBottom: 18, marginTop: 8 }}>
               <div style={{
                 display: "flex", alignItems: "baseline", gap: 12,
                 borderBottom: `1px solid ${C.line}22`,
@@ -39980,25 +41239,69 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   textTransform: "uppercase", fontWeight: 700,
                   fontFamily: "'JetBrains Mono', monospace",
                 }}>
-                  {drawerItems.length} item{drawerItems.length !== 1 ? "s" : ""}
+                  {drawerItems.length === 0 ? "Jot anything below" : `${drawerItems.length} item${drawerItems.length === 1 ? "" : "s"}`}
                 </span>
                 {stale.length > 0 && (
                   <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    fontSize: 9, color: "#C18D7A",
-                    letterSpacing: "0.18em",
+                    fontSize: 9, color: C.accent, letterSpacing: "0.16em",
                     textTransform: "uppercase", fontWeight: 700,
                     fontFamily: "'JetBrains Mono', monospace",
                   }}>
-                    <span style={{
-                      width: 5, height: 5, borderRadius: "50%",
-                      background: "#C18D7A",
-                    }} />
                     {stale.length} stale
                   </span>
                 )}
               </div>
-              {drawerItems.map(t => {
+              {/* v05.05bt483 — Inline + add input. Always visible at
+                  the top of the section. Type and Enter to capture
+                  to the drawer without opening any modal. */}
+              <div data-inline-editor="brain-dump-add" style={{
+                display: "flex", gap: 6, padding: "8px 10px",
+                marginBottom: drawerItems.length > 0 ? 10 : 0,
+                background: "transparent",
+                border: `1px solid ${C.ink}15`,
+                borderRadius: 8,
+              }}>
+                <input
+                  type="text"
+                  value={brainDumpText}
+                  onChange={(e) => setBrainDumpText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      // bt132 addBrainDump handles parsing + saving.
+                      // Reuse it directly.
+                      const text = brainDumpText.trim();
+                      if (text) addBrainDump();
+                    }
+                    if (e.key === "Escape") {
+                      setBrainDumpText("");
+                    }
+                  }}
+                  placeholder="Jot something. Enter to save · multi-task separated by period."
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                    fontStyle: "italic", fontSize: 14, color: C.ink,
+                    outline: "none", padding: "2px 0",
+                  }}
+                />
+                {brainDumpText.trim() && (
+                  <button
+                    onClick={() => {
+                      const text = brainDumpText.trim();
+                      if (text) addBrainDump();
+                    }}
+                    style={{
+                      background: C.mommy, color: "#fff",
+                      border: "none", borderRadius: 5,
+                      padding: "3px 9px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+                      cursor: "pointer",
+                    }}>SAVE</button>
+                )}
+              </div>
+              {drawerItems.length > 0 && drawerItems.map(t => {
                 const age = (now - new Date(t.createdAt)) / (1000 * 60 * 60 * 24);
                 const isStale = age >= STALE_DAYS;
                 return (
@@ -45338,7 +46641,7 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
   const expired = inventory.filter(i => i.expired);
   const lowAlert = feedsRunway < 2;
   const minsToNextPump = nextPumpAt ? Math.round((nextPumpAt - now) / 60000) : null;
-  const [emptyConfirm, setEmptyConfirm] = useState(null); // 'rt' | 'fridge' | null
+  const [emptyConfirm, setEmptyConfirm] = useState(null); // 'rt' | 'fridge' | 'freezer' | null
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -45498,6 +46801,35 @@ function InventoryView({ C, inventory, events, currentUser, moveToFridge, moveTo
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
               }}>
                 <Trash2 size={11} /> {emptyConfirm === "fridge" ? "Sure? Tap again" : `Empty fridge (${fridgeOz.toFixed(1)} oz)`}
+              </button>
+            )}
+            {/* v05.05bt481 — Per chat: 'there is a bug where no
+                matter how much i empty the freezer, the bottles
+                still appear'. Root cause was DOUBLE: (1) there was
+                NO Empty freezer button — only RT and Fridge had bulk
+                empties. The user was discarding bottles one-by-one
+                which made resurrection from cloud sync more likely
+                because each discard is a separate setInventory call
+                and the bt101 protection window is per-call. (2)
+                Even when ids ARE in the recentlyDrained ref, a
+                cloud snapshot newer than 5 min reverts them. Fix:
+                add the missing button + emptyLocation('freezer')
+                wired the same way as the other two. */}
+            {freezerOz > 0 && (
+              <button onClick={() => {
+                if (emptyConfirm === "freezer") { emptyLocation("freezer"); setEmptyConfirm(null); }
+                else setEmptyConfirm("freezer");
+              }} style={{
+                flex: 1,
+                background: emptyConfirm === "freezer" ? C.accent : "transparent",
+                color: emptyConfirm === "freezer" ? "#fff" : C.muted,
+                border: emptyConfirm === "freezer" ? "none" : `1px dashed ${C.line}33`,
+                borderRadius: 8,
+                padding: "8px 10px", fontSize: 11, cursor: "pointer",
+                fontWeight: emptyConfirm === "freezer" ? 600 : 400,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              }}>
+                <Trash2 size={11} /> {emptyConfirm === "freezer" ? "Sure? Tap again" : `Empty freezer (${freezerOz.toFixed(1)} oz)`}
               </button>
             )}
           </div>
