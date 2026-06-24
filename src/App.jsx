@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt499";
+const APP_VERSION = "2026.05.05bt500";
 const APP_BUILD_NOTES = [
-  "Brain dump title is click-to-edit now. Per chat: need to be able to click and edit the title when you do your brain dump even before assigning to a drawer.\\n\\nWas: brain dump item title was a static <div>; if you mistyped, you had to delete + retype. Now: tapping the title opens inlineTitleEdit on that item — renders an autofocused <input> right where the title was, in the same Newsreader serif at the same size, with a subtle mauve hairline border. Enter commits, blur commits, Escape cancels. Empty title on blur is treated as cancel (keeps original).\\n\\nNo need to promote to a drawer first. Just tap, fix, tap → TODAY / → MAYBE / → BACKLOG when ready.\\n\\nBuild verified clean via esbuild.",
+  "→ BACKLOG bug fix + pile sections more prominent. Per chat: when I click on the backlog button it doesnt go to the backlog pile · the task pile section blends in.\\n\\n(1) → BACKLOG BUG. Was setting drawer:true which kept the task inside the brain dump section (drawer items render in brain dump, not backlog). Backlog filter is !scheduledTime && !scheduledDate (with drawer=false). Fixed: → BACKLOG now sets drawer:false + clears all date fields. Task properly moves to backlog pile. Also auto-expands the backlog section so you can see it land.\\n\\n(2) PILE SECTIONS POP. Three sections were faint paper cards with thin colored borders that washed out against the new Option B bg. Boosted:\\n  · Section bg: was C.paper (pale blue, blended in) → now tinted with the section\'s color at 10% alpha (mauve tint for Scheduled, gold for Not yet scheduled, purple for Backlog).\\n  · borderTop: 2px → 4px chunkier accent stripe.\\n  · Section header label: fontSize 10.5 → 12.5, weight 700 → 800, letter-spacing tightened.\\n  · Subtle drop shadow added underneath each section.\\nNet: scrolling past the timeline, the three piles now visually distinguish themselves immediately.\\n\\nDEFERRED to bt501 (responding to your other notes):\\n  · Baby feed predictions + wake windows on the timeline — they ALREADY render as feed-predicted slots but too subtly (0.72 opacity, italic, no high-contrast badge). Plus predicted naps are used for focus-scoring only, not rendered as visible slots. Need to make both POP so the navigating-mom-life-and-work-life value comes through.\\n  · Bulk-add modal vs brain-dump redundancy: yes, they overlap. Brain dump already accepts multi-task input (period-separated). The structured bulk-add modal (showAddForm path) is mostly dead weight at this point. I\'d remove it but want to confirm with you first since it had structured fields (focus, effort, regret).\\n  · MAYBE pile as a separate section + default-expansion toggle — still on the docket.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt500", summary: "(1) → BACKLOG bug fix: was setting drawer:true (kept task in brain dump) — now sets drawer:false + clears date fields, properly moves to backlog. Auto-expands backlog section. (2) Pile sections more prominent: tinted bg (10% section color), 4px top border (was 2px), section labels 12.5px weight 800, subtle shadow. No more blending in. Build verified clean via esbuild." },
   { version: "2026.05.05bt499", summary: "Brain dump title is click-to-edit. Was a static div; now tapping the title opens inlineTitleEdit on that item — autofocused input with mauve hairline. Enter or blur commits, Escape cancels. No need to promote to a drawer first. Build verified clean via esbuild." },
   { version: "2026.05.05bt498", summary: "Bench palette → Option B (cool blue-gray cards, less blinding): bg #DCE1EB, paper #F2F5FA, line #BFC9D6. + Brain dump three-button destination model: → TODAY (mauve auto-slot), → MAYBE (gold dayWishlist), → BACKLOG (slate). Replaces keep/✓/× row. dayWishlist flag set but separate pile section + default-expansion toggle deferred to bt499. Build verified clean via esbuild." },
   { version: "2026.05.05bt497", summary: "Skip-for-today button on routine inline edit. Routines cant be permanently deleted from the timeline (recurring) but can be SKIPPED. Added ✕ SKIP TODAY button next to ↺ RESET in the routine expand-edit. Writes routineOverrides[id]={skipped:true}. Routine vanishes from todays timeline, returns tomorrow. Build verified clean via esbuild." },
@@ -41029,14 +41030,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                       {/* SCHEDULED section — v05.05bt441 left rail for state distinction. */}
                       <div data-pile-section="scheduled" style={{
+                        // v05.05bt500 — per chat: sections blend in. Pumped prominence.
                         position: "relative",
-                        marginBottom: 10,
-                        background: C.paper,
-                        border: `1px solid ${C.line}66`,
-                        borderLeft: `5px solid ${C.gold}`,
-                        borderTop: `2px solid ${C.gold}`,
+                        marginBottom: 12,
+                        background: `${C.mommy}10`,
+                        border: `1px solid ${C.mommy}33`,
+                        borderLeft: `5px solid ${C.mommy}`,
+                        borderTop: `4px solid ${C.mommy}`,
                         borderRadius: 10,
-                        padding: "8px 10px 10px",
+                        padding: "10px 12px 12px",
+                        boxShadow: `0 1px 0 ${C.line}44`,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
@@ -41053,7 +41056,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <span style={{ color: C.mommy, fontWeight: 800, fontSize: 10 }}>●</span>
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              fontSize: 12.5, letterSpacing: "0.12em", fontWeight: 800,
                               color: C.mommy, textTransform: "uppercase",
                             }}>Scheduled for today · {scheduled.length}</span>
                             <span style={{
@@ -41161,14 +41164,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           FIT for engine, ↺ MOVED OFF for user). */}
                       {/* FOR TODAY section — v05.05bt441 muted left rail. */}
                       <div data-pile-section="today" style={{
+                        // v05.05bt500 — per chat: sections blend in. Pumped prominence.
                         position: "relative",
-                        marginBottom: 10,
-                        background: C.paper,
-                        border: `1px solid ${C.line}66`,
-                        borderLeft: `5px solid ${C.muted}`,
-                        borderTop: `2px solid ${C.muted}`,
+                        marginBottom: 12,
+                        background: `${C.gold}10`,
+                        border: `1px solid ${C.gold}33`,
+                        borderLeft: `5px solid ${C.gold}`,
+                        borderTop: `4px solid ${C.gold}`,
                         borderRadius: 10,
-                        padding: "8px 10px 10px",
+                        padding: "10px 12px 12px",
+                        boxShadow: `0 1px 0 ${C.line}44`,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
@@ -41185,7 +41190,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <span style={{ color: C.gold, fontWeight: 800, fontSize: 10 }}>◐</span>
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              fontSize: 12.5, letterSpacing: "0.12em", fontWeight: 800,
                               color: C.gold, textTransform: "uppercase",
                             }}>Not yet scheduled · {forToday.length}</span>
                             <span style={{
@@ -41405,14 +41410,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           Moved to live INSIDE the outer IIFE so backlog
                           variable is in scope. */}
                       <div data-pile-section="backlog" style={{
+                        // v05.05bt500 — per chat: sections blend in. Pumped prominence.
                         position: "relative",
-                        marginBottom: 10,
-                        background: C.paper,
-                        border: `1px solid ${C.line}66`,
+                        marginBottom: 12,
+                        background: `${C.nap}10`,
+                        border: `1px solid ${C.nap}33`,
                         borderLeft: `5px solid ${C.nap}`,
-                        borderTop: `2px solid ${C.nap}`,
+                        borderTop: `4px solid ${C.nap}`,
                         borderRadius: 10,
-                        padding: "8px 10px 10px",
+                        padding: "10px 12px 12px",
+                        boxShadow: `0 1px 0 ${C.line}44`,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <button
@@ -41428,7 +41435,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             <span style={{ color: C.muted, fontWeight: 800, fontSize: 10 }}>○</span>
                             <span style={{
                               fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: 10.5, letterSpacing: "0.10em", fontWeight: 700,
+                              fontSize: 12.5, letterSpacing: "0.12em", fontWeight: 800,
                               color: C.muted, textTransform: "uppercase",
                             }}>Backlog <span style={{ fontWeight: 500, opacity: 0.7 }}>(brain dump)</span> · {backlog.length}</span>
                             <span style={{
@@ -41940,9 +41947,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       <button
                         onClick={() => {
                           // → BACKLOG = no date, low priority.
+                          // v05.05bt500 — Per chat: 'when i click on
+                          // the backlog button it doesnt go to the
+                          // backlog pile'. Was setting drawer:true
+                          // which kept the task in the brain dump
+                          // section. Backlog filter is !scheduledTime
+                          // && !scheduledDate (drawer must be false).
                           setTasks(prev => prev.map(x => x.id === t.id
-                            ? { ...x, drawer: true, scheduledTime: null, scheduledDate: null, dayWishlist: false, pinned: false }
+                            ? { ...x, drawer: false, scheduledTime: null, scheduledDate: null, dayWishlist: false, pinned: false }
                             : x));
+                          if (setBacklogExpanded) setBacklogExpanded(true);
                         }}
                         style={{
                           background: "transparent", color: C.muted,
