@@ -15,11 +15,13 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt501";
+const APP_VERSION = "2026.05.05bt503";
 const APP_BUILD_NOTES = [
-  "Multi-select in brain dump pile — batch destinations. Per chat: should be able to manage the pile drawers so I can multiselect and do some action on it.\\n\\nBrain dump first (highest-value triage spot). iOS-Mail style:\\n  · SELECT button in the brain dump header (mauve outline pill). Tap → enters select mode.\\n  · Each brain dump row gains a checkbox at the left. Tap row to toggle selection. Selected rows get a mauve-tinted bg + thicker mauve border.\\n  · Per-row → TODAY / → MAYBE / → BACKLOG / × buttons hide in select mode (avoid double-action confusion). The floating bar takes over.\\n  · FLOATING ACTION BAR appears at the bottom of the viewport when ≥1 item selected. Shows: N SEL · → TODAY (mauve) · → MAYBE (gold) · → BACKLOG (slate) · ✕ DELETE (coral, confirmation prompt) · CANCEL.\\n  · Each batch destination action loops through the selected ids and applies the same single-item logic in one setState pass. TODAY auto-slots each into the first workable block that fits its effortMin.\\n  · Header SELECT toggle becomes N SEL · CANCEL when active so you always have a way out.\\n\\nFlow: long list of brain dump items → tap SELECT → tap each row you want → tap → BACKLOG → all triaged at once.\\n\\nNEXT: extend to the other piles (Scheduled / Not yet scheduled / Backlog) if useful. The mechanics are identical — just state plumbing.\\n\\nBuild verified clean via esbuild.",
+  "Stillness bench variant — stage 1: palette + menu toggle. Per chat: I like the stillness bench view as an option.\\n\\nWHAT SHIPPED. New benchVariant state alongside benchScope, persisted to ll:benchVariant. Two values:\\n  · lab (default) — the existing Option B cool blue-gray clinical lab notebook.\\n  · stillness — warm off-white minimalist mood (Things 3 / Sunsama).\\nNew menu section Bench look (appears in ⋯ menu when bench is on, both menu locations) with two radio items:\\n  · Lab · clinical blue\\n  · Stillness · warm minimal\\n\\nNEW PALETTE cadenceStillness:\\n  · bg #FAFAF7 (warm off-white — replaces cool blue-gray #DCE1EB)\\n  · paper #FFFFFF (pure white cards on warm bg)\\n  · ink #1F1B16 (warm dark — replaces navy #061A4D)\\n  · muted #9C8B7A (warm muted — replaces cool gray #4D5970)\\n  · line #E8E2D8 (warm hairlines — replaces cool #BFC9D6)\\n  · accent #B85040 (terracotta — replaces clinical red #A8231A)\\nFamily colors (mommy mauve, daddy blue, sage, gold) unchanged across variants.\\n\\nCOMING IN STAGE 2 (bt504+): layout-level changes that the Stillness mockup actually showed —\\n  · Owner rendered as 6px DOT not 5px rail\\n  · Pile sections lose colored bg tints + thick top borders; rely on whitespace + eyebrow text\\n  · Day title in big italic Fraunces serif as the ONE serif moment\\n  · Generous row padding\\n  · NOW row gets soft mauve glow instead of red line\\nStage 1 ships the palette + the option so you can flip back and forth in the menu and see the warm-vs-cool feel side by side. If you want to wait on stage 2 to evaluate the full mood, let me know — otherwise I\'ll keep iterating.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt503", summary: "Stillness bench variant — stage 1: palette + menu toggle. New benchVariant state (lab | stillness). New ⋯ menu section Bench look with Lab · clinical blue / Stillness · warm minimal. New cadenceStillness palette: bg #FAFAF7 warm off-white, paper #FFFFFF, ink #1F1B16 warm dark, muted #9C8B7A, line #E8E2D8, accent #B85040 terracotta. Family colors unchanged. Stage 2 (dots not rails, no section borders, Fraunces day title, NOW glow) deferred. Build verified clean via esbuild." },
+  { version: "2026.05.05bt502", summary: "Category visible + editable on brain dump rows. work=lavender #8B7AA8, personal=warm orange #D9956A. AUTO (muted) is inferred/unset. Tap badge to cycle: auto → work → personal → auto. category from bt157 was hidden scheduler state; now exposed in pile row meta line. Could extend to other pile sections next. Build verified clean via esbuild." },
   { version: "2026.05.05bt501", summary: "Multi-select in brain dump pile. SELECT button in header toggles select mode. Checkboxes appear on each row. Tap rows to toggle selection. Floating action bar at viewport bottom shows: N SEL · → TODAY · → MAYBE · → BACKLOG · ✕ DELETE · CANCEL. Batch actions loop through selected ids. Per-row buttons hide in select mode. Build verified clean via esbuild." },
   { version: "2026.05.05bt500", summary: "(1) → BACKLOG bug fix: was setting drawer:true (kept task in brain dump) — now sets drawer:false + clears date fields, properly moves to backlog. Auto-expands backlog section. (2) Pile sections more prominent: tinted bg (10% section color), 4px top border (was 2px), section labels 12.5px weight 800, subtle shadow. No more blending in. Build verified clean via esbuild." },
   { version: "2026.05.05bt499", summary: "Brain dump title is click-to-edit. Was a static div; now tapping the title opens inlineTitleEdit on that item — autofocused input with mauve hairline. Enter or blur commits, Escape cancels. No need to promote to a drawer first. Build verified clean via esbuild." },
@@ -2057,6 +2059,14 @@ const PALETTES = {
   cadenceBench:  { bg: "#DCE1EB", ink: "#061A4D", paper: "#F2F5FA", panel: "#CFD7E3", accent: "#A8231A", soft: "#EAEFF6", muted: "#4D5970", line: "#BFC9D6", modalSurface: "#F2F5FA",
                    mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C",
                    pump: "#BF7A1A", feed: "#C97A47", nap: "#9B6BB5" },
+  // v05.05bt503 — Per chat 'I like the stillness bench view'. Things 3
+  // + Sunsama mood: warm off-white, ONE serif moment (day title), no
+  // colored card backgrounds, whitespace + small dots do the visual
+  // hierarchy instead of borders + rails. Family colors keep their
+  // semantic but render as 6px dots instead of 5px rails.
+  cadenceStillness: { bg: "#FAFAF7", ink: "#1F1B16", paper: "#FFFFFF", panel: "#F5F1E8", accent: "#B85040", soft: "#F5F1E8", muted: "#9C8B7A", line: "#E8E2D8", modalSurface: "#FFFFFF",
+                      mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C",
+                      pump: "#BF7A1A", feed: "#C97A47", nap: "#9B6BB5" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -2654,6 +2664,18 @@ function SoleneHandoffInner() {
   useEffect(() => {
     try { localStorage.setItem("ll:benchScope", benchScope); } catch {}
   }, [benchScope]);
+  // v05.05bt503 — Per chat: 'I like the stillness bench view as an
+  // option'. Adding bench *variant* alongside scope. "lab" = the
+  // existing Option B cool blue-gray clinical lab notebook. "stillness"
+  // = warm off-white minimalist (Things 3 / Sunsama mood). Persists
+  // separately so user can flip between them.
+  const [benchVariant, setBenchVariant] = useState(() => {
+    try { return localStorage.getItem("ll:benchVariant") || "lab"; }
+    catch { return "lab"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:benchVariant", benchVariant); } catch {}
+  }, [benchVariant]);
   // Legacy cadenceLayout kept for backward compat in props plumbing;
   // its value mirrors benchScope state for any code still reading it.
   const cadenceLayout = benchScope === "off" ? "editorial" : "bench";
@@ -4094,8 +4116,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // Completely decoupled from cadenceScope and productMode now.
   const cadenceKey = currentUser === "Daddy" ? "cadenceDaddy" : "cadence";
   const isBench = benchScope === "all" || (benchScope === "schedule" && tab === "shifts");
+  // v05.05bt503 — benchVariant selects which palette: "lab" → cadenceBench
+  // (cool blue-gray Option B). "stillness" → cadenceStillness (warm
+  // off-white minimalist). Persisted separately so user can flip.
+  const isStillness = isBench && benchVariant === "stillness";
   const C = isBench
-    ? PALETTES.cadenceBench
+    ? (benchVariant === "stillness" ? PALETTES.cadenceStillness : PALETTES.cadenceBench)
     : isCadence
       ? PALETTES[themeMode === "dusk" ? "cadenceDusk" : cadenceKey]
       : PALETTES[themeMode];
@@ -7598,7 +7624,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             schedulerDarkMode={schedulerDarkMode} setSchedulerDarkMode={setSchedulerDarkMode}
             setTab={setTab}
             productMode={productMode} setProductMode={setProductMode}
-            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope} benchVariant={benchVariant} setBenchVariant={setBenchVariant}
           />
         )}
         {tab === "bank" && (
@@ -10239,7 +10265,7 @@ function SoundToggleButton({ C }) {
   );
 }
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope, benchVariant, setBenchVariant }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // v05.05bt86 — gate destructive/dev controls behind explicit reveal
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -19887,7 +19913,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope, benchVariant, setBenchVariant }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -20076,7 +20102,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             openAllTasksModal={() => setAllTasksModalOpen(true)}
             setTab={setTab}
             productMode={productMode} setProductMode={setProductMode}
-            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope} benchVariant={benchVariant} setBenchVariant={setBenchVariant}
         />
       )}
 
@@ -28897,7 +28923,7 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope, benchVariant, setBenchVariant }) {
   const [showAddForm, setShowAddForm] = useState(false);
   // v05.05bt488 — bench is a palette-only alternative now; the
   // custom bench-table render was removed because it broke add /
@@ -33810,6 +33836,29 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 },
                                 hint: "Lab-bench treatment everywhere — Now, Journal, Wellness, Milk too",
                               },
+                              // v05.05bt503 — Bench variant toggle.
+                              // Lab = current Option B cool blue-gray
+                              // clinical. Stillness = warm off-white
+                              // minimalist (Things 3 mood).
+                              ...(benchScope !== "off" ? [
+                                { section: "Bench look" },
+                                { icon: (benchVariant || "lab") === "lab" ? "●" : "○",
+                                  label: "Lab · clinical blue",
+                                  onClick: () => {
+                                    if (setBenchVariant) setBenchVariant("lab");
+                                    setShowActionsMenu(false);
+                                  },
+                                  hint: "Cool blue-gray cards, navy chrome — instrument feel",
+                                },
+                                { icon: benchVariant === "stillness" ? "●" : "○",
+                                  label: "Stillness · warm minimal",
+                                  onClick: () => {
+                                    if (setBenchVariant) setBenchVariant("stillness");
+                                    setShowActionsMenu(false);
+                                  },
+                                  hint: "Warm off-white, dots not rails, generous whitespace",
+                                },
+                              ] : []),
                             ].map((item, idx) => {
                               if (item.section) {
                                 return (
@@ -34030,6 +34079,26 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               },
                               hint: "Lab-bench treatment everywhere — Now, Journal, Wellness, Milk too",
                             },
+                            // v05.05bt503 — Bench variant toggle (second menu location).
+                            ...(benchScope !== "off" ? [
+                              { section: "Bench look" },
+                              { icon: (benchVariant || "lab") === "lab" ? "●" : "○",
+                                label: "Lab · clinical blue",
+                                onClick: () => {
+                                  if (setBenchVariant) setBenchVariant("lab");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Cool blue-gray cards, navy chrome — instrument feel",
+                              },
+                              { icon: benchVariant === "stillness" ? "●" : "○",
+                                label: "Stillness · warm minimal",
+                                onClick: () => {
+                                  if (setBenchVariant) setBenchVariant("stillness");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Warm off-white, dots not rails, generous whitespace",
+                              },
+                            ] : []),
                           ].map((item, idx) => {
                             if (item.section) {
                               return (
@@ -41925,13 +41994,53 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         fontSize: 10, color: C.muted,
                         fontFamily: "'JetBrains Mono', monospace",
                         letterSpacing: "0.04em", marginTop: 2,
+                        display: "flex", alignItems: "center", gap: 6,
                       }}>
-                        {(() => {
-                          if (age < 1) return "today";
-                          const d = Math.floor(age);
-                          return `${d}d ago`;
-                        })()}
-                        {isStale && " · review?"}
+                        <span>
+                          {(() => {
+                            if (age < 1) return "today";
+                            const d = Math.floor(age);
+                            return `${d}d ago`;
+                          })()}
+                          {isStale && " · review?"}
+                        </span>
+                        {/* v05.05bt502 — Per chat: under the task pile,
+                            am I able to add the info in terms of what
+                            category this task is under? Category was
+                            hidden state from bt157 (work/personal as
+                            scheduler tiebreaker). Now surfaced as a
+                            tap-to-cycle badge inline with the meta.
+                            Cycle: auto (inferred) → work → personal →
+                            auto. Color: work=lavender #8B7AA8, personal
+                            =warm orange #D9956A, auto=muted line. */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (bdSelectMode) return;
+                            setTasks(prev => prev.map(x => {
+                              if (x.id !== t.id) return x;
+                              const cur = x.category;
+                              const next = cur === "work" ? "personal" : cur === "personal" ? null : "work";
+                              return { ...x, category: next };
+                            }));
+                          }}
+                          title="Tap to cycle: auto → work → personal"
+                          style={{
+                            background: t.category === "work" ? "#8B7AA822"
+                                      : t.category === "personal" ? "#D9956A22"
+                                      : "transparent",
+                            border: `1px solid ${t.category === "work" ? "#8B7AA8" : t.category === "personal" ? "#D9956A" : C.line}`,
+                            color: t.category === "work" ? "#8B7AA8"
+                                 : t.category === "personal" ? "#A65F1A"
+                                 : C.muted,
+                            borderRadius: 3,
+                            padding: "1px 5px",
+                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 8.5, fontWeight: 800, letterSpacing: "0.08em",
+                            cursor: "pointer", textTransform: "uppercase",
+                          }}>
+                          {t.category || "auto"}
+                        </button>
                       </div>
                     </div>
                     {!bdSelectMode && (
