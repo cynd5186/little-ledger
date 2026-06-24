@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt500";
+const APP_VERSION = "2026.05.05bt501";
 const APP_BUILD_NOTES = [
-  "→ BACKLOG bug fix + pile sections more prominent. Per chat: when I click on the backlog button it doesnt go to the backlog pile · the task pile section blends in.\\n\\n(1) → BACKLOG BUG. Was setting drawer:true which kept the task inside the brain dump section (drawer items render in brain dump, not backlog). Backlog filter is !scheduledTime && !scheduledDate (with drawer=false). Fixed: → BACKLOG now sets drawer:false + clears all date fields. Task properly moves to backlog pile. Also auto-expands the backlog section so you can see it land.\\n\\n(2) PILE SECTIONS POP. Three sections were faint paper cards with thin colored borders that washed out against the new Option B bg. Boosted:\\n  · Section bg: was C.paper (pale blue, blended in) → now tinted with the section\'s color at 10% alpha (mauve tint for Scheduled, gold for Not yet scheduled, purple for Backlog).\\n  · borderTop: 2px → 4px chunkier accent stripe.\\n  · Section header label: fontSize 10.5 → 12.5, weight 700 → 800, letter-spacing tightened.\\n  · Subtle drop shadow added underneath each section.\\nNet: scrolling past the timeline, the three piles now visually distinguish themselves immediately.\\n\\nDEFERRED to bt501 (responding to your other notes):\\n  · Baby feed predictions + wake windows on the timeline — they ALREADY render as feed-predicted slots but too subtly (0.72 opacity, italic, no high-contrast badge). Plus predicted naps are used for focus-scoring only, not rendered as visible slots. Need to make both POP so the navigating-mom-life-and-work-life value comes through.\\n  · Bulk-add modal vs brain-dump redundancy: yes, they overlap. Brain dump already accepts multi-task input (period-separated). The structured bulk-add modal (showAddForm path) is mostly dead weight at this point. I\'d remove it but want to confirm with you first since it had structured fields (focus, effort, regret).\\n  · MAYBE pile as a separate section + default-expansion toggle — still on the docket.\\n\\nBuild verified clean via esbuild.",
+  "Multi-select in brain dump pile — batch destinations. Per chat: should be able to manage the pile drawers so I can multiselect and do some action on it.\\n\\nBrain dump first (highest-value triage spot). iOS-Mail style:\\n  · SELECT button in the brain dump header (mauve outline pill). Tap → enters select mode.\\n  · Each brain dump row gains a checkbox at the left. Tap row to toggle selection. Selected rows get a mauve-tinted bg + thicker mauve border.\\n  · Per-row → TODAY / → MAYBE / → BACKLOG / × buttons hide in select mode (avoid double-action confusion). The floating bar takes over.\\n  · FLOATING ACTION BAR appears at the bottom of the viewport when ≥1 item selected. Shows: N SEL · → TODAY (mauve) · → MAYBE (gold) · → BACKLOG (slate) · ✕ DELETE (coral, confirmation prompt) · CANCEL.\\n  · Each batch destination action loops through the selected ids and applies the same single-item logic in one setState pass. TODAY auto-slots each into the first workable block that fits its effortMin.\\n  · Header SELECT toggle becomes N SEL · CANCEL when active so you always have a way out.\\n\\nFlow: long list of brain dump items → tap SELECT → tap each row you want → tap → BACKLOG → all triaged at once.\\n\\nNEXT: extend to the other piles (Scheduled / Not yet scheduled / Backlog) if useful. The mechanics are identical — just state plumbing.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt501", summary: "Multi-select in brain dump pile. SELECT button in header toggles select mode. Checkboxes appear on each row. Tap rows to toggle selection. Floating action bar at viewport bottom shows: N SEL · → TODAY · → MAYBE · → BACKLOG · ✕ DELETE · CANCEL. Batch actions loop through selected ids. Per-row buttons hide in select mode. Build verified clean via esbuild." },
   { version: "2026.05.05bt500", summary: "(1) → BACKLOG bug fix: was setting drawer:true (kept task in brain dump) — now sets drawer:false + clears date fields, properly moves to backlog. Auto-expands backlog section. (2) Pile sections more prominent: tinted bg (10% section color), 4px top border (was 2px), section labels 12.5px weight 800, subtle shadow. No more blending in. Build verified clean via esbuild." },
   { version: "2026.05.05bt499", summary: "Brain dump title is click-to-edit. Was a static div; now tapping the title opens inlineTitleEdit on that item — autofocused input with mauve hairline. Enter or blur commits, Escape cancels. No need to promote to a drawer first. Build verified clean via esbuild." },
   { version: "2026.05.05bt498", summary: "Bench palette → Option B (cool blue-gray cards, less blinding): bg #DCE1EB, paper #F2F5FA, line #BFC9D6. + Brain dump three-button destination model: → TODAY (mauve auto-slot), → MAYBE (gold dayWishlist), → BACKLOG (slate). Replaces keep/✓/× row. dayWishlist flag set but separate pile section + default-expansion toggle deferred to bt499. Build verified clean via esbuild." },
@@ -29137,6 +29138,19 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // v05.05bt148 — Inline title edit. Tap title → input + delete button
   // inline, no modal needed.
   const [inlineTitleEdit, setInlineTitleEdit] = useState(null);
+  // v05.05bt501 — Per chat: should be able to manage the pile drawers
+  // so I can multiselect and do some action on it. Brain dump first
+  // (highest-value triage spot). bdSelectMode toggles checkbox view;
+  // bdSelectedIds tracks the selected set. Floating action bar at the
+  // bottom of the screen offers batch destinations + delete.
+  const [bdSelectMode, setBdSelectMode] = useState(false);
+  const [bdSelectedIds, setBdSelectedIds] = useState(() => new Set());
+  const exitBdSelect = () => { setBdSelectMode(false); setBdSelectedIds(new Set()); };
+  const toggleBdSelect = (id) => setBdSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   // v05.05bt150 — Two-tap delete state. First tap on the × button
   // sets pendingDeleteId; second tap (while pending) actually deletes.
   // Tapping anywhere else clears it. This replaces the broken
@@ -41733,6 +41747,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                     {stale.length} stale
                   </span>
                 )}
+                {/* v05.05bt501 — Per chat: should be able to manage
+                    the pile drawers so I can multiselect and do some
+                    action on it. SELECT toggle. Visible when there
+                    are items. iOS-Mail style: tap → checkboxes appear
+                    on each row, floating action bar at the bottom. */}
+                {drawerItems.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (bdSelectMode) exitBdSelect();
+                      else setBdSelectMode(true);
+                    }}
+                    style={{
+                      marginLeft: "auto",
+                      background: bdSelectMode ? C.mommy : "transparent",
+                      color: bdSelectMode ? "#fff" : C.mommy,
+                      border: `1px solid ${C.mommy}`,
+                      borderRadius: 5,
+                      padding: "3px 8px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 9, fontWeight: 800, letterSpacing: "0.08em",
+                      cursor: "pointer", textTransform: "uppercase",
+                    }}>
+                    {bdSelectMode ? `${bdSelectedIds.size} sel · cancel` : "select"}
+                  </button>
+                )}
               </div>
               {/* v05.05bt483 — Inline + add input. Always visible at
                   the top of the section. Type and Enter to capture
@@ -41787,17 +41826,38 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
               {drawerItems.length > 0 && drawerItems.map(t => {
                 const age = (now - new Date(t.createdAt)) / (1000 * 60 * 60 * 24);
                 const isStale = age >= STALE_DAYS;
+                const isBdSelected = bdSelectMode && bdSelectedIds.has(t.id);
                 return (
-                  <div key={t.id} style={{
+                  <div key={t.id}
+                    onClick={bdSelectMode ? () => toggleBdSelect(t.id) : undefined}
+                    style={{
                     display: "flex", alignItems: "center", gap: 10,
                     padding: "12px 14px",
-                    background: C.paper,
-                    border: `1px solid ${isStale ? "#C18D7A40" : C.mommy + "38"}`,
+                    background: isBdSelected ? `${C.mommy}18` : C.paper,
+                    border: `1.5px solid ${isBdSelected ? C.mommy : (isStale ? "#C18D7A40" : C.mommy + "38")}`,
                     borderRadius: 12,
                     boxShadow: "0 1px 2px rgba(166, 139, 160, 0.05)",
                     marginBottom: 8,
+                    cursor: bdSelectMode ? "pointer" : "default",
+                    transition: "background 0.12s, border-color 0.12s",
                   }}>
-                    {isStale && (
+                    {/* v05.05bt501 — Checkbox in select mode (replaces
+                        the stale-dot which moves into the title row
+                        instead). */}
+                    {bdSelectMode && (
+                      <div style={{
+                        width: 18, height: 18,
+                        borderRadius: 4,
+                        border: `1.5px solid ${C.mommy}`,
+                        background: isBdSelected ? C.mommy : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#fff", fontSize: 12, fontWeight: 800,
+                        flexShrink: 0,
+                      }}>
+                        {isBdSelected ? "✓" : ""}
+                      </div>
+                    )}
+                    {!bdSelectMode && isStale && (
                       <span style={{
                         width: 6, height: 6, borderRadius: "50%",
                         background: "#C18D7A", flexShrink: 0,
@@ -41874,13 +41934,16 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         {isStale && " · review?"}
                       </div>
                     </div>
+                    {!bdSelectMode && (
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                       {/* v05.05bt498 — Per chat: three-destination
                           model from the approved mockup. Was:
                           [keep][✓][×]. Now: [→ TODAY (mauve)] /
                           [→ MAYBE (gold)] / [→ BACKLOG (slate)]. No
                           more keep/discard prompt. Delete handled
-                          via swipe / row trash elsewhere. */}
+                          via swipe / row trash elsewhere.
+                          v05.05bt501 — Hidden in select mode; the
+                          floating action bar handles batch ops. */}
                       <button
                         onClick={() => {
                           // → TODAY = commit to today, auto-slot.
@@ -41983,12 +42046,132 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         ×
                       </button>
                     </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           );
         })()}
+
+        {/* v05.05bt501 — Floating batch action bar. Appears at the
+            bottom of the screen when in brain-dump select mode with
+            at least one item selected. Wide enough to comfortably tap
+            on mobile. Tap CANCEL or pick a destination to exit. */}
+        {bdSelectMode && bdSelectedIds.size > 0 && (
+          <div style={{
+            position: "fixed",
+            bottom: 20, left: 12, right: 12,
+            zIndex: 220,
+            background: C.paper,
+            border: `2px solid ${C.mommy}`,
+            borderRadius: 14,
+            padding: "10px 12px",
+            boxShadow: "0 8px 28px rgba(0,0,0,0.28)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+            justifyContent: "center",
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, fontWeight: 800, letterSpacing: "0.12em",
+              color: C.mommy, marginRight: 4,
+              textTransform: "uppercase",
+            }}>
+              {bdSelectedIds.size} sel
+            </div>
+            <button
+              onClick={() => {
+                // Batch → TODAY (auto-slot per row best effort).
+                const ids = new Set(bdSelectedIds);
+                setTasks(prev => prev.map(t => {
+                  if (!ids.has(t.id)) return t;
+                  const todayKey = referenceISO;
+                  const dur = t.effortMin || 30;
+                  let scheduledTime = null;
+                  try {
+                    const blocks = (typeof getWorkableBlocks === "function") ? getWorkableBlocks() : [];
+                    const fit = (blocks || []).find(b => (b.durationMin || 0) >= dur);
+                    if (fit && fit.start) {
+                      const hh = String(fit.start.getHours()).padStart(2, "0");
+                      const mm = String(fit.start.getMinutes()).padStart(2, "0");
+                      scheduledTime = `${hh}:${mm}`;
+                    }
+                  } catch {}
+                  return { ...t, drawer: false, scheduledDate: todayKey, scheduledTime, dayWishlist: false };
+                }));
+                if (setForTodayExpanded) setForTodayExpanded(true);
+                if (setScheduledExpanded) setScheduledExpanded(true);
+                exitBdSelect();
+              }}
+              style={{
+                background: C.mommy, color: "#fff", border: "none",
+                borderRadius: 6, padding: "8px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}>→ TODAY</button>
+            <button
+              onClick={() => {
+                const ids = new Set(bdSelectedIds);
+                setTasks(prev => prev.map(t => ids.has(t.id)
+                  ? { ...t, drawer: false, scheduledDate: referenceISO, scheduledTime: null, dayWishlist: true, pinned: false }
+                  : t));
+                if (setForTodayExpanded) setForTodayExpanded(true);
+                exitBdSelect();
+              }}
+              style={{
+                background: C.gold, color: "#fff", border: "none",
+                borderRadius: 6, padding: "8px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}>→ MAYBE</button>
+            <button
+              onClick={() => {
+                const ids = new Set(bdSelectedIds);
+                setTasks(prev => prev.map(t => ids.has(t.id)
+                  ? { ...t, drawer: false, scheduledTime: null, scheduledDate: null, dayWishlist: false, pinned: false }
+                  : t));
+                if (setBacklogExpanded) setBacklogExpanded(true);
+                exitBdSelect();
+              }}
+              style={{
+                background: C.muted, color: "#fff", border: "none",
+                borderRadius: 6, padding: "8px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}>→ BACKLOG</button>
+            <button
+              onClick={() => {
+                if (!confirm(`Delete ${bdSelectedIds.size} item${bdSelectedIds.size === 1 ? "" : "s"}?`)) return;
+                const ids = new Set(bdSelectedIds);
+                setTasks(prev => prev.filter(t => !ids.has(t.id)));
+                exitBdSelect();
+              }}
+              style={{
+                background: "transparent", color: C.accent,
+                border: `1.5px solid ${C.accent}`,
+                borderRadius: 6, padding: "7px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}>✕ DELETE</button>
+            <button
+              onClick={exitBdSelect}
+              style={{
+                background: "transparent", color: C.muted,
+                border: `1px solid ${C.line}`,
+                borderRadius: 6, padding: "7px 12px",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                cursor: "pointer", textTransform: "uppercase",
+              }}>CANCEL</button>
+          </div>
+        )}
 
         {/* v05.05bt133 — Unscheduled collapsed by default per chat
             'let's collapse unscheduled and make it super subtle because
