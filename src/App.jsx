@@ -15,11 +15,12 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt503";
+const APP_VERSION = "2026.05.05bt504";
 const APP_BUILD_NOTES = [
-  "Stillness bench variant — stage 1: palette + menu toggle. Per chat: I like the stillness bench view as an option.\\n\\nWHAT SHIPPED. New benchVariant state alongside benchScope, persisted to ll:benchVariant. Two values:\\n  · lab (default) — the existing Option B cool blue-gray clinical lab notebook.\\n  · stillness — warm off-white minimalist mood (Things 3 / Sunsama).\\nNew menu section Bench look (appears in ⋯ menu when bench is on, both menu locations) with two radio items:\\n  · Lab · clinical blue\\n  · Stillness · warm minimal\\n\\nNEW PALETTE cadenceStillness:\\n  · bg #FAFAF7 (warm off-white — replaces cool blue-gray #DCE1EB)\\n  · paper #FFFFFF (pure white cards on warm bg)\\n  · ink #1F1B16 (warm dark — replaces navy #061A4D)\\n  · muted #9C8B7A (warm muted — replaces cool gray #4D5970)\\n  · line #E8E2D8 (warm hairlines — replaces cool #BFC9D6)\\n  · accent #B85040 (terracotta — replaces clinical red #A8231A)\\nFamily colors (mommy mauve, daddy blue, sage, gold) unchanged across variants.\\n\\nCOMING IN STAGE 2 (bt504+): layout-level changes that the Stillness mockup actually showed —\\n  · Owner rendered as 6px DOT not 5px rail\\n  · Pile sections lose colored bg tints + thick top borders; rely on whitespace + eyebrow text\\n  · Day title in big italic Fraunces serif as the ONE serif moment\\n  · Generous row padding\\n  · NOW row gets soft mauve glow instead of red line\\nStage 1 ships the palette + the option so you can flip back and forth in the menu and see the warm-vs-cool feel side by side. If you want to wait on stage 2 to evaluate the full mood, let me know — otherwise I\'ll keep iterating.\\n\\nBuild verified clean via esbuild.",
+  "Fourth pile drawer: Done today. Per chat: I need one more drawer which is done.\\n\\nNew section below Backlog, same structural pattern as the other three (4px sage top border, sage tinted bg, 5px sage left rail, chevron header, count + duration in muted). Collapsed by default.\\n\\nFILTER. Tasks where completedAt timestamp falls within referenceISO (today\'s date). Sort: most recently completed first.\\n\\nROW DESIGN. 78% opacity (dimmed). Strikethrough on title (textDecorationColor muted at 60%). Time stamp shows when it was completed (e.g., done 9:42a). 22px round sage check button = tap to UN-complete, which clears completedAt and the task returns to its source pile (today / scheduled / backlog).\\n\\nEMPTY STATE. Italic Newsreader: \"Nothing done yet today. Tap any task to mark complete.\"\\n\\nNet: at end of day you can expand Done to see your trail of crossed-off tasks + total time logged. Or un-check a mis-clicked completion to recover it.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt504", summary: "Fourth pile drawer: Done today. New section below Backlog with sage tint + 4px top border + 5px left rail (same pattern as other three). Filters tasks where completedAt falls within referenceISO. Collapsed by default. Rows show strikethrough title + done-time + 78% opacity. Sage check button un-completes (clears completedAt, returns task to source pile). Build verified clean via esbuild." },
   { version: "2026.05.05bt503", summary: "Stillness bench variant — stage 1: palette + menu toggle. New benchVariant state (lab | stillness). New ⋯ menu section Bench look with Lab · clinical blue / Stillness · warm minimal. New cadenceStillness palette: bg #FAFAF7 warm off-white, paper #FFFFFF, ink #1F1B16 warm dark, muted #9C8B7A, line #E8E2D8, accent #B85040 terracotta. Family colors unchanged. Stage 2 (dots not rails, no section borders, Fraunces day title, NOW glow) deferred. Build verified clean via esbuild." },
   { version: "2026.05.05bt502", summary: "Category visible + editable on brain dump rows. work=lavender #8B7AA8, personal=warm orange #D9956A. AUTO (muted) is inferred/unset. Tap badge to cycle: auto → work → personal → auto. category from bt157 was hidden scheduler state; now exposed in pile row meta line. Could extend to other pile sections next. Build verified clean via esbuild." },
   { version: "2026.05.05bt501", summary: "Multi-select in brain dump pile. SELECT button in header toggles select mode. Checkboxes appear on each row. Tap rows to toggle selection. Floating action bar at viewport bottom shows: N SEL · → TODAY · → MAYBE · → BACKLOG · ✕ DELETE · CANCEL. Batch actions loop through selected ids. Per-row buttons hide in select mode. Build verified clean via esbuild." },
@@ -30007,6 +30008,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
   // sections for planning.' Backlog has its own collapsed-by-default
   // state since it can be long.
   const [backlogExpanded, setBacklogExpanded] = useState(false);
+  // v05.05bt504 — Per chat: 'I need one more drawer which is done'.
+  // Fourth pile section below Backlog showing tasks completed today.
+  // Collapsed by default; you don't need to look at it unless you
+  // want to feel good about what's already done or un-check a mistake.
+  const [doneExpanded, setDoneExpanded] = useState(false);
   // v05.05bt376 → bt441 — Per chat: 'scheduled for today should be
   // the only expanded. the other state should be collapsed by
   // default.' Scheduled stays expanded as the actionable drawer;
@@ -41742,6 +41748,143 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           )
                         )}
                       </div>
+
+                      {/* v05.05bt504 — Per chat: 'I need one more
+                          drawer which is done'. Done today pile.
+                          Filters tasks where completedAt timestamp
+                          falls within referenceISO. Collapsed by
+                          default. Tap a row's check to UN-complete.
+                          Sage tinted bg (sage = done in family
+                          mode + caregiver semantic). */}
+                      {(() => {
+                        const doneToday = tasks.filter(t => {
+                          if (!t.completedAt) return false;
+                          try {
+                            const cd = new Date(t.completedAt);
+                            const cdISO = cd.toISOString().slice(0, 10);
+                            return cdISO === referenceISO;
+                          } catch { return false; }
+                        }).sort((a, b) => {
+                          const ta = new Date(a.completedAt).getTime();
+                          const tb = new Date(b.completedAt).getTime();
+                          return tb - ta;
+                        });
+                        const dur = doneToday.reduce((s, t) => s + (t.effortMin || 0), 0);
+                        return (
+                      <div data-pile-section="done" style={{
+                        position: "relative",
+                        marginBottom: 12,
+                        background: `${C.sage}10`,
+                        border: `1px solid ${C.sage}33`,
+                        borderLeft: `5px solid ${C.sage}`,
+                        borderTop: `4px solid ${C.sage}`,
+                        borderRadius: 10,
+                        padding: "10px 12px 12px",
+                        boxShadow: `0 1px 0 ${C.line}44`,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setDoneExpanded(v => !v)}
+                            style={{
+                              flex: 1, display: "flex", alignItems: "center",
+                              gap: 8, background: "transparent", border: "none",
+                              padding: "4px 0", cursor: "pointer", textAlign: "left",
+                            }}>
+                            <span style={{
+                              display: "inline-block",
+                              transform: doneExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                              transition: "transform 0.16s ease",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 11, color: C.sage, fontWeight: 800,
+                              width: 12,
+                            }}>›</span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 12.5, letterSpacing: "0.12em", fontWeight: 800,
+                              color: C.sage, textTransform: "uppercase",
+                            }}>
+                              ✓ Done today
+                            </span>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 10, color: C.muted, fontWeight: 600,
+                              marginLeft: 4,
+                            }}>
+                              {doneToday.length} {dur > 0 ? `· ${Math.floor(dur / 60) > 0 ? Math.floor(dur / 60) + "h " : ""}${dur % 60}m` : ""}
+                            </span>
+                          </button>
+                        </div>
+                        {doneExpanded && (
+                          doneToday.length === 0 ? (
+                            <div style={{
+                              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                              fontStyle: "italic", fontSize: 13,
+                              color: C.muted, marginTop: 8, paddingLeft: 20,
+                            }}>
+                              Nothing done yet today. Tap any task to mark complete.
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: 10 }}>
+                              {doneToday.map(t => {
+                                const ct = t.completedAt ? new Date(t.completedAt) : null;
+                                const ctLabel = ct ? `${((ct.getHours() % 12) || 12)}:${String(ct.getMinutes()).padStart(2, "0")}${ct.getHours() >= 12 ? "p" : "a"}` : "";
+                                const ownerColor = t.owner === "Daddy" ? C.daddy : t.owner === "Caregiver" ? C.sage : C.mommy;
+                                return (
+                                  <div key={t.id} style={{
+                                    display: "flex", alignItems: "center", gap: 10,
+                                    padding: "8px 10px",
+                                    background: C.paper,
+                                    border: `1px solid ${C.line}55`,
+                                    borderLeft: `3px solid ${ownerColor}`,
+                                    borderRadius: 8,
+                                    marginBottom: 6,
+                                    opacity: 0.78,
+                                  }}>
+                                    <button
+                                      onClick={() => {
+                                        // Un-complete: clear completedAt.
+                                        // Task returns to its source pile.
+                                        setTasks(prev => prev.map(x => x.id === t.id
+                                          ? { ...x, completedAt: null }
+                                          : x));
+                                      }}
+                                      title="Un-complete this task"
+                                      style={{
+                                        width: 22, height: 22,
+                                        borderRadius: "50%",
+                                        background: C.sage, color: "#fff",
+                                        border: "none",
+                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                        fontSize: 13, fontWeight: 800,
+                                        cursor: "pointer", flexShrink: 0,
+                                      }}>✓</button>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{
+                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                        fontSize: 15, fontWeight: 500,
+                                        color: C.ink, lineHeight: 1.3,
+                                        textDecoration: "line-through",
+                                        textDecorationColor: `${C.muted}99`,
+                                      }}>{t.title}</div>
+                                      <div style={{
+                                        fontSize: 10, color: C.muted,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        letterSpacing: "0.04em", marginTop: 2,
+                                      }}>
+                                        {ctLabel ? `done ${ctLabel}` : "done"}
+                                        {t.effortMin ? ` · ${t.effortMin}m` : ""}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )
+                        )}
+                      </div>
+                        );
+                      })()}
                     </div>
                     </>
                   )}
