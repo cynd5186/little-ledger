@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt493";
+const APP_VERSION = "2026.05.05bt496";
 const APP_BUILD_NOTES = [
-  "EVERY ADD-TASK PATH IS INLINE NOW. NO MORE MODALS. Per chat: I hate the pile. If I click to add a task a whole modal pops up. I want to be able to write right there and then.\\n\\nFour add-task triggers in the task pile all opened modals. All four converted to inline section-add (the bt416 / bt472 pattern):\\n\\n  (1) BOTTOM + INSERT TASK button (line 40771). Was: setShowNlInput(true) opens the NL parser modal. Now: expand the today pile + setInlineSectionAdd(today) + scroll to it. The inline + add input appears below the today section header.\\n\\n  (2) EMPTY SCHEDULED state button (line 40961). Was: setShowNlInput modal. Now: setScheduledExpanded(true) + setInlineSectionAdd(scheduled). Inline input appears in place.\\n\\n  (3) EMPTY UNSCHEDULED (today) state button (line 41148). Was: setShowNlInput modal. Now: setTaskPileExpanded(true) + setInlineSectionAdd(today).\\n\\n  (4) EMPTY BACKLOG state button (line 41359). Was: setShowBrainDump(true) opens the brain dump modal. Now: setBacklogExpanded(true) + setInlineSectionAdd(backlog).\\n\\nThese four were the remaining modal escape hatches in the pile. Combined with bt491 (keep input open after add + auto-expand destination + skip duplicate prompt on inline path) the entire add flow is Monday-style: tap → input appears → type → Enter → another input ready. No dialogs anywhere.\\n\\nThe legacy showNlInput modal + showAddForm structured-form modal still exist in code for any path that might still call them (e.g., free-block tap when bt453 inline-free-edit doesnt fire) but no PILE button opens them anymore.\\n\\nBuild verified clean via esbuild.",
+  "Refresh popup stripped to a minimal notification. Per chat: for the refresh popup i dont need to see the changelog - i can see that under viewing profile...i just need a popup indicating that there has been an update.\\n\\nNow shows: ✦ UPDATED · v2026.05.05bt496 · See profile for details. · GOT IT. Width 360, centered. Tapping outside or GOT IT dismisses and bumps ll:lastSeenVersion so it doesn\'t re-show until the next deploy. Full build notes still live in the About this build card inside the ⋯ menu — unchanged.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt496", summary: "Refresh popup minimized. Was: showed full APP_BUILD_NOTES bulleted list. Now: just ✦ UPDATED + version + See profile for details + GOT IT button. Compact 360px wide centered modal. Full notes still in About card under ⋯ menu. Build verified clean via esbuild." },
+  { version: "2026.05.05bt495", summary: "Critical bug fix: Enter-doesnt-log in Not yet scheduled pile. The section uses state forTodayExpanded (from bt393) but commitInlineSectionAdd + the bt493 + INSERT TASK button + the empty-state button were all calling setTaskPileExpanded(true) — the wrong state. Task got added (correct fields) but the section stayed collapsed, making the new task invisible. Fixed all three sites to use setForTodayExpanded(true). Also: delivered bench-palette-and-brain-dump-mockup.html with 5 less-blinding palette options + new three-way brain dump destination buttons + opinion on default expansion. Build verified clean via esbuild." },
+  { version: "2026.05.05bt494", summary: "(1) Diaper-disappearing bug fixed: the solene:events cloud-pull setter was blindly overwriting local events with cloud snapshot — no protection. Same pattern as bt84 (inventory wipe). Added regression guard: refuses cloud value when cloud is SHORTER than local AND local has events from last 60s. (2) Auto-show whats new modal restored. Stores ll:lastSeenVersion in localStorage. On boot, if mismatch with APP_VERSION, shows the build notes overlay. Dismiss bumps the seen-version. Build verified clean via esbuild." },
   { version: "2026.05.05bt493", summary: "Every add-task path in the pile is now INLINE. Was: 4 buttons opened modals (NL input / brain dump). Now: all 4 trigger setInlineSectionAdd + expand the section + scroll. (1) Bottom + INSERT TASK → today. (2) Empty scheduled → scheduled. (3) Empty unscheduled → today. (4) Empty backlog → backlog. Combined with bt491 keep-open / auto-expand / no-dup-prompt, the entire add flow is Monday-style: tap → input → Enter → next input. No modals. Build verified clean via esbuild." },
   { version: "2026.05.05bt492", summary: "Two drag/fill bugs. (1) Routine drag: grip now activates IMMEDIATELY on touch (was: 300ms long-press + <25px movement gate — impossible on mobile). New immediate=true param on handleDragStart; grip handlers pass it. (2) Passive fill: clicking + FILL on a freed strip stamps slottedIntoFreedTimeOf, which filters the task out of the pile where expand-edit lives — so the new task was uneditable. Fix: insertTaskAtTime opens inlineTitleEdit (per-task) when hostId is set. The filledTask row now renders an autofocused input when inlineTitleEdit matches. Enter commits, Esc removes the draft. Build verified clean via esbuild." },
   { version: "2026.05.05bt491", summary: "Monday-style inline add + bolder bench. (1) commitInlineSectionAdd keeps the input OPEN after submit instead of closing — just clears the text and refocuses. Monday-style streak entry. (2) Destination section auto-expands after add (was: user tapped +add without expanding, added, then couldnt see their task). (3) Inline brain dump add passes forceDuplicate:true to skip duplicate prompt. (4) Bench palette pushed sharper/bolder: ink #061A4D deeper navy, line #C5D0E0 more visible hairlines, muted #4D5970 darker, accent #A8231A deeper red. Build verified clean via esbuild." },
@@ -2681,6 +2684,29 @@ function SoleneHandoffInner() {
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
   const [weather, setWeather] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+  // v05.05bt494 — Per chat: 'where is my new update pop up?'. Restored
+  // an auto-show what's-new modal. Stores the last seen APP_VERSION
+  // in localStorage. On every boot, if it doesn't match the current
+  // APP_VERSION (i.e., user just got a new deploy), shows the build
+  // notes overlay. Dismissed by tapping anywhere outside or the
+  // Got it button. Once dismissed, the seen-version is bumped to
+  // the current APP_VERSION so it doesn't show again until next
+  // deploy.
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem("ll:lastSeenVersion");
+      if (seen !== APP_VERSION) {
+        // Delay so the boot transition isn't covered by the modal.
+        const t = setTimeout(() => setShowWhatsNew(true), 800);
+        return () => clearTimeout(t);
+      }
+    } catch {}
+  }, []);
+  const dismissWhatsNew = () => {
+    try { localStorage.setItem("ll:lastSeenVersion", APP_VERSION); } catch {}
+    setShowWhatsNew(false);
+  };
   // === Theme override ===
   // User-picked theme: "day" or "dusk". Defaults to "day" so existing users
   // aren't surprised by sudden dark mode after sunset (the default would
@@ -3586,7 +3612,47 @@ function SoleneHandoffInner() {
   // The ref is cleared after a microtask (queueMicrotask) so the state update
   // has time to fire its effect first.
   const cloudKeySetters = useMemo(() => ({
-    "solene:events":          (v) => setEvents(Array.isArray(v) ? v.map(x => ({ ...x, ts: new Date(x.ts) })) : []),
+    "solene:events":          (v) => {
+      // v05.05bt494 — Per chat: 'diaper changes does not stick...even
+      // though i log it, it somehow disappears after a while'. Root
+      // cause: this setter was blindly replacing local events with
+      // whatever the cloud held. When a stale cloud snapshot
+      // (pre-diaper-log) lands while local has the fresh diaper,
+      // the diaper disappears. Same bug pattern as bt84 (inventory
+      // wipe) but for events.
+      //
+      // Defense: refuse to overwrite local events if (a) cloud is
+      // shorter than local AND (b) local has events from the last
+      // 60 seconds. Cloud catches up on next push. Console-warn so
+      // it's diagnosable. Doesn't block legit cross-device events
+      // because cloud's snapshot from a partner device would
+      // typically be LARGER than local, not smaller.
+      if (!Array.isArray(v)) { setEvents([]); return; }
+      const mapped = v.map(x => ({ ...x, ts: new Date(x.ts) }));
+      setEvents(prev => {
+        if (!Array.isArray(prev) || prev.length === 0) return mapped;
+        if (mapped.length >= prev.length) return mapped; // safe — cloud has at least as many
+        // Cloud is shorter. Check if local has any events from the
+        // last 60s. If so, the cloud is likely stale.
+        const cutoff = Date.now() - 60 * 1000;
+        const hasRecent = prev.some(e => {
+          const t = e && e.ts ? new Date(e.ts).getTime() : 0;
+          return t >= cutoff;
+        });
+        if (hasRecent) {
+          console.warn(
+            `[cloud] events setter blocked: cloud has ${mapped.length} events ` +
+            `but local has ${prev.length} with recent (<60s) entries. ` +
+            `Likely stale cloud snapshot — keeping local.`
+          );
+          return prev;
+        }
+        // No recent local events — cloud's smaller count might be
+        // legit (e.g., user cleared events on another device).
+        // Accept it.
+        return mapped;
+      });
+    },
     "solene:inventory":       (v) => {
       // v05.05bt83: peak-count regression guard. If the cloud poll wants
       // to replace local inventory with an array dramatically smaller than
@@ -7849,6 +7915,66 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             setShowHandoffNoteEditor(false);
           }}
         />
+      )}
+
+      {/* v05.05bt494 — auto-show update popup on new version.
+          v05.05bt496 — Per chat: 'for the refresh popup i dont need
+          to see the changelog - i can see that under viewing profile
+          ...i just need a popup indicating that there has been an
+          update'. Stripped to a minimal notification — just version
+          + a brief tagline + GOT IT. Full notes still live in the
+          About card inside the ⋯ menu. */}
+      {showWhatsNew && (
+        <div
+          onClick={dismissWhatsNew}
+          style={{
+            position: "fixed", inset: 0, zIndex: 250,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+          }}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 360, width: "100%",
+              background: C.paper, border: `2px solid ${C.mommy}`,
+              borderRadius: 14, padding: "22px 22px 18px",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+              textAlign: "center",
+            }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, letterSpacing: "0.22em",
+              textTransform: "uppercase", fontWeight: 700,
+              color: C.mommy, marginBottom: 6,
+            }}>
+              ✦ Updated
+            </div>
+            <div style={{
+              fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+              fontStyle: "italic", fontWeight: 500, fontSize: 22,
+              color: C.ink, marginBottom: 4, lineHeight: 1.15,
+            }}>
+              v{APP_VERSION}
+            </div>
+            <div style={{
+              fontSize: 12, color: C.muted,
+              marginBottom: 16, fontStyle: "italic",
+            }}>
+              See profile for details.
+            </div>
+            <button onClick={dismissWhatsNew} style={{
+              width: "100%",
+              background: C.mommy, color: "#fff", border: "none",
+              padding: "10px 16px", borderRadius: 8,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11, fontWeight: 800, letterSpacing: "0.12em",
+              cursor: "pointer", textTransform: "uppercase",
+            }}>
+              GOT IT
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Redeem gift modal — opened from the Now-view pip when the current
@@ -30018,8 +30144,15 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     //       where their task went.
     setInlineSectionAddDraft("");
     // setInlineSectionAdd stays the same — input stays open.
+    // v05.05bt495 — Per chat: 'when I click on add in the other pile
+    // called not yet scheduled, and press enter nothing happens — it
+    // does not log'. Root cause: the "Not yet scheduled" section uses
+    // state `forTodayExpanded` (bt393), but commitInlineSectionAdd was
+    // setting `setTaskPileExpanded(true)` for the today case — the
+    // wrong state variable. The task DID get added, but the section
+    // stayed collapsed so the user couldn't see it. Fixed mapping:
     if (section === "scheduled") setScheduledExpanded(true);
-    else if (section === "today") setTaskPileExpanded(true);
+    else if (section === "today") setForTodayExpanded(true);
     else if (section === "backlog") setBacklogExpanded(true);
     // Refocus the input via ref so iOS keyboard stays up.
     setTimeout(() => {
@@ -40777,7 +40910,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         // today pile + activate the inline + add
                         // input below the section header. Scrolls to
                         // it. Monday-style flow.
-                        setTaskPileExpanded(true);
+                        // v05.05bt495 — Was setTaskPileExpanded; fixed
+                        // to setForTodayExpanded so the section actually
+                        // opens.
+                        setForTodayExpanded(true);
                         setInlineSectionAdd("today");
                         setInlineSectionAddDraft("");
                         try {
@@ -41150,7 +41286,9 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             type="button"
                             onClick={() => {
                               // v05.05bt493 — inline instead of modal.
-                              setTaskPileExpanded(true);
+                              // v05.05bt495 — was setTaskPileExpanded;
+                              // fixed to setForTodayExpanded.
+                              setForTodayExpanded(true);
                               setInlineSectionAdd("today");
                               setInlineSectionAddDraft("");
                             }}
