@@ -15,11 +15,14 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt496";
+const APP_VERSION = "2026.05.05bt499";
 const APP_BUILD_NOTES = [
-  "Refresh popup stripped to a minimal notification. Per chat: for the refresh popup i dont need to see the changelog - i can see that under viewing profile...i just need a popup indicating that there has been an update.\\n\\nNow shows: ✦ UPDATED · v2026.05.05bt496 · See profile for details. · GOT IT. Width 360, centered. Tapping outside or GOT IT dismisses and bumps ll:lastSeenVersion so it doesn\'t re-show until the next deploy. Full build notes still live in the About this build card inside the ⋯ menu — unchanged.",
+  "Brain dump title is click-to-edit now. Per chat: need to be able to click and edit the title when you do your brain dump even before assigning to a drawer.\\n\\nWas: brain dump item title was a static <div>; if you mistyped, you had to delete + retype. Now: tapping the title opens inlineTitleEdit on that item — renders an autofocused <input> right where the title was, in the same Newsreader serif at the same size, with a subtle mauve hairline border. Enter commits, blur commits, Escape cancels. Empty title on blur is treated as cancel (keeps original).\\n\\nNo need to promote to a drawer first. Just tap, fix, tap → TODAY / → MAYBE / → BACKLOG when ready.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt499", summary: "Brain dump title is click-to-edit. Was a static div; now tapping the title opens inlineTitleEdit on that item — autofocused input with mauve hairline. Enter or blur commits, Escape cancels. No need to promote to a drawer first. Build verified clean via esbuild." },
+  { version: "2026.05.05bt498", summary: "Bench palette → Option B (cool blue-gray cards, less blinding): bg #DCE1EB, paper #F2F5FA, line #BFC9D6. + Brain dump three-button destination model: → TODAY (mauve auto-slot), → MAYBE (gold dayWishlist), → BACKLOG (slate). Replaces keep/✓/× row. dayWishlist flag set but separate pile section + default-expansion toggle deferred to bt499. Build verified clean via esbuild." },
+  { version: "2026.05.05bt497", summary: "Skip-for-today button on routine inline edit. Routines cant be permanently deleted from the timeline (recurring) but can be SKIPPED. Added ✕ SKIP TODAY button next to ↺ RESET in the routine expand-edit. Writes routineOverrides[id]={skipped:true}. Routine vanishes from todays timeline, returns tomorrow. Build verified clean via esbuild." },
   { version: "2026.05.05bt496", summary: "Refresh popup minimized. Was: showed full APP_BUILD_NOTES bulleted list. Now: just ✦ UPDATED + version + See profile for details + GOT IT button. Compact 360px wide centered modal. Full notes still in About card under ⋯ menu. Build verified clean via esbuild." },
   { version: "2026.05.05bt495", summary: "Critical bug fix: Enter-doesnt-log in Not yet scheduled pile. The section uses state forTodayExpanded (from bt393) but commitInlineSectionAdd + the bt493 + INSERT TASK button + the empty-state button were all calling setTaskPileExpanded(true) — the wrong state. Task got added (correct fields) but the section stayed collapsed, making the new task invisible. Fixed all three sites to use setForTodayExpanded(true). Also: delivered bench-palette-and-brain-dump-mockup.html with 5 less-blinding palette options + new three-way brain dump destination buttons + opinion on default expansion. Build verified clean via esbuild." },
   { version: "2026.05.05bt494", summary: "(1) Diaper-disappearing bug fixed: the solene:events cloud-pull setter was blindly overwriting local events with cloud snapshot — no protection. Same pattern as bt84 (inventory wipe). Added regression guard: refuses cloud value when cloud is SHORTER than local AND local has events from last 60s. (2) Auto-show whats new modal restored. Stores ll:lastSeenVersion in localStorage. On boot, if mismatch with APP_VERSION, shows the build notes overlay. Dismiss bumps the seen-version. Build verified clean via esbuild." },
@@ -2044,17 +2047,12 @@ const PALETTES = {
                    mommy: "#A88299", daddy: "#8B9BBC", gold: "#D8B894", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#C8B5DA", line: "#C6B0DB", modalSurface: "#1a1228",
                    mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
-  // v05.05bt485 → bt489 → bt490 → bt491 — Per chat: 'I feel like
-  // things should be more sharper/bolder/intense'. Pushed the
-  // palette harder:
-  //   · ink #0b2a6f → #061A4D — deeper, more saturated navy
-  //   · line #DDE3EE → #C5D0E0 — more visible hairlines (sharper)
-  //   · muted #6B7488 → #4D5970 — darker readable secondary text
-  //   · accent #C0392B → #A8231A — deeper, more saturated red
-  //   · bg #F5F6F8 → #F1F3F8 — slightly more contrast vs paper
-  //   · panel #EEF1F5 → #E6EBF2 — more separation
-  // Everything else stays the same. Instrument feel is intensified.
-  cadenceBench:  { bg: "#F1F3F8", ink: "#061A4D", paper: "#FFFFFF", panel: "#E6EBF2", accent: "#A8231A", soft: "#EEF1F8", muted: "#4D5970", line: "#C5D0E0", modalSurface: "#FFFFFF",
+  // v05.05bt485 → bt498 — Per chat: option B from
+  // bench-palette-and-brain-dump-mockup.html — cool blue-gray cards
+  // on slightly darker bg, so the white isn't blinding. Family
+  // colors stay on owner rails only. Typography overlay still
+  // deferred.
+  cadenceBench:  { bg: "#DCE1EB", ink: "#061A4D", paper: "#F2F5FA", panel: "#CFD7E3", accent: "#A8231A", soft: "#EAEFF6", muted: "#4D5970", line: "#BFC9D6", modalSurface: "#F2F5FA",
                    mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C",
                    pump: "#BF7A1A", feed: "#C97A47", nap: "#9B6BB5" },
 };
@@ -39893,6 +39891,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                               fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
                             }}>↺ RESET</button>
                         )}
+                        {d.isRoutine && (
+                          <button
+                            onClick={() => {
+                              // v05.05bt497 — Per chat: 'when I click on
+                              // the routine tasks, I should also be able
+                              // to delete it there like I can the others
+                              // instead of having to go specifically to
+                              // routines and uncheck it'. Routines can't
+                              // be permanently deleted from the timeline
+                              // (they're recurring rituals), but they
+                              // can be SKIPPED for today. Writes
+                              // routineOverrides[routineId] = { skipped:
+                              // true } — same shape detectRoutineIntent
+                              // uses for "skip am routine" NL parsing.
+                              const todayKey = now.toISOString().slice(0, 10);
+                              setTodaySetup(prev => ({
+                                ...(prev || {}),
+                                date: todayKey,
+                                routineOverrides: {
+                                  ...((prev || {}).routineOverrides || {}),
+                                  [d.routineId]: { skipped: true },
+                                },
+                              }));
+                              closeExpandedEdit();
+                            }}
+                            style={{
+                              padding: "6px 10px",
+                              background: `${C2.accent}10`,
+                              border: `1px solid ${C2.accent}55`,
+                              borderRadius: 5,
+                              color: C2.accent,
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+                            }} title="Skip this routine for today only (returns tomorrow). Manage permanently in Routines settings.">✕ SKIP TODAY</button>
+                        )}
                         {/* v05.05bt464 — Redundant CANCEL removed; the
                             top-right × close handles escape now. */}
                         <button
@@ -41763,12 +41797,63 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       }} title="Stale — needs review" />
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                        fontSize: 16, fontWeight: 500,
-                        color: C.ink, lineHeight: 1.3,
-                        letterSpacing: "-0.005em",
-                      }}>{t.title}</div>
+                      {/* v05.05bt499 — Per chat: need to be able to
+                          click and edit the title when you do your
+                          brain dump even before assigning to a
+                          drawer. Title is now a clickable target
+                          that opens inlineTitleEdit; when editing,
+                          renders an autofocused input. Enter or
+                          blur commits, Escape cancels (keeps the
+                          original title). Empty title on blur is
+                          treated as cancel — keeps original. */}
+                      {inlineTitleEdit === t.id ? (
+                        <input
+                          type="text"
+                          defaultValue={t.title || ""}
+                          autoFocus
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (v && v !== t.title) {
+                              setTasks(prev => prev.map(x => x.id === t.id ? { ...x, title: v } : x));
+                            }
+                            setInlineTitleEdit(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              setInlineTitleEdit(null);
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            background: C.paper,
+                            border: `1.5px solid ${C.mommy}55`,
+                            borderRadius: 5,
+                            padding: "3px 6px",
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                            fontSize: 16, fontWeight: 500,
+                            color: C.ink, lineHeight: 1.3,
+                            letterSpacing: "-0.005em",
+                            outline: "none",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInlineTitleEdit(t.id);
+                          }}
+                          style={{
+                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                            fontSize: 16, fontWeight: 500,
+                            color: C.ink, lineHeight: 1.3,
+                            letterSpacing: "-0.005em",
+                            cursor: "text",
+                          }} title="Tap to edit title">{t.title}</div>
+                      )}
                       <div style={{
                         fontSize: 10, color: C.muted,
                         fontFamily: "'JetBrains Mono', monospace",
@@ -41783,31 +41868,92 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      {/* v05.05bt498 — Per chat: three-destination
+                          model from the approved mockup. Was:
+                          [keep][✓][×]. Now: [→ TODAY (mauve)] /
+                          [→ MAYBE (gold)] / [→ BACKLOG (slate)]. No
+                          more keep/discard prompt. Delete handled
+                          via swipe / row trash elsewhere. */}
                       <button
-                        onClick={() => promoteFromDrawer(t.id)}
-                        style={{
-                          background: C.mommy, color: "#fff", border: "none",
-                          borderRadius: 6, padding: "5px 10px",
-                          fontSize: 10, fontWeight: 600,
-                          cursor: "pointer", fontFamily: "inherit",
-                          letterSpacing: "0.04em",
+                        onClick={() => {
+                          // → TODAY = commit to today, auto-slot.
+                          // Sets scheduledDate=today, drawer=false,
+                          // tries to find a workable block for time.
+                          setTasks(prev => {
+                            const todayKey = referenceISO;
+                            const dur = t.effortMin || 30;
+                            // Best-effort auto-slot. Falls through to
+                            // today-no-time if nothing fits.
+                            let scheduledTime = null;
+                            try {
+                              const blocks = (typeof getWorkableBlocks === "function")
+                                ? getWorkableBlocks() : [];
+                              const fit = (blocks || []).find(b => (b.durationMin || 0) >= dur);
+                              if (fit && fit.start) {
+                                const hh = String(fit.start.getHours()).padStart(2, "0");
+                                const mm = String(fit.start.getMinutes()).padStart(2, "0");
+                                scheduledTime = `${hh}:${mm}`;
+                              }
+                            } catch {}
+                            return prev.map(x => x.id === t.id
+                              ? { ...x, drawer: false, scheduledDate: todayKey, scheduledTime, dayWishlist: false }
+                              : x);
+                          });
+                          if (setForTodayExpanded) setForTodayExpanded(true);
+                          if (setScheduledExpanded) setScheduledExpanded(true);
                         }}
-                        title="Move to unscheduled pile">
-                        keep
+                        style={{
+                          background: "transparent", color: C.mommy,
+                          border: `1px solid ${C.mommy}`,
+                          borderRadius: 5, padding: "4px 8px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                          cursor: "pointer", textTransform: "uppercase",
+                        }}
+                        title="Commit to today — auto-slot into a free block">
+                        → TODAY
                       </button>
                       <button
-                        onClick={() => toggleComplete(t.id)}
-                        style={{
-                          background: "transparent",
-                          color: "#7B9B6E",
-                          border: `1px solid #7B9B6E55`,
-                          borderRadius: 6, padding: "4px 9px",
-                          fontSize: 10, fontWeight: 600,
-                          cursor: "pointer", fontFamily: "inherit",
-                          letterSpacing: "0.04em",
+                        onClick={() => {
+                          // → MAYBE = wishlist for today, no time
+                          // committed. New dayWishlist flag so it
+                          // can render in its own section between
+                          // Today and Backlog (TODO: separate
+                          // section render — for now it lands in
+                          // Today-no-time with a tag).
+                          setTasks(prev => prev.map(x => x.id === t.id
+                            ? { ...x, drawer: false, scheduledDate: referenceISO, scheduledTime: null, dayWishlist: true, pinned: false }
+                            : x));
+                          if (setForTodayExpanded) setForTodayExpanded(true);
                         }}
-                        title="Mark done">
-                        ✓
+                        style={{
+                          background: "transparent", color: C.gold,
+                          border: `1px solid ${C.gold}`,
+                          borderRadius: 5, padding: "4px 8px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                          cursor: "pointer", textTransform: "uppercase",
+                        }}
+                        title="If I have time today — wishlist pile">
+                        → MAYBE
+                      </button>
+                      <button
+                        onClick={() => {
+                          // → BACKLOG = no date, low priority.
+                          setTasks(prev => prev.map(x => x.id === t.id
+                            ? { ...x, drawer: true, scheduledTime: null, scheduledDate: null, dayWishlist: false, pinned: false }
+                            : x));
+                        }}
+                        style={{
+                          background: "transparent", color: C.muted,
+                          border: `1px solid ${C.muted}`,
+                          borderRadius: 5, padding: "4px 8px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, fontWeight: 800, letterSpacing: "0.06em",
+                          cursor: "pointer", textTransform: "uppercase",
+                        }}
+                        title="Backlog — low priority, eventually">
+                        → BACKLOG
                       </button>
                       <button
                         onClick={() => deleteTask(t.id)}
