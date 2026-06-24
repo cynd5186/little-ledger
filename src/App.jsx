@@ -15,11 +15,20 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt484";
+const APP_VERSION = "2026.05.05bt493";
 const APP_BUILD_NOTES = [
-  "PERFORMANCE / LAG FIX — CRITICAL NOW-TICK BUG. Per chat: there is also an issue with things being slightly laggy and having to close and open to refresh.\\n\\nROOT CAUSE FOUND. The 15-second clock tick was passing the STALE closure-captured `now` reference back into setNow: setInterval(() => setNow(now), 15000). React bails out (no re-render) when setState is called with a value identical to the current one — and setNow(now) is the textbook case of that. So the clock literally never advanced from a tick. The only reason the UI ever updated when idle was that OTHER state changes (cloud sync, events being added, etc.) triggered re-renders which re-computed everything downstream and incidentally re-read Date(). When the app sat still, nothing updated until you backgrounded + foregrounded it — at which point the bt444 visibility listener fired, ALSO using setNow(now) (which I just fixed), but happening to land at a moment where some other state had drifted enough that React did re-render.\\n\\nFIX. All four setNow() call sites in the now-management effects now pass `new Date(Date.now() + timeTravelOffset)` — a fresh Date instance each time, with time-travel offset preserved. React detects the new reference and re-renders. The 15s interval, the offset-change snap, the visibility listener, and the focus listener are all fixed. Net: the now-line advances live, ACTIVE NOW glow shifts as the slot boundary crosses, countdowns count, freshness flags expire, and the inline now-line marker (bt476) slides smoothly down the active row in real time.\\n\\nSECONDARY FIX. The bt482 window-caregiver-flag effect was writing window.__llCaregiverActive on every events/now change — meaning every 15s when the now tick fires, the effect ran and wrote even though the boolean value was unchanged. Added a value comparison before the write. Saves a tiny bit of work and matches sane React practice.\\n\\nWHY THIS WAS THE LAG. With the clock frozen, every interaction that DID trigger a re-render (tapping a task, opening a modal, dragging) had to do MORE work than usual because the timestamps inside derived state were stale. The visible symptom: laggy interactions because the first render of any UI panel re-computed everything from a wrong-time baseline, then immediately needed to update.\\n\\nBuild verified clean via esbuild.",
+  "EVERY ADD-TASK PATH IS INLINE NOW. NO MORE MODALS. Per chat: I hate the pile. If I click to add a task a whole modal pops up. I want to be able to write right there and then.\\n\\nFour add-task triggers in the task pile all opened modals. All four converted to inline section-add (the bt416 / bt472 pattern):\\n\\n  (1) BOTTOM + INSERT TASK button (line 40771). Was: setShowNlInput(true) opens the NL parser modal. Now: expand the today pile + setInlineSectionAdd(today) + scroll to it. The inline + add input appears below the today section header.\\n\\n  (2) EMPTY SCHEDULED state button (line 40961). Was: setShowNlInput modal. Now: setScheduledExpanded(true) + setInlineSectionAdd(scheduled). Inline input appears in place.\\n\\n  (3) EMPTY UNSCHEDULED (today) state button (line 41148). Was: setShowNlInput modal. Now: setTaskPileExpanded(true) + setInlineSectionAdd(today).\\n\\n  (4) EMPTY BACKLOG state button (line 41359). Was: setShowBrainDump(true) opens the brain dump modal. Now: setBacklogExpanded(true) + setInlineSectionAdd(backlog).\\n\\nThese four were the remaining modal escape hatches in the pile. Combined with bt491 (keep input open after add + auto-expand destination + skip duplicate prompt on inline path) the entire add flow is Monday-style: tap → input appears → type → Enter → another input ready. No dialogs anywhere.\\n\\nThe legacy showNlInput modal + showAddForm structured-form modal still exist in code for any path that might still call them (e.g., free-block tap when bt453 inline-free-edit doesnt fire) but no PILE button opens them anymore.\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt493", summary: "Every add-task path in the pile is now INLINE. Was: 4 buttons opened modals (NL input / brain dump). Now: all 4 trigger setInlineSectionAdd + expand the section + scroll. (1) Bottom + INSERT TASK → today. (2) Empty scheduled → scheduled. (3) Empty unscheduled → today. (4) Empty backlog → backlog. Combined with bt491 keep-open / auto-expand / no-dup-prompt, the entire add flow is Monday-style: tap → input → Enter → next input. No modals. Build verified clean via esbuild." },
+  { version: "2026.05.05bt492", summary: "Two drag/fill bugs. (1) Routine drag: grip now activates IMMEDIATELY on touch (was: 300ms long-press + <25px movement gate — impossible on mobile). New immediate=true param on handleDragStart; grip handlers pass it. (2) Passive fill: clicking + FILL on a freed strip stamps slottedIntoFreedTimeOf, which filters the task out of the pile where expand-edit lives — so the new task was uneditable. Fix: insertTaskAtTime opens inlineTitleEdit (per-task) when hostId is set. The filledTask row now renders an autofocused input when inlineTitleEdit matches. Enter commits, Esc removes the draft. Build verified clean via esbuild." },
+  { version: "2026.05.05bt491", summary: "Monday-style inline add + bolder bench. (1) commitInlineSectionAdd keeps the input OPEN after submit instead of closing — just clears the text and refocuses. Monday-style streak entry. (2) Destination section auto-expands after add (was: user tapped +add without expanding, added, then couldnt see their task). (3) Inline brain dump add passes forceDuplicate:true to skip duplicate prompt. (4) Bench palette pushed sharper/bolder: ink #061A4D deeper navy, line #C5D0E0 more visible hairlines, muted #4D5970 darker, accent #A8231A deeper red. Build verified clean via esbuild." },
+  { version: "2026.05.05bt490", summary: "Bench palette finalized per approved v5 mockup. Designed as a twin to eSSF Curve — cool clinical navy chrome, pure white cards on cool off-white workbench, hairline borders. cadenceBench: bg #F5F6F8, paper #FFFFFF, ink #0b2a6f navy, muted #6B7488 cool gray, line #DDE3EE, accent #C0392B clinical red. Family colors kept but RESTRICTED to owner-rail semantic only (mauve = Mommy slot, blue = Daddy slot, sage = Caregiver, gold = bridge accent). They no longer bleed into chrome. Typography overlay (mono caps day title / section headers, focus pill emoji removal, system-ui body text, owner-dot in NOW pill) deferred to bt491. Build verified clean via esbuild." },
+  { version: "2026.05.05bt489", summary: "Bench treatment v2 per approved mockup. Palette overhaul: KEEP family colors (mommy mauve, daddy blue, sage, gold, pump teal, cream paper, cream bg) — SWAP structural chrome to cool clinical values (line #DDE3EE soft hairline, muted #6B7488 cool gray, soft #F4F6FA cool navy tint, accent #C0392B clinical red). New benchScope state (off | schedule | all) — independent of cadenceScope and productMode. Menu UI replaced. Backwards-compat cadenceLayout shims preserved. Typography overlay (section headers mono caps, day title etc.) deferred to bt490. Build verified clean via esbuild." },
+  { version: "2026.05.05bt488", summary: "Bench reverted to palette-only. The custom clinical-table render from bt485 was removed — it broke add/drag/edit and dropped rounded cards + rails. Editorial render now stays in place; only the C palette swaps to cadenceBench. Also: isBench gated on cadenceScope === all || tab === shifts so it respects scope just like Cadence. Build verified clean via esbuild." },
+  { version: "2026.05.05bt487", summary: "Bench works standalone. Was gated behind isCadence (solo + scope), so toggling Bench in family mode did nothing. Decoupled: cadenceLayout === bench now flips the palette + render regardless of productMode. Build verified clean via esbuild." },
+  { version: "2026.05.05bt486", summary: "Hotfix to bt485: ReferenceError isBench is not defined at TodayTaskPlanCard. The bench branch referenced isBench inside the component but it was only declared at App scope. Derived it inline from the existing productMode + cadenceLayout props: const isBench = productMode === \"solo\" && cadenceLayout === \"bench\". Both are already passed to the component. Build verified clean via esbuild." },
+  { version: "2026.05.05bt485", summary: "Cadence2 bench view (eSSF design architecture) + PTO + pump-disappearing bug. (1) New cadenceBench palette (navy/teal/amber/purple, white cards, hairlines). New cadenceLayout state (editorial | bench). Bench timeline render: section headers, CSS grid rows (time / owner badge / block / focus / effort / status), green dots, footer totals. Toggle in ⋯ menu in both locations. (2) #3 PTO: ptoDays map per YYYY-MM-DD, auto-Caregiver skip check, togglePtoDay helper. (3) #13 Pump disappearing fix: auto-clear now also requires the matching event to be a completed session (durationMin > 0 or endTs), not just any pump event within 60s. Build verified clean via esbuild." },
   { version: "2026.05.05bt484", summary: "Performance / lag fix. CRITICAL: the 15s now-tick was setNow(now) — passing the stale closure reference back. React bails out on identical-value setState. Clock literally never advanced from a tick; only OTHER state changes incidentally re-rendered. Fixed all four setNow sites to use `new Date(Date.now() + timeTravelOffset)`. Plus: window-caregiver-flag effect now compares before writing instead of writing every 15s. Build verified clean via esbuild." },
   { version: "2026.05.05bt483", summary: "JSX bug + UX sweep. (1) Critical fix: stray )} text inside pump card from a bt475 fragment-wrap leftover. (2) Top + ADD A TASK button removed per redundancy. (3) Insert chips hover-only via new .ll-insert-chip class (opacity 0.18 → 0.85 on hover; 0.22 on touch). (4) Brain Dump section now ALWAYS renders with an inline + add input at the top (type + Enter saves, no modal). Bulk paste and other-drawer inline patterns deferred to next build. Build verified clean via esbuild." },
   { version: "2026.05.05bt482", summary: "Auto-Caregiver on weekdays + notifications snoozed under Caregiver. (1) New useEffect auto-creates a caregiver_window 6:00 AM - 6:30 PM on Mon-Fri when none exists and not WFH/dismissed. Tagged _autoCreated for safe teardown. Two App-level helpers exposed: dismissTodayAutoCaregiver + toggleWfhWeekday. (2) playNotificationSound now bails when window.__llCaregiverActive is true. New App-level useEffect sets the flag based on getActiveOrUpcomingCaregiverWindow(events, now). Build verified clean via esbuild." },
@@ -2032,6 +2041,19 @@ const PALETTES = {
                    mommy: "#A88299", daddy: "#8B9BBC", gold: "#D8B894", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
   cadenceDusk:   { bg: "#050308", ink: "#F5F1EA", paper: "#0B0810", panel: "#0B0810", accent: "#C6B0DB", soft: "#100B17", muted: "#C8B5DA", line: "#C6B0DB", modalSurface: "#1a1228",
                    mommy: "#D0A8C0", daddy: "#8B9BBC", gold: "#E0C896", sage: "#8FAE7E", pump: "#4DA89C", feed: "#C97A47", nap: "#9B6BB5" },
+  // v05.05bt485 → bt489 → bt490 → bt491 — Per chat: 'I feel like
+  // things should be more sharper/bolder/intense'. Pushed the
+  // palette harder:
+  //   · ink #0b2a6f → #061A4D — deeper, more saturated navy
+  //   · line #DDE3EE → #C5D0E0 — more visible hairlines (sharper)
+  //   · muted #6B7488 → #4D5970 — darker readable secondary text
+  //   · accent #C0392B → #A8231A — deeper, more saturated red
+  //   · bg #F5F6F8 → #F1F3F8 — slightly more contrast vs paper
+  //   · panel #EEF1F5 → #E6EBF2 — more separation
+  // Everything else stays the same. Instrument feel is intensified.
+  cadenceBench:  { bg: "#F1F3F8", ink: "#061A4D", paper: "#FFFFFF", panel: "#E6EBF2", accent: "#A8231A", soft: "#EEF1F8", muted: "#4D5970", line: "#C5D0E0", modalSurface: "#FFFFFF",
+                   mommy: "#947590", daddy: "#3D6FAB", gold: "#C49A3A", sage: "#6B8B5C",
+                   pump: "#BF7A1A", feed: "#C97A47", nap: "#9B6BB5" },
 };
 
 // Little Ledger app mark — the artwork now fills the full viewBox so it reads
@@ -2607,6 +2629,32 @@ function SoleneHandoffInner() {
   const [cadenceScope, setCadenceScope] = useState(() => {
     try { return localStorage.getItem("ll:cadenceScope") || "all"; } catch { return "all"; }
   });
+  // v05.05bt485 → bt489 — Per chat (mockup approved): bench is now
+  // its OWN independent scope setting, not tied to cadenceLayout or
+  // cadenceScope. Three values:
+  //   "off"      — bench treatment never applies
+  //   "schedule" — bench palette only inside the schedule tab
+  //   "all"      — bench palette everywhere (whole app)
+  // Default: off. Persists in localStorage.
+  const [benchScope, setBenchScope] = useState(() => {
+    try {
+      const v = localStorage.getItem("ll:benchScope");
+      // Migration: bt485-488 used cadenceLayout for this. If the user
+      // had bench enabled there, default benchScope to "all" so they
+      // don't lose their setting.
+      if (v) return v;
+      const legacy = localStorage.getItem("ll:cadenceLayout");
+      if (legacy === "bench") return "all";
+      return "off";
+    } catch { return "off"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:benchScope", benchScope); } catch {}
+  }, [benchScope]);
+  // Legacy cadenceLayout kept for backward compat in props plumbing;
+  // its value mirrors benchScope state for any code still reading it.
+  const cadenceLayout = benchScope === "off" ? "editorial" : "bench";
+  const setCadenceLayout = (v) => setBenchScope(v === "bench" ? "all" : "off");
   useEffect(() => {
     try { localStorage.setItem("ll:productMode", productMode); } catch {}
   }, [productMode]);
@@ -3973,10 +4021,18 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   // antique-brass variant. Mommy gets champagne. Same dark bg, only
   // accents shift — duty ownership is instantly readable from the
   // accent family.
+  // v05.05bt485 → bt489 — Bench is its OWN independent scope:
+  //   "off"      → no bench
+  //   "schedule" → bench palette only inside schedule tab
+  //   "all"      → bench palette everywhere
+  // Completely decoupled from cadenceScope and productMode now.
   const cadenceKey = currentUser === "Daddy" ? "cadenceDaddy" : "cadence";
-  const C = isCadence
-    ? PALETTES[themeMode === "dusk" ? "cadenceDusk" : cadenceKey]
-    : PALETTES[themeMode];
+  const isBench = benchScope === "all" || (benchScope === "schedule" && tab === "shifts");
+  const C = isBench
+    ? PALETTES.cadenceBench
+    : isCadence
+      ? PALETTES[themeMode === "dusk" ? "cadenceDusk" : cadenceKey]
+      : PALETTES[themeMode];
 
   // Sync html + body backgrounds to the current theme. Without this, iOS
   // overscroll, the area under the safe-area inset, and any rendering gap
@@ -4185,8 +4241,19 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
       if (e.type !== "pump" || e.mode === "start") return false;
       const ts = new Date(e.ts).getTime();
       if (!Number.isFinite(ts)) return false;
-      // Logged pump's ts IS the start time (FinishPumpModal saves ts: start),
-      // so a match means |ts - apStart| should be small. ±60s tolerance.
+      // v05.05bt485 — Build #13: stricter match to fix "pump session
+      // disappearing" bug. Was: any non-start pump event within ±60s
+      // would clear activePump. That misfired when (a) two pump
+      // events happened back-to-back (the SECOND one's timestamp
+      // could fall within 60s of the FIRST one's startedAt, clearing
+      // a still-active subsequent session) and (b) when a logged
+      // pump's `ts` was edited later. Now also require the event to
+      // be a COMPLETED session — has either durationMin or endTs —
+      // AND for the event's start ts to match (not its end). The
+      // matching event's `ts` is its START time so this is correct.
+      const isCompleted = (typeof e.durationMin === "number" && e.durationMin > 0)
+        || (typeof e.endTs === "string" && e.endTs.length > 0);
+      if (!isCompleted) return false;
       return Math.abs(ts - apStart) < 60 * 1000;
     });
     if (matching) {
@@ -4510,6 +4577,12 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     // Check today-specific dismissal
     const dismissed = (todaySetup?.autoCaregiverDismissed || {})[todayKey];
     if (dismissed) return;
+    // v05.05bt485 — Build #3: PTO date opt-out. todaySetup.ptoDays is
+    // a map of YYYY-MM-DD → true for days you're on PTO. No
+    // auto-Caregiver, no work shifts assumed. Combine with WFH for
+    // full coverage of non-work-day modes.
+    const ptoDays = todaySetup?.ptoDays || {};
+    if (ptoDays[todayKey]) return;
     // Check if a caregiver_window already exists covering 6:00-18:30 today
     const dayStart = new Date(now); dayStart.setHours(6, 0, 0, 0);
     const dayEnd = new Date(now); dayEnd.setHours(18, 30, 0, 0);
@@ -4563,6 +4636,19 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
         [dow]: !((prev || {}).wfhWeekdays || {})[dow],
       },
     }));
+  };
+
+  // v05.05bt485 — Build #3: PTO day toggle. Mark a specific date as
+  // PTO so the auto-Caregiver skip applies, the scheduler treats it
+  // as a non-work day, and your daily roll-up reflects it.
+  const togglePtoDay = (dateKey) => {
+    setTodaySetup(prev => {
+      const next = { ...(prev || {}) };
+      const cur = { ...(next.ptoDays || {}) };
+      if (cur[dateKey]) delete cur[dateKey]; else cur[dateKey] = true;
+      next.ptoDays = cur;
+      return next;
+    });
   };
 
   // v05.05bt482 → bt484 — Per chat: 'when under caregiver all
@@ -7446,7 +7532,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
             schedulerDarkMode={schedulerDarkMode} setSchedulerDarkMode={setSchedulerDarkMode}
             setTab={setTab}
             productMode={productMode} setProductMode={setProductMode}
-            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope}
           />
         )}
         {tab === "bank" && (
@@ -10027,7 +10113,7 @@ function SoundToggleButton({ C }) {
   );
 }
 
-function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ProfileSwitcherModal({ C, currentUser, onSelect, onClose, onResetData, onExportData, onImportData, onRestoreBackup, takeover, onClearTakeover, familyCode, cloudSyncAvailable, onOpenFamilyCodeSetup, onClearFamilyCode, themeOverride, setThemeOverride, timeTravelOffset, setTimeTravelOffset, onResetBedtimeCheck, onClearStuckActivePump, updateAvailable, latestBundleHash, bundleHash, updateCheckFailed, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   // v05.05bt86 — gate destructive/dev controls behind explicit reveal
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -19675,7 +19761,7 @@ function AllTasksView({ C, tasks, setTasks, currentUser, now, onEditTask, onBack
 }
 
 
-function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, now, onsite, setOnsite, activeShifts, swaps, tomorrowProjection, timeBank, setTimeBank, currentUser, pendingTimeBankAction, clearPendingTimeBankAction, events, addEvent, tasks, setTasks, parentAway, setParentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, todaySetup, setTodaySetup, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, schedulerDarkMode, setSchedulerDarkMode, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
   // v05.05bt283 — Whole Mommy Day page goes dark. Per chat: 'i think
   // the WHOLE page under mommy day should be under dark mode.' By
   // overriding C inside ShiftsView, every component rendered here
@@ -19864,7 +19950,7 @@ function ShiftsView({ C: receivedC, shifts, setShifts, meetings, setMeetings, no
             openAllTasksModal={() => setAllTasksModalOpen(true)}
             setTab={setTab}
             productMode={productMode} setProductMode={setProductMode}
-            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope}
+            cadenceScope={cadenceScope} setCadenceScope={setCadenceScope} cadenceLayout={cadenceLayout} setCadenceLayout={setCadenceLayout} benchScope={benchScope} setBenchScope={setBenchScope}
         />
       )}
 
@@ -28685,8 +28771,14 @@ function ScheduleOptimizerModal({ C, focusProfile, routineLibrary, currentUser, 
   );
 }
 
-function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope }) {
+function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjection, events, addEvent, now, currentUser, parentAway, undoOnce, redoOnce, canUndo, canRedo, undoTick, pumpPlan, setPumpPlan, nextPumpAt, lastPump, activePump, takeover, onDuty, onsite, setOnsite, todaySetup, setTodaySetup, meetings, setMeetings, focusProfile, setFocusProfile, dailyEnergy, setDailyEnergy, routineLibrary, setRoutineLibrary, showRoutineEditor, setShowRoutineEditor, showOptimizer, setShowOptimizer, tradeRequests, openSendTrade, appointments, timeBank, schedulerDarkMode, setSchedulerDarkMode, setScheduleSubTab, openAllTasksModal, setTab, productMode, setProductMode, cadenceScope, setCadenceScope, cadenceLayout, setCadenceLayout, benchScope, setBenchScope }) {
   const [showAddForm, setShowAddForm] = useState(false);
+  // v05.05bt488 — bench is a palette-only alternative now; the
+  // custom bench-table render was removed because it broke add /
+  // drag / edit affordances. The cadenceBench palette flips colors
+  // at App scope (C is passed in already swapped); the editorial
+  // render handles ALL layout (rounded cards, rails, insert chips,
+  // FAB, drag handles, brain dump, etc.) regardless of palette.
   const [draftTitle, setDraftTitle] = useState("");
   const [draftEffort, setDraftEffort] = useState(30);
   const [draftRegret, setDraftRegret] = useState(3);
@@ -29286,7 +29378,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     return null;
   };
 
-  const handleDragStart = (e, slot) => {
+  const handleDragStart = (e, slot, immediate = false) => {
     // v05.05bt474 — Build #11: routines draggable too. Was task-only;
     // now also accepts routine rows. Drop handler routes routines to
     // routineOverrides instead of task.scheduledTime.
@@ -29297,6 +29389,25 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     if (!p) return;
     dragStartPosRef.current = p;
     cancelLongPress();
+    // v05.05bt492 — Per chat: 'it is hard moving the routine tasks
+    // - seems like it doesnt want to move'. Root cause: handleDragStart
+    // required a 300ms long-press AND <25px finger movement before
+    // committing to drag. On mobile, you can't easily hold dead-still
+    // for 300ms on a tiny grip handle while reaching for an empty
+    // slot — your finger moves >25px while the timer is still running
+    // and the drag cancels. Since the ⋮⋮ grip is a DEDICATED drag
+    // affordance (not a tap target), the long-press gate is pointless
+    // there. New `immediate` param: when true (set by the grip's
+    // handlers below), skip the long-press entirely and start drag
+    // on touchStart. The 300ms gate still applies for whole-row
+    // long-presses elsewhere.
+    if (immediate) {
+      setDraggingId(slot.id);
+      draggingIdRef.current = slot.id;
+      draggingKindRef.current = isRoutineSlot ? "routine" : "task";
+      if (navigator.vibrate) try { navigator.vibrate(15); } catch {}
+      return;
+    }
     longPressTimerRef.current = setTimeout(() => {
       setDraggingId(slot.id);
       draggingIdRef.current = slot.id;
@@ -29892,8 +30003,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
       base.drawer = true;
     }
     setTasks(prev => [...prev, base]);
-    setInlineSectionAdd(null);
+    // v05.05bt491 — Per chat: 'when I add to the drawer, it
+    // recollapses which is annoying and I have to re expand in
+    // order to see what I just entered. Remember this should be
+    // similar to monday.com where it is super easy to add things
+    // in line without a ton of hassle'. Two fixes:
+    //   (a) DON'T close the inline input after add — keep it open
+    //       and refocus so the user can immediately type the next
+    //       task. Monday-style streak entry. Only Escape or
+    //       clicking outside dismisses.
+    //   (b) AUTO-EXPAND the destination section so the just-added
+    //       task is visible. Users were tapping +add without first
+    //       expanding the section, hitting Enter, then wondering
+    //       where their task went.
     setInlineSectionAddDraft("");
+    // setInlineSectionAdd stays the same — input stays open.
+    if (section === "scheduled") setScheduledExpanded(true);
+    else if (section === "today") setTaskPileExpanded(true);
+    else if (section === "backlog") setBacklogExpanded(true);
+    // Refocus the input via ref so iOS keyboard stays up.
+    setTimeout(() => {
+      try {
+        const el = document.querySelector(`[data-inline-add="${section}"] input`);
+        if (el && typeof el.focus === "function") el.focus({ preventScroll: true });
+      } catch {}
+    }, 30);
     // v05.05bt430 — After React paints, measure the anchor again and
     // adjust scroll so it sits where it did before. Two rAFs ensure
     // the new layout has settled (one for React's commit, one for
@@ -30102,17 +30236,32 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
     };
     setTasks(prev => [...prev, newTask]);
     setTimeout(() => {
-      setExpandedEditTaskId(newTask.id);
-      setExpandedDraft({
-        title: "",
-        scheduledTime: `${hh}:${mm}`,
-        effortMin: durationMin,
-        focusLevel: null,
-        regretScore: 3,
-        ownerName: currentUser,
-        isPassive: false,
-      });
-      setExpandedShowMore(false);
+      // v05.05bt492 — Per chat: 'for passive tasks, when i click on
+      // fill, i cannot edit it so there is something wrong with that'.
+      // Root cause: a slotted-into-freed task is filtered out of the
+      // unscheduled pile (line 30685 .filter(t => !t.slottedIntoFreedTimeOf))
+      // — so the expand-edit modal, which renders INSIDE the pile
+      // iteration, never mounts for it. The task was created but had
+      // no way to edit the title from the strip.
+      // Fix: when hostId is set, open inlineTitleEdit instead. That
+      // edit renders inside the strip's filledTask row (added below
+      // in the strip render). User can type title + Enter without
+      // ever leaving the host slot.
+      if (hostId) {
+        setInlineTitleEdit(newTask.id);
+      } else {
+        setExpandedEditTaskId(newTask.id);
+        setExpandedDraft({
+          title: "",
+          scheduledTime: `${hh}:${mm}`,
+          effortMin: durationMin,
+          focusLevel: null,
+          regretScore: 3,
+          ownerName: currentUser,
+          isPassive: false,
+        });
+        setExpandedShowMore(false);
+      }
     }, 50);
   };
 
@@ -33479,6 +33628,42 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 },
                                 hint: "Cadence palette everywhere — Now, Journal, Wellness, Milk too",
                               },
+                              // v05.05bt485 → bt489 — Per approved
+                              // mockup: bench is a crisp clinical
+                              // treatment that KEEPS family colors
+                              // (mommy mauve, daddy blue, sage,
+                              // gold, cream paper) but swaps the
+                              // structural chrome — hairlines, muted
+                              // text, accents — for cooler clinical
+                              // values. Three-way scope:
+                              //   off      — bench treatment never applies
+                              //   schedule — bench only on the schedule tab
+                              //   all      — bench across the whole app
+                              { section: "Bench treatment" },
+                              { icon: benchScope === "off" ? "●" : "○",
+                                label: "Off (default)",
+                                onClick: () => {
+                                  if (setBenchScope) setBenchScope("off");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Editorial — current Little Ledger look",
+                              },
+                              { icon: benchScope === "schedule" ? "●" : "○",
+                                label: "On · scheduler only",
+                                onClick: () => {
+                                  if (setBenchScope) setBenchScope("schedule");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Crisp lab-bench treatment, only inside the schedule",
+                              },
+                              { icon: benchScope === "all" ? "●" : "○",
+                                label: "On · whole app",
+                                onClick: () => {
+                                  if (setBenchScope) setBenchScope("all");
+                                  setShowActionsMenu(false);
+                                },
+                                hint: "Lab-bench treatment everywhere — Now, Journal, Wellness, Milk too",
+                              },
                             ].map((item, idx) => {
                               if (item.section) {
                                 return (
@@ -33673,6 +33858,31 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                 setShowActionsMenu(false);
                               },
                               hint: "Cadence palette everywhere — Now, Journal, Wellness, Milk too",
+                            },
+                            { section: "Bench treatment" },
+                            { icon: benchScope === "off" ? "●" : "○",
+                              label: "Off (default)",
+                              onClick: () => {
+                                if (setBenchScope) setBenchScope("off");
+                                setShowActionsMenu(false);
+                              },
+                              hint: "Editorial — current Little Ledger look",
+                            },
+                            { icon: benchScope === "schedule" ? "●" : "○",
+                              label: "On · scheduler only",
+                              onClick: () => {
+                                if (setBenchScope) setBenchScope("schedule");
+                                setShowActionsMenu(false);
+                              },
+                              hint: "Crisp lab-bench treatment, only inside the schedule",
+                            },
+                            { icon: benchScope === "all" ? "●" : "○",
+                              label: "On · whole app",
+                              onClick: () => {
+                                if (setBenchScope) setBenchScope("all");
+                                setShowActionsMenu(false);
+                              },
+                              hint: "Lab-bench treatment everywhere — Now, Journal, Wellness, Milk too",
                             },
                           ].map((item, idx) => {
                             if (item.section) {
@@ -34723,6 +34933,11 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                 in a combined nav row inside the timeline rows. */}
             <div style={{ padding: "0", position: "relative" }}>
               {(() => {
+                // v05.05bt485 — Per chat: 'cadence2 view' using
+                // eSSF Bench design architecture. When isBench is
+                // true, render a clinical lab-bench table instead
+                // of the editorial card timeline. Returns early
+                // before the existing rows loop.
                 const rows = [];
                 let lastSection = null;
                 // Find slot containing now for NOW-line insertion
@@ -37226,14 +37441,75 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                                         fontSize: 9.5, color: stripColor, fontWeight: 700,
                                         flexShrink: 0,
                                       }}>{filledTask.effortMin || 0}m</span>
-                                      <span style={{
-                                        flex: 1, minWidth: 0,
-                                        fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
-                                        fontSize: 13, color: C.ink,
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                      }}>{filledTask.title}</span>
+                                      {/* v05.05bt492 — Per chat: 'for
+                                          passive tasks, when i click on
+                                          fill, i cannot edit it'. The
+                                          title is now editable inline.
+                                          insertTaskAtTime sets
+                                          inlineTitleEdit to the new
+                                          task's id; when this row
+                                          matches, render an <input>
+                                          autoFocused. Enter or blur
+                                          commits. Esc cancels (delete
+                                          if title is still empty). */}
+                                      {inlineTitleEdit === filledTask.id ? (
+                                        <input
+                                          type="text"
+                                          defaultValue={filledTask.title || ""}
+                                          autoFocus
+                                          onBlur={(e) => {
+                                            const v = e.target.value.trim();
+                                            if (!v) {
+                                              // Empty title on blur = treat as cancel + remove the freshly-inserted draft.
+                                              setTasks(prev => prev.filter(x => x.id !== filledTask.id));
+                                            } else {
+                                              setTasks(prev => prev.map(x => x.id === filledTask.id ? { ...x, title: v } : x));
+                                            }
+                                            setInlineTitleEdit(null);
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              e.currentTarget.blur();
+                                            } else if (e.key === "Escape") {
+                                              e.preventDefault();
+                                              // Remove the freshly-inserted empty-title task on cancel.
+                                              if (!(filledTask.title || "").trim()) {
+                                                setTasks(prev => prev.filter(x => x.id !== filledTask.id));
+                                              }
+                                              setInlineTitleEdit(null);
+                                            }
+                                          }}
+                                          placeholder="what light task?"
+                                          style={{
+                                            flex: 1, minWidth: 0,
+                                            background: "rgba(255,255,255,0.9)",
+                                            border: `1px solid ${stripColor}66`,
+                                            borderRadius: 4,
+                                            padding: "3px 6px",
+                                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                            fontSize: 13, color: C.ink,
+                                            outline: "none",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setInlineTitleEdit(filledTask.id);
+                                          }}
+                                          style={{
+                                            flex: 1, minWidth: 0,
+                                            fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                                            fontSize: 13, color: C.ink,
+                                            whiteSpace: "nowrap",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            cursor: "pointer",
+                                            fontStyle: (filledTask.title || "").trim() ? "normal" : "italic",
+                                            opacity: (filledTask.title || "").trim() ? 1 : 0.55,
+                                          }}>{filledTask.title || "tap to name"}</span>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -38638,10 +38914,10 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             EditTaskModal. The redundant pencil dropped. */}
                         {(isTask || isRoutine) && !slot.completedAt && (
                           <div
-                            onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
+                            onTouchStart={(e) => { e.stopPropagation(); handleDragStart(e, slot, true); }}
                             onTouchMove={draggingIdRef.current ? handleDragMove : undefined}
                             onTouchEnd={handleDragEnd}
-                            onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, slot); }}
+                            onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, slot, true); }}
                             title="Hold and drag to move"
                             aria-label="Drag to move task or routine"
                             style={{
@@ -40493,11 +40769,24 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         the same parser + preview. */}
                     <button
                       onClick={() => {
-                        setShowNlInput(true);
+                        // v05.05bt493 — Per chat: 'I hate the pile.
+                        // If I click to add a task a whole modal
+                        // pops up. I want to be able to right to
+                        // there and then'. Was: setShowNlInput(true)
+                        // opens the full modal. Now: expand the
+                        // today pile + activate the inline + add
+                        // input below the section header. Scrolls to
+                        // it. Monday-style flow.
+                        setTaskPileExpanded(true);
+                        setInlineSectionAdd("today");
+                        setInlineSectionAddDraft("");
                         try {
-                          if (typeof window !== "undefined") {
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }
+                          setTimeout(() => {
+                            const el = document.querySelector('[data-pile-section="today"]');
+                            if (el && el.scrollIntoView) {
+                              el.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                          }, 80);
                         } catch {}
                       }}
                       style={{
@@ -40626,7 +40915,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "scheduled" && (
-                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" data-inline-add={inlineSectionAdd} style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -40670,7 +40959,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           scheduled.length === 0 ? (
                             <button
                               type="button"
-                              onClick={() => setShowNlInput(true)}
+                              onClick={() => {
+                                // v05.05bt493 — inline instead of modal.
+                                setScheduledExpanded(true);
+                                setInlineSectionAdd("scheduled");
+                                setInlineSectionAddDraft("");
+                              }}
                               style={{
                                 width: "100%",
                                 padding: "10px 8px",
@@ -40753,7 +41047,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "today" && (
-                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" data-inline-add={inlineSectionAdd} style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -40854,7 +41148,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                         {unscheduled.length === 0 ? (
                           <button
                             type="button"
-                            onClick={() => setShowNlInput(true)}
+                            onClick={() => {
+                              // v05.05bt493 — inline instead of modal.
+                              setTaskPileExpanded(true);
+                              setInlineSectionAdd("today");
+                              setInlineSectionAddDraft("");
+                            }}
                             style={{
                               width: "100%",
                               padding: "10px 8px",
@@ -41014,7 +41313,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                             }}>+ add</button>
                         </div>
                         {inlineSectionAdd === "backlog" && (
-                          <div data-inline-editor="section-add" style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
+                          <div data-inline-editor="section-add" data-inline-add={inlineSectionAdd} style={{ display: "flex", gap: 6, padding: "10px 8px", marginTop: 6, background: "transparent", border: `1px solid ${C.ink}15`, borderRadius: 8 }}>
                             <input
                               type="text"
                               value={inlineSectionAddDraft}
@@ -41058,7 +41357,12 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                           backlog.length === 0 ? (
                             <button
                               type="button"
-                              onClick={() => setShowBrainDump(true)}
+                              onClick={() => {
+                                // v05.05bt493 — inline instead of modal.
+                                setBacklogExpanded(true);
+                                setInlineSectionAdd("backlog");
+                                setInlineSectionAddDraft("");
+                              }}
                               style={{
                                 width: "100%",
                                 padding: "10px 8px",
@@ -41271,7 +41575,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                       // bt132 addBrainDump handles parsing + saving.
                       // Reuse it directly.
                       const text = brainDumpText.trim();
-                      if (text) addBrainDump();
+                      if (text) addBrainDump({ forceDuplicate: true });
                     }
                     if (e.key === "Escape") {
                       setBrainDumpText("");
@@ -41289,7 +41593,7 @@ function TodayTaskPlanCard({ C, tasks, setTasks, activeShifts, tomorrowProjectio
                   <button
                     onClick={() => {
                       const text = brainDumpText.trim();
-                      if (text) addBrainDump();
+                      if (text) addBrainDump({ forceDuplicate: true });
                     }}
                     style={{
                       background: C.mommy, color: "#fff",
