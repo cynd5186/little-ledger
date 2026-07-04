@@ -15,12 +15,24 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt517";
+const APP_VERSION = "2026.05.05bt523";
 const APP_BUILD_NOTES = [
+  "Pump forensic instrumentation. Second field report of a wrong pump start (finish 7:21p entered, start != 7:21 - duration). Systematic verification: submit math (bt514), preview (bt518), journal render (bt396), nextPumpAt (bt396), edit modal (range mode treats ts as start), addEvent normalization, DateTimeInput/localDateTimeNow format — ALL consistent with ts = session start. Corruption must enter via the form inputs (duration seeding/overwrite was killed in bt522; mode toggle and datetime parsing remain candidates). Instead of further hypothesis-shotgunning: the PumpForm submit now snapshots every input at the moment of save onto the event as _logForensics {formVersion, whenMode, customTimeRaw, anchorParsedISO, anchorWasInvalid, logMode, durationAtSubmit, pumpTypeAtSubmit, computedTsISO, deviceNowISO}. Also hardened: invalid custom-time parse now falls back to now at the FORM level (anchorSafe) rather than relying on addEvent's fallback, and the anchorWasInvalid flag records that it happened. Zero UI change; field is inert metadata riding on the event through storage/cloud. Next bad entry is self-explanatory from its own record. SCOPING: PumpForm SubmitButton onClick restructure only. ts math unchanged (identical formula, now with explicit safe-anchor). Build verified clean via esbuild.",
+  "Pump duration silent-overwrite fix + pre-save session statement. Per chat: logged 'just finished 6:45p, 45 min' but journal showed 5:45p — exactly 60 min subtracted, not 45. The submit/journal math (bt514/bt396) is correct; root cause is the power-pump convenience effect, which force-set duration to 60 whenever pumpType flipped to power with duration <50 — silently overwriting a user-chosen 45 so the submit subtracted 60 (6:45-60=5:45). (1) DURATION IS AUTHORITATIVE ONCE TOUCHED: new userTouchedDuration ref; the duration picker routes through setDurationByUser; the power/standard auto-default effect now early-returns if the user has explicitly set a duration. Convenience default preserved for untouched forms. (2) PRE-SAVE STATEMENT: mono line above the submit button — 'will log: 6:00p-6:45p · 45m' — computed from the same anchor math as the submit (custom finish time honored, duration subtracted only in just-finished mode). Any control silently disagreeing with the user's intent (duration jump, wrong mode, wrong time) is now visible BEFORE saving instead of surfacing as a journal surprise. Verification path: the mislogged event's journal row should read '60m (5:45-6:45)' confirming the stored duration was 60; the event can be corrected via the existing journal row edit. SCOPING: PumpForm only — one ref, one setter wrapper, effect guard, one JSX line. No changes to submit ts math, addEvent, journal render, FinishPumpModal. Build verified clean via esbuild.",
+  "Freezer resurrection — root-caused and fixed for real this time. Per chat: 'I keep emptying it, and it keeps coming back.' Full lifecycle trace found THREE interacting defects that bt511/bt515 missed. (1) THE STAMP NEVER SYNCED: the lastLocationEmptyAt persistence effect wrote raw localStorage.setItem — never storage.set — so the empty stamp was NEVER pushed to the cloud. The receiving cloud setter existed since bt511 but no device ever transmitted; protection was device-local only. Any second device/tab (or an iOS-PWA localStorage eviction) had no stamp and re-synced stale bottles. Fixed: effect now uses storage.set, which writes localStorage first (superset of old behavior) then cloud-pushes; the existing max-merge receiving setter distributes it to every device. (2) ANTI-REGRESSION GUARD FOUGHT LEGITIMATE EMPTIES: incoming.length <= prev.length-3 could not distinguish 'user emptied >=3 bottles' from data corruption, so receiving devices refused the correct smaller inventory, kept stale bottles, and re-pushed them — a stable two-device resurrection oscillator. Fixed: prev is purged through the stamp filter BEFORE the guards, so an explained shrink passes while true regressions are still caught. (3) NO SELF-PURGE: the bt515 filter only screened INCOMING cloud bottles; a device already holding stale bottles never cleaned its own state even after receiving the stamp. Fixed: new effect purges local inventory whenever lastLocationEmptyAt changes (identity-return when clean, so zero churn). (4) BONUS LATENT BUG: the filter compared pumpedAt, so a bottle legitimately MOVED into the freezer after an empty (frozenAt > stamp but pumpedAt < stamp) was wrongly rejected — vanishing-bottle. New module-level bottleSurvivesLocationEmpty(b, emptyMap) is the single source of truth: entry time = frozenAt for freezer bottles (fallback pumpedAt), missing/invalid timestamps survive (data-safe). Used by the cloud filter, the guard purge, and the self-purge effect. SCOPING: one module helper, one effect rewrite + one new effect, cloud inventory setter rework. Zero changes to emptyLocation handler, drain logic, events, other setters. Build verified clean via esbuild.",
+  "Fed-today total folded into the next-feed tile. Per chat: 'the idea was to have the total under one of the feed tiles so that the 4 tiles aren't disrupted by an awkward fifth.' bt519's full-width fifth tile removed; the 2x2 stat grid is restored. The running total now lives as the sub-line of next-feed est.: 'X oz today · lo-hi typical' in neutral ink through the afternoon, then from 5p 'X oz today · ~N oz to go before bed' in gold, umber after 7p while the gap to band-low is >2oz, sage 'band met' at any hour once inside the band. Hidden until the first bottle logs. StatTile gains an optional valueColor prop: when provided it overrides the legacy subColor tint on the big value (undefined preserves original behavior for all existing tiles, e.g. the sleep tile's intentional value tinting). The next-feed tile passes valueColor=null so the 9:15p prediction stays ink while the sub carries the warning color. Band source unchanged (getSoleneIntakeBandNow, custom override honored). SCOPING: tile JSX revert, StatTile signature + one style line, IIFE string rework. Build verified clean via esbuild.",
+  "Fed-today total promoted to its own tile. Per chat: 'i wanted to know the TOTAL oz for the day so it can be a quick glance that uh oh, shes only had 15 oz and its about to be bedtime.' bt518's sub-line under next-feed est. was too buried for a glance. Now: new full-width StatTile ('fed today · total') spanning the bottom row of the OnDutyCard stat grid (gridColumn 1/-1). The total bottle oz is the big 26px serif VALUE, and since StatTile paints the value with subColor, the number itself carries the indicator: neutral ink before 5p, gold from 5p with '~X oz to go before bed', umber after 7p if the gap to band-low is still >2oz, sage with 'daily band met' once inside the band (band-met shows sage at any hour). Zero-bottle state reads '0 oz / no bottles yet today' in neutral ink. Band source unchanged: getSoleneIntakeBandNow shared with the bt517 Milk-tab card, custom ll:soleneIntakeBand override honored. Next-feed tile's bt518 sub-line removed to avoid duplication; pump preview + parser fixes from bt518 unchanged. SCOPING: reworked one IIFE, one tile prop revert, one new wrapped StatTile. Zero other changes. Build verified clean via esbuild.",
+  "Now-tab intake context + pump-math fixes. (1) NEXT-FEED TILE SUB-LINE: per chat, the next feed est. tile on OnDutyCard now shows total bottle oz today underneath. From 5p (bedtime anchor 20:30) it adds a gap-to-band readout — '~X oz to go before bed' in gold, umber after 7p if the gap is still >2oz, sage 'daily band met' otherwise. Band source is the new shared getSoleneIntakeBandNow() so the tile and the bt517 Milk-tab card always agree, including the ll:soleneIntakeBand custom override. Hidden until the first bottle logs so mornings never show an alarming zero. Uses the sleep tile's existing sub/subColor affordance — no new chrome, no banner. (2) PUMP PREVIEW MATH FIX: per chat 'the math is always wrong. if i enter a time for just finished, it logs it as just started.' The submit math has been correct since bt514 (ts = anchor − duration for mode=end), but PumpForm's in-form 'next pump due · 3hr from start (X)' preview anchored to Date.now() and IGNORED the WhenField — so with a custom finish time the popup displayed a now-derived start, which read as the app logging the entered time wrong. Preview now mirrors the submit anchor exactly: custom time honored, duration subtracted only in just-finished mode, invalid dates falling back to now. (3) BULK-IMPORT PARSER SCHEMA FIX: the NL parser's pump branch wrote the pump TYPE into the mode field (mode: pumpMode || 'standard'). Schema per bt396: mode is start|end (ts always = session start), pumpType is standard|power. Imported pumps are historical finished sessions -> mode 'end', pumpType carries power detection. Inventory-add gate (mode !== 'start') behaved correctly by accident before; now it's correct by construction. SCOPING: one helper + one IIFE + two tile props in OnDutyCard; preview block in PumpForm; one object literal in the parser. Zero changes to submit paths, addEvent, predictors, journal render, Cadence tab. Build verified clean via esbuild.",
   "Solene's intake today card (Milk tab) — the age-based milk-intake deferred feature, silent-fix flavor. New module-level SoleneIntakeTodayCard rendered in InventoryView between CaregiverPackCard and PumpGoalsCard, not Mommy-gated. (1) RUNNING TOTAL: sums oz across today's type=feed events from ALL loggers including Caregiver (intake is what she drank; the bt303 quarantine applies to predictors, not totals). Breastfeed minutes shown alongside as '+Xm at breast' — deliberately NOT converted to estimated oz. (2) TARGET BAND: getAgeNorms(ageMonths).ozPerDay (AAP band, 27-36 at 4-6 mo) rendered as a sage region on a progress bar; getSoleneIntakeTarget WHO/FAO point estimate as a small tick. Band overridable for baby-specific patterns via collapsed 'adjust band' dotted link -> two mono inputs + save/reset; override persists to localStorage ll:soleneIntakeBand (device-local; cloud sync deferred). (3) PROJECTION: today's oz divided by her own average cumulative-intake fraction at the current clock time across the last 7 days (days with >=6 oz count; needs >=3 valid days and frac>=0.12) — her measured circadian intake curve — falling back to linear over a 7a-9p window when history is thin, labeling which method was used (n=X/7d). Suppressed before 10:00a or before the first bottle so mornings never look falsely alarming. (4) NUDGE = one status line with a colored dot, nothing else: sage on-pace, muted above-band (neutral wording), gold trending-under, accent only when projection <75% of band-low. No banners, no toasts, no notifications, no streaks — data-presenting per the bt78 anti-gamification stance. SCOPING: one new component + one render insertion in InventoryView + this version block. Zero changes to schema, events, predictors, Cadence tab, cloud sync. Build verified clean via esbuild.",
   "Caregiver-mode: handoff prompt silenced. Per chat: if you are in caregiver mode then ALL alerts should be snoozed. Just basic caregiver instead of mommy and daddy. So no handoff notes to pass. No x min until handoff to daddy.\\n\\nAUDIT of caregiver-mode alert surfaces:\\n  · Notification sound: ALREADY suppressed (bt482 gates playNotificationSound on window.__llCaregiverActive).\\n  · Countdown chip \'X min until handoff to Daddy\': ALREADY gated (line 12256 wraps the whole block in !getActiveOrUpcomingCaregiverWindow…state===\'active\').\\n  · Editorial duty line: ALREADY overridden to \'Solène with caregiver\' (bt411).\\n  · Per-row babyContext + owner: ALREADY overridden (bt412).\\n  · Schedule NOW slider: ALREADY reads NOW · CAREGIVER (bt413).\\n\\nBUG FOUND + FIXED. The handoff-prompt trigger useEffect (line ~6400) fires when the on-duty parent CHANGES and the previously-on-duty parent is the current user. During caregiver windows this trigger could still fire (e.g., Mommy shift → Caregiver window transitions the on-duty state), showing an irrelevant \'leave a handoff note for Daddy?\' modal. Added a caregiver-active guard at the top of the trigger: if the caregiver window is currently active, skip the prompt entirely. Neither parent is on-duty during caregiver windows, so parent-to-parent handoff surfaces are irrelevant.\\n\\nSTILL DEFERRED (from the fresh-chat list):\\n  · Caregiver morning confirmation prompt (both parents confirm).\\n  · Age-based milk-intake proactive nudging.\\n  · Routines editable inline like tasks + manually-adjusted badge.\\n  · Right-rail icon redesign (mockup first).\\n  · Simplifying persona to \'basic caregiver\' when in caregiver mode (needs profile-switcher rework — larger refactor).\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt523", summary: "Pump forensic instrumentation. Second field report of a wrong pump start (finish 7:21p entered, start != 7:21 - duration). Systematic verification: submit math (bt514), preview (bt518), journal render (bt396), nextPumpAt (bt396), edit modal (range mode treats ts as start), addEvent normalization, DateTimeInput/localDateTimeNow format — ALL consistent with ts = session start. Corruption must enter via the form inputs (duration seeding/overwrite was killed in bt522; mode toggle and datetime parsing remain candidates). Instead of further hypothesis-shotgunning: the PumpForm submit now snapshots every input at the moment of save onto the event as _logForensics {formVersion, whenMode, customTimeRaw, anchorParsedISO, anchorWasInvalid, logMode, durationAtSubmit, pumpTypeAtSubmit, computedTsISO, deviceNowISO}. Also hardened: invalid custom-time parse now falls back to now at the FORM level (anchorSafe) rather than relying on addEvent's fallback, and the anchorWasInvalid flag records that it happened. Zero UI change; field is inert metadata riding on the event through storage/cloud. Next bad entry is self-explanatory from its own record. SCOPING: PumpForm SubmitButton onClick restructure only. ts math unchanged (identical formula, now with explicit safe-anchor). Build verified clean via esbuild." },
+  { version: "2026.05.05bt522", summary: "Pump duration silent-overwrite fix + pre-save session statement. Per chat: logged 'just finished 6:45p, 45 min' but journal showed 5:45p — exactly 60 min subtracted, not 45. The submit/journal math (bt514/bt396) is correct; root cause is the power-pump convenience effect, which force-set duration to 60 whenever pumpType flipped to power with duration <50 — silently overwriting a user-chosen 45 so the submit subtracted 60 (6:45-60=5:45). (1) DURATION IS AUTHORITATIVE ONCE TOUCHED: new userTouchedDuration ref; the duration picker routes through setDurationByUser; the power/standard auto-default effect now early-returns if the user has explicitly set a duration. Convenience default preserved for untouched forms. (2) PRE-SAVE STATEMENT: mono line above the submit button — 'will log: 6:00p-6:45p · 45m' — computed from the same anchor math as the submit (custom finish time honored, duration subtracted only in just-finished mode). Any control silently disagreeing with the user's intent (duration jump, wrong mode, wrong time) is now visible BEFORE saving instead of surfacing as a journal surprise. Verification path: the mislogged event's journal row should read '60m (5:45-6:45)' confirming the stored duration was 60; the event can be corrected via the existing journal row edit. SCOPING: PumpForm only — one ref, one setter wrapper, effect guard, one JSX line. No changes to submit ts math, addEvent, journal render, FinishPumpModal. Build verified clean via esbuild." },
+  { version: "2026.05.05bt521", summary: "Freezer resurrection — root-caused and fixed for real this time. Per chat: 'I keep emptying it, and it keeps coming back.' Full lifecycle trace found THREE interacting defects that bt511/bt515 missed. (1) THE STAMP NEVER SYNCED: the lastLocationEmptyAt persistence effect wrote raw localStorage.setItem — never storage.set — so the empty stamp was NEVER pushed to the cloud. The receiving cloud setter existed since bt511 but no device ever transmitted; protection was device-local only. Any second device/tab (or an iOS-PWA localStorage eviction) had no stamp and re-synced stale bottles. Fixed: effect now uses storage.set, which writes localStorage first (superset of old behavior) then cloud-pushes; the existing max-merge receiving setter distributes it to every device. (2) ANTI-REGRESSION GUARD FOUGHT LEGITIMATE EMPTIES: incoming.length <= prev.length-3 could not distinguish 'user emptied >=3 bottles' from data corruption, so receiving devices refused the correct smaller inventory, kept stale bottles, and re-pushed them — a stable two-device resurrection oscillator. Fixed: prev is purged through the stamp filter BEFORE the guards, so an explained shrink passes while true regressions are still caught. (3) NO SELF-PURGE: the bt515 filter only screened INCOMING cloud bottles; a device already holding stale bottles never cleaned its own state even after receiving the stamp. Fixed: new effect purges local inventory whenever lastLocationEmptyAt changes (identity-return when clean, so zero churn). (4) BONUS LATENT BUG: the filter compared pumpedAt, so a bottle legitimately MOVED into the freezer after an empty (frozenAt > stamp but pumpedAt < stamp) was wrongly rejected — vanishing-bottle. New module-level bottleSurvivesLocationEmpty(b, emptyMap) is the single source of truth: entry time = frozenAt for freezer bottles (fallback pumpedAt), missing/invalid timestamps survive (data-safe). Used by the cloud filter, the guard purge, and the self-purge effect. SCOPING: one module helper, one effect rewrite + one new effect, cloud inventory setter rework. Zero changes to emptyLocation handler, drain logic, events, other setters. Build verified clean via esbuild." },
+  { version: "2026.05.05bt520", summary: "Fed-today total folded into the next-feed tile. Per chat: 'the idea was to have the total under one of the feed tiles so that the 4 tiles aren't disrupted by an awkward fifth.' bt519's full-width fifth tile removed; the 2x2 stat grid is restored. The running total now lives as the sub-line of next-feed est.: 'X oz today · lo-hi typical' in neutral ink through the afternoon, then from 5p 'X oz today · ~N oz to go before bed' in gold, umber after 7p while the gap to band-low is >2oz, sage 'band met' at any hour once inside the band. Hidden until the first bottle logs. StatTile gains an optional valueColor prop: when provided it overrides the legacy subColor tint on the big value (undefined preserves original behavior for all existing tiles, e.g. the sleep tile's intentional value tinting). The next-feed tile passes valueColor=null so the 9:15p prediction stays ink while the sub carries the warning color. Band source unchanged (getSoleneIntakeBandNow, custom override honored). SCOPING: tile JSX revert, StatTile signature + one style line, IIFE string rework. Build verified clean via esbuild." },
+  { version: "2026.05.05bt519", summary: "Fed-today total promoted to its own tile. Per chat: 'i wanted to know the TOTAL oz for the day so it can be a quick glance that uh oh, shes only had 15 oz and its about to be bedtime.' bt518's sub-line under next-feed est. was too buried for a glance. Now: new full-width StatTile ('fed today · total') spanning the bottom row of the OnDutyCard stat grid (gridColumn 1/-1). The total bottle oz is the big 26px serif VALUE, and since StatTile paints the value with subColor, the number itself carries the indicator: neutral ink before 5p, gold from 5p with '~X oz to go before bed', umber after 7p if the gap to band-low is still >2oz, sage with 'daily band met' once inside the band (band-met shows sage at any hour). Zero-bottle state reads '0 oz / no bottles yet today' in neutral ink. Band source unchanged: getSoleneIntakeBandNow shared with the bt517 Milk-tab card, custom ll:soleneIntakeBand override honored. Next-feed tile's bt518 sub-line removed to avoid duplication; pump preview + parser fixes from bt518 unchanged. SCOPING: reworked one IIFE, one tile prop revert, one new wrapped StatTile. Zero other changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt518", summary: "Now-tab intake context + pump-math fixes. (1) NEXT-FEED TILE SUB-LINE: per chat, the next feed est. tile on OnDutyCard now shows total bottle oz today underneath. From 5p (bedtime anchor 20:30) it adds a gap-to-band readout — '~X oz to go before bed' in gold, umber after 7p if the gap is still >2oz, sage 'daily band met' otherwise. Band source is the new shared getSoleneIntakeBandNow() so the tile and the bt517 Milk-tab card always agree, including the ll:soleneIntakeBand custom override. Hidden until the first bottle logs so mornings never show an alarming zero. Uses the sleep tile's existing sub/subColor affordance — no new chrome, no banner. (2) PUMP PREVIEW MATH FIX: per chat 'the math is always wrong. if i enter a time for just finished, it logs it as just started.' The submit math has been correct since bt514 (ts = anchor − duration for mode=end), but PumpForm's in-form 'next pump due · 3hr from start (X)' preview anchored to Date.now() and IGNORED the WhenField — so with a custom finish time the popup displayed a now-derived start, which read as the app logging the entered time wrong. Preview now mirrors the submit anchor exactly: custom time honored, duration subtracted only in just-finished mode, invalid dates falling back to now. (3) BULK-IMPORT PARSER SCHEMA FIX: the NL parser's pump branch wrote the pump TYPE into the mode field (mode: pumpMode || 'standard'). Schema per bt396: mode is start|end (ts always = session start), pumpType is standard|power. Imported pumps are historical finished sessions -> mode 'end', pumpType carries power detection. Inventory-add gate (mode !== 'start') behaved correctly by accident before; now it's correct by construction. SCOPING: one helper + one IIFE + two tile props in OnDutyCard; preview block in PumpForm; one object literal in the parser. Zero changes to submit paths, addEvent, predictors, journal render, Cadence tab. Build verified clean via esbuild." },
   { version: "2026.05.05bt517", summary: "Solene's intake today card (Milk tab) — the age-based milk-intake deferred feature, silent-fix flavor. New module-level SoleneIntakeTodayCard rendered in InventoryView between CaregiverPackCard and PumpGoalsCard, not Mommy-gated. (1) RUNNING TOTAL: sums oz across today's type=feed events from ALL loggers including Caregiver (intake is what she drank; the bt303 quarantine applies to predictors, not totals). Breastfeed minutes shown alongside as '+Xm at breast' — deliberately NOT converted to estimated oz. (2) TARGET BAND: getAgeNorms(ageMonths).ozPerDay (AAP band, 27-36 at 4-6 mo) rendered as a sage region on a progress bar; getSoleneIntakeTarget WHO/FAO point estimate as a small tick. Band overridable for baby-specific patterns via collapsed 'adjust band' dotted link -> two mono inputs + save/reset; override persists to localStorage ll:soleneIntakeBand (device-local; cloud sync deferred). (3) PROJECTION: today's oz divided by her own average cumulative-intake fraction at the current clock time across the last 7 days (days with >=6 oz count; needs >=3 valid days and frac>=0.12) — her measured circadian intake curve — falling back to linear over a 7a-9p window when history is thin, labeling which method was used (n=X/7d). Suppressed before 10:00a or before the first bottle so mornings never look falsely alarming. (4) NUDGE = one status line with a colored dot, nothing else: sage on-pace, muted above-band (neutral wording), gold trending-under, accent only when projection <75% of band-low. No banners, no toasts, no notifications, no streaks — data-presenting per the bt78 anti-gamification stance. SCOPING: one new component + one render insertion in InventoryView + this version block. Zero changes to schema, events, predictors, Cadence tab, cloud sync. Build verified clean via esbuild." },
   { version: "2026.05.05bt508", summary: "TASKS pile manager header pops + sticks. Was faint paper pill with 1px line border barely visible. Now sticky (position:sticky top:0 zIndex:18) so it follows your scroll, 4px mauve top stripe, solid bg, chunky drop shadow, padding 10→14, header text 9.5→12.5 weight 700→800 in ink color. Count digits keep semantic colors. Build verified clean via esbuild." },
   { version: "2026.05.05bt516", summary: "Caregiver-mode handoff prompt silenced. Audit found: notification sound (bt482), countdown chip (bt414), duty line (bt411), row context (bt412), NOW slider (bt413) were all already gated. But the handoff-prompt trigger useEffect could still fire during a caregiver window transition. Added caregiver-active guard: skip parent-to-parent handoff prompt entirely when caregiver has Solène. Build verified clean via esbuild." },
@@ -790,7 +802,13 @@ function parseBulkImport(text, opts = {}) {
       const event = {
         type: "pump",
         ts,
-        mode: pumpMode || "standard",
+        // v05.05bt518 — was `mode: pumpMode || "standard"`, which wrote
+        // the pump TYPE into the mode field. Schema: mode is
+        // "start"|"end" (bt396: ts always = session start; mode is
+        // metadata), pumpType is "standard"|"power". Bulk-imported
+        // pumps are historical, i.e. finished sessions → mode "end".
+        mode: "end",
+        pumpType: pumpMode || "standard",
       };
       if (oz != null) event.oz = oz;
       if (rangeMatch && endTime) {
@@ -2139,6 +2157,24 @@ function LittleLedgerLogo({ C, size = 40, currentUser }) {
 }
 
 // ---- Storage layer -----------------------------------------------------
+// v05.05bt521 — single source of truth for the location-empty rule.
+// A bottle survives an empty stamp iff it ENTERED its location at or
+// after the stamp. Entry time = frozenAt for freezer bottles that
+// have it (a bottle pumped at 9a and moved to the freezer at 5p
+// entered at 5p — comparing pumpedAt would wrongly kill legitimate
+// moves), falling back to pumpedAt. Missing/invalid timestamps
+// survive (data-safe: never destroy a bottle we can't date).
+function bottleSurvivesLocationEmpty(b, emptyMap) {
+  if (!b || !b.location) return true;
+  const emptyTs = emptyMap && emptyMap[b.location];
+  if (!Number.isFinite(emptyTs)) return true;
+  const entryRaw = (b.location === "freezer" && b.frozenAt) ? b.frozenAt : b.pumpedAt;
+  if (!entryRaw) return true;
+  const entryMs = new Date(entryRaw).getTime();
+  if (!Number.isFinite(entryMs)) return true;
+  return entryMs >= emptyTs;
+}
+
 const storage = {
   // === Cloud sync runtime state ===
   // Set by App via setCloudContext(). Storage uses these to decide whether
@@ -2745,7 +2781,30 @@ function SoleneHandoffInner() {
   const lastLocationEmptyAtRef = useRef(lastLocationEmptyAt);
   useEffect(() => { lastLocationEmptyAtRef.current = lastLocationEmptyAt; }, [lastLocationEmptyAt]);
   useEffect(() => {
-    try { localStorage.setItem("solene:lastLocationEmptyAt", JSON.stringify(lastLocationEmptyAt)); } catch {}
+    // v05.05bt521 — THE core freezer-resurrection fix. This effect
+    // previously wrote raw localStorage.setItem, which meant the
+    // empty stamp NEVER reached the cloud: the receiving setter
+    // (solene:lastLocationEmptyAt below) existed since bt511 but no
+    // device ever transmitted. Protection was device-local only —
+    // one second device/tab, or an iOS-PWA localStorage eviction,
+    // and stale bottles re-synced with nothing to stop them.
+    // storage.set writes localStorage first (superset of the old
+    // behavior) then pushes to cloud, so every device now receives
+    // the authoritative stamp.
+    try { storage.set("solene:lastLocationEmptyAt", lastLocationEmptyAt); } catch {}
+  }, [lastLocationEmptyAt]);
+  // v05.05bt521 — self-purge: when a stamp arrives (from a local
+  // empty OR from another device via cloud), clean the bottles we
+  // are ALREADY holding. The bt515 filter only screened incoming
+  // cloud data; a device already carrying stale bottles never
+  // cleaned its own state and kept re-pushing them — the two-device
+  // resurrection oscillator. Identity-return when nothing violates,
+  // so this never causes churn.
+  useEffect(() => {
+    setInventory(prev => {
+      const kept = prev.filter(b => bottleSurvivesLocationEmpty(b, lastLocationEmptyAt));
+      return kept.length === prev.length ? prev : kept;
+    });
   }, [lastLocationEmptyAt]);
   const [meetings, setMeetings] = useState([]);
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
@@ -3741,31 +3800,36 @@ function SoleneHandoffInner() {
           console.warn(`[cloud-poll] rejecting recently-drained bottle id=${b.id} (drained ${((Date.now() - drainedAt) / 1000).toFixed(0)}s ago)`);
           return false;
         }
-        // v05.05bt511/bt515 — authoritative location-empty stamp.
-        // If user emptied this bottle's location AFTER this bottle
-        // was pumped, reject it. Survives page refresh + works
-        // cross-device. v05.05bt515 — read from ref instead of the
-        // stale closure value (cloudKeySetters is useMemo with
-        // empty deps).
-        const emptyMap = lastLocationEmptyAtRef.current || {};
-        const emptyTs = emptyMap[b.location];
-        if (emptyTs && b.pumpedAt) {
-          const pumpedMs = new Date(b.pumpedAt).getTime();
-          if (Number.isFinite(pumpedMs) && pumpedMs < emptyTs) {
-            console.warn(`[cloud-poll] rejecting bottle in ${b.location} that predates location empty at ${new Date(emptyTs).toISOString()}`);
-            return false;
-          }
+        // v05.05bt511/bt515/bt521 — authoritative location-empty
+        // stamp. bt521: extracted to bottleSurvivesLocationEmpty —
+        // now frozenAt-aware (a bottle legitimately moved INTO the
+        // freezer after an empty entered at frozenAt and must
+        // survive; the old pumpedAt comparison wrongly rejected it).
+        // Still reads the ref (bt515) since cloudKeySetters is
+        // useMemo([]).
+        if (!bottleSurvivesLocationEmpty(b, lastLocationEmptyAtRef.current || {})) {
+          console.warn(`[cloud-poll] rejecting bottle in ${b.location} that predates the location-empty stamp`);
+          return false;
         }
         return true;
       });
       setInventory(prev => {
-        if (prev.length > 0 && incoming.length === 0) {
-          console.warn(`[cloud-poll] refusing inventory wipe: cloud=[] but local=${prev.length}. Keeping local.`);
-          return prev;
+        // v05.05bt521 — purge prev BEFORE the anti-regression guards.
+        // The guards compare raw lengths, so a legitimate empty of
+        // ≥3 bottles was indistinguishable from data loss: this
+        // device would refuse the (correct, smaller) cloud state,
+        // keep its stale bottles, and re-push them — the two-device
+        // resurrection oscillator. Comparing against the purged
+        // local state means an explained shrink passes while real
+        // regressions are still caught.
+        const prevKept = prev.filter(b => bottleSurvivesLocationEmpty(b, lastLocationEmptyAtRef.current || {}));
+        if (prevKept.length > 0 && incoming.length === 0) {
+          console.warn(`[cloud-poll] refusing inventory wipe: cloud=[] but local=${prevKept.length}. Keeping local.`);
+          return prevKept.length === prev.length ? prev : prevKept;
         }
-        if (prev.length >= 3 && incoming.length <= prev.length - 3) {
-          console.warn(`[cloud-poll] refusing inventory regression: cloud=${incoming.length}, local=${prev.length}. Keeping local.`);
-          return prev;
+        if (prevKept.length >= 3 && incoming.length <= prevKept.length - 3) {
+          console.warn(`[cloud-poll] refusing inventory regression: cloud=${incoming.length}, local=${prevKept.length}. Keeping local.`);
+          return prevKept.length === prev.length ? prev : prevKept;
         }
         return incoming.map(x => ({
           ...x,
@@ -11925,6 +11989,38 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
     return { latestFeedTimeStr };
   })();
 
+  // v05.05bt518→bt520 — Per chat: total oz for the day as a quick
+  // glance, but 'under one of the feed tiles so the 4 tiles aren't
+  // disrupted by an awkward fifth.' Final form: sub-line under
+  // next-feed est. — always shows the running total once a bottle
+  // has logged, with the bedtime gap appended from 5p (anchor
+  // 20:30): gold with ground to cover, umber after 7p if the gap to
+  // band-low is still >2oz, sage once the band is met. valueColor
+  // pinned to ink so the 9:15p prediction never inherits the
+  // warning tint. Band shared with the Milk-tab card via
+  // getSoleneIntakeBandNow (custom override honored). No banner —
+  // the colored sub-line is the whole indicator.
+  const intakeSoFar = (() => {
+    const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+    let oz = 0, count = 0;
+    for (const e of events) {
+      if (!e || e.type !== "feed" || typeof e.oz !== "number") continue;
+      const ts = new Date(e.ts);
+      if (isNaN(ts.getTime()) || ts < dayStart || ts > now) continue;
+      oz += e.oz; count++;
+    }
+    if (count === 0) return { sub: null, color: null };
+    const ozStr = (Math.round(oz * 10) / 10).toString();
+    const { lo, hi } = getSoleneIntakeBandNow(now);
+    const h = now.getHours() + now.getMinutes() / 60;
+    const gap = lo - oz;
+    if (gap <= 0) return { sub: `${ozStr} oz today · band met`, color: C.sage };
+    if (h < 17) return { sub: `${ozStr} oz today · ${lo}–${hi} typical`, color: null };
+    const toGo = Math.ceil(gap);
+    if (h >= 19 && gap > 2) return { sub: `${ozStr} oz today · ~${toGo} oz to go before bed`, color: "#8A4A35" };
+    return { sub: `${ozStr} oz today · ~${toGo} oz to go before bed`, color: C.gold };
+  })();
+
   // v05.05bt253 — Morning routine prompt. Per chat: '5:30am prompt to see
   // if she has done her morning routine. Daddy will be the one doing it
   // on weekdays before dropping her off at daycare.' Mirrors the bedtime
@@ -12957,7 +13053,10 @@ function OnDutyCard({ C, mode, onDuty, next, lastFeed, lastDiaper, diaperWarnH, 
         <StatTile C={C} label="next feed est."
           icon={<Clock size={12} />}
           iconColor={C.accent}
-          value={lastFeed ? fmtPredictedNextFeed(lastFeed, now) : "—"} />
+          value={lastFeed ? fmtPredictedNextFeed(lastFeed, now) : "—"}
+          valueColor={null}
+          sub={intakeSoFar.sub}
+          subColor={intakeSoFar.color} />
       </div>
 
       {/* Milk panel — RT inventory + next pump, visible to both parents always */}
@@ -14512,7 +14611,7 @@ function MilkPanel({ C, currentUser, onDutyParent, rtSafeOz, fridgeOz, totalSafe
   );
 }
 
-function StatTile({ C, label, value, sub, subColor, icon, iconColor, onTap }) {
+function StatTile({ C, label, value, sub, subColor, valueColor, icon, iconColor, onTap }) {
   const Wrapper = onTap ? "button" : "div";
   const tapProps = onTap ? {
     onClick: onTap,
@@ -14548,7 +14647,11 @@ function StatTile({ C, label, value, sub, subColor, icon, iconColor, onTap }) {
         fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
         fontSize: 26, fontWeight: 600,
         marginTop: 4, lineHeight: 1.05,
-        color: subColor || C.ink,
+        // v05.05bt520 — valueColor overrides the legacy subColor
+        // tint when provided (pass null to keep the value neutral
+        // ink while the sub carries a warning color). undefined
+        // preserves the original behavior for existing tiles.
+        color: valueColor !== undefined ? (valueColor || C.ink) : (subColor || C.ink),
       }}>
         {value}
       </div>
@@ -23382,6 +23485,27 @@ function DailyPumpHistoryCard({ C, events, now, bagBuffer = 1 }) {
       </div>
     </Section>
   );
+}
+
+// v05.05bt518 — shared band reader so every intake surface (Milk-tab
+// card, Now-tab next-feed sub-line) agrees on the same target band:
+// the localStorage override (ll:soleneIntakeBand) when set, else the
+// AAP ozPerDay band for her current age.
+function getSoleneIntakeBandNow(now) {
+  const ageMonths = (now - BIRTHDAY) / (1000 * 60 * 60 * 24 * 30.4375);
+  const norms = getAgeNorms(ageMonths);
+  let lo = norms?.ozPerDay?.[0] ?? 24;
+  let hi = norms?.ozPerDay?.[1] ?? 32;
+  try {
+    const raw = localStorage.getItem("ll:soleneIntakeBand");
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Number.isFinite(p?.lo) && Number.isFinite(p?.hi) && p.lo > 0 && p.hi > p.lo) {
+        lo = p.lo; hi = p.hi;
+      }
+    }
+  } catch {}
+  return { lo, hi };
 }
 
 // v05.05bt517 — Solène's intake today. The "age-based milk-intake
@@ -51593,16 +51717,42 @@ function PumpForm({ C, lastPump, onSubmit }) {
   const [pumpType, setPumpType] = useState("standard"); // 'standard' | 'power'
   const [time, setTime] = useState("now");
   const [customTime, setCustomTime] = useState(localDateTimeNow);
+  // v05.05bt522 — Per chat: logged finish 6:45p, duration 45m, journal
+  // showed 5:45p — i.e. 60 min was subtracted, not 45. Root cause: the
+  // power-pump convenience effect below silently overwrote a user-
+  // chosen duration (<50 → 60) whenever the type toggled to power, so
+  // the submit used 60 while the user believed 45. The duration a user
+  // has explicitly set is authoritative: track it and never overwrite.
+  const userTouchedDuration = useRef(false);
+  const setDurationByUser = (v) => { userTouchedDuration.current = true; setDuration(v); };
 
   // Power pump = 60 min total: 20 on / 10 off / 10 on / 10 off / 10 on
-  // When user toggles to power pump, default duration to 60 min
+  // When user toggles to power pump, default duration to 60 min —
+  // v05.05bt522: ONLY if they haven't explicitly chosen a duration.
   useEffect(() => {
+    if (userTouchedDuration.current) return;
     if (pumpType === "power" && duration < 50) setDuration(60);
     if (pumpType === "standard" && duration === 60) setDuration(20);
   }, [pumpType]); // eslint-disable-line
 
   const kcal = Math.round(oz * KCAL_PER_OZ_BM);
-  const startTime = mode === "end" ? new Date(Date.now() - duration * 60000) : new Date();
+  // v05.05bt518 — Per chat: 'when logging a pump, the math is always
+  // wrong. if i enter a time for just finished, it logs it as just
+  // started.' The SUBMIT math was correct since bt514 (ts = anchor −
+  // duration when mode=end), but this PREVIEW ignored the WhenField
+  // entirely — it anchored to Date.now(), so the 'next pump due ·
+  // 3hr from start (X)' panel showed a now-derived start whenever a
+  // custom finish time was entered, making the entered time look like
+  // it was being logged as the start. Preview now uses the same
+  // anchor logic as the submit: custom time honored, duration
+  // subtracted only in just-finished mode.
+  const previewAnchor = (() => {
+    const a = time === "now" ? new Date() : new Date(customTime);
+    return isNaN(a.getTime()) ? new Date() : a;
+  })();
+  const startTime = mode === "end"
+    ? new Date(previewAnchor.getTime() - Number(duration) * 60000)
+    : previewAnchor;
   const nextPump = new Date(startTime.getTime() + PUMP_INTERVAL_HRS * 3600000);
 
   const locInfo = {
@@ -51634,7 +51784,7 @@ function PumpForm({ C, lastPump, onSubmit }) {
 
       {mode === "end" && (
         <Field C={C} label="Duration (minutes)">
-          <BigNumberPicker C={C} value={duration} onChange={setDuration} step={5}
+          <BigNumberPicker C={C} value={duration} onChange={setDurationByUser} step={5}
             presets={pumpType === "power" ? [50, 55, 60, 65, 70] : [10, 15, 20, 25, 30, 45]}
             unit="MINUTES" />
         </Field>
@@ -51681,29 +51831,52 @@ function PumpForm({ C, lastPump, onSubmit }) {
       <WhenField C={C} mode={time} setMode={setTime} customLocal={customTime} setCustomLocal={setCustomTime}
         label={mode === "end" ? "When did you finish?" : "When did you start?"} />
 
-      <SubmitButton C={C} onClick={() => onSubmit({
-        type: "pump",
-        oz: Number(oz),
-        durationMin: Number(duration),
-        mode,
-        pumpType,
-        location: mode === "end" ? location : null,
-        // v05.05bt514 — Per chat: 'I click on just finished a pump,
-        // it does eight eleven to eight forty one for a duration of
-        // thirty minutes'. bt396 changed pump ts to always mean the
-        // START of the pump session. But this form was submitting
-        // ts=now for "Just finished" mode, which incorrectly logged
-        // now (the FINISH time) as the start. Fix: when mode is
-        // "end", the anchor (now or user-picked finish time) is the
-        // END; subtract duration to get the start (which is what ts
-        // represents). Same for customTime with mode=end (user
-        // answered 'when did you finish?').
-        ts: (() => {
-          const anchor = time === "now" ? new Date() : new Date(customTime);
-          if (mode === "end") return new Date(anchor.getTime() - Number(duration) * 60000);
-          return anchor;
-        })(),
-      })}>Log {pumpType === "power" ? "power pump" : "pump"}</SubmitButton>
+      {/* v05.05bt522 — explicit pre-save statement of the exact session
+          that will be stored. If any control silently disagrees with
+          what the user believes (duration, mode, time), it's visible
+          HERE, before saving — never a journal surprise after. */}
+      <div style={{
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5,
+        color: C.ink, background: `${C.line}18`, border: `1px solid ${C.line}33`,
+        borderRadius: 8, padding: "8px 12px", marginBottom: 10, letterSpacing: "0.02em",
+      }}>
+        will log: <strong>{fmtTimeShort(startTime)}–{fmtTimeShort(new Date(startTime.getTime() + Number(duration) * 60000))}</strong> · {duration}m{pumpType === "power" ? " · power" : ""}
+      </div>
+
+      <SubmitButton C={C} onClick={() => {
+        // v05.05bt523 — forensic instrumentation. Two field reports of
+        // wrong pump start times; every write path and read path
+        // verifies correct, so the corruption enters via form inputs.
+        // Snapshot EVERY input at the moment of submit onto the event
+        // so the next bad entry is self-explanatory instead of a
+        // reconstruction exercise. Silent — no UI change.
+        const anchor = time === "now" ? new Date() : new Date(customTime);
+        const anchorSafe = isNaN(anchor.getTime()) ? new Date() : anchor;
+        const tsVal = mode === "end"
+          ? new Date(anchorSafe.getTime() - Number(duration) * 60000)
+          : anchorSafe;
+        onSubmit({
+          type: "pump",
+          oz: Number(oz),
+          durationMin: Number(duration),
+          mode,
+          pumpType,
+          location: mode === "end" ? location : null,
+          ts: tsVal,
+          _logForensics: {
+            formVersion: "bt523",
+            whenMode: time,
+            customTimeRaw: time === "custom" ? String(customTime) : null,
+            anchorParsedISO: anchorSafe.toISOString(),
+            anchorWasInvalid: isNaN(anchor.getTime()),
+            logMode: mode,
+            durationAtSubmit: Number(duration),
+            pumpTypeAtSubmit: pumpType,
+            computedTsISO: tsVal.toISOString(),
+            deviceNowISO: new Date().toISOString(),
+          },
+        });
+      }}>Log {pumpType === "power" ? "power pump" : "pump"}</SubmitButton>
     </>
   );
 }
