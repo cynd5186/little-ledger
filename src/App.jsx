@@ -15,8 +15,11 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt523";
+const APP_VERSION = "2026.05.05bt526";
 const APP_BUILD_NOTES = [
+  "Journal-side data loss fix — notes + noteArchive get the union-merge + tombstone treatment. Per chat: 'still having issues with lost data on my journal side.' ROOT CAUSE: solene:notes and solene:noteArchive cloud setters were BLIND REPLACES — any stale poll clobbered fresh local notes, and a malformed cloud value wiped them to []. Same disease as bt494/bt525 events. FIXES: (1) notes setter: union by id (legacy id-less fallback key ts|text-prefix); collision resolved by _updatedAt last-write-wins (missing=0, ties keep local); cloud-side tombstoned notes drop; malformed cloud ignored, never wipes. (2) updateNote stamps _updatedAt so cross-device edits actually propagate; removeNote records a notes: tombstone. (3) noteArchive setter: same union; the 50-entry cap now applied DETERMINISTICALLY (sort by ackedAt/replacedAt/ts desc, then slice) so every device converges to the same 50 instead of cap-vs-merge ping-pong; archive entries get crypto.randomUUID ids at creation (both handoff-archive paths). (4) Archive 'clear' tombstones everything it removes — without that, union merge would resurrect the cleared archive from the cloud on the next poll. (5) New solene:journalTombstones key (prefixed notes:/archive: ids, 30-day prune) with per-key max-merge setter, wired into poll + wipe lists, persisted via storage.set. STILL BLIND-REPLACE (queued next build, same treatment candidates): solene:appointments, solene:meetings, solene:timeBank, solene:dailyContent. SCOPING: two setters replaced, one added, four choke-point touches, two list additions. No UI changes. Build verified clean via esbuild.",
+  "Event resurrection/erasure root fix — id-union merge + tombstones. Per chat: 'data erasing... whenever caregiver mode is on and i take it back immediately.' ROOT CAUSE: the bt494 events cloud setter replaced local wholesale whenever cloud count >= local count — but LENGTH IS NOT SUPERSET. Take-back removes the auto caregiver_window (−1); logging a feed right after adds one (+1); equal counts, different members; a stale in-flight poll then swapped the fresh feed OUT and the caregiver window back IN. Real data loss — and the resurrected window re-quarantined the day's parent logs (bt303 exclusion), so even surviving events LOOKED erased from tiles/predictors. FIX (1) MERGE: the events setter now unions by id (fallback key type|ts for legacy id-less events); local wins collisions; identity-return when membership unchanged; malformed cloud value is ignored instead of wiping. Union can only add, so the bt494 stale-shorter-cloud case is covered structurally, without heuristics. FIX (2) TOMBSTONES: union alone would resurrect deletions, so deletions now write id->deletedAt tombstones (new solene:eventTombstones key, per-id max-merge setter, 30-day prune, wired into poll + wipe lists, localStorage-hydrated with cloud sync via storage.set). Cloud-side events with tombstoned ids are dropped at merge; local side is NOT tombstone-filtered so an undo that restores an event locally sticks and re-propagates. Tombstone writers: removeEvent (the single delete choke point) and the caregiver take-back teardown (ids computed synchronously BEFORE setEvents — collecting inside the async updater would record nothing). KEPT: the peak-count push guard (>=5 shrink) stays as the last-resort backstop. SCOPING: events + tombstones only. No changes to inventory merge (bt521 stamps), predictors, quarantine logic, caregiver auto-create, UI. Build verified clean via esbuild.",
+  "Oz consistency canon + fresh-bottle tile. Per chat: '4.67 rounds to 4.7 but logging 4.6 leaves 0.1, logging 4.7 says not enough... if i see one number i dont have to think about the trickery behind doors.' Root cause: THREE precisions coexisted — storage (raw float, e.g. 4.67), display (0.1 via toFixed(1)), allocations (0.05 per bt66) — the number shown was never the number compared. (1) CANONICAL QUANTUM: new module quantOz() = 0.1 oz, applied at every write boundary so displayed == stored == compared. (2) MIGRATION + GUARD: continuous normalization effect quantizes all inventory oz (migrates pre-bt524 residue like 4.67 -> 4.7 on first load, and permanently catches any write path that forgets); identity-return when clean. (3) DRAINS: drainInventory and the label-reconcile drain now subtract in quantized space with a 0.001 epsilon and sweep sub-quantum dust (<0.05 oz remainder = consumed, never a phantom 0.1 bottle). (4) ALLOCATIONS: setBottleOz clamps against the QUANTIZED capacity, so typing exactly what the tile displays is always accepted; bt66's 0.05 allocation precision retired (it preserved 1.25 but was an invisible third precision — allocations now on the same 0.1 canon; 1.25 entries land as 1.3, matching what every display would show anyway). (5) FRESH-BOTTLE TILE: the dashed-italic 'BM from a fresh bottle (not in inventory)' fine-print button rebuilt with the same anatomy as the RT/Fz bottle cards — 30px accent circle badge 'NEW', serif 'Fresh bottle' title, mono 'not in inventory - logs with warn' sub, accent-tint selected state with check — so the no-bottle fallback reads as a deliberate first-class choice. SCOPING: one module helper, one effect, two drain blocks, setBottleOz, one button rebuild. No changes to feed submit, reconcile flags, canSubmit logic, pump paths. Build verified clean via esbuild.",
   "Pump forensic instrumentation. Second field report of a wrong pump start (finish 7:21p entered, start != 7:21 - duration). Systematic verification: submit math (bt514), preview (bt518), journal render (bt396), nextPumpAt (bt396), edit modal (range mode treats ts as start), addEvent normalization, DateTimeInput/localDateTimeNow format — ALL consistent with ts = session start. Corruption must enter via the form inputs (duration seeding/overwrite was killed in bt522; mode toggle and datetime parsing remain candidates). Instead of further hypothesis-shotgunning: the PumpForm submit now snapshots every input at the moment of save onto the event as _logForensics {formVersion, whenMode, customTimeRaw, anchorParsedISO, anchorWasInvalid, logMode, durationAtSubmit, pumpTypeAtSubmit, computedTsISO, deviceNowISO}. Also hardened: invalid custom-time parse now falls back to now at the FORM level (anchorSafe) rather than relying on addEvent's fallback, and the anchorWasInvalid flag records that it happened. Zero UI change; field is inert metadata riding on the event through storage/cloud. Next bad entry is self-explanatory from its own record. SCOPING: PumpForm SubmitButton onClick restructure only. ts math unchanged (identical formula, now with explicit safe-anchor). Build verified clean via esbuild.",
   "Pump duration silent-overwrite fix + pre-save session statement. Per chat: logged 'just finished 6:45p, 45 min' but journal showed 5:45p — exactly 60 min subtracted, not 45. The submit/journal math (bt514/bt396) is correct; root cause is the power-pump convenience effect, which force-set duration to 60 whenever pumpType flipped to power with duration <50 — silently overwriting a user-chosen 45 so the submit subtracted 60 (6:45-60=5:45). (1) DURATION IS AUTHORITATIVE ONCE TOUCHED: new userTouchedDuration ref; the duration picker routes through setDurationByUser; the power/standard auto-default effect now early-returns if the user has explicitly set a duration. Convenience default preserved for untouched forms. (2) PRE-SAVE STATEMENT: mono line above the submit button — 'will log: 6:00p-6:45p · 45m' — computed from the same anchor math as the submit (custom finish time honored, duration subtracted only in just-finished mode). Any control silently disagreeing with the user's intent (duration jump, wrong mode, wrong time) is now visible BEFORE saving instead of surfacing as a journal surprise. Verification path: the mislogged event's journal row should read '60m (5:45-6:45)' confirming the stored duration was 60; the event can be corrected via the existing journal row edit. SCOPING: PumpForm only — one ref, one setter wrapper, effect guard, one JSX line. No changes to submit ts math, addEvent, journal render, FinishPumpModal. Build verified clean via esbuild.",
   "Freezer resurrection — root-caused and fixed for real this time. Per chat: 'I keep emptying it, and it keeps coming back.' Full lifecycle trace found THREE interacting defects that bt511/bt515 missed. (1) THE STAMP NEVER SYNCED: the lastLocationEmptyAt persistence effect wrote raw localStorage.setItem — never storage.set — so the empty stamp was NEVER pushed to the cloud. The receiving cloud setter existed since bt511 but no device ever transmitted; protection was device-local only. Any second device/tab (or an iOS-PWA localStorage eviction) had no stamp and re-synced stale bottles. Fixed: effect now uses storage.set, which writes localStorage first (superset of old behavior) then cloud-pushes; the existing max-merge receiving setter distributes it to every device. (2) ANTI-REGRESSION GUARD FOUGHT LEGITIMATE EMPTIES: incoming.length <= prev.length-3 could not distinguish 'user emptied >=3 bottles' from data corruption, so receiving devices refused the correct smaller inventory, kept stale bottles, and re-pushed them — a stable two-device resurrection oscillator. Fixed: prev is purged through the stamp filter BEFORE the guards, so an explained shrink passes while true regressions are still caught. (3) NO SELF-PURGE: the bt515 filter only screened INCOMING cloud bottles; a device already holding stale bottles never cleaned its own state even after receiving the stamp. Fixed: new effect purges local inventory whenever lastLocationEmptyAt changes (identity-return when clean, so zero churn). (4) BONUS LATENT BUG: the filter compared pumpedAt, so a bottle legitimately MOVED into the freezer after an empty (frozenAt > stamp but pumpedAt < stamp) was wrongly rejected — vanishing-bottle. New module-level bottleSurvivesLocationEmpty(b, emptyMap) is the single source of truth: entry time = frozenAt for freezer bottles (fallback pumpedAt), missing/invalid timestamps survive (data-safe). Used by the cloud filter, the guard purge, and the self-purge effect. SCOPING: one module helper, one effect rewrite + one new effect, cloud inventory setter rework. Zero changes to emptyLocation handler, drain logic, events, other setters. Build verified clean via esbuild.",
@@ -27,6 +30,9 @@ const APP_BUILD_NOTES = [
   "Caregiver-mode: handoff prompt silenced. Per chat: if you are in caregiver mode then ALL alerts should be snoozed. Just basic caregiver instead of mommy and daddy. So no handoff notes to pass. No x min until handoff to daddy.\\n\\nAUDIT of caregiver-mode alert surfaces:\\n  · Notification sound: ALREADY suppressed (bt482 gates playNotificationSound on window.__llCaregiverActive).\\n  · Countdown chip \'X min until handoff to Daddy\': ALREADY gated (line 12256 wraps the whole block in !getActiveOrUpcomingCaregiverWindow…state===\'active\').\\n  · Editorial duty line: ALREADY overridden to \'Solène with caregiver\' (bt411).\\n  · Per-row babyContext + owner: ALREADY overridden (bt412).\\n  · Schedule NOW slider: ALREADY reads NOW · CAREGIVER (bt413).\\n\\nBUG FOUND + FIXED. The handoff-prompt trigger useEffect (line ~6400) fires when the on-duty parent CHANGES and the previously-on-duty parent is the current user. During caregiver windows this trigger could still fire (e.g., Mommy shift → Caregiver window transitions the on-duty state), showing an irrelevant \'leave a handoff note for Daddy?\' modal. Added a caregiver-active guard at the top of the trigger: if the caregiver window is currently active, skip the prompt entirely. Neither parent is on-duty during caregiver windows, so parent-to-parent handoff surfaces are irrelevant.\\n\\nSTILL DEFERRED (from the fresh-chat list):\\n  · Caregiver morning confirmation prompt (both parents confirm).\\n  · Age-based milk-intake proactive nudging.\\n  · Routines editable inline like tasks + manually-adjusted badge.\\n  · Right-rail icon redesign (mockup first).\\n  · Simplifying persona to \'basic caregiver\' when in caregiver mode (needs profile-switcher rework — larger refactor).\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt526", summary: "Journal-side data loss fix — notes + noteArchive get the union-merge + tombstone treatment. Per chat: 'still having issues with lost data on my journal side.' ROOT CAUSE: solene:notes and solene:noteArchive cloud setters were BLIND REPLACES — any stale poll clobbered fresh local notes, and a malformed cloud value wiped them to []. Same disease as bt494/bt525 events. FIXES: (1) notes setter: union by id (legacy id-less fallback key ts|text-prefix); collision resolved by _updatedAt last-write-wins (missing=0, ties keep local); cloud-side tombstoned notes drop; malformed cloud ignored, never wipes. (2) updateNote stamps _updatedAt so cross-device edits actually propagate; removeNote records a notes: tombstone. (3) noteArchive setter: same union; the 50-entry cap now applied DETERMINISTICALLY (sort by ackedAt/replacedAt/ts desc, then slice) so every device converges to the same 50 instead of cap-vs-merge ping-pong; archive entries get crypto.randomUUID ids at creation (both handoff-archive paths). (4) Archive 'clear' tombstones everything it removes — without that, union merge would resurrect the cleared archive from the cloud on the next poll. (5) New solene:journalTombstones key (prefixed notes:/archive: ids, 30-day prune) with per-key max-merge setter, wired into poll + wipe lists, persisted via storage.set. STILL BLIND-REPLACE (queued next build, same treatment candidates): solene:appointments, solene:meetings, solene:timeBank, solene:dailyContent. SCOPING: two setters replaced, one added, four choke-point touches, two list additions. No UI changes. Build verified clean via esbuild." },
+  { version: "2026.05.05bt525", summary: "Event resurrection/erasure root fix — id-union merge + tombstones. Per chat: 'data erasing... whenever caregiver mode is on and i take it back immediately.' ROOT CAUSE: the bt494 events cloud setter replaced local wholesale whenever cloud count >= local count — but LENGTH IS NOT SUPERSET. Take-back removes the auto caregiver_window (−1); logging a feed right after adds one (+1); equal counts, different members; a stale in-flight poll then swapped the fresh feed OUT and the caregiver window back IN. Real data loss — and the resurrected window re-quarantined the day's parent logs (bt303 exclusion), so even surviving events LOOKED erased from tiles/predictors. FIX (1) MERGE: the events setter now unions by id (fallback key type|ts for legacy id-less events); local wins collisions; identity-return when membership unchanged; malformed cloud value is ignored instead of wiping. Union can only add, so the bt494 stale-shorter-cloud case is covered structurally, without heuristics. FIX (2) TOMBSTONES: union alone would resurrect deletions, so deletions now write id->deletedAt tombstones (new solene:eventTombstones key, per-id max-merge setter, 30-day prune, wired into poll + wipe lists, localStorage-hydrated with cloud sync via storage.set). Cloud-side events with tombstoned ids are dropped at merge; local side is NOT tombstone-filtered so an undo that restores an event locally sticks and re-propagates. Tombstone writers: removeEvent (the single delete choke point) and the caregiver take-back teardown (ids computed synchronously BEFORE setEvents — collecting inside the async updater would record nothing). KEPT: the peak-count push guard (>=5 shrink) stays as the last-resort backstop. SCOPING: events + tombstones only. No changes to inventory merge (bt521 stamps), predictors, quarantine logic, caregiver auto-create, UI. Build verified clean via esbuild." },
+  { version: "2026.05.05bt524", summary: "Oz consistency canon + fresh-bottle tile. Per chat: '4.67 rounds to 4.7 but logging 4.6 leaves 0.1, logging 4.7 says not enough... if i see one number i dont have to think about the trickery behind doors.' Root cause: THREE precisions coexisted — storage (raw float, e.g. 4.67), display (0.1 via toFixed(1)), allocations (0.05 per bt66) — the number shown was never the number compared. (1) CANONICAL QUANTUM: new module quantOz() = 0.1 oz, applied at every write boundary so displayed == stored == compared. (2) MIGRATION + GUARD: continuous normalization effect quantizes all inventory oz (migrates pre-bt524 residue like 4.67 -> 4.7 on first load, and permanently catches any write path that forgets); identity-return when clean. (3) DRAINS: drainInventory and the label-reconcile drain now subtract in quantized space with a 0.001 epsilon and sweep sub-quantum dust (<0.05 oz remainder = consumed, never a phantom 0.1 bottle). (4) ALLOCATIONS: setBottleOz clamps against the QUANTIZED capacity, so typing exactly what the tile displays is always accepted; bt66's 0.05 allocation precision retired (it preserved 1.25 but was an invisible third precision — allocations now on the same 0.1 canon; 1.25 entries land as 1.3, matching what every display would show anyway). (5) FRESH-BOTTLE TILE: the dashed-italic 'BM from a fresh bottle (not in inventory)' fine-print button rebuilt with the same anatomy as the RT/Fz bottle cards — 30px accent circle badge 'NEW', serif 'Fresh bottle' title, mono 'not in inventory - logs with warn' sub, accent-tint selected state with check — so the no-bottle fallback reads as a deliberate first-class choice. SCOPING: one module helper, one effect, two drain blocks, setBottleOz, one button rebuild. No changes to feed submit, reconcile flags, canSubmit logic, pump paths. Build verified clean via esbuild." },
   { version: "2026.05.05bt523", summary: "Pump forensic instrumentation. Second field report of a wrong pump start (finish 7:21p entered, start != 7:21 - duration). Systematic verification: submit math (bt514), preview (bt518), journal render (bt396), nextPumpAt (bt396), edit modal (range mode treats ts as start), addEvent normalization, DateTimeInput/localDateTimeNow format — ALL consistent with ts = session start. Corruption must enter via the form inputs (duration seeding/overwrite was killed in bt522; mode toggle and datetime parsing remain candidates). Instead of further hypothesis-shotgunning: the PumpForm submit now snapshots every input at the moment of save onto the event as _logForensics {formVersion, whenMode, customTimeRaw, anchorParsedISO, anchorWasInvalid, logMode, durationAtSubmit, pumpTypeAtSubmit, computedTsISO, deviceNowISO}. Also hardened: invalid custom-time parse now falls back to now at the FORM level (anchorSafe) rather than relying on addEvent's fallback, and the anchorWasInvalid flag records that it happened. Zero UI change; field is inert metadata riding on the event through storage/cloud. Next bad entry is self-explanatory from its own record. SCOPING: PumpForm SubmitButton onClick restructure only. ts math unchanged (identical formula, now with explicit safe-anchor). Build verified clean via esbuild." },
   { version: "2026.05.05bt522", summary: "Pump duration silent-overwrite fix + pre-save session statement. Per chat: logged 'just finished 6:45p, 45 min' but journal showed 5:45p — exactly 60 min subtracted, not 45. The submit/journal math (bt514/bt396) is correct; root cause is the power-pump convenience effect, which force-set duration to 60 whenever pumpType flipped to power with duration <50 — silently overwriting a user-chosen 45 so the submit subtracted 60 (6:45-60=5:45). (1) DURATION IS AUTHORITATIVE ONCE TOUCHED: new userTouchedDuration ref; the duration picker routes through setDurationByUser; the power/standard auto-default effect now early-returns if the user has explicitly set a duration. Convenience default preserved for untouched forms. (2) PRE-SAVE STATEMENT: mono line above the submit button — 'will log: 6:00p-6:45p · 45m' — computed from the same anchor math as the submit (custom finish time honored, duration subtracted only in just-finished mode). Any control silently disagreeing with the user's intent (duration jump, wrong mode, wrong time) is now visible BEFORE saving instead of surfacing as a journal surprise. Verification path: the mislogged event's journal row should read '60m (5:45-6:45)' confirming the stored duration was 60; the event can be corrected via the existing journal row edit. SCOPING: PumpForm only — one ref, one setter wrapper, effect guard, one JSX line. No changes to submit ts math, addEvent, journal render, FinishPumpModal. Build verified clean via esbuild." },
   { version: "2026.05.05bt521", summary: "Freezer resurrection — root-caused and fixed for real this time. Per chat: 'I keep emptying it, and it keeps coming back.' Full lifecycle trace found THREE interacting defects that bt511/bt515 missed. (1) THE STAMP NEVER SYNCED: the lastLocationEmptyAt persistence effect wrote raw localStorage.setItem — never storage.set — so the empty stamp was NEVER pushed to the cloud. The receiving cloud setter existed since bt511 but no device ever transmitted; protection was device-local only. Any second device/tab (or an iOS-PWA localStorage eviction) had no stamp and re-synced stale bottles. Fixed: effect now uses storage.set, which writes localStorage first (superset of old behavior) then cloud-pushes; the existing max-merge receiving setter distributes it to every device. (2) ANTI-REGRESSION GUARD FOUGHT LEGITIMATE EMPTIES: incoming.length <= prev.length-3 could not distinguish 'user emptied >=3 bottles' from data corruption, so receiving devices refused the correct smaller inventory, kept stale bottles, and re-pushed them — a stable two-device resurrection oscillator. Fixed: prev is purged through the stamp filter BEFORE the guards, so an explained shrink passes while true regressions are still caught. (3) NO SELF-PURGE: the bt515 filter only screened INCOMING cloud bottles; a device already holding stale bottles never cleaned its own state even after receiving the stamp. Fixed: new effect purges local inventory whenever lastLocationEmptyAt changes (identity-return when clean, so zero churn). (4) BONUS LATENT BUG: the filter compared pumpedAt, so a bottle legitimately MOVED into the freezer after an empty (frozenAt > stamp but pumpedAt < stamp) was wrongly rejected — vanishing-bottle. New module-level bottleSurvivesLocationEmpty(b, emptyMap) is the single source of truth: entry time = frozenAt for freezer bottles (fallback pumpedAt), missing/invalid timestamps survive (data-safe). Used by the cloud filter, the guard purge, and the self-purge effect. SCOPING: one module helper, one effect rewrite + one new effect, cloud inventory setter rework. Zero changes to emptyLocation handler, drain logic, events, other setters. Build verified clean via esbuild." },
@@ -2157,6 +2163,20 @@ function LittleLedgerLogo({ C, size = 40, currentUser }) {
 }
 
 // ---- Storage layer -----------------------------------------------------
+// v05.05bt524 — canonical oz quantum. Per chat: 'the app rounds up
+// 4.67 to 4.7 but then if you try to log it adds 4.6 then it makes it
+// look like you have 0.1 left. or if you try to add 4.7 it says there
+// is not enough... everything should be consistent so that if i see
+// one number then i dont have to think about the trickery behind
+// doors.' Root cause: THREE precisions coexisted — storage
+// (unquantized float), display (0.1 via toFixed(1)), allocations
+// (0.05 per bt66) — so the number shown was never the number
+// compared. Rule now: 0.1 oz is the canonical quantum, applied at
+// every WRITE boundary, so displayed == stored == compared, always.
+function quantOz(v) {
+  return Math.round((Number(v) || 0) * 10) / 10;
+}
+
 // v05.05bt521 — single source of truth for the location-empty rule.
 // A bottle survives an empty stamp iff it ENTERED its location at or
 // after the stamp. Entry time = frozenAt for freezer bottles that
@@ -2379,7 +2399,7 @@ const storage = {
     // List ALL solene:* keys we know about. If the artifact storage API doesn't expose
     // a list operation we can't enumerate dynamically, so this list must stay current.
     const keys = [
-      "solene:events", "solene:inventory", "solene:meetings", "solene:shifts:v3",
+      "solene:events", "solene:eventTombstones", "solene:inventory", "solene:meetings", "solene:shifts:v3", "solene:journalTombstones",
       "solene:diaperbag", "solene:onsite", "solene:notes", "solene:appointments",
       "solene:activeActivity", "solene:activePump", "solene:takeover", "solene:handoffNote", "solene:noteArchive",
       "solene:timeBank", "solene:dailyContent", "solene:currentUser",
@@ -2753,6 +2773,65 @@ function SoleneHandoffInner() {
     try { localStorage.setItem("ll:fontScale", String(fontScale)); } catch {}
   }, [fontScale]);
   const [events, setEvents] = useState([]);
+  // v05.05bt525 — event tombstones: id → deletedAt ms. Deleted events
+  // must STAY deleted across the cloud; without tombstones, any stale
+  // snapshot resurrects them (the caregiver take-back bug: window
+  // removed locally, stale poll brings it back, and its return
+  // quarantines the day's logs so they LOOK erased — plus the
+  // count-parity replace could genuinely swap a fresh feed for the
+  // stale window). Tombstones sync via their own key with per-id
+  // max-merge; entries prune after 30 days.
+  const [eventTombstones, setEventTombstones] = useState(() => {
+    try {
+      const r = localStorage.getItem("solene:eventTombstones");
+      if (r) { const p = JSON.parse(r); if (p && typeof p === "object") return p; }
+    } catch {}
+    return {};
+  });
+  const eventTombstonesRef = useRef(eventTombstones);
+  useEffect(() => { eventTombstonesRef.current = eventTombstones; }, [eventTombstones]);
+  useEffect(() => {
+    try { storage.set("solene:eventTombstones", eventTombstones); } catch {}
+  }, [eventTombstones]);
+  const recordEventTombstones = (ids) => {
+    const list = (ids || []).filter(Boolean);
+    if (!list.length) return;
+    const nowMs = Date.now();
+    setEventTombstones(prev => {
+      const next = { ...prev };
+      for (const id of list) next[id] = nowMs;
+      const cutoff = nowMs - 30 * 86400000;
+      for (const k of Object.keys(next)) if (next[k] < cutoff) delete next[k];
+      return next;
+    });
+  };
+  // v05.05bt526 — journal-side tombstones (notes: / archive: prefixed
+  // keys), same architecture as event tombstones: deletions must stay
+  // deleted across the cloud once the setters become union merges.
+  const [journalTombstones, setJournalTombstones] = useState(() => {
+    try {
+      const r = localStorage.getItem("solene:journalTombstones");
+      if (r) { const p = JSON.parse(r); if (p && typeof p === "object") return p; }
+    } catch {}
+    return {};
+  });
+  const journalTombstonesRef = useRef(journalTombstones);
+  useEffect(() => { journalTombstonesRef.current = journalTombstones; }, [journalTombstones]);
+  useEffect(() => {
+    try { storage.set("solene:journalTombstones", journalTombstones); } catch {}
+  }, [journalTombstones]);
+  const recordJournalTombstones = (prefix, ids) => {
+    const list = (ids || []).filter(Boolean);
+    if (!list.length) return;
+    const nowMs = Date.now();
+    setJournalTombstones(prev => {
+      const next = { ...prev };
+      for (const id of list) next[`${prefix}:${id}`] = nowMs;
+      const cutoff = nowMs - 30 * 86400000;
+      for (const k of Object.keys(next)) if (next[k] < cutoff) delete next[k];
+      return next;
+    });
+  };
   const [inventory, setInventory] = useState([]);
   // v05.05bt511 — Per chat: 'the freezer inventory never empties when
   // empty it'. The bt101 + bt481 protection used a refs-of-IDs
@@ -2806,6 +2885,23 @@ function SoleneHandoffInner() {
       return kept.length === prev.length ? prev : kept;
     });
   }, [lastLocationEmptyAt]);
+  // v05.05bt524 — inventory oz normalization: every bottle's oz is
+  // held at the canonical 0.1 quantum. Migrates pre-bt524 float
+  // residue (4.67 → 4.7) and continuously catches any write path
+  // that forgets to quantize. Identity-return when already clean, so
+  // no churn and no effect loop.
+  useEffect(() => {
+    setInventory(prev => {
+      let changed = false;
+      const next = prev.map(b => {
+        const q = quantOz(b.oz);
+        if (q === b.oz) return b;
+        changed = true;
+        return { ...b, oz: q };
+      });
+      return changed ? next : prev;
+    });
+  }, [inventory]);
   const [meetings, setMeetings] = useState([]);
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
   const [weather, setWeather] = useState(null);
@@ -3508,7 +3604,7 @@ function SoleneHandoffInner() {
           localStorage.setItem(storage.WIPE_MARKER_KEY, String(Date.now()));
         } catch {}
         const dataKeys = [
-          "solene:events", "solene:inventory", "solene:meetings",
+          "solene:events", "solene:eventTombstones", "solene:journalTombstones", "solene:inventory", "solene:meetings",
           "solene:shifts:v3", "solene:diaperbag", "solene:onsite",
           "solene:notes", "solene:appointments", "solene:activeActivity",
           "solene:activePump", "solene:takeover", "solene:handoffNote",
@@ -3739,44 +3835,61 @@ function SoleneHandoffInner() {
   // has time to fire its effect first.
   const cloudKeySetters = useMemo(() => ({
     "solene:events":          (v) => {
-      // v05.05bt494 — Per chat: 'diaper changes does not stick...even
-      // though i log it, it somehow disappears after a while'. Root
-      // cause: this setter was blindly replacing local events with
-      // whatever the cloud held. When a stale cloud snapshot
-      // (pre-diaper-log) lands while local has the fresh diaper,
-      // the diaper disappears. Same bug pattern as bt84 (inventory
-      // wipe) but for events.
-      //
-      // Defense: refuse to overwrite local events if (a) cloud is
-      // shorter than local AND (b) local has events from the last
-      // 60 seconds. Cloud catches up on next push. Console-warn so
-      // it's diagnosable. Doesn't block legit cross-device events
-      // because cloud's snapshot from a partner device would
-      // typically be LARGER than local, not smaller.
-      if (!Array.isArray(v)) { setEvents([]); return; }
+      // v05.05bt525 — id-based union merge with tombstones, replacing
+      // the bt494 length heuristic. Root cause of 'data erasing when
+      // caregiver mode is on and i take it back immediately': the old
+      // rule replaced local wholesale whenever cloud count >= local
+      // count — but LENGTH IS NOT SUPERSET. Take-back (−window) then
+      // a fresh log (+feed) gives equal counts with different
+      // members; a stale poll then swapped the feed OUT and the
+      // window back IN — real data loss, plus the resurrected window
+      // re-quarantined the day's logs (bt303) so everything LOOKED
+      // erased.
+      // New rule: union by id (fallback key type|ts for legacy
+      // id-less events). Local wins on key collision (fresher).
+      // Cloud-side events whose id is tombstoned are dropped —
+      // deletions can never resurrect. Local side is NOT tombstone-
+      // filtered, so an undo that restores an event locally sticks
+      // and re-propagates. Identity-return when membership is
+      // unchanged. The bt494 concern (stale shorter cloud) is
+      // covered for free: union can only add, never silently drop.
+      if (!Array.isArray(v)) return; // malformed cloud value: never wipe
+      const tomb = eventTombstonesRef.current || {};
+      const keyOf = (e) => (e && (e.id || `${e.type}|${new Date(e.ts).getTime()}`)) || null;
       const mapped = v.map(x => ({ ...x, ts: new Date(x.ts) }));
       setEvents(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) return mapped;
-        if (mapped.length >= prev.length) return mapped; // safe — cloud has at least as many
-        // Cloud is shorter. Check if local has any events from the
-        // last 60s. If so, the cloud is likely stale.
-        const cutoff = Date.now() - 60 * 1000;
-        const hasRecent = prev.some(e => {
-          const t = e && e.ts ? new Date(e.ts).getTime() : 0;
-          return t >= cutoff;
-        });
-        if (hasRecent) {
-          console.warn(
-            `[cloud] events setter blocked: cloud has ${mapped.length} events ` +
-            `but local has ${prev.length} with recent (<60s) entries. ` +
-            `Likely stale cloud snapshot — keeping local.`
-          );
-          return prev;
+        const base = Array.isArray(prev) ? prev : [];
+        const byKey = new Map();
+        for (const e of mapped) {
+          const k = keyOf(e);
+          if (!k) continue;
+          if (e.id && tomb[e.id]) continue; // deleted stays deleted
+          byKey.set(k, e);
         }
-        // No recent local events — cloud's smaller count might be
-        // legit (e.g., user cleared events on another device).
-        // Accept it.
-        return mapped;
+        for (const e of base) {
+          const k = keyOf(e);
+          if (!k) continue;
+          byKey.set(k, e); // local wins collisions
+        }
+        const merged = [...byKey.values()];
+        merged.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+        if (merged.length === base.length && merged.every((e, i) => e === base[i])) return prev;
+        return merged;
+      });
+    },
+    "solene:eventTombstones": (v) => {
+      // v05.05bt525 — per-id max-merge so tombstones from any device
+      // accumulate and never regress.
+      if (!v || typeof v !== "object" || Array.isArray(v)) return;
+      setEventTombstones(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [id, ms] of Object.entries(v)) {
+          const m = Number(ms);
+          if (!Number.isFinite(m)) continue;
+          if (!(id in next) || m > next[id]) { next[id] = m; changed = true; }
+        }
+        return changed ? next : prev;
       });
     },
     "solene:inventory":       (v) => {
@@ -3844,7 +3957,75 @@ function SoleneHandoffInner() {
     "solene:diaperbag":       (v) => v && setDiaperBag(v),
     "solene:onsite":          (v) => setOnsite(v),
     "solene:todaySetup":      (v) => setTodaySetup(v && typeof v === "object" ? v : null),
-    "solene:notes":           (v) => setNotes(Array.isArray(v) ? v : []),
+    // v05.05bt526 — Per chat: 'still having issues with lost data on my
+    // journal side.' These two setters were blind replaces — any stale
+    // poll clobbered fresh local notes, and a malformed cloud value
+    // wiped them to []. Same disease as bt494/bt525 events; same cure:
+    // union merge by id with tombstones. Collision rule: newer
+    // _updatedAt wins (stamped by updateNote as of bt526; missing = 0,
+    // ties → local). Cloud-side tombstoned items drop; local side is
+    // never tombstone-filtered so undo-style restores stick.
+    "solene:notes":           (v) => {
+      if (!Array.isArray(v)) return; // malformed: never wipe
+      const tomb = journalTombstonesRef.current || {};
+      const keyOf = (n) => (n && (n.id || `${n.ts}|${String(n.text || n.body || "").slice(0, 40)}`)) || null;
+      setNotes(prev => {
+        const base = Array.isArray(prev) ? prev : [];
+        const byKey = new Map();
+        for (const n of base) { const k = keyOf(n); if (k) byKey.set(k, n); }
+        for (const n of v) {
+          const k = keyOf(n);
+          if (!k) continue;
+          if (n.id && tomb[`notes:${n.id}`]) continue;
+          const local = byKey.get(k);
+          if (!local) { byKey.set(k, n); continue; }
+          const lu = new Date(local._updatedAt || 0).getTime();
+          const cu = new Date(n._updatedAt || 0).getTime();
+          if (cu > lu) byKey.set(k, n); // newer edit wins; ties → local
+        }
+        const merged = [...byKey.values()];
+        if (merged.length === base.length && merged.every((x, i) => x === base[i])) return prev;
+        return merged;
+      });
+    },
+    // v05.05bt526 — same union treatment; the archive's 50-entry cap is
+    // applied deterministically (newest by ackedAt/replacedAt/ts) so
+    // every device converges to the same 50 instead of cap-vs-merge
+    // ping-pong.
+    "solene:noteArchive":     (v) => {
+      if (!Array.isArray(v)) return;
+      const tomb = journalTombstonesRef.current || {};
+      const entryTime = (n) => new Date(n?.ackedAt || n?.replacedAt || n?.ts || 0).getTime();
+      const keyOf = (n) => (n && (n.id || `${n.ts}|${String(n.text || n.body || "").slice(0, 40)}`)) || null;
+      setNoteArchive(prev => {
+        const base = Array.isArray(prev) ? prev : [];
+        const byKey = new Map();
+        for (const n of base) { const k = keyOf(n); if (k) byKey.set(k, n); }
+        for (const n of v) {
+          const k = keyOf(n);
+          if (!k) continue;
+          if (n.id && tomb[`archive:${n.id}`]) continue;
+          if (!byKey.has(k)) byKey.set(k, n);
+        }
+        const merged = [...byKey.values()].sort((a, b) => entryTime(b) - entryTime(a)).slice(0, 50);
+        if (merged.length === base.length && merged.every((x, i) => x === base[i])) return prev;
+        return merged;
+      });
+    },
+    // v05.05bt526 — per-key max-merge, mirroring eventTombstones.
+    "solene:journalTombstones": (v) => {
+      if (!v || typeof v !== "object" || Array.isArray(v)) return;
+      setJournalTombstones(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [k, ms] of Object.entries(v)) {
+          const m = Number(ms);
+          if (!Number.isFinite(m)) continue;
+          if (!(k in next) || m > next[k]) { next[k] = m; changed = true; }
+        }
+        return changed ? next : prev;
+      });
+    },
     "solene:appointments":    (v) => setAppointments(Array.isArray(v) ? v : []),
     "solene:activeActivity":  (v) => setActiveActivity(v),
     "solene:activePump":      (v) => setActivePump(v),
@@ -3898,7 +4079,6 @@ function SoleneHandoffInner() {
     "solene:handoffNote":     (v) => setHandoffNote(v),
     "solene:tasks":           (v) => setTasks(Array.isArray(v) ? v : []),
     "solene:parentAway":      (v) => setParentAway(v),
-    "solene:noteArchive":     (v) => setNoteArchive(Array.isArray(v) ? v : []),
     "solene:timeBank":        (v) => v && setTimeBank(v),
     "solene:dailyContent":    (v) => v && setDailyContent(v),
     // INTENTIONALLY no setter for "solene:currentUser". Device persona is
@@ -4108,7 +4288,7 @@ function SoleneHandoffInner() {
   const setNoteWithArchive = (newNote) => {
     if (handoffNote) {
       setNoteArchive(prev => [
-        { ...handoffNote, replaced: true, replacedAt: new Date().toISOString() },
+        { ...handoffNote, id: handoffNote.id || crypto.randomUUID(), replaced: true, replacedAt: new Date().toISOString() },
         ...prev,
       ].slice(0, 50));
     }
@@ -4743,8 +4923,14 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     setShowLogger(false);
     setLoggerType(null);
   };
-  const removeNote = (id) => setNotes(prev => prev.filter(n => n.id !== id));
-  const updateNote = (id, patch) => setNotes(prev => prev.map(n => n.id === id ? { ...n, ...patch } : n));
+  const removeNote = (id) => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+    recordJournalTombstones("notes", [id]); // v05.05bt526 — deleted stays deleted
+  };
+  const updateNote = (id, patch) => setNotes(prev => prev.map(n =>
+    // v05.05bt526 — _updatedAt makes cross-device edits last-write-wins
+    // in the union merge instead of local-always-wins.
+    n.id === id ? { ...n, ...patch, _updatedAt: new Date().toISOString() } : n));
 
   const addAppointment = (appt) => setAppointments(prev => [...prev, { ...appt, id: crypto.randomUUID() }]);
   const removeAppointment = (id) => setAppointments(prev => prev.filter(a => a.id !== id));
@@ -4757,17 +4943,23 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           if (a.location !== b.location) return a.location === "rt" ? -1 : 1;
           return new Date(a.pumpedAt) - new Date(b.pumpedAt);
         });
-      let remaining = oz;
+      let remaining = quantOz(oz);
       const out = [...prev];
       for (const item of sorted) {
         if (remaining <= 0) break;
         const idx = out.findIndex(x => x.id === item.id);
         if (idx === -1) continue;
-        if (item.oz <= remaining) {
-          remaining -= item.oz;
+        // v05.05bt524 — compare and subtract in canonical 0.1 space
+        // (+0.001 epsilon for float safety), and sweep sub-quantum
+        // dust: a bottle left with <0.05 oz is consumed, not shown as
+        // a phantom "0.1 oz" remainder.
+        if (item.oz <= remaining + 0.001) {
+          remaining = quantOz(remaining - item.oz);
           out.splice(idx, 1);
         } else {
-          out[idx] = { ...item, oz: item.oz - remaining };
+          const left = quantOz(item.oz - remaining);
+          if (left < 0.05) out.splice(idx, 1);
+          else out[idx] = { ...item, oz: left };
           remaining = 0;
         }
       }
@@ -4858,12 +5050,24 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
     }));
     // Also tear down the auto-created window for today (TAKE BACK NOW).
     const todayStr = now.toISOString().slice(0, 10);
+    // v05.05bt525 — tombstone the removed window(s) so a stale cloud
+    // snapshot can never resurrect them (THE take-back-immediately
+    // data-erasing bug: resurrected window re-quarantined the day's
+    // logs and the old count-parity merge could swap out fresh events).
+    // Ids are computed from current state BEFORE setEvents — the
+    // updater runs asynchronously, so collecting inside it would
+    // tombstone nothing.
+    const removedIds = (events || [])
+      .filter(e => e && e.type === "caregiver_window" && e._autoCreated && e.id &&
+        new Date(e.ts).toISOString().slice(0, 10) === todayStr)
+      .map(e => e.id);
     setEvents(prev => prev.filter(e => {
       if (e.type !== "caregiver_window") return true;
       if (!e._autoCreated) return true;
       const est = new Date(e.ts).toISOString().slice(0, 10);
       return est !== todayStr;
     }));
+    recordEventTombstones(removedIds);
   };
 
   const toggleWfhWeekday = (dow) => {
@@ -4992,6 +5196,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
   const removeEvent = (id) => {
     const ev = events.find(e => e.id === id);
     setEvents(prev => prev.filter(e => e.id !== id));
+    recordEventTombstones([id]); // v05.05bt525 — deleted stays deleted across cloud
 
     // Reverse the time bank entry if a takeover is being removed.
     // Strategy: filter out the matching transaction, then re-derive balance
@@ -7538,7 +7743,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           })()}
           onAckNote={() => {
             setNoteArchive(prev => [
-              { ...handoffNote, acknowledged: true, ackedAt: new Date().toISOString() },
+              { ...handoffNote, id: handoffNote.id || crypto.randomUUID(), acknowledged: true, ackedAt: new Date().toISOString() },
               ...prev,
             ].slice(0, 50)); // keep last 50
             setHandoffNote(null);
@@ -8969,7 +9174,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           archive={noteArchive}
           currentUser={currentUser}
           onClose={() => setShowNoteArchive(false)}
-          onClear={() => { setNoteArchive([]); setShowNoteArchive(false); }}
+          onClear={() => { recordJournalTombstones("archive", (noteArchive || []).map(n => n.id).filter(Boolean)); setNoteArchive([]); setShowNoteArchive(false); }}
         />
       )}
 
@@ -16788,7 +16993,9 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
                   const take = Math.min(b.oz, remaining);
                   remaining -= take;
                   drained += take;
-                  const newOz = b.oz - take;
+                  // v05.05bt524 — quantize the remainder to the 0.1
+                  // canon; sub-quantum residue is consumed, not kept.
+                  const newOz = quantOz(b.oz - take);
                   if (newOz > 0.05) newInventory.push({ ...b, oz: newOz });
                   // else: bottle emptied, drop
                 } else {
@@ -51210,14 +51417,18 @@ function FeedForm({ C, lastFeed, onSubmit, onCancel, liveInventory }) {
 
   const setBottleOz = (bottleId, value) => {
     const bottle = availableBottles.find(b => b.id === bottleId);
-    const max = bottle?.oz || 0;
-    const clamped = Math.max(0, Math.min(max, Number(value) || 0));
+    // v05.05bt524 — clamp against the QUANTIZED capacity so typing the
+    // number the tile displays (4.7 for a stored 4.67) is always
+    // accepted. Allocations now live on the same 0.1 canon as
+    // everything else (bt66's 0.05 precision retired: it preserved
+    // 1.25 exactly but was a third precision the display never
+    // showed — the definition of behind-doors trickery).
+    const max = quantOz(bottle?.oz || 0);
+    const clamped = Math.max(0, Math.min(max, quantOz(value)));
     setAllocations(prev => {
       const next = { ...prev };
       if (clamped <= 0) delete next[bottleId];
-      // v05.05bt66: round to 0.05 oz precision so values like 1.25 oz
-      // are preserved exactly (was 0.5 oz precision which rounded to 1.3).
-      else next[bottleId] = Math.round(clamped * 20) / 20;
+      else next[bottleId] = clamped;
       return next;
     });
     setSkipInventory(false);
@@ -51499,21 +51710,52 @@ function FeedForm({ C, lastFeed, onSubmit, onCancel, liveInventory }) {
                   );
                 })}
               </div>
-              {/* Skip-inventory option */}
+              {/* v05.05bt524 — Fresh-bottle option as a legitimate tile.
+                  Per chat: 'should look like the other tiles — like the
+                  RT or Fz would show, except in a bold color so you know
+                  exactly to skip to that if you don't have a bottle to
+                  pick from.' Same anatomy as the bottle cards (circle
+                  badge · serif title · mono sub · selected tint), accent
+                  color so it reads as the deliberate fallback, not
+                  fine print. */}
               <button
                 onClick={() => {
                   setAllocations({});
                   setSkipInventory(s => !s);
                 }}
                 style={{
-                  width: "100%", marginTop: 10,
-                  background: skipInventory ? `${C.muted}20` : "transparent",
-                  border: `1px ${skipInventory ? "solid" : "dashed"} ${C.muted}55`,
-                  borderRadius: 8, padding: "8px 10px",
-                  fontSize: 11, color: skipInventory ? C.ink : C.muted, cursor: "pointer",
-                  fontFamily: "inherit", fontStyle: "italic",
+                  width: "100%", marginTop: 6,
+                  background: skipInventory ? `${C.accent}15` : C.bg,
+                  border: `1.5px solid ${skipInventory ? C.accent : C.accent + "55"}`,
+                  borderRadius: 10, padding: "8px 10px",
+                  display: "flex", alignItems: "center", gap: 10,
+                  cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                  transition: "background 0.15s ease, border 0.15s ease",
                 }}>
-                {skipInventory ? "✓ Fresh bottle (not in inventory) — will log with ⚠" : "BM from a fresh bottle (not in inventory)"}
+                <span style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: C.accent, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700, flexShrink: 0,
+                }}>NEW</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: "'Newsreader', 'Cormorant Garamond', serif",
+                    fontSize: 17, fontWeight: 600, lineHeight: 1.15,
+                    color: skipInventory ? C.accent : C.ink,
+                  }}>
+                    Fresh bottle
+                  </div>
+                  <div style={{
+                    fontSize: 10, color: C.muted, marginTop: 1,
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                    not in inventory · logs with ⚠
+                  </div>
+                </div>
+                {skipInventory && (
+                  <span style={{ color: C.accent, fontSize: 16, fontWeight: 700, flexShrink: 0 }}>✓</span>
+                )}
               </button>
             </>
           )}
