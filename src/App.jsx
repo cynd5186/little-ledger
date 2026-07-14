@@ -15,8 +15,9 @@ import {
 // day, append a letter: 2026.05.05a, 2026.05.05b, etc.
 const APP_NAME = "Little Ledger";
 const APP_SUBTITLE = "for Solène";
-const APP_VERSION = "2026.05.05bt526";
+const APP_VERSION = "2026.05.05bt527";
 const APP_BUILD_NOTES = [
+  "Events VAULT + restore, and malformed-guards on remaining setters. Per chat: 'my data disappears... whenever we go into caregiver mode and it erases everything prior on my journal.' Verified: tiles and Full journal read raw events with NO caregiver filtering — reported losses are true state loss (the bt525-class replace bug), not display quarantine. bt525/bt526 target the mechanism; deployment status unconfirmed, so this build changes the engineering posture: stop betting the journal on the merge being perfect. (1) VAULT: device-local snapshot ring of the full events array (ll:eventsVault) — written at most every 4h, cap 5 (~a day of coverage), never vaults pre-hydration emptiness, and never consumes a ring slot with a suspicious shrink (<50 percent of last snapshot) so post-loss states can't crowd out good backups. (2) RESTORE: Full journal header gains a quiet 'backup vault · N snapshots' dotted line; expands to a snapshot list (time + event count) with a 'merge back' action. Restore is an ADDITIVE UNION by id — can only bring events back, never removes anything logged since — and clears event tombstones for restored ids (an explicit restore overrides prior deletions). Restored events re-propagate to cloud through the normal push. (3) GUARDS: solene:appointments and solene:meetings cloud setters no longer wipe to [] on malformed values (now: ignore). Full union+tombstone treatment for appointments/meetings/timeBank/dailyContent queued as its own build. DIAGNOSTIC NOTE for the next report: with the vault live, any loss becomes 'diff the newest pre-loss snapshot against live' — exact missing ids in seconds. Also: if lost events still exist in the cloud or on the partner device, the bt525 union merge may resurrect them automatically on the first post-deploy poll. SCOPING: vault state+2 effects+restore fn (placed after hydrated declaration — TDZ), LogView props+inline UI, two setter guards. Build verified clean via esbuild.",
   "Journal-side data loss fix — notes + noteArchive get the union-merge + tombstone treatment. Per chat: 'still having issues with lost data on my journal side.' ROOT CAUSE: solene:notes and solene:noteArchive cloud setters were BLIND REPLACES — any stale poll clobbered fresh local notes, and a malformed cloud value wiped them to []. Same disease as bt494/bt525 events. FIXES: (1) notes setter: union by id (legacy id-less fallback key ts|text-prefix); collision resolved by _updatedAt last-write-wins (missing=0, ties keep local); cloud-side tombstoned notes drop; malformed cloud ignored, never wipes. (2) updateNote stamps _updatedAt so cross-device edits actually propagate; removeNote records a notes: tombstone. (3) noteArchive setter: same union; the 50-entry cap now applied DETERMINISTICALLY (sort by ackedAt/replacedAt/ts desc, then slice) so every device converges to the same 50 instead of cap-vs-merge ping-pong; archive entries get crypto.randomUUID ids at creation (both handoff-archive paths). (4) Archive 'clear' tombstones everything it removes — without that, union merge would resurrect the cleared archive from the cloud on the next poll. (5) New solene:journalTombstones key (prefixed notes:/archive: ids, 30-day prune) with per-key max-merge setter, wired into poll + wipe lists, persisted via storage.set. STILL BLIND-REPLACE (queued next build, same treatment candidates): solene:appointments, solene:meetings, solene:timeBank, solene:dailyContent. SCOPING: two setters replaced, one added, four choke-point touches, two list additions. No UI changes. Build verified clean via esbuild.",
   "Event resurrection/erasure root fix — id-union merge + tombstones. Per chat: 'data erasing... whenever caregiver mode is on and i take it back immediately.' ROOT CAUSE: the bt494 events cloud setter replaced local wholesale whenever cloud count >= local count — but LENGTH IS NOT SUPERSET. Take-back removes the auto caregiver_window (−1); logging a feed right after adds one (+1); equal counts, different members; a stale in-flight poll then swapped the fresh feed OUT and the caregiver window back IN. Real data loss — and the resurrected window re-quarantined the day's parent logs (bt303 exclusion), so even surviving events LOOKED erased from tiles/predictors. FIX (1) MERGE: the events setter now unions by id (fallback key type|ts for legacy id-less events); local wins collisions; identity-return when membership unchanged; malformed cloud value is ignored instead of wiping. Union can only add, so the bt494 stale-shorter-cloud case is covered structurally, without heuristics. FIX (2) TOMBSTONES: union alone would resurrect deletions, so deletions now write id->deletedAt tombstones (new solene:eventTombstones key, per-id max-merge setter, 30-day prune, wired into poll + wipe lists, localStorage-hydrated with cloud sync via storage.set). Cloud-side events with tombstoned ids are dropped at merge; local side is NOT tombstone-filtered so an undo that restores an event locally sticks and re-propagates. Tombstone writers: removeEvent (the single delete choke point) and the caregiver take-back teardown (ids computed synchronously BEFORE setEvents — collecting inside the async updater would record nothing). KEPT: the peak-count push guard (>=5 shrink) stays as the last-resort backstop. SCOPING: events + tombstones only. No changes to inventory merge (bt521 stamps), predictors, quarantine logic, caregiver auto-create, UI. Build verified clean via esbuild.",
   "Oz consistency canon + fresh-bottle tile. Per chat: '4.67 rounds to 4.7 but logging 4.6 leaves 0.1, logging 4.7 says not enough... if i see one number i dont have to think about the trickery behind doors.' Root cause: THREE precisions coexisted — storage (raw float, e.g. 4.67), display (0.1 via toFixed(1)), allocations (0.05 per bt66) — the number shown was never the number compared. (1) CANONICAL QUANTUM: new module quantOz() = 0.1 oz, applied at every write boundary so displayed == stored == compared. (2) MIGRATION + GUARD: continuous normalization effect quantizes all inventory oz (migrates pre-bt524 residue like 4.67 -> 4.7 on first load, and permanently catches any write path that forgets); identity-return when clean. (3) DRAINS: drainInventory and the label-reconcile drain now subtract in quantized space with a 0.001 epsilon and sweep sub-quantum dust (<0.05 oz remainder = consumed, never a phantom 0.1 bottle). (4) ALLOCATIONS: setBottleOz clamps against the QUANTIZED capacity, so typing exactly what the tile displays is always accepted; bt66's 0.05 allocation precision retired (it preserved 1.25 but was an invisible third precision — allocations now on the same 0.1 canon; 1.25 entries land as 1.3, matching what every display would show anyway). (5) FRESH-BOTTLE TILE: the dashed-italic 'BM from a fresh bottle (not in inventory)' fine-print button rebuilt with the same anatomy as the RT/Fz bottle cards — 30px accent circle badge 'NEW', serif 'Fresh bottle' title, mono 'not in inventory - logs with warn' sub, accent-tint selected state with check — so the no-bottle fallback reads as a deliberate first-class choice. SCOPING: one module helper, one effect, two drain blocks, setBottleOz, one button rebuild. No changes to feed submit, reconcile flags, canSubmit logic, pump paths. Build verified clean via esbuild.",
@@ -30,6 +31,7 @@ const APP_BUILD_NOTES = [
   "Caregiver-mode: handoff prompt silenced. Per chat: if you are in caregiver mode then ALL alerts should be snoozed. Just basic caregiver instead of mommy and daddy. So no handoff notes to pass. No x min until handoff to daddy.\\n\\nAUDIT of caregiver-mode alert surfaces:\\n  · Notification sound: ALREADY suppressed (bt482 gates playNotificationSound on window.__llCaregiverActive).\\n  · Countdown chip \'X min until handoff to Daddy\': ALREADY gated (line 12256 wraps the whole block in !getActiveOrUpcomingCaregiverWindow…state===\'active\').\\n  · Editorial duty line: ALREADY overridden to \'Solène with caregiver\' (bt411).\\n  · Per-row babyContext + owner: ALREADY overridden (bt412).\\n  · Schedule NOW slider: ALREADY reads NOW · CAREGIVER (bt413).\\n\\nBUG FOUND + FIXED. The handoff-prompt trigger useEffect (line ~6400) fires when the on-duty parent CHANGES and the previously-on-duty parent is the current user. During caregiver windows this trigger could still fire (e.g., Mommy shift → Caregiver window transitions the on-duty state), showing an irrelevant \'leave a handoff note for Daddy?\' modal. Added a caregiver-active guard at the top of the trigger: if the caregiver window is currently active, skip the prompt entirely. Neither parent is on-duty during caregiver windows, so parent-to-parent handoff surfaces are irrelevant.\\n\\nSTILL DEFERRED (from the fresh-chat list):\\n  · Caregiver morning confirmation prompt (both parents confirm).\\n  · Age-based milk-intake proactive nudging.\\n  · Routines editable inline like tasks + manually-adjusted badge.\\n  · Right-rail icon redesign (mockup first).\\n  · Simplifying persona to \'basic caregiver\' when in caregiver mode (needs profile-switcher rework — larger refactor).\\n\\nBuild verified clean via esbuild.",
 ];
 const APP_CHANGELOG = [
+  { version: "2026.05.05bt527", summary: "Events VAULT + restore, and malformed-guards on remaining setters. Per chat: 'my data disappears... whenever we go into caregiver mode and it erases everything prior on my journal.' Verified: tiles and Full journal read raw events with NO caregiver filtering — reported losses are true state loss (the bt525-class replace bug), not display quarantine. bt525/bt526 target the mechanism; deployment status unconfirmed, so this build changes the engineering posture: stop betting the journal on the merge being perfect. (1) VAULT: device-local snapshot ring of the full events array (ll:eventsVault) — written at most every 4h, cap 5 (~a day of coverage), never vaults pre-hydration emptiness, and never consumes a ring slot with a suspicious shrink (<50 percent of last snapshot) so post-loss states can't crowd out good backups. (2) RESTORE: Full journal header gains a quiet 'backup vault · N snapshots' dotted line; expands to a snapshot list (time + event count) with a 'merge back' action. Restore is an ADDITIVE UNION by id — can only bring events back, never removes anything logged since — and clears event tombstones for restored ids (an explicit restore overrides prior deletions). Restored events re-propagate to cloud through the normal push. (3) GUARDS: solene:appointments and solene:meetings cloud setters no longer wipe to [] on malformed values (now: ignore). Full union+tombstone treatment for appointments/meetings/timeBank/dailyContent queued as its own build. DIAGNOSTIC NOTE for the next report: with the vault live, any loss becomes 'diff the newest pre-loss snapshot against live' — exact missing ids in seconds. Also: if lost events still exist in the cloud or on the partner device, the bt525 union merge may resurrect them automatically on the first post-deploy poll. SCOPING: vault state+2 effects+restore fn (placed after hydrated declaration — TDZ), LogView props+inline UI, two setter guards. Build verified clean via esbuild." },
   { version: "2026.05.05bt526", summary: "Journal-side data loss fix — notes + noteArchive get the union-merge + tombstone treatment. Per chat: 'still having issues with lost data on my journal side.' ROOT CAUSE: solene:notes and solene:noteArchive cloud setters were BLIND REPLACES — any stale poll clobbered fresh local notes, and a malformed cloud value wiped them to []. Same disease as bt494/bt525 events. FIXES: (1) notes setter: union by id (legacy id-less fallback key ts|text-prefix); collision resolved by _updatedAt last-write-wins (missing=0, ties keep local); cloud-side tombstoned notes drop; malformed cloud ignored, never wipes. (2) updateNote stamps _updatedAt so cross-device edits actually propagate; removeNote records a notes: tombstone. (3) noteArchive setter: same union; the 50-entry cap now applied DETERMINISTICALLY (sort by ackedAt/replacedAt/ts desc, then slice) so every device converges to the same 50 instead of cap-vs-merge ping-pong; archive entries get crypto.randomUUID ids at creation (both handoff-archive paths). (4) Archive 'clear' tombstones everything it removes — without that, union merge would resurrect the cleared archive from the cloud on the next poll. (5) New solene:journalTombstones key (prefixed notes:/archive: ids, 30-day prune) with per-key max-merge setter, wired into poll + wipe lists, persisted via storage.set. STILL BLIND-REPLACE (queued next build, same treatment candidates): solene:appointments, solene:meetings, solene:timeBank, solene:dailyContent. SCOPING: two setters replaced, one added, four choke-point touches, two list additions. No UI changes. Build verified clean via esbuild." },
   { version: "2026.05.05bt525", summary: "Event resurrection/erasure root fix — id-union merge + tombstones. Per chat: 'data erasing... whenever caregiver mode is on and i take it back immediately.' ROOT CAUSE: the bt494 events cloud setter replaced local wholesale whenever cloud count >= local count — but LENGTH IS NOT SUPERSET. Take-back removes the auto caregiver_window (−1); logging a feed right after adds one (+1); equal counts, different members; a stale in-flight poll then swapped the fresh feed OUT and the caregiver window back IN. Real data loss — and the resurrected window re-quarantined the day's parent logs (bt303 exclusion), so even surviving events LOOKED erased from tiles/predictors. FIX (1) MERGE: the events setter now unions by id (fallback key type|ts for legacy id-less events); local wins collisions; identity-return when membership unchanged; malformed cloud value is ignored instead of wiping. Union can only add, so the bt494 stale-shorter-cloud case is covered structurally, without heuristics. FIX (2) TOMBSTONES: union alone would resurrect deletions, so deletions now write id->deletedAt tombstones (new solene:eventTombstones key, per-id max-merge setter, 30-day prune, wired into poll + wipe lists, localStorage-hydrated with cloud sync via storage.set). Cloud-side events with tombstoned ids are dropped at merge; local side is NOT tombstone-filtered so an undo that restores an event locally sticks and re-propagates. Tombstone writers: removeEvent (the single delete choke point) and the caregiver take-back teardown (ids computed synchronously BEFORE setEvents — collecting inside the async updater would record nothing). KEPT: the peak-count push guard (>=5 shrink) stays as the last-resort backstop. SCOPING: events + tombstones only. No changes to inventory merge (bt521 stamps), predictors, quarantine logic, caregiver auto-create, UI. Build verified clean via esbuild." },
   { version: "2026.05.05bt524", summary: "Oz consistency canon + fresh-bottle tile. Per chat: '4.67 rounds to 4.7 but logging 4.6 leaves 0.1, logging 4.7 says not enough... if i see one number i dont have to think about the trickery behind doors.' Root cause: THREE precisions coexisted — storage (raw float, e.g. 4.67), display (0.1 via toFixed(1)), allocations (0.05 per bt66) — the number shown was never the number compared. (1) CANONICAL QUANTUM: new module quantOz() = 0.1 oz, applied at every write boundary so displayed == stored == compared. (2) MIGRATION + GUARD: continuous normalization effect quantizes all inventory oz (migrates pre-bt524 residue like 4.67 -> 4.7 on first load, and permanently catches any write path that forgets); identity-return when clean. (3) DRAINS: drainInventory and the label-reconcile drain now subtract in quantized space with a 0.001 epsilon and sweep sub-quantum dust (<0.05 oz remainder = consumed, never a phantom 0.1 bottle). (4) ALLOCATIONS: setBottleOz clamps against the QUANTIZED capacity, so typing exactly what the tile displays is always accepted; bt66's 0.05 allocation precision retired (it preserved 1.25 but was an invisible third precision — allocations now on the same 0.1 canon; 1.25 entries land as 1.3, matching what every display would show anyway). (5) FRESH-BOTTLE TILE: the dashed-italic 'BM from a fresh bottle (not in inventory)' fine-print button rebuilt with the same anatomy as the RT/Fz bottle cards — 30px accent circle badge 'NEW', serif 'Fresh bottle' title, mono 'not in inventory - logs with warn' sub, accent-tint selected state with check — so the no-bottle fallback reads as a deliberate first-class choice. SCOPING: one module helper, one effect, two drain blocks, setBottleOz, one button rebuild. No changes to feed submit, reconcile flags, canSubmit logic, pump paths. Build verified clean via esbuild." },
@@ -2906,6 +2908,64 @@ function SoleneHandoffInner() {
   const [shifts, setShifts] = useState(DEFAULT_SHIFTS);
   const [weather, setWeather] = useState(null);
   const [hydrated, setHydrated] = useState(false);
+  // v05.05bt527 — the events VAULT. After three rounds of sync data-
+  // loss reports, the correct engineering posture is: stop betting the
+  // journal on the merge being perfect. Periodic local snapshots
+  // (device-local ring, ≥4h apart, cap 5 ≈ a day of coverage) make any
+  // future loss recoverable and diagnosable. Writer guards: never
+  // vaults pre-hydration emptiness, and never lets a suspicious
+  // shrink (<50% of the last snapshot) consume a ring slot — post-
+  // loss states must not crowd out the good backups.
+  const [eventsVault, setEventsVault] = useState(() => {
+    try {
+      const r = localStorage.getItem("ll:eventsVault");
+      if (r) { const p = JSON.parse(r); if (Array.isArray(p)) return p; }
+    } catch {}
+    return [];
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ll:eventsVault", JSON.stringify(eventsVault)); } catch {}
+  }, [eventsVault]);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!Array.isArray(events) || events.length === 0) return;
+    const nowMs = Date.now();
+    setEventsVault(prev => {
+      const last = prev[0];
+      if (last && nowMs - new Date(last.at).getTime() < 4 * 3600000) return prev;
+      if (last && last.count > 20 && events.length < last.count / 2) return prev; // suspicious shrink: don't vault it
+      const snap = {
+        at: new Date(nowMs).toISOString(),
+        count: events.length,
+        events: events.map(e => ({ ...e, ts: (e.ts instanceof Date) ? e.ts.toISOString() : e.ts })),
+      };
+      return [snap, ...prev].slice(0, 5);
+    });
+  }, [events, hydrated]);
+  const restoreEventsVault = (index) => {
+    const snap = eventsVault[index];
+    if (!snap || !Array.isArray(snap.events)) return;
+    const restored = snap.events.map(x => ({ ...x, ts: new Date(x.ts) }));
+    // Clear tombstones for restored ids — a restore is an explicit
+    // user decision that overrides prior deletions.
+    setEventTombstones(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const e of restored) if (e.id && next[e.id] !== undefined) { delete next[e.id]; changed = true; }
+      return changed ? next : prev;
+    });
+    // Additive union — restore can only bring events back, never
+    // remove anything logged since the snapshot.
+    setEvents(prev => {
+      const keyOf = (e) => (e && (e.id || `${e.type}|${new Date(e.ts).getTime()}`)) || null;
+      const byKey = new Map();
+      for (const e of restored) { const k = keyOf(e); if (k) byKey.set(k, e); }
+      for (const e of (Array.isArray(prev) ? prev : [])) { const k = keyOf(e); if (k) byKey.set(k, e); }
+      const merged = [...byKey.values()];
+      merged.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+      return merged;
+    });
+  };
   // v05.05bt494 — Per chat: 'where is my new update pop up?'. Restored
   // an auto-show what's-new modal. Stores the last seen APP_VERSION
   // in localStorage. On every boot, if it doesn't match the current
@@ -3951,7 +4011,7 @@ function SoleneHandoffInner() {
         }));
       });
     },
-    "solene:meetings":        (v) => setMeetings(Array.isArray(v) ? v : []),
+    "solene:meetings":        (v) => { if (Array.isArray(v)) setMeetings(v); }, // v05.05bt527 — malformed never wipes; union+tombstones queued
     "solene:tradeRequests":   (v) => setTradeRequests(Array.isArray(v) ? v : []),
     "solene:shifts:v3":       (v) => v && typeof v === "object" && setShifts(v),
     "solene:diaperbag":       (v) => v && setDiaperBag(v),
@@ -4026,7 +4086,7 @@ function SoleneHandoffInner() {
         return changed ? next : prev;
       });
     },
-    "solene:appointments":    (v) => setAppointments(Array.isArray(v) ? v : []),
+    "solene:appointments":    (v) => { if (Array.isArray(v)) setAppointments(v); }, // v05.05bt527 — malformed never wipes; union+tombstones queued
     "solene:activeActivity":  (v) => setActiveActivity(v),
     "solene:activePump":      (v) => setActivePump(v),
     // v05.05bt511 — cross-device empty timestamp sync.
@@ -7948,7 +8008,7 @@ Vary content based on the day so it doesn't feel repetitive. Return ONLY the JSO
           />
         )}
         {tab === "log" && (
-          <LogView C={C} events={events} removeEvent={removeEvent} updateEvent={updateEvent} now={now} onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }} />
+          <LogView eventsVault={eventsVault} onRestoreVault={restoreEventsVault} C={C} events={events} removeEvent={removeEvent} updateEvent={updateEvent} now={now} onOpenBathLog={() => { setLoggerType("bath"); setShowLogger(true); }} />
         )}
         {tab === "shifts" && (
           <ShiftsView
@@ -16743,7 +16803,8 @@ function ShiftStrip({ C, shifts, now }) {
   );
 }
 
-function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
+function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog, eventsVault, onRestoreVault }) {
+  const [showVault, setShowVault] = useState(false); // v05.05bt527
   const [editing, setEditing] = useState(null); // event being edited
   // v05.05bt25 — show bath_skipped events in journal (even though silent)
   // so users can see + undo their "no bath tonight" decision. Other silent
@@ -16759,6 +16820,31 @@ function LogView({ C, events, removeEvent, updateEvent, now, onOpenBathLog }) {
   return (
     <div style={{ marginTop: 14 }}>
       <Section C={C} title={`Full journal · ${visibleEvents.length} entries`}>
+        {/* v05.05bt527 — vault: quiet one-line entry point; expands to a
+            snapshot list. Restore is an additive union (can only bring
+            events back), so no scary confirm needed. */}
+        {Array.isArray(eventsVault) && eventsVault.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <button onClick={() => setShowVault(s => !s)} style={{
+              background: "none", border: "none", padding: "2px 0", cursor: "pointer",
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: C.muted,
+              letterSpacing: "0.06em", textDecoration: "underline dotted",
+            }}>
+              backup vault · {eventsVault.length} snapshot{eventsVault.length === 1 ? "" : "s"} {showVault ? "▾" : "›"}
+            </button>
+            {showVault && eventsVault.map((s, i) => (
+              <div key={s.at} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: `1px solid ${C.line}33` }}>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10.5, color: C.ink, flex: 1 }}>
+                  {new Date(s.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · {s.count} events
+                </span>
+                <button onClick={() => { onRestoreVault && onRestoreVault(i); setShowVault(false); }} style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, padding: "3px 10px",
+                  border: `1px solid ${C.sage}`, borderRadius: 6, background: "none", color: C.sage, cursor: "pointer",
+                }}>merge back</button>
+              </div>
+            ))}
+          </div>
+        )}
         {Object.keys(grouped).length === 0 ? (
           <div style={{ color: C.muted, fontStyle: "italic", padding: 20, fontSize: 14, textAlign: "center" }}>
             Nothing logged yet.
